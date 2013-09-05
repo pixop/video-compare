@@ -19,6 +19,16 @@ class Container {
 		// Conversion context to YUV for output
 		std::shared_ptr<SwsContext> conversion_context;
 
+		// Custom IO
+		std::shared_ptr<AVIOContext> custom_io;
+		// Input buffer
+		std::shared_ptr<unsigned char> buffer;
+
+		// Custom file reader callback function
+		static int read_custom(void* opaque, uint8_t* buffer, int buffer_size);
+		static int64_t seek_custom(void* opaque, int64_t position, int whence);
+		// Setup custom file I/O
+		void setup_io(const std::string &file_name);
 		// Read container to setup format context
 		void parse_header(const std::string &file_name);
 		// Register streams

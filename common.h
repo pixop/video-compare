@@ -14,6 +14,8 @@ extern "C" {
 #include <string>
 #include <cstring>
 #include <iostream>
+#include <fstream>
+#include <cstdio>
 #include <algorithm>
 #include <queue>
 #include <mutex>
