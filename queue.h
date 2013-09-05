@@ -1,118 +1,138 @@
 #pragma once
 
-//std::atomic_bool quit(false);
-
 template <class T>
 class Queue {
 	protected:
-		std::queue<T> q;
+		// Data
+		std::queue<T> data_queue;
+
+		// Size of data
+		std::queue<size_t> size_queue;
+		size_t size_total;
+		size_t size_limit;
+
+		// Thread gubbins
 		std::mutex m;
-		std::condition_variable cv;
+		std::condition_variable full;
+		std::condition_variable empty;
+
+		// Exit
+		std::atomic_bool quit;
+		std::atomic_bool finished;
+
 	public:
-		virtual ~Queue() {
-		};
-		virtual void push(T &data) {
-			std::lock_guard<std::mutex> lock(m);
+		Queue(const size_t size_max);
 
-			std::clog << "Push" << std::endl;
-			q.push(std::move(data));
+		bool push(T &data, const size_t size);
+		bool push(T &&data, const size_t size);
+		bool pop(T &data);
 
-			cv.notify_one();
-		};
-		virtual void push(T &&data) {
-			std::lock_guard<std::mutex> lock(m);
-
-			std::clog << "Push" << std::endl;
-			q.push(std::move(data));
-
-			cv.notify_one();
-		};
-		virtual bool pop(T &data) {
-			std::unique_lock<std::mutex> lock(m);
-
-			for(;;) {
-				//if (quit) {
-				//	std::clog << "Quit" << std::endl;
-				//	return false;
-				//}
-
-				if (!q.empty()) {
-					std::clog << "Pop" << std::endl;
-					data = std::move(q.front());
-					q.pop();
-					return true;
-				}
-
-				else {
-					std::clog << "Wait for data" << std::endl;
-					cv.wait(lock);
-				}
-			}
-		};
-		virtual bool full (size_t max) {
-			bool ret = q.size() > max;
-			if (ret) {
-				std::clog << "Queue full" << std::endl;
-			}
-
-			return ret;
-		};
+		// Don't wait for more data when queue empty
+		void set_finished();
+		// Don't push or pop anymore:wq
+		void set_quit();
 };
-		       
-class PacketQueue : public Queue<AVPacket>{
-	private:
-		size_t size;
-	public:
-		PacketQueue() :  size(0) {
-		};
-		virtual void push(AVPacket &packet) override {
-			std::lock_guard<std::mutex> lock(m);
 
-			std::clog << "Push" << std::endl;
-			q.push(std::move(packet));	
-			size += packet.size;
 
-			cv.notify_one();
-		};
-		virtual void push(AVPacket &&packet) override {
-			std::lock_guard<std::mutex> lock(m);
+template <class T>
+Queue<T>::Queue(const size_t size_max) : size_total(0), size_limit(size_max) {
+	quit = false;
+	finished = false;
+}
 
-			std::clog << "Push" << std::endl;
-			q.push(std::move(packet));
-			size += packet.size;
+template <class T>
+bool Queue<T>::push(T &data, const size_t size) {
+	std::unique_lock<std::mutex> lock(m);
 
-			cv.notify_one();
-		};
+	for (;;) {
+		if (quit) {
+			return false;
+		}
 
-		virtual bool pop(AVPacket &packet) override {
-			std::unique_lock<std::mutex> lock(m);
+		else if (finished) {
+			return false;
+		}
 
-			for(;;) {
-				//if (quit) {
-				//	std::clog << "Quit" << std::endl;
-				//	return false;
-				//}
+		else if (size_total + size <= size_limit) {
+			data_queue.push(std::move(data));
+			size_queue.push(size);
+			size_total += size;
 
-				if (!q.empty()) {
-					std::clog << "Pop" << std::endl;
-					packet = std::move(q.front());
-					q.pop();
-					size -= packet.size;
-					return true;
-				}
-
-				else {
-					std::clog << "Wait for data" << std::endl;
-					cv.wait(lock);
-				}
-			}
-		};
-		virtual bool full (size_t max) override {
-			bool ret = size > max;
-			if (ret) {
-				std::clog << "Queue full" << std::endl;
-			}
-
-			return ret;
-		};
+			empty.notify_one();
+			return true;
+		}
+		else {
+			full.wait(lock);
+		}
+	}
 };
+
+template <class T>
+bool Queue<T>::push(T &&data, const size_t size) {
+	std::unique_lock<std::mutex> lock(m);
+
+	for (;;) {
+		if (quit) {
+			return false;
+		}
+
+		else if (finished) {
+			return false;
+		}
+
+		else if (size_total + size <= size_limit) {
+			data_queue.push(std::move(data));
+			size_queue.push(size);
+			size_total += size;
+
+			empty.notify_one();
+			return true;
+		}
+
+		else {
+			full.wait(lock);
+
+		}
+	}
+};
+
+template <class T>
+bool Queue<T>::pop(T &data) {
+	std::unique_lock<std::mutex> lock(m);
+
+	for (;;) {
+		if (quit) {
+			return false;
+		}
+
+		if (!data_queue.empty()) {
+			data = std::move(data_queue.front());
+			data_queue.pop();
+			size_total -= size_queue.front();
+			size_queue.pop();
+			full.notify_one();
+			return true;
+		}
+
+		else if (finished) {
+			return false;
+		}
+
+		else {
+			empty.wait(lock);
+		}
+	}
+};
+
+template <class T>
+void Queue<T>::set_finished() {
+	finished = true;
+	empty.notify_one();
+}
+
+template <class T>
+void Queue<T>::set_quit() {
+	quit = true;
+	empty.notify_one();
+	full.notify_one();
+}

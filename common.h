@@ -5,13 +5,15 @@ extern "C" {
 	#include <libavformat/avformat.h>
 	#include <libswscale/swscale.h>
 	#include <libavutil/avutil.h>
+	#include <libavutil/time.h>
 }
 
 #include <SDL.h>
 #include <SDL_thread.h>
 
-#include <iostream>
+#include <string>
 #include <cstring>
+#include <iostream>
 #include <algorithm>
 #include <queue>
 #include <mutex>
@@ -19,5 +21,7 @@ extern "C" {
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include <memory>
+#include <cmath>
 
 #include "queue.h"

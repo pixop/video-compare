@@ -4,30 +4,51 @@
 
 class Container {
 	private:
-		AVFormatContext *format_context = nullptr;
-		AVCodecContext *codec_context_video = nullptr;
-		AVCodecContext *codec_context_audio = nullptr;
-		AVCodec *codec_video = nullptr;
-		AVCodec *codec_audio = nullptr;
-		int video_stream = -1;
-		int audio_stream = -1;
+		// Load codecs once
+		static std::once_flag init_flag;
 
-		void set_container(const char* file_name);
+		// Container information
+		std::shared_ptr<AVFormatContext> format_context;
+		std::shared_ptr<AVCodecContext> codec_context_video;
+		std::shared_ptr<AVCodecContext> codec_context_audio;
+
+		// Stream indices
+		std::vector<int> video_stream;
+		std::vector<int> audio_stream;
+
+		// Conversion context to YUV for output
+		std::shared_ptr<SwsContext> conversion_context;
+
+		// Read container to setup format context
+		void parse_header(const std::string &file_name);
+		// Register streams
 		void find_streams();
+		// Register codecs and open them
 		void find_codecs();
+		// Register conversion context
+		void setup_conversion_context(); 
+
 	public:
-		void init(const char* file_name);
+		// Setup before reading
+		Container(const std::string &file_name);
+
+		// Read into a single packet
 		bool read_frame(AVPacket &packet);
-		void decode_frame(AVFrame *frame, int &got_frame, AVPacket &packet);
+		// Decode a single packet
+		void decode_frame(std::unique_ptr<AVFrame, void(*)(AVFrame*)> &frame, int &got_frame, std::unique_ptr<AVPacket, void(*)(AVPacket*)> packet);
+		// Convert a frame to YUV for output
+		void convert_frame(std::unique_ptr<AVFrame, void(*)(AVFrame*)> src, std::unique_ptr<AVFrame, void(*)(AVFrame*)> &dst);
+		// Decode audio packets
+		void decode_audio();
 
-		bool is_video();
-		bool is_audio();
+		bool is_video() const;
+		bool is_audio() const;
+		int get_video_stream() const;
+		int get_audio_stream() const;
+		unsigned get_width() const;
+		unsigned get_height() const;
+		AVPixelFormat get_pixel_format() const;
+		AVRational get_video_time_base() const;
+		AVRational get_container_time_base() const;
 
-		int get_video_stream();
-		int get_audio_stream();
-		unsigned get_width();
-		unsigned get_height();
-		AVCodecContext* get_codec_context_video();
-		AVPixelFormat get_pixel_format();
-		SDL_AudioSpec get_audio_spec();
 };

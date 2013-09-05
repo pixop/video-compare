@@ -1,328 +1,168 @@
-#include "common.h"
-#include "container.h"
+#include "player.h"
+#include "display.h"
 
 using namespace std;
 
-Queue<AVPicture> picture_queue;
-PacketQueue audio_queue;
-PacketQueue video_queue;
+Player::Player(const std::string &file_name) :
+       	container(new Container(file_name)),
+	packet_queue(new Queue<unique_ptr<AVPacket, void(*)(AVPacket*)>>(512 * 1024 * 1024)),
+	frame_queue(new Queue<unique_ptr<AVFrame, void(*)(AVFrame*)>>(512 * 1024 * 1024)) {
+	display.reset(new Display(container->get_width(), container->get_height()));
+stages.emplace_back(thread(&Player::demultiplex, this));
+	stages.emplace_back(thread(&Player::decode_video, this));
+	stages.emplace_back(thread(&Player::video, this));
+	stages.emplace_back(thread(&Player::poll, this));
 
-int decode_audio(AVCodecContext *codec_context_audio, uint8_t *audio_buffer, int buffer_size) {
-	static AVPacket packet;
-	static uint8_t *audio_packet_data = nullptr;
-	static int audio_packet_size = 0;
-	static AVFrame frame;
-
-	int len1, data_size = 0;
-
-	for(;;) {
-		while(audio_packet_size > 0) {
-			int got_frame = 0;
-			len1 = avcodec_decode_audio4(codec_context_audio, &frame, &got_frame, &packet);
-			if (len1 < 0) {
-				cerr << "Skip audio frame" << endl;	
-				audio_packet_size = 0;
-				break;
-			}
-
-			audio_packet_data += len1;
-			audio_packet_size -= len1;
-
-			if (got_frame) {
-				data_size = frame.linesize[0];
-
-				copy(&frame.data[0][0], &frame.data[0][data_size], audio_buffer);
-			}
-			if (data_size <= 0) {
-				// No data yet, get more frames
-				continue;
-			}
-
-			// We have data, return it and come back for more later
-			return data_size;
-		}
-
-		if (packet.data) {
-			av_free_packet(&packet);
-		}
-		//if (quit) {
-		//	clog << "Quit" << endl;
-		//	throw "Quit";
-		//}
-
-		if (!audio_queue.pop(packet))
-			break;
-
-		audio_packet_data = packet.data;
-		audio_packet_size = packet.size;
+	while (!display->get_quit()) {
+		chrono::milliseconds sleep(10);
+		this_thread::sleep_for(sleep);
 	}
-	return 0;
+
+	for (auto &stage : stages) {
+		stage.join();
+	}	
 }
 
-void audio_callback(void *userdata, Uint8 *stream, int len) {
-	AVCodecContext *codec_context_audio = (AVCodecContext*) userdata;
-	int len1, audio_size;
-
-	static uint8_t audio_buf[(AVCODEC_MAX_AUDIO_FRAME_SIZE * 3) / 2];
-	static unsigned audio_buf_size = 0;
-	static unsigned audio_buf_index = 0;
-
-	while (len > 0) {
-		if (audio_buf_index >= audio_buf_size) {
-			/* We have already sent all our data; get more */
-			audio_size = decode_audio(codec_context_audio, audio_buf, sizeof(audio_buf));
-			if (audio_size < 0) {
-				/* If error, output silence */
-				cerr << "Output Silence" << endl;
-				audio_buf_size = 1024; // arbitrary?
-				memset(audio_buf, 0, audio_buf_size);
-			}
-		       	else {
-				audio_buf_size = audio_size;
-			}
-			audio_buf_index = 0;
-		}
-		len1 = audio_buf_size - audio_buf_index;
-		if (len1 > len)
-			len1 = len;
-		copy((uint8_t*)audio_buf + audio_buf_index, (uint8_t*)audio_buf + audio_buf_index + len1, stream);
-		len -= len1;
-		stream += len1;
-		audio_buf_index += len1;
-	}
-}
-
-void decode_video(Container &container) {
-	AVPacket packet;
-	shared_ptr<AVFrame> frame(avcodec_alloc_frame(), av_free);
-	AVPicture pict;
-
-	int finished_frame;
-
-	try {
-		if (avpicture_alloc(&pict, container.get_pixel_format(), container.get_width(), container.get_height()) < 0) {
-			throw runtime_error("Allocating picture"); 
-		}
-
-		for(;;) {
-			if (!video_queue.pop(packet))
-				break;
-
-			clog << "Decode video" << endl;
-
-			container.decode_frame(frame.get(), finished_frame, packet);
-
-			if (finished_frame) {
-				clog << "Frame finished" << endl;
-				for(;;) {
-					if (picture_queue.full(1)) {
-						this_thread::sleep_for(chrono::milliseconds(10));
-					}
-					else {
-						break;
-					}
-				}
-
-				// Convert YUV to RGB 
-				static SwsContext *conversion_context = sws_getContext(
-					// Source
-					container.get_width(), container.get_height(), container.get_pixel_format(), 
-					// Destination
-					container.get_width(), container.get_height(), PIX_FMT_YUV420P,
-					// Filters
-					SWS_BICUBIC, nullptr, nullptr, nullptr);
-
-				if (!conversion_context) {
-					throw runtime_error("Conversion context");
-				}
-				
-				clog << "Convert picture" << endl;
-				sws_scale(conversion_context,
-					// Source
-					frame.get()->data, frame.get()->linesize, 0, container.get_height(),
-					// Destination
-					pict.data, pict.linesize);	
-		
-				picture_queue.push(pict);
-			}
-			else {
-				clog << "Frame not finished" << endl;
-			}
-			av_free_packet(&packet);
-		}
-	}
-	catch (exception &e) {
-		clog << "Decoding error: " <<  e.what() << endl;
-		exit(1);
-	}
-
-}
-void demux(Container &container) {
-	AVPacket packet;
-
+void Player::demultiplex() {
 	try {
 		for (;;) {
-			if (!container.read_frame(packet))
+			if (display->get_quit()) {
+				packet_queue->set_quit();
 				break;
-
-			if (audio_queue.full(5 * 16 * 1024) || video_queue.full(5 * 256 * 1024)) {
-				this_thread::sleep_for(chrono::milliseconds(10));
 			}
 
-			if (packet.stream_index == container.get_video_stream()) {
-				video_queue.push(packet);
-			}
-			else if (packet.stream_index == container.get_audio_stream()) {
-				audio_queue.push(packet);
-			}
-			else {
-				av_free_packet(&packet);
+			unique_ptr<AVPacket, void(*)(AVPacket*)> packet(new AVPacket, [](AVPacket* p){ av_free_packet(p); delete p; });
+			av_init_packet(packet.get());
+			packet->data = nullptr;
+
+			if (!container->read_frame(*packet)) {
+				packet_queue->set_finished();
+				break; }
+
+			if (packet->stream_index == container->get_video_stream()) {
+				packet_queue->push(move(packet), packet->size);
 			}
 		}
 	}
 	catch (exception &e) {
-		clog << "Demuxing  error: " << e.what() << endl;
+		cerr << "Demuxing  error: " << e.what() << endl;
 		exit(1);
 	}
 
 }
-enum class Signal {
-     play = 0,
-     kill = 1
-};
-	     
-Queue<Signal> event;
 
-void refresh(const size_t ms) {
-	auto sleep_event = [ms]() {
-		this_thread::sleep_for(chrono::milliseconds(ms));
-		event.push(Signal::play);
-	};
-	thread t(sleep_event);
-	t.detach();
-}
+void Player::decode_video() {
 
-void display(Container &container, SDL_Overlay *bmp, AVPicture &pict) 
-{
-	SDL_Rect rect;
+	int finished_frame;
+	const AVRational microseconds = {1, 1000000};
 
-	SDL_LockYUVOverlay(bmp);
-
-	for (size_t channel = 0; channel < 3; ++channel) {
-		bmp->pitches[channel] = pict.linesize[channel];
-	}
-
-	move(&pict.data[0][0], &pict.data[0][bmp->pitches[0] * container.get_height()], bmp->pixels[0]); 
-	move(&pict.data[1][0], &pict.data[1][bmp->pitches[1] * container.get_height() / 2], bmp->pixels[2]); 
-	move(&pict.data[2][0], &pict.data[2][bmp->pitches[2] * container.get_height() / 2], bmp->pixels[1]); 
-
-	SDL_UnlockYUVOverlay(bmp);
-
-	rect.x = 0;
-	rect.y = 0;
-	rect.w = container.get_width();
-	rect.h = container.get_height();
-	SDL_DisplayYUVOverlay(bmp, &rect);
-
-	clog << "Display picture" << endl;
-}
-
-void init(Container &container, SDL_Overlay *&bmp, const string &file_name)
-{
-	SDL_AudioSpec spec_required;
-	SDL_AudioSpec spec_attained;
-	SDL_Surface *screen;
-
-	// FFmpeg
-	static once_flag init_flag;	
-	call_once(init_flag, [](){ av_register_all(); });
-
-	// SDL
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
-		throw runtime_error("SDL init");
-	}
-
-	// Parse file for information 
-	container.init(file_name.c_str());
-
-	// Give audio spec to SDL
-	spec_required = container.get_audio_spec();
-	if (spec_required.channels) {
-		spec_required.callback = audio_callback;
-		if (SDL_OpenAudio(&spec_required, &spec_attained) < 0) {
-			throw runtime_error("SDL audio");
-		}	
-		SDL_PauseAudio(0);
-	}
-
-	screen = SDL_SetVideoMode(container.get_width(), container.get_height(), 0, 0);
-	if (!screen) {
-		throw runtime_error("SDL video");
-	}
-
-	bmp = SDL_CreateYUVOverlay(container.get_width(), container.get_height(), SDL_YV12_OVERLAY, screen);
-
-	clog << "Initialize" << endl;
-}
-
-int main(int argc, char **argv) {
-
-	Container container;
-	AVPicture picture;
-
-	SDL_Overlay *bmp = nullptr;
-
-	try {
-		if (argc < 2) {
-			throw runtime_error("Arguements");
-		}
-
-		string file_name = argv[1];
-
-		init(container, bmp, file_name);
-	}
-
-	catch (exception &e) {
-		cerr << "Initialization error: " << e.what() << endl;
-		exit(1);
-	}
-
-	thread t1(demux, ref(container)); 
-	thread t2(decode_video, ref(container));
-
-	refresh(20);
 	try {
 		for(;;) {
-			Signal s;
-			event.pop(s);
-			switch (s)
-			{
-				case Signal::play: {
-					if (!picture_queue.pop(picture)) {
-						break;
-					}
+			if (display->get_quit()) {
+				frame_queue->set_quit();
+				break;
+			}
 
-					refresh(40);
-					display(container, bmp, picture);
-					break;
+			unique_ptr<AVFrame, void(*)(AVFrame*)> frame_decoded(avcodec_alloc_frame(), [](AVFrame* f){ avcodec_free_frame(&f); });
+			unique_ptr<AVPacket, void(*)(AVPacket*)> packet(nullptr, [](AVPacket* p){ av_free_packet(p); delete p; });
+
+			if (!packet_queue->pop(packet)) {
+				frame_queue->set_finished();
+				break;
+			}
+
+			container->decode_frame(frame_decoded, finished_frame, move(packet));
+
+			if (finished_frame) {
+				frame_decoded->pts = av_rescale_q(frame_decoded->pkt_dts, container->get_container_time_base(), microseconds);
+
+				unique_ptr<AVFrame, void(*)(AVFrame*)> frame_converted(avcodec_alloc_frame(), [](AVFrame* f){ avpicture_free(reinterpret_cast<AVPicture*>(f)); avcodec_free_frame(&f); });
+				if (av_frame_copy_props(frame_converted.get(), frame_decoded.get()) < 0) {
+					throw runtime_error("Copying frame properties");
 				}
-				case Signal::kill: {
-					// XXX: Signals
-					//quit = true;
-					break;
-				}
-				default: {
-					this_thread::sleep_for(chrono::milliseconds(1));
-					break;
-				}
+				if (avpicture_alloc(reinterpret_cast<AVPicture*>(frame_converted.get()), container->get_pixel_format(), container->get_width(), container->get_height()) < 0) {
+					throw runtime_error("Allocating picture"); 
+				}	
+				container->convert_frame(move(frame_decoded), frame_converted);
+		
+				frame_queue->push(move(frame_converted), 1920*1080*3);
 			}
 		}
 	}
-
 	catch (exception &e) {
-		cerr << "Playback error: " << e.what() << endl;
+		cerr << "Decoding error: " <<  e.what() << endl;
 		exit(1);
 	}
 
-	return 0;
+}
+
+void Player::video() {
+	try {
+		const int64_t no_lag = 0;
+		int64_t frame_pts = 0;
+		int64_t frame_delay = 0;
+		int64_t start_time = 0;
+		int64_t target_time = 0;
+		int64_t lag = 0;
+		int64_t display_time = 0;
+		int64_t delay = 0;
+		int64_t diff = 0;
+		int64_t delta = 0;
+		for (uint64_t frame_number = 0;; ++frame_number) {
+			if (display->get_quit()) {
+				break;
+			}
+
+			else if (display->get_play()) {
+				unique_ptr<AVFrame, void(*)(AVFrame*)> frame(nullptr, [](AVFrame* f){ avcodec_free_frame(&f); });
+				frame_queue->pop(frame);
+
+				if (frame_number) {
+					frame_delay = frame->pts - frame_pts;
+					frame_pts = frame->pts;
+
+					target_time += frame_delay;
+
+					lag = max(no_lag, target_time - av_gettime());
+
+					delta += diff;
+					lag -= delta;
+
+					av_usleep(lag < 0 ? 0 : static_cast<unsigned>(lag));
+					//this_thread::sleep_for(chrono::microseconds(lag));
+
+					display_time = av_gettime();
+					diff = display_time - target_time;
+					//cout << diff << endl;
+				}
+				else
+				{
+					frame_pts = frame->pts;
+					display_time = av_gettime();
+					start_time = display_time;
+					target_time = display_time;
+				}
+				display->refresh(*frame);
+			}
+			else {
+				chrono::milliseconds sleep(10);
+				this_thread::sleep_for(sleep);
+			}
+		}
+	}
+	catch (exception &e) {
+		cerr << "Display error: " <<  e.what() << endl;
+		exit(1);
+	}
+}
+
+void Player::poll() {
+	for (;;) {
+		if (display->get_quit()) {
+			packet_queue->set_quit();
+			frame_queue->set_quit();
+			break;
+		}
+		display->input();
+	}
 }
