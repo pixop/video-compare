@@ -6,8 +6,7 @@ using std::once_flag;
 using std::string;
 using std::runtime_error;
 using std::unique_ptr;
-using std::cout;
-using std::endl;
+using std::function;
 
 once_flag Container::init_flag;
 
@@ -88,13 +87,13 @@ bool Container::read_frame(AVPacket &packet) {
 	return av_read_frame(format_context.get(), &packet) >= 0;
 }
 
-void Container::decode_frame(unique_ptr<AVFrame, void(*)(AVFrame*)> &frame, int &got_frame, unique_ptr<AVPacket, void(*)(AVPacket*)> packet) {
+void Container::decode_frame(unique_ptr<AVFrame, function<void(AVFrame*)>> &frame, int &got_frame, unique_ptr<AVPacket, function<void(AVPacket*)>> packet) {
 	if (avcodec_decode_video2(codec_context_video.get(), frame.get(), &got_frame, packet.get()) < 0) {
 		throw runtime_error("Decoding video");
 	}
 }
 
-void Container::convert_frame(unique_ptr<AVFrame, void(*)(AVFrame*)> src, unique_ptr<AVFrame, void(*)(AVFrame*)> &dst) {
+void Container::convert_frame(unique_ptr<AVFrame, function<void(AVFrame*)>> src, unique_ptr<AVFrame, function<void(AVFrame*)>> &dst) {
 	sws_scale(conversion_context.get(),
 		// Source
 		src->data, src->linesize, 0, get_height(),

@@ -12,6 +12,7 @@ extern "C" {
 
 using std::string;
 using std::unique_ptr;
+using std::function;
 using std::thread;
 using std::chrono::milliseconds;
 using std::this_thread::sleep_for;
@@ -23,8 +24,8 @@ using std::max;
 
 Player::Player(const string &file_name) :
        	container(new Container(file_name)),
-	packet_queue(new Queue<unique_ptr<AVPacket, void(*)(AVPacket*)>>(512 * 1024 * 1024)),
-	frame_queue(new Queue<unique_ptr<AVFrame, void(*)(AVFrame*)>>(512 * 1024 * 1024)) {
+	packet_queue(new Queue<unique_ptr<AVPacket, function<void(AVPacket*)>>>(512 * 1024 * 1024)),
+	frame_queue(new Queue<unique_ptr<AVFrame, function<void(AVFrame*)>>>(512 * 1024 * 1024)) {
 	display.reset(new Display(container->get_width(), container->get_height()));
 stages.emplace_back(thread(&Player::demultiplex, this));
 	stages.emplace_back(thread(&Player::decode_video, this));
@@ -49,7 +50,7 @@ void Player::demultiplex() {
 				break;
 			}
 
-			unique_ptr<AVPacket, void(*)(AVPacket*)> packet(new AVPacket, [](AVPacket* p){ av_free_packet(p); delete p; });
+			unique_ptr<AVPacket, function<void(AVPacket*)>> packet(new AVPacket, [](AVPacket* p){ av_free_packet(p); delete p; });
 			av_init_packet(packet.get());
 			packet->data = nullptr;
 
@@ -81,8 +82,8 @@ void Player::decode_video() {
 				break;
 			}
 
-			unique_ptr<AVFrame, void(*)(AVFrame*)> frame_decoded(avcodec_alloc_frame(), [](AVFrame* f){ avcodec_free_frame(&f); });
-			unique_ptr<AVPacket, void(*)(AVPacket*)> packet(nullptr, [](AVPacket* p){ av_free_packet(p); delete p; });
+			unique_ptr<AVFrame, function<void(AVFrame*)>> frame_decoded(avcodec_alloc_frame(), [](AVFrame* f){ avcodec_free_frame(&f); });
+			unique_ptr<AVPacket, function<void(AVPacket*)>> packet(nullptr, [](AVPacket* p){ av_free_packet(p); delete p; });
 
 			if (!packet_queue->pop(packet)) {
 				frame_queue->set_finished();
@@ -94,7 +95,7 @@ void Player::decode_video() {
 			if (finished_frame) {
 				frame_decoded->pts = av_rescale_q(frame_decoded->pkt_dts, container->get_container_time_base(), microseconds);
 
-				unique_ptr<AVFrame, void(*)(AVFrame*)> frame_converted(avcodec_alloc_frame(), [](AVFrame* f){ avpicture_free(reinterpret_cast<AVPicture*>(f)); avcodec_free_frame(&f); });
+				unique_ptr<AVFrame, function<void(AVFrame*)>> frame_converted(avcodec_alloc_frame(), [](AVFrame* f){ avpicture_free(reinterpret_cast<AVPicture*>(f)); avcodec_free_frame(&f); });
 				if (av_frame_copy_props(frame_converted.get(), frame_decoded.get()) < 0) {
 					throw runtime_error("Copying frame properties");
 				}
@@ -132,7 +133,7 @@ void Player::video() {
 			}
 
 			else if (display->get_play()) {
-				unique_ptr<AVFrame, void(*)(AVFrame*)> frame(nullptr, [](AVFrame* f){ avcodec_free_frame(&f); });
+				unique_ptr<AVFrame, function<void(AVFrame*)>> frame(nullptr, [](AVFrame* f){ avcodec_free_frame(&f); });
 				frame_queue->pop(frame);
 
 				if (frame_number) {

@@ -51,9 +51,9 @@ class Container {
 		// Read into a single packet
 		bool read_frame(AVPacket &packet);
 		// Decode a single packet
-		void decode_frame(std::unique_ptr<AVFrame, void(*)(AVFrame*)> &frame, int &got_frame, std::unique_ptr<AVPacket, void(*)(AVPacket*)> packet);
+		void decode_frame(std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> &frame, int &got_frame, std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet);
 		// Convert a frame to YUV for output
-		void convert_frame(std::unique_ptr<AVFrame, void(*)(AVFrame*)> src, std::unique_ptr<AVFrame, void(*)(AVFrame*)> &dst);
+		void convert_frame(std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> src, std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> &dst);
 		// Decode audio packets
 		void decode_audio();
 
