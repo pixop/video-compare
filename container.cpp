@@ -10,7 +10,11 @@ using std::function;
 
 once_flag Container::init_flag;
 
-Container::Container(const string &file_name) {
+Container::Container(const string &file_name) :
+	format_context(nullptr, [](AVFormatContext* c){ avformat_close_input(&c); avformat_free_context(c); }),
+	codec_context_video(nullptr, [](AVCodecContext *c){ avcodec_close(c); }), 
+	codec_context_audio(nullptr, [](AVCodecContext *c){ avcodec_close(c); }),
+	conversion_context(nullptr, &sws_freeContext) {
 	call_once(init_flag, [](){ av_register_all(); });
 	parse_header(file_name);
 	find_streams();
@@ -23,7 +27,7 @@ void Container::parse_header(const string &file_name) {
 	if (avformat_open_input(&format, file_name.c_str(), nullptr, nullptr) < 0) {
 		throw runtime_error("Error opening input");
 	}
-	format_context.reset(format, [](AVFormatContext* c){ avformat_close_input(&c); avformat_free_context(c); });
+	format_context.reset(format);
 }
 
 void Container::find_streams() {
@@ -47,9 +51,7 @@ void Container::find_streams() {
 
 void Container::find_codecs() {
 	if (is_video()) {
-		codec_context_video.reset(
-				format_context->streams[video_stream.front()]->codec,
-			       	[](AVCodecContext *c){ avcodec_close(c); }); 
+		codec_context_video.reset(format_context->streams[video_stream.front()]->codec);
 		const auto codec_video = avcodec_find_decoder(codec_context_video.get()->codec_id);
 		if (!codec_video) {
 			throw runtime_error("Unsupported video codec");
@@ -59,9 +61,7 @@ void Container::find_codecs() {
 		}
 	}
 	if (is_audio()) {
-		codec_context_audio.reset(
-				format_context->streams[audio_stream.front()]->codec,
-			       	[](AVCodecContext *c){ avcodec_close(c); }); 
+		codec_context_audio.reset(format_context->streams[audio_stream.front()]->codec);
 		const auto codec_audio = avcodec_find_decoder(codec_context_audio.get()->codec_id);
 		if (!codec_audio) {
 			throw runtime_error("Unsupported audio codec");
@@ -80,7 +80,7 @@ void Container::setup_conversion_context() {
 			// Destination
 			get_width(), get_height(), PIX_FMT_YUV420P,
 			// Filters
-			SWS_BICUBIC, nullptr, nullptr, nullptr), sws_freeContext);
+			SWS_BICUBIC, nullptr, nullptr, nullptr));
 }
 
 bool Container::read_frame(AVPacket &packet) {

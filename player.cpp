@@ -27,7 +27,7 @@ Player::Player(const string &file_name) :
 	packet_queue(new Queue<unique_ptr<AVPacket, function<void(AVPacket*)>>>(512 * 1024 * 1024)),
 	frame_queue(new Queue<unique_ptr<AVFrame, function<void(AVFrame*)>>>(512 * 1024 * 1024)) {
 	display.reset(new Display(container->get_width(), container->get_height()));
-stages.emplace_back(thread(&Player::demultiplex, this));
+	stages.emplace_back(thread(&Player::demultiplex, this));
 	stages.emplace_back(thread(&Player::decode_video, this));
 	stages.emplace_back(thread(&Player::video, this));
 	stages.emplace_back(thread(&Player::poll, this));
