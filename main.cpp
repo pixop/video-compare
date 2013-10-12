@@ -17,15 +17,13 @@ int main(int argc, char **argv) {
 			throw runtime_error("Arguements");
 		}
 
-		string file_name = argv[1];
-
-		Player player(file_name);
+		Player player(argv[1]);
 
 	}
 
 	catch (exception &e) {
 		cerr << "Initialization error: " << e.what() << endl;
-		return 1;
+		return 1048576;
 	}
 
 	return 0;
