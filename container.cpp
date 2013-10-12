@@ -13,46 +13,15 @@ once_flag Container::init_flag;
 
 Container::Container(const string &file_name) {
 	call_once(init_flag, [](){ av_register_all(); });
-	setup_io(file_name);
 	parse_header(file_name);
 	find_streams();
 	find_codecs();
 	setup_conversion_context();
 }
 
-int Container::read_custom(void* opaque, uint8_t* buffer, int buffer_size)
-{
-	auto file = reinterpret_cast<FILE*>(opaque);
-	//auto& stream = *reinterpret_cast<ifstream*>(opaque);
-	cout << "HAHAHA" << endl;
-	cout << buffer_size << endl;
-	return fread(buffer, 1, buffer_size, file);
-	//stream.read(reinterpret_cast<char*>(buffer), buffer_size);
-	cout << "HAHAHA" << endl;
-	//return stream.gcount();
-}
-
-int64_t Container::seek_custom(void* opaque, int64_t position, int whence)
-{
-	auto file = reinterpret_cast<FILE*>(opaque);
-	fseek(file, position, whence);
-	return ftell(file);
-}
-
-void Container::setup_io(const string &file_name) {
-	FILE* file;
-	file = fopen(file_name.c_str(), "rb");
-	//std::ifstream stream(file_name, ios::binary);
-	buffer.reset(reinterpret_cast<unsigned char*>(av_malloc(64*1024*1024)), &av_free);
-	custom_io.reset(avio_alloc_context(buffer.get(), 64*1024*1024, 0, reinterpret_cast<void*>(file), Container::read_custom, nullptr, nullptr), &av_free);
-	custom_io->seekable = 0;
-}
-
 void Container::parse_header(const string &file_name) {
 	AVFormatContext* format = avformat_alloc_context();
-	format->pb = custom_io.get();
-	format->flags = AVFMT_FLAG_CUSTOM_IO;
-	if (avformat_open_input(&format, "", nullptr, nullptr) < 0) {
+	if (avformat_open_input(&format, file_name.c_str(), nullptr, nullptr) < 0) {
 		throw runtime_error("Error opening input");
 	}
 	format_context.reset(format, [](AVFormatContext* c){ avformat_close_input(&c); avformat_free_context(c); });
