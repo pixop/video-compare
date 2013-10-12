@@ -1,6 +1,13 @@
 #include "container.h"
 
-using namespace std;
+#include <iostream>
+
+using std::once_flag;
+using std::string;
+using std::runtime_error;
+using std::unique_ptr;
+using std::cout;
+using std::endl;
 
 once_flag Container::init_flag;
 

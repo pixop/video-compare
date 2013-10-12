@@ -1,6 +1,13 @@
 #pragma once
 
-#include "common.h"
+#include <atomic>
+
+extern "C" {
+	#include <libavcodec/avcodec.h>
+}
+
+#include <SDL.h>
+#include <SDL_thread.h>
 
 class Display {
 	private:

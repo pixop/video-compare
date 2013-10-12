@@ -1,5 +1,10 @@
 #pragma once
 
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+
 template <class T>
 class Queue {
 	protected:

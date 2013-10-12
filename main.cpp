@@ -1,7 +1,13 @@
-#include "common.h"
+#include <string>
+#include <iostream>
+
 #include "player.h"
 
-using namespace std;
+using std::runtime_error;
+using std::string;
+using std::exception;
+using std::cerr;
+using std::endl;
 
 int main(int argc, char **argv) {
 
@@ -18,7 +24,7 @@ int main(int argc, char **argv) {
 
 	catch (exception &e) {
 		cerr << "Initialization error: " << e.what() << endl;
-		exit(1);
+		return 1;
 	}
 
 	return 0;

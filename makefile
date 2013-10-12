@@ -9,16 +9,16 @@ all: $(TARGET)
 player: main.o player.o container.o display.o
 	$(CC) $(CFLAGS) -o $(TARGET) main.o container.o player.o display.o $(LDFLAGS)
 
-main.o: main.cpp player.h common.h
+main.o: main.cpp player.h
 	$(CC) $(CFLAGS) -c main.cpp $(LDFLAGS)
 
-player.o: player.cpp player.h container.h display.h common.h
+player.o: player.cpp player.h container.h display.h
 	$(CC) $(CFLAGS) -c player.cpp $(LDFLAGS)
 
-container.o: container.cpp container.h common.h
+container.o: container.cpp container.h
 	$(CC) $(CFLAGS) -c container.cpp $(LDFLAGS)
 
-display.o: display.cpp display.h common.h
+display.o: display.cpp display.h
 	$(CC) $(CFLAGS) -c display.cpp $(LDFLAGS)
 
 clean:

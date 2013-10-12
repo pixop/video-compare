@@ -1,6 +1,9 @@
 #include "display.h"
 
-using namespace std;
+#include <stdexcept>
+
+using std::runtime_error;
+using std::move;
 
 Display::Display(const unsigned width, const unsigned height) {
 

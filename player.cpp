@@ -1,9 +1,27 @@
 #include "player.h"
-#include "display.h"
 
-using namespace std;
+#include <chrono>
+#include <iostream>
+#include <algorithm>
 
-Player::Player(const std::string &file_name) :
+
+extern "C" {
+	#include <libavutil/time.h>
+}
+
+
+using std::string;
+using std::unique_ptr;
+using std::thread;
+using std::chrono::milliseconds;
+using std::this_thread::sleep_for;
+using std::exception;
+using std::cerr;
+using std::endl;
+using std::runtime_error;
+using std::max;
+
+Player::Player(const string &file_name) :
        	container(new Container(file_name)),
 	packet_queue(new Queue<unique_ptr<AVPacket, void(*)(AVPacket*)>>(512 * 1024 * 1024)),
 	frame_queue(new Queue<unique_ptr<AVFrame, void(*)(AVFrame*)>>(512 * 1024 * 1024)) {
@@ -14,8 +32,8 @@ stages.emplace_back(thread(&Player::demultiplex, this));
 	stages.emplace_back(thread(&Player::poll, this));
 
 	while (!display->get_quit()) {
-		chrono::milliseconds sleep(10);
-		this_thread::sleep_for(sleep);
+		milliseconds sleep(10);
+		sleep_for(sleep);
 	}
 
 	for (auto &stage : stages) {
@@ -145,8 +163,8 @@ void Player::video() {
 				display->refresh(*frame);
 			}
 			else {
-				chrono::milliseconds sleep(10);
-				this_thread::sleep_for(sleep);
+				milliseconds sleep(10);
+				sleep_for(sleep);
 			}
 		}
 	}

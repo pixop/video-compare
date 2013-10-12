@@ -1,8 +1,18 @@
 #pragma once
 
-#include "common.h"
 #include "container.h"
 #include "display.h"
+#include "queue.h"
+
+#include <memory>
+#include <vector>
+#include <thread>
+#include <string>
+
+extern "C" {
+	#include <libavcodec/avcodec.h>
+}
+
 
 class Player {
 	private:
