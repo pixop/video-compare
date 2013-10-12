@@ -1,5 +1,6 @@
 #include <string>
 #include <iostream>
+#include <stdexcept>
 
 #include "player.h"
 
