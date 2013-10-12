@@ -30,11 +30,6 @@ class Container {
 		// Conversion context to YUV for output
 		std::shared_ptr<SwsContext> conversion_context;
 
-		// Custom IO
-		std::shared_ptr<AVIOContext> custom_io;
-		// Input buffer
-		std::shared_ptr<unsigned char> buffer;
-
 		// Read container to setup format context
 		void parse_header(const std::string &file_name);
 		// Register streams
