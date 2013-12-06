@@ -120,11 +120,9 @@ void Player::video() {
 		const int64_t no_lag = 0;
 		int64_t frame_pts = 0;
 		int64_t frame_delay = 0;
-		int64_t start_time = 0;
 		int64_t target_time = 0;
 		int64_t lag = 0;
 		int64_t display_time = 0;
-		int64_t delay = 0;
 		int64_t diff = 0;
 		int64_t delta = 0;
 		for (uint64_t frame_number = 0;; ++frame_number) {
@@ -158,7 +156,6 @@ void Player::video() {
 				{
 					frame_pts = frame->pts;
 					display_time = av_gettime();
-					start_time = display_time;
 					target_time = display_time;
 				}
 				display->refresh(*frame);
