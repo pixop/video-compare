@@ -3,7 +3,7 @@
 #include <stdexcept>
 
 using std::runtime_error;
-using std::move;
+using std::copy;
 
 Display::Display(const unsigned width, const unsigned height) {
 
@@ -38,9 +38,9 @@ void Display::refresh(AVFrame &frame)
 		bmp->pitches[channel] = frame.linesize[channel];
 	}
 
-	move(&frame.data[0][0], &frame.data[0][bmp->pitches[0] * bmp->h], bmp->pixels[0]); 
-	move(&frame.data[1][0], &frame.data[1][bmp->pitches[1] * bmp->h / 2], bmp->pixels[2]); 
-	move(&frame.data[2][0], &frame.data[2][bmp->pitches[2] * bmp->h / 2], bmp->pixels[1]); 
+	copy(&frame.data[0][0], &frame.data[0][bmp->pitches[0] * bmp->h], bmp->pixels[0]); 
+	copy(&frame.data[1][0], &frame.data[1][bmp->pitches[1] * bmp->h / 2], bmp->pixels[2]); 
+	copy(&frame.data[2][0], &frame.data[2][bmp->pitches[2] * bmp->h / 2], bmp->pixels[1]); 
 
 	SDL_UnlockYUVOverlay(bmp);
 
@@ -49,7 +49,6 @@ void Display::refresh(AVFrame &frame)
 	rect.w = bmp->w;
 	rect.h = bmp->h;
 	SDL_DisplayYUVOverlay(bmp, &rect);
-
 }
 
 void Display::input()
@@ -62,7 +61,7 @@ void Display::input()
 				quit = true;
 				break;
 			case SDLK_SPACE:
-				toggle_play();
+				play = !play;
 				break;
 			default:
 				break;
@@ -87,8 +86,4 @@ void Display::set_quit() {
 
 bool Display::get_play() {
 	return play;
-}
-
-void Display::toggle_play() {
-	play = !play;
 }

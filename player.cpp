@@ -22,11 +22,13 @@ using std::endl;
 using std::runtime_error;
 using std::max;
 
+const size_t Player::queue_size = 512 * 1048576;
+
 Player::Player(const string &file_name) :
        	container(new Container(file_name)),
-	packet_queue(new Queue<unique_ptr<AVPacket, function<void(AVPacket*)>>>(512 * 1024 * 1024)),
-	frame_queue(new Queue<unique_ptr<AVFrame, function<void(AVFrame*)>>>(512 * 1024 * 1024)) {
-	display.reset(new Display(container->get_width(), container->get_height()));
+	display(new Display(container->get_width(), container->get_height())),
+	packet_queue(new Queue<unique_ptr<AVPacket, function<void(AVPacket*)>>>(queue_size)),
+	frame_queue(new Queue<unique_ptr<AVFrame, function<void(AVFrame*)>>>(queue_size)) {
 	stages.emplace_back(thread(&Player::demultiplex, this));
 	stages.emplace_back(thread(&Player::decode_video, this));
 	stages.emplace_back(thread(&Player::video, this));
@@ -45,19 +47,23 @@ Player::Player(const string &file_name) :
 void Player::demultiplex() {
 	try {
 		for (;;) {
+			// If quitting, inform queue
 			if (display->get_quit()) {
 				packet_queue->set_quit();
 				break;
 			}
 
+			// Create AVPacket
 			unique_ptr<AVPacket, function<void(AVPacket*)>> packet(new AVPacket, [](AVPacket* p){ av_free_packet(p); delete p; });
 			av_init_packet(packet.get());
 			packet->data = nullptr;
 
+			// Read frame into AVPacket
 			if (!container->read_frame(*packet)) {
 				packet_queue->set_finished();
 				break; }
 
+			// Move into queue if first video stream
 			if (packet->stream_index == container->get_video_stream()) {
 				packet_queue->push(move(packet), packet->size);
 			}
@@ -67,31 +73,36 @@ void Player::demultiplex() {
 		cerr << "Demuxing  error: " << e.what() << endl;
 		exit(1);
 	}
-
 }
 
 void Player::decode_video() {
 
-	int finished_frame;
 	const AVRational microseconds = {1, 1000000};
 
 	try {
 		for(;;) {
+			// If quitting, inform queues
 			if (display->get_quit()) {
 				frame_queue->set_quit();
+				packet_queue->set_quit();
 				break;
 			}
 
+			// Create AVFrame and AVQueue
 			unique_ptr<AVFrame, function<void(AVFrame*)>> frame_decoded(avcodec_alloc_frame(), [](AVFrame* f){ avcodec_free_frame(&f); });
 			unique_ptr<AVPacket, function<void(AVPacket*)>> packet(nullptr, [](AVPacket* p){ av_free_packet(p); delete p; });
 
+			// Read packet from queue
 			if (!packet_queue->pop(packet)) {
 				frame_queue->set_finished();
 				break;
 			}
 
+			// Decode packet
+			int finished_frame;
 			container->decode_frame(frame_decoded, finished_frame, move(packet));
 
+			// If a whole frame has been decoded, adjust time stamps and add to queue
 			if (finished_frame) {
 				frame_decoded->pts = av_rescale_q(frame_decoded->pkt_dts, container->get_container_time_base(), microseconds);
 
