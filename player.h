@@ -19,8 +19,8 @@ class Player {
 		std::unique_ptr<Container> container;
 		std::unique_ptr<Display> display;
 
-		std::unique_ptr<Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>>> packet_queue;
-		std::unique_ptr<Queue<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>>> frame_queue;
+		std::unique_ptr<PacketQueue> packet_queue;
+		std::unique_ptr<FrameQueue> frame_queue;
 
 		std::vector<std::thread> stages;
 

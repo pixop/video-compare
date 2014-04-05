@@ -27,8 +27,10 @@ const size_t Player::queue_size = 512 * 1048576;
 Player::Player(const string &file_name) :
        	container(new Container(file_name)),
 	display(new Display(container->get_width(), container->get_height())),
-	packet_queue(new Queue<unique_ptr<AVPacket, function<void(AVPacket*)>>>(queue_size)),
-	frame_queue(new Queue<unique_ptr<AVFrame, function<void(AVFrame*)>>>(queue_size)) {
+	packet_queue(new Queue<unique_ptr<AVPacket, function<void(AVPacket*)>>>(
+		queue_size)),
+	frame_queue(new Queue<unique_ptr<AVFrame, function<void(AVFrame*)>>>(
+		queue_size)) {
 	stages.emplace_back(thread(&Player::demultiplex, this));
 	stages.emplace_back(thread(&Player::decode_video, this));
 	stages.emplace_back(thread(&Player::video, this));
@@ -54,7 +56,8 @@ void Player::demultiplex() {
 			}
 
 			// Create AVPacket
-			unique_ptr<AVPacket, function<void(AVPacket*)>> packet(new AVPacket, [](AVPacket* p){ av_free_packet(p); delete p; });
+			unique_ptr<AVPacket, function<void(AVPacket*)>> packet(
+				new AVPacket, [](AVPacket* p){ av_free_packet(p); delete p; });
 			av_init_packet(packet.get());
 			packet->data = nullptr;
 
@@ -89,8 +92,10 @@ void Player::decode_video() {
 			}
 
 			// Create AVFrame and AVQueue
-			unique_ptr<AVFrame, function<void(AVFrame*)>> frame_decoded(av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); });
-			unique_ptr<AVPacket, function<void(AVPacket*)>> packet(nullptr, [](AVPacket* p){ av_free_packet(p); delete p; });
+			unique_ptr<AVFrame, function<void(AVFrame*)>> frame_decoded(
+				av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); });
+			unique_ptr<AVPacket, function<void(AVPacket*)>> packet(
+				nullptr, [](AVPacket* p){ av_free_packet(p); delete p; });
 
 			// Read packet from queue
 			if (!packet_queue->pop(packet)) {
@@ -100,17 +105,29 @@ void Player::decode_video() {
 
 			// Decode packet
 			int finished_frame;
-			container->decode_frame(frame_decoded, finished_frame, move(packet));
+			container->decode_frame(
+				frame_decoded, finished_frame, move(packet));
 
-			// If a whole frame has been decoded, adjust time stamps and add to queue
+			// If a whole frame has been decoded,
+			// adjust time stamps and add to queue
 			if (finished_frame) {
-				frame_decoded->pts = av_rescale_q(frame_decoded->pkt_dts, container->get_container_time_base(), microseconds);
+				frame_decoded->pts = av_rescale_q(
+					frame_decoded->pkt_dts,
+				   	container->get_container_time_base(),
+				   	microseconds);
 
-				unique_ptr<AVFrame, function<void(AVFrame*)>> frame_converted(av_frame_alloc(), [](AVFrame* f){ avpicture_free(reinterpret_cast<AVPicture*>(f)); av_frame_free(&f); });
-				if (av_frame_copy_props(frame_converted.get(), frame_decoded.get()) < 0) {
+				unique_ptr<AVFrame, function<void(AVFrame*)>> frame_converted(
+					av_frame_alloc(),
+					[](AVFrame* f){avpicture_free(reinterpret_cast<AVPicture*>(
+						f)); av_frame_free(&f); });
+				if (av_frame_copy_props(frame_converted.get(),
+				    frame_decoded.get()) < 0) {
 					throw runtime_error("Copying frame properties");
 				}
-				if (avpicture_alloc(reinterpret_cast<AVPicture*>(frame_converted.get()), container->get_pixel_format(), container->get_width(), container->get_height()) < 0) {
+				if (avpicture_alloc(
+					reinterpret_cast<AVPicture*>(frame_converted.get()),
+				   	container->get_pixel_format(),
+				   	container->get_width(), container->get_height()) < 0) {
 					throw runtime_error("Allocating picture"); 
 				}	
 				container->convert_frame(move(frame_decoded), frame_converted);
@@ -142,7 +159,8 @@ void Player::video() {
 			}
 
 			else if (display->get_play()) {
-				unique_ptr<AVFrame, function<void(AVFrame*)>> frame(nullptr, [](AVFrame* f){ av_frame_free(&f); });
+				unique_ptr<AVFrame, function<void(AVFrame*)>> frame(
+					nullptr, [](AVFrame* f){ av_frame_free(&f); });
 				frame_queue->pop(frame);
 
 				if (frame_number) {

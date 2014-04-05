@@ -38,9 +38,15 @@ void Display::refresh(AVFrame &frame)
 		bmp->pitches[channel] = frame.linesize[channel];
 	}
 
-	copy(&frame.data[0][0], &frame.data[0][bmp->pitches[0] * bmp->h], bmp->pixels[0]); 
-	copy(&frame.data[1][0], &frame.data[1][bmp->pitches[1] * bmp->h / 2], bmp->pixels[2]); 
-	copy(&frame.data[2][0], &frame.data[2][bmp->pitches[2] * bmp->h / 2], bmp->pixels[1]); 
+	copy(&frame.data[0][0],
+	     &frame.data[0][bmp->pitches[0] * bmp->h],
+	     bmp->pixels[0]);
+	copy(&frame.data[1][0],
+	     &frame.data[1][bmp->pitches[1] * bmp->h / 2],
+	     bmp->pixels[2]);
+	copy(&frame.data[2][0],
+	     &frame.data[2][bmp->pitches[2] * bmp->h / 2],
+	     bmp->pixels[1]);
 
 	SDL_UnlockYUVOverlay(bmp);
 

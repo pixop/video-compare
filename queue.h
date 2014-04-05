@@ -4,6 +4,10 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <memory>
+
+struct AVPacket;
+struct AVFrame;
 
 template <class T>
 class Queue {
@@ -38,6 +42,10 @@ class Queue {
 		void set_quit();
 };
 
+typedef Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>>
+	PacketQueue;
+typedef Queue<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>>
+	FrameQueue;
 
 template <class T>
 Queue<T>::Queue(const size_t size_max) : size_total(0), size_limit(size_max) {

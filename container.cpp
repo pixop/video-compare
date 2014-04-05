@@ -11,9 +11,10 @@ using std::function;
 once_flag Container::init_flag;
 
 Container::Container(const string &file_name) :
-	format_context(nullptr, [](AVFormatContext* c){ avformat_close_input(&c); avformat_free_context(c); }),
-	codec_context_video(nullptr, [](AVCodecContext *c){ avcodec_close(c); }), 
-	codec_context_audio(nullptr, [](AVCodecContext *c){ avcodec_close(c); }),
+	format_context(nullptr, [](AVFormatContext* c){avformat_close_input(&c);
+	                                               avformat_free_context(c);}),
+	codec_context_video(nullptr, [](AVCodecContext *c){avcodec_close(c);}), 
+	codec_context_audio(nullptr, [](AVCodecContext *c){avcodec_close(c);}),
 	conversion_context(nullptr, &sws_freeContext) {
 	call_once(init_flag, [](){ av_register_all(); });
 	parse_header(file_name);
@@ -24,7 +25,8 @@ Container::Container(const string &file_name) :
 
 void Container::parse_header(const string &file_name) {
 	AVFormatContext* format = avformat_alloc_context();
-	if (avformat_open_input(&format, file_name.c_str(), nullptr, nullptr) < 0) {
+	if (avformat_open_input(&format, file_name.c_str(),
+	                        nullptr, nullptr) < 0) {
 		throw runtime_error("Error opening input");
 	}
 	format_context.reset(format);
@@ -51,22 +53,28 @@ void Container::find_streams() {
 
 void Container::find_codecs() {
 	if (is_video()) {
-		codec_context_video.reset(format_context->streams[video_stream.front()]->codec);
-		const auto codec_video = avcodec_find_decoder(codec_context_video.get()->codec_id);
+		codec_context_video.reset(
+			format_context->streams[video_stream.front()]->codec);
+		const auto codec_video =
+		   	avcodec_find_decoder(codec_context_video.get()->codec_id);
 		if (!codec_video) {
 			throw runtime_error("Unsupported video codec");
 		}
-		if (avcodec_open2(codec_context_video.get(), codec_video, nullptr) < 0) {
+		if (avcodec_open2(codec_context_video.get(),
+		                  codec_video, nullptr) < 0) {
 			throw runtime_error("Opening video codec");
 		}
 	}
 	if (is_audio()) {
-		codec_context_audio.reset(format_context->streams[audio_stream.front()]->codec);
-		const auto codec_audio = avcodec_find_decoder(codec_context_audio.get()->codec_id);
+		codec_context_audio.reset(
+				format_context->streams[audio_stream.front()]->codec);
+		const auto codec_audio =
+		   	avcodec_find_decoder(codec_context_audio.get()->codec_id);
 		if (!codec_audio) {
 			throw runtime_error("Unsupported audio codec");
 		}
-		if (avcodec_open2(codec_context_audio.get(), codec_audio, nullptr) < 0) {
+		if (avcodec_open2(codec_context_audio.get(),
+		                  codec_audio, nullptr) < 0) {
 			throw runtime_error("Opening audio codec");
 		}
 	}
@@ -87,13 +95,18 @@ bool Container::read_frame(AVPacket &packet) {
 	return av_read_frame(format_context.get(), &packet) >= 0;
 }
 
-void Container::decode_frame(unique_ptr<AVFrame, function<void(AVFrame*)>> &frame, int &got_frame, unique_ptr<AVPacket, function<void(AVPacket*)>> packet) {
-	if (avcodec_decode_video2(codec_context_video.get(), frame.get(), &got_frame, packet.get()) < 0) {
+void Container::decode_frame(
+	unique_ptr<AVFrame, function<void(AVFrame*)>> &frame,
+   	int &got_frame, unique_ptr<AVPacket, function<void(AVPacket*)>> packet) {
+	if (avcodec_decode_video2(codec_context_video.get(),
+	                          frame.get(), &got_frame, packet.get()) < 0) {
 		throw runtime_error("Decoding video");
 	}
 }
 
-void Container::convert_frame(unique_ptr<AVFrame, function<void(AVFrame*)>> src, unique_ptr<AVFrame, function<void(AVFrame*)>> &dst) {
+void Container::convert_frame(
+	unique_ptr<AVFrame, function<void(AVFrame*)>> src,
+   	unique_ptr<AVFrame, function<void(AVFrame*)>> &dst) {
 	sws_scale(conversion_context.get(),
 		// Source
 		src->data, src->linesize, 0, get_height(),
@@ -102,29 +115,6 @@ void Container::convert_frame(unique_ptr<AVFrame, function<void(AVFrame*)>> src,
 }
 
 void Container::decode_audio() {
-	//while (packet.size > 0) {
-	//	int frame_finished = 0;
-	//	int length = avcodec_decode_audio4(codec_context, frame, &frame_finished, packet);
-
-	//	if (length < 0) {
-	//		// Error skip frame
-	//		packet.size = 0;
-	//		break;
-	//	}
-
-	//	if (frame_finished) {
-	//		int data_size = av_samples_get_buffer_size(
-	//			nullptr,
-	//			codec_context->channels,
-	//			frame->nb_samples,
-	//			codec_context->sample_fmt,
-	//			1);
-	//		copy(frame->data[0][0], frame->data[0][data_size], audio_buffer);
-	//	}
-
-	//	packet.data += length;
-	//	packet.size -= length;
-	//}
 }
 
 bool Container::is_video() const {
