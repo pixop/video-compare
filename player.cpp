@@ -199,6 +199,8 @@ void Player::video() {
 			else {
 				milliseconds sleep(10);
 				sleep_for(sleep);
+					display_time = av_gettime();
+					target_time = display_time;
 			}
 		}
 	}
