@@ -63,7 +63,7 @@ bool Queue<T>::push(T &data, const size_t size) {
 			size_queue.push(size);
 			size_total += size;
 
-			empty.notify_one();
+			empty.notify_all();
 			return true;
 		}
 		else {
@@ -90,7 +90,7 @@ bool Queue<T>::push(T &&data, const size_t size) {
 			size_queue.push(size);
 			size_total += size;
 
-			empty.notify_one();
+			empty.notify_all();
 			return true;
 		}
 
@@ -115,7 +115,7 @@ bool Queue<T>::pop(T &data) {
 			data_queue.pop();
 			size_total -= size_queue.front();
 			size_queue.pop();
-			full.notify_one();
+			full.notify_all();
 			return true;
 		}
 
@@ -132,12 +132,12 @@ bool Queue<T>::pop(T &data) {
 template <class T>
 void Queue<T>::set_finished() {
 	finished = true;
-	empty.notify_one();
+	empty.notify_all();
 }
 
 template <class T>
 void Queue<T>::set_quit() {
 	quit = true;
-	empty.notify_one();
-	full.notify_one();
+	empty.notify_all();
+	full.notify_all();
 }
