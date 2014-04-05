@@ -25,7 +25,7 @@ using std::max;
 const size_t Player::queue_size = 512 * 1048576;
 
 Player::Player(const string &file_name) :
-       	container(new Container(file_name)),
+	container(new Container(file_name)),
 	display(new Display(container->get_width(), container->get_height())),
 	packet_queue(new Queue<unique_ptr<AVPacket, function<void(AVPacket*)>>>(
 		queue_size)),
