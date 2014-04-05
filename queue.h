@@ -34,7 +34,7 @@ class Queue {
 
 		// Don't wait for more data when queue empty
 		void set_finished();
-		// Don't push or pop anymore:wq
+		// Don't push or pop anymore
 		void set_quit();
 };
 
