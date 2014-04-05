@@ -1,4 +1,5 @@
 #pragma once
+#include <iostream>
 
 #include <queue>
 #include <mutex>
@@ -32,7 +33,6 @@ class Queue {
 	public:
 		Queue(const size_t size_max);
 
-		bool push(T &data, const size_t size);
 		bool push(T &&data, const size_t size);
 		bool pop(T &data);
 
@@ -40,6 +40,7 @@ class Queue {
 		void set_finished();
 		// Don't push or pop anymore
 		void set_quit();
+
 };
 
 typedef Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>>
@@ -54,87 +55,48 @@ Queue<T>::Queue(const size_t size_max) : size_total(0), size_limit(size_max) {
 }
 
 template <class T>
-bool Queue<T>::push(T &data, const size_t size) {
-	std::unique_lock<std::mutex> lock(m);
-
-	for (;;) {
-		if (quit) {
-			return false;
-		}
-
-		else if (finished) {
-			return false;
-		}
-
-		else if (size_total + size <= size_limit) {
-			data_queue.push(std::move(data));
-			size_queue.push(size);
-			size_total += size;
-
-			empty.notify_all();
-			return true;
-		}
-		else {
-			full.wait(lock);
-		}
-	}
-};
-
-template <class T>
 bool Queue<T>::push(T &&data, const size_t size) {
 	std::unique_lock<std::mutex> lock(m);
 
-	for (;;) {
-		if (quit) {
-			return false;
-		}
+	while (!quit && !finished) {
 
-		else if (finished) {
-			return false;
-		}
-
-		else if (size_total + size <= size_limit) {
+		if (size_total + size <= size_limit) {
 			data_queue.push(std::move(data));
 			size_queue.push(size);
 			size_total += size;
 
 			empty.notify_all();
 			return true;
-		}
-
-		else {
+		} else {
 			full.wait(lock);
-
 		}
 	}
+
+	return false;
 };
 
 template <class T>
 bool Queue<T>::pop(T &data) {
 	std::unique_lock<std::mutex> lock(m);
 
-	for (;;) {
-		if (quit) {
-			return false;
-		}
+	while (!quit) {
 
 		if (!data_queue.empty()) {
 			data = std::move(data_queue.front());
 			data_queue.pop();
 			size_total -= size_queue.front();
 			size_queue.pop();
+
 			full.notify_all();
 			return true;
-		}
-
-		else if (finished) {
+		} else if (data_queue.empty() && finished) {
 			return false;
-		}
-
-		else {
+		} else {
 			empty.wait(lock);
 		}
 	}
+
+	return false;
 };
 
 template <class T>

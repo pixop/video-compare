@@ -64,16 +64,18 @@ void Player::demultiplex() {
 			// Read frame into AVPacket
 			if (!container->read_frame(*packet)) {
 				packet_queue->set_finished();
-				break; }
+				break;
+		   	}
 
 			// Move into queue if first video stream
 			if (packet->stream_index == container->get_video_stream()) {
 				packet_queue->push(move(packet), packet->size);
 			}
 		}
+
 	}
 	catch (exception &e) {
-		cerr << "Demuxing  error: " << e.what() << endl;
+		cerr << "Demuxing error: " << e.what() << endl;
 		exit(1);
 	}
 }
@@ -118,8 +120,9 @@ void Player::decode_video() {
 
 				unique_ptr<AVFrame, function<void(AVFrame*)>> frame_converted(
 					av_frame_alloc(),
-					[](AVFrame* f){avpicture_free(reinterpret_cast<AVPicture*>(
-						f)); av_frame_free(&f); });
+					[](AVFrame* f){ avpicture_free(
+						reinterpret_cast<AVPicture*>(f));
+						av_frame_free(&f); });
 				if (av_frame_copy_props(frame_converted.get(),
 				    frame_decoded.get()) < 0) {
 					throw runtime_error("Copying frame properties");
@@ -132,7 +135,11 @@ void Player::decode_video() {
 				}	
 				container->convert_frame(move(frame_decoded), frame_converted);
 		
-				frame_queue->push(move(frame_converted), 1920*1080*3);
+				frame_queue->push(
+					move(frame_converted),
+					avpicture_get_size(container->get_pixel_format(),
+					                   container->get_width(),
+					                   container->get_height()));
 			}
 		}
 	}
@@ -153,6 +160,7 @@ void Player::video() {
 		int64_t display_time = 0;
 		int64_t diff = 0;
 		int64_t delta = 0;
+
 		for (uint64_t frame_number = 0;; ++frame_number) {
 			if (display->get_quit()) {
 				break;
@@ -179,7 +187,6 @@ void Player::video() {
 
 					display_time = av_gettime();
 					diff = display_time - target_time;
-					//cout << diff << endl;
 				}
 				else
 				{
