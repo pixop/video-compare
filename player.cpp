@@ -27,6 +27,7 @@ const size_t Player::queue_size = 512 * 1048576;
 Player::Player(const string &file_name) :
 	container(new Container(file_name)),
 	display(new Display(container->get_width(), container->get_height())),
+	timer(new Timer),
 	packet_queue(new Queue<unique_ptr<AVPacket, function<void(AVPacket*)>>>(
 		queue_size)),
 	frame_queue(new Queue<unique_ptr<AVFrame, function<void(AVFrame*)>>>(
@@ -152,59 +153,33 @@ void Player::decode_video() {
 
 void Player::video() {
 	try {
-		const int64_t no_lag = 0;
 		int64_t frame_pts = 0;
-		int64_t frame_delay = 0;
-		int64_t target_time = 0;
-		int64_t lag = 0;
-		int64_t display_time = 0;
-		int64_t diff = 0;
-		int64_t delta = 0;
 
 		for (uint64_t frame_number = 0;; ++frame_number) {
 			if (display->get_quit()) {
 				break;
-			}
 
-			else if (display->get_play()) {
+			} else if (display->get_play()) {
 				unique_ptr<AVFrame, function<void(AVFrame*)>> frame(
 					nullptr, [](AVFrame* f){ av_frame_free(&f); });
 				frame_queue->pop(frame);
 
+				int64_t frame_delay = frame->pts - frame_pts;
+				frame_pts = frame->pts;
+
 				if (frame_number) {
-					frame_delay = frame->pts - frame_pts;
-					frame_pts = frame->pts;
+					timer->wait(frame_delay);
 
-					// Time at which we want to display the frame
-					target_time += frame_delay;
+				} else {
+					timer->reset();
+				} 
 
-					lag = max(no_lag, target_time - av_gettime());
-
-					delta += diff;
-					lag -= delta;
-
-					av_usleep(lag < 0 ? 0 : static_cast<unsigned>(lag));
-					//this_thread::sleep_for(chrono::microseconds(lag));
-
-					// Time at which the frame was displayed
-					display_time = av_gettime();
-
-					// The error in sleeping
-					diff = display_time - target_time;
-				}
-				else
-				{
-					frame_pts = frame->pts;
-					display_time = av_gettime();
-					target_time = display_time;
-				}
 				display->refresh(*frame);
-			}
-			else {
+
+			} else {
 				milliseconds sleep(10);
 				sleep_for(sleep);
-					display_time = av_gettime();
-					target_time = display_time;
+				timer->reset();
 			}
 		}
 	}

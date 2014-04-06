@@ -9,9 +9,9 @@ class Timer {
 		int64_t integral;
 		int64_t derivative;
 
-		const static int64_t P = 1;
-		const static int64_t I = 0;
-		const static int64_t D = 0;
+		const static double P;
+		const static double I;
+		const static double D;
 
 	public:
 		Timer();

@@ -2,6 +2,7 @@
 
 #include "container.h"
 #include "display.h"
+#include "timer.h"
 #include "queue.h"
 
 #include <memory>
@@ -18,6 +19,7 @@ class Player {
 	private:
 		std::unique_ptr<Container> container;
 		std::unique_ptr<Display> display;
+		std::unique_ptr<Timer> timer;
 
 		std::unique_ptr<PacketQueue> packet_queue;
 		std::unique_ptr<FrameQueue> frame_queue;

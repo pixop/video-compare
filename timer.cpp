@@ -15,16 +15,17 @@ Timer::Timer() :
 	derivative(0) {
 }
 
+const double Timer::P = 0.0;
+const double Timer::I = -1.0;
+const double Timer::D = 0.0;
+
 void Timer::wait(const int64_t period) {
 	target_time += period;
 
 	int64_t lag = target_time - av_gettime();
-	if (lag) {
+	lag += adjust();
 
-		lag += adjust();
-
-		av_usleep(max(0u, static_cast<unsigned>(lag)));
-	}
+	av_usleep(max(0u, static_cast<unsigned>(lag)));
 
 	int64_t error = av_gettime() - target_time;
 	derivative = error - proportional; 
