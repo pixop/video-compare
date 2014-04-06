@@ -6,13 +6,13 @@ TARGET = player
 
 all: $(TARGET)
 
-player: main.o player.o container.o display.o
-	$(CC) $(CFLAGS) -o $(TARGET) main.o container.o player.o display.o $(LDFLAGS)
+player: main.o player.o container.o display.o timer.o
+	$(CC) $(CFLAGS) -o $(TARGET) main.o container.o player.o display.o timer.o $(LDFLAGS)
 
 main.o: main.cpp player.h
 	$(CC) $(CFLAGS) -c main.cpp $(LDFLAGS)
 
-player.o: player.cpp player.h container.h display.h
+player.o: player.cpp player.h container.h display.h queue.h timer.h
 	$(CC) $(CFLAGS) -c player.cpp $(LDFLAGS)
 
 container.o: container.cpp container.h
@@ -20,6 +20,9 @@ container.o: container.cpp container.h
 
 display.o: display.cpp display.h
 	$(CC) $(CFLAGS) -c display.cpp $(LDFLAGS)
+
+timer.o: timer.cpp timer.h
+	$(CC) $(CFLAGS) -c timer.cpp $(LDFLAGS)
 
 clean:
 	rm -f *.o $(TARGET)

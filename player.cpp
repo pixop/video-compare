@@ -175,6 +175,7 @@ void Player::video() {
 					frame_delay = frame->pts - frame_pts;
 					frame_pts = frame->pts;
 
+					// Time at which we want to display the frame
 					target_time += frame_delay;
 
 					lag = max(no_lag, target_time - av_gettime());
@@ -185,7 +186,10 @@ void Player::video() {
 					av_usleep(lag < 0 ? 0 : static_cast<unsigned>(lag));
 					//this_thread::sleep_for(chrono::microseconds(lag));
 
+					// Time at which the frame was displayed
 					display_time = av_gettime();
+
+					// The error in sleeping
 					diff = display_time - target_time;
 				}
 				else
