@@ -30,8 +30,6 @@ Display::~Display() {
 
 void Display::refresh(AVFrame &frame)
 {
-	SDL_Rect rect;
-
 	SDL_LockYUVOverlay(bmp);
 
 	for (size_t channel = 0; channel < 3; ++channel) {
@@ -50,10 +48,10 @@ void Display::refresh(AVFrame &frame)
 
 	SDL_UnlockYUVOverlay(bmp);
 
-	rect.x = 0;
-	rect.y = 0;
-	rect.w = bmp->w;
-	rect.h = bmp->h;
+	SDL_Rect rect = {0, 0,
+	                 static_cast<Uint16>(bmp->w),
+	                 static_cast<Uint16>(bmp->h)};
+
 	SDL_DisplayYUVOverlay(bmp, &rect);
 }
 
