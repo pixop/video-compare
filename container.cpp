@@ -39,9 +39,9 @@ void Container::find_streams() {
 
 	for (size_t i = 0; i < format_context->nb_streams; ++i) {
 		size_t codec_type = format_context->streams[i]->codec->codec_type;
-		if (!is_video() && codec_type == AVMEDIA_TYPE_VIDEO) {
+		if (codec_type == AVMEDIA_TYPE_VIDEO) {
 			video_stream.push_back(i);
-		} else if (!is_audio() && codec_type == AVMEDIA_TYPE_AUDIO) {
+		} else if (codec_type == AVMEDIA_TYPE_AUDIO) {
 			audio_stream.push_back(i);
 		}
 	}
@@ -118,7 +118,7 @@ void Container::decode_audio() {
 }
 
 bool Container::is_video() const {
-       	return video_stream.size();
+	return video_stream.size();
 }
 
 bool Container::is_audio() const {
