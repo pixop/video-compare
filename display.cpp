@@ -1,63 +1,71 @@
 #include "display.h"
+#include <iostream>
 
 #include <stdexcept>
 
 using std::runtime_error;
 using std::copy;
 
-Display::Display(const unsigned width, const unsigned height) {
-
-	quit = false;
-	play = true;
-
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTTHREAD)) {
+Display::Display(const unsigned width, const unsigned height) :
+	quit(false),
+	play(true)
+{
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER)) {
 		throw runtime_error("SDL init");
 	}
 
-	screen = SDL_SetVideoMode(width, height, 0, 0);
-	if (!screen) {
-		throw runtime_error("SDL video");
+	window = SDL_CreateWindow(
+		"player", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+		width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+	if (!window) {
+		throw runtime_error("SDL window");
 	}
 
-	bmp = SDL_CreateYUVOverlay(width, height, SDL_YV12_OVERLAY, screen);
+	renderer = SDL_CreateRenderer(
+		window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+	if (!renderer) {
+		throw runtime_error("SDL renderer");
+	}
+
+	texture = SDL_CreateTexture(
+		renderer, SDL_PIXELFORMAT_YV12, SDL_TEXTUREACCESS_STREAMING,
+		width, height);
+	if (!texture) {
+		throw runtime_error("SDL texture");
+	}
+
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+	SDL_RenderSetLogicalSize(renderer, width, height);
+
+	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+	SDL_RenderClear(renderer);
+	SDL_RenderPresent(renderer);
 }
 
 Display::~Display() {
-	SDL_FreeYUVOverlay(bmp);
-	SDL_FreeSurface(screen);
+	SDL_DestroyTexture(texture);
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
 	SDL_Quit();
 }
 
 void Display::refresh(AVFrame &frame)
 {
-	SDL_LockYUVOverlay(bmp);
-
-	for (size_t channel = 0; channel < 3; ++channel) {
-		bmp->pitches[channel] = frame.linesize[channel];
+	if (SDL_UpdateYUVTexture(
+		texture, nullptr,
+		frame.data[0], frame.linesize[0],
+		frame.data[1], frame.linesize[1],
+		frame.data[2], frame.linesize[2])) {
+		throw runtime_error("SDL texture update");
 	}
-
-	copy(&frame.data[0][0],
-	     &frame.data[0][bmp->pitches[0] * bmp->h],
-	     bmp->pixels[0]);
-	copy(&frame.data[1][0],
-	     &frame.data[1][bmp->pitches[1] * bmp->h / 2],
-	     bmp->pixels[2]);
-	copy(&frame.data[2][0],
-	     &frame.data[2][bmp->pitches[2] * bmp->h / 2],
-	     bmp->pixels[1]);
-
-	SDL_UnlockYUVOverlay(bmp);
-
-	SDL_Rect rect = {0, 0,
-	                 static_cast<Uint16>(bmp->w),
-	                 static_cast<Uint16>(bmp->h)};
-
-	SDL_DisplayYUVOverlay(bmp, &rect);
+	SDL_RenderClear(renderer);
+	SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+	SDL_RenderPresent(renderer);
 }
 
 void Display::input()
 {
-	if (SDL_WaitEvent(&event)) {
+	if (SDL_PollEvent(&event)) {
 		switch (event.type) {
 		case SDL_KEYUP:
 			switch (event.key.keysym.sym) {
@@ -82,10 +90,6 @@ void Display::input()
 
 bool Display::get_quit() {
 	return quit;
-}
-
-void Display::set_quit() {
-	quit = true;
 }
 
 bool Display::get_play() {

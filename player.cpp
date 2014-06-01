@@ -34,13 +34,15 @@ Player::Player(const string &file_name) :
 		queue_size)) {
 	stages.emplace_back(thread(&Player::demultiplex, this));
 	stages.emplace_back(thread(&Player::decode_video, this));
-	stages.emplace_back(thread(&Player::video, this));
-	stages.emplace_back(thread(&Player::poll, this));
 
-	while (!display->get_quit()) {
-		milliseconds sleep(10);
-		sleep_for(sleep);
-	}
+	video();
+
+}
+
+Player::~Player() {
+
+	frame_queue->set_quit();
+	packet_queue->set_quit();
 
 	for (auto &stage : stages) {
 		stage.join();
@@ -50,12 +52,6 @@ Player::Player(const string &file_name) :
 void Player::demultiplex() {
 	try {
 		for (;;) {
-			// If quitting, inform queue
-			if (display->get_quit()) {
-				packet_queue->set_quit();
-				break;
-			}
-
 			// Create AVPacket
 			unique_ptr<AVPacket, function<void(AVPacket*)>> packet(
 				new AVPacket, [](AVPacket* p){ av_free_packet(p); delete p; });
@@ -70,10 +66,11 @@ void Player::demultiplex() {
 
 			// Move into queue if first video stream
 			if (packet->stream_index == container->get_video_stream()) {
-				packet_queue->push(move(packet), packet->size);
+				if (!packet_queue->push(move(packet), packet->size)) {
+					break;
+				}
 			}
 		}
-
 	}
 	catch (exception &e) {
 		cerr << "Demuxing error: " << e.what() << endl;
@@ -87,13 +84,6 @@ void Player::decode_video() {
 
 	try {
 		for(;;) {
-			// If quitting, inform queues
-			if (display->get_quit()) {
-				frame_queue->set_quit();
-				packet_queue->set_quit();
-				break;
-			}
-
 			// Create AVFrame and AVQueue
 			unique_ptr<AVFrame, function<void(AVFrame*)>> frame_decoded(
 				av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); });
@@ -136,11 +126,13 @@ void Player::decode_video() {
 				}	
 				container->convert_frame(move(frame_decoded), frame_converted);
 		
-				frame_queue->push(
+				if (!frame_queue->push(
 					move(frame_converted),
 					avpicture_get_size(container->get_pixel_format(),
 					                   container->get_width(),
-					                   container->get_height()));
+					                   container->get_height()))) {
+					break;
+				}
 			}
 		}
 	}
@@ -156,13 +148,18 @@ void Player::video() {
 		int64_t frame_pts = 0;
 
 		for (uint64_t frame_number = 0;; ++frame_number) {
+
+			display->input();
+
 			if (display->get_quit()) {
 				break;
 
 			} else if (display->get_play()) {
 				unique_ptr<AVFrame, function<void(AVFrame*)>> frame(
 					nullptr, [](AVFrame* f){ av_frame_free(&f); });
-				frame_queue->pop(frame);
+				if (!frame_queue->pop(frame)) {
+					break;
+				}
 
 				int64_t frame_delay = frame->pts - frame_pts;
 				frame_pts = frame->pts;
@@ -186,16 +183,5 @@ void Player::video() {
 	catch (exception &e) {
 		cerr << "Display error: " <<  e.what() << endl;
 		exit(1);
-	}
-}
-
-void Player::poll() {
-	for (;;) {
-		if (display->get_quit()) {
-			packet_queue->set_quit();
-			frame_queue->set_quit();
-			break;
-		}
-		display->input();
 	}
 }

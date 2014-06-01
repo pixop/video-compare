@@ -6,16 +6,17 @@ extern "C" {
 	#include <libavcodec/avcodec.h>
 }
 
-#include <SDL.h>
-#include <SDL_thread.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_thread.h>
 
 class Display {
 	private:
-		std::atomic_bool quit;
-		std::atomic_bool play;
+		bool quit;
+		bool play;
 
-		SDL_Surface *screen;
-		SDL_Overlay *bmp;
+		SDL_Window* window;
+		SDL_Renderer* renderer;
+		SDL_Texture* texture;
 		SDL_Event event;
 
 	public:
@@ -29,7 +30,6 @@ class Display {
 		void input();
 
 		bool get_quit();
-		void set_quit();
 		bool get_play();
 
 };

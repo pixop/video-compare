@@ -1,6 +1,6 @@
 CC = g++
 CFLAGS = -g -Wall
-LDFLAGS = -lavformat -lavcodec -lavutil -lswscale `sdl-config --cflags --libs` -std=c++0x -D__STDC_CONSTANT_MACROS
+LDFLAGS = -lavformat -lavcodec -lavutil -lswscale `sdl2-config --cflags --libs` -std=c++0x -D__STDC_CONSTANT_MACROS
 
 TARGET = player
 

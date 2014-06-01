@@ -30,11 +30,10 @@ class Player {
 
 	public:
 		Player(const std::string &file_name);
+		~Player();
 
 		void demultiplex();
 		void decode_video();
-		void decode_audio();
 		void video();
-		void poll();
 
 };
