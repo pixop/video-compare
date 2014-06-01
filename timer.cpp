@@ -25,7 +25,9 @@ void Timer::wait(const int64_t period) {
 	int64_t lag = target_time - av_gettime();
 	lag += adjust();
 
-	av_usleep(max(0u, static_cast<unsigned>(lag)));
+	if (lag > 0) {
+		av_usleep(static_cast<unsigned>(lag));
+	}
 
 	int64_t error = av_gettime() - target_time;
 	derivative = error - proportional; 
