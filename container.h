@@ -62,7 +62,10 @@ class Container {
 		   	std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> &dst);
 
 		// Decode audio packets
-		void decode_audio();
+		void decode_audio(
+			std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> &frame,
+		   	int &got_frame,
+		   	std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet);
 
 		bool is_video() const;
 		bool is_audio() const;

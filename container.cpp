@@ -114,7 +114,13 @@ void Container::convert_frame(
 		dst->data, dst->linesize);	
 }
 
-void Container::decode_audio() {
+void Container::decode_audio(
+	unique_ptr<AVFrame, function<void(AVFrame*)>> &frame,
+   	int &got_frame, unique_ptr<AVPacket, function<void(AVPacket*)>> packet) {
+	if (avcodec_decode_audio4(codec_context_video.get(),
+	                          frame.get(), &got_frame, packet.get()) < 0) {
+		throw runtime_error("Decoding audio");
+	}
 }
 
 bool Container::is_video() const {
