@@ -34,7 +34,7 @@ void Container::parse_header(const string &file_name) {
 
 void Container::find_streams() {
 	if (avformat_find_stream_info(format_context.get(), nullptr) < 0) {
-	       throw runtime_error("Finding stream information");
+		throw runtime_error("Finding stream information");
 	}
 
 	for (size_t i = 0; i < format_context->nb_streams; ++i) {
@@ -67,9 +67,9 @@ void Container::find_codecs() {
 	}
 	if (is_audio()) {
 		codec_context_audio.reset(
-				format_context->streams[audio_stream.front()]->codec);
+			format_context->streams[audio_stream.front()]->codec);
 		const auto codec_audio =
-		   	avcodec_find_decoder(codec_context_audio.get()->codec_id);
+			avcodec_find_decoder(codec_context_audio.get()->codec_id);
 		if (!codec_audio) {
 			throw runtime_error("Unsupported audio codec");
 		}
@@ -106,7 +106,7 @@ void Container::decode_frame(
 
 void Container::convert_frame(
 	unique_ptr<AVFrame, function<void(AVFrame*)>> src,
-   	unique_ptr<AVFrame, function<void(AVFrame*)>> &dst) {
+	unique_ptr<AVFrame, function<void(AVFrame*)>> &dst) {
 	sws_scale(conversion_context.get(),
 		// Source
 		src->data, src->linesize, 0, get_height(),
@@ -116,7 +116,7 @@ void Container::convert_frame(
 
 void Container::decode_audio(
 	unique_ptr<AVFrame, function<void(AVFrame*)>> &frame,
-   	int &got_frame, unique_ptr<AVPacket, function<void(AVPacket*)>> packet) {
+	int &got_frame, unique_ptr<AVPacket, function<void(AVPacket*)>> packet) {
 	if (avcodec_decode_audio4(codec_context_video.get(),
 	                          frame.get(), &got_frame, packet.get()) < 0) {
 		throw runtime_error("Decoding audio");

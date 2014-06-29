@@ -46,7 +46,7 @@ Player::~Player() {
 
 	for (auto &stage : stages) {
 		stage.join();
-	}	
+	}
 }
 
 void Player::demultiplex() {
@@ -62,7 +62,7 @@ void Player::demultiplex() {
 			if (!container->read_frame(*packet)) {
 				packet_queue->set_finished();
 				break;
-		   	}
+			}
 
 			// Move into queue if first video stream
 			if (packet->stream_index == container->get_video_stream()) {
@@ -71,8 +71,7 @@ void Player::demultiplex() {
 				}
 			}
 		}
-	}
-	catch (exception &e) {
+	} catch (exception &e) {
 		cerr << "Demuxing error: " << e.what() << endl;
 		exit(1);
 	}
@@ -83,7 +82,7 @@ void Player::decode_video() {
 	const AVRational microseconds = {1, 1000000};
 
 	try {
-		for(;;) {
+		for (;;) {
 			// Create AVFrame and AVQueue
 			unique_ptr<AVFrame, function<void(AVFrame*)>> frame_decoded(
 				av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); });
@@ -125,7 +124,7 @@ void Player::decode_video() {
 					throw runtime_error("Allocating picture"); 
 				}	
 				container->convert_frame(move(frame_decoded), frame_converted);
-		
+
 				if (!frame_queue->push(
 					move(frame_converted),
 					avpicture_get_size(container->get_pixel_format(),
@@ -135,8 +134,7 @@ void Player::decode_video() {
 				}
 			}
 		}
-	}
-	catch (exception &e) {
+	} catch (exception &e) {
 		cerr << "Decoding error: " <<  e.what() << endl;
 		exit(1);
 	}
@@ -169,7 +167,7 @@ void Player::video() {
 
 				} else {
 					timer->reset();
-				} 
+				}
 
 				display->refresh(*frame);
 
@@ -179,8 +177,7 @@ void Player::video() {
 				timer->reset();
 			}
 		}
-	}
-	catch (exception &e) {
+	} catch (exception &e) {
 		cerr << "Display error: " <<  e.what() << endl;
 		exit(1);
 	}

@@ -12,34 +12,34 @@ struct AVFrame;
 
 template <class T>
 class Queue {
-	protected:
-		// Data
-		std::queue<T> data_queue;
+protected:
+	// Data
+	std::queue<T> data_queue;
 
-		// Size of data
-		std::queue<size_t> size_queue;
-		size_t size_total;
-		size_t size_limit;
+	// Size of data
+	std::queue<size_t> size_queue;
+	size_t size_total;
+	size_t size_limit;
 
-		// Thread gubbins
-		std::mutex m;
-		std::condition_variable full;
-		std::condition_variable empty;
+	// Thread gubbins
+	std::mutex m;
+	std::condition_variable full;
+	std::condition_variable empty;
 
-		// Exit
-		std::atomic_bool quit;
-		std::atomic_bool finished;
+	// Exit
+	std::atomic_bool quit;
+	std::atomic_bool finished;
 
-	public:
-		Queue(const size_t size_max);
+public:
+	Queue(const size_t size_max);
 
-		bool push(T &&data, const size_t size);
-		bool pop(T &data);
+	bool push(T &&data, const size_t size);
+	bool pop(T &data);
 
-		// Don't wait for more data when queue empty
-		void set_finished();
-		// Don't push or pop anymore
-		void set_quit();
+	// Don't wait for more data when queue empty
+	void set_finished();
+	// Don't push or pop anymore
+	void set_quit();
 
 };
 

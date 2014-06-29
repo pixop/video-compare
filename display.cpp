@@ -8,8 +8,7 @@ using std::copy;
 
 Display::Display(const unsigned width, const unsigned height) :
 	quit(false),
-	play(true)
-{
+	play(true) {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER)) {
 		throw runtime_error("SDL init");
 	}
@@ -49,8 +48,7 @@ Display::~Display() {
 	SDL_Quit();
 }
 
-void Display::refresh(AVFrame &frame)
-{
+void Display::refresh(AVFrame &frame) {
 	if (SDL_UpdateYUVTexture(
 		texture, nullptr,
 		frame.data[0], frame.linesize[0],
@@ -63,8 +61,7 @@ void Display::refresh(AVFrame &frame)
 	SDL_RenderPresent(renderer);
 }
 
-void Display::input()
-{
+void Display::input() {
 	if (SDL_PollEvent(&event)) {
 		switch (event.type) {
 		case SDL_KEYUP:

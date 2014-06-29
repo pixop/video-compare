@@ -10,26 +10,26 @@ extern "C" {
 #include <SDL2/SDL_thread.h>
 
 class Display {
-	private:
-		bool quit;
-		bool play;
+private:
+	bool quit;
+	bool play;
 
-		SDL_Window* window;
-		SDL_Renderer* renderer;
-		SDL_Texture* texture;
-		SDL_Event event;
+	SDL_Window* window;
+	SDL_Renderer* renderer;
+	SDL_Texture* texture;
+	SDL_Event event;
 
-	public:
-		Display(const unsigned width, const unsigned height);
-		~Display();
+public:
+	Display(const unsigned width, const unsigned height);
+	~Display();
 
-		// Copy frame to display
-		void refresh(AVFrame &frame);
+	// Copy frame to display
+	void refresh(AVFrame &frame);
 
-		// Handle events
-		void input();
+	// Handle events
+	void input();
 
-		bool get_quit();
-		bool get_play();
+	bool get_quit();
+	bool get_play();
 
 };

@@ -30,7 +30,7 @@ void Timer::wait(const int64_t period) {
 	}
 
 	int64_t error = av_gettime() - target_time;
-	derivative = error - proportional; 
+	derivative = error - proportional;
 	integral += error;
 	proportional = error;
 
