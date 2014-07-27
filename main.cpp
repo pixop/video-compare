@@ -4,7 +4,7 @@
 
 #include "player.h"
 
-using std::runtime_error;
+using std::logic_error;
 using std::string;
 using std::exception;
 using std::cerr;
@@ -13,8 +13,8 @@ using std::endl;
 int main(int argc, char** argv) {
 
 	try {
-		if (argc < 2) {
-			throw runtime_error("Not enough arguements");
+		if (argc != 2) {
+			throw logic_error("Not enough arguments");
 		}
 
 		Player player(argv[1]);
