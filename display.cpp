@@ -7,8 +7,8 @@ using std::runtime_error;
 using std::copy;
 
 Display::Display(const unsigned width, const unsigned height) :
-	quit(false),
-	play(true) {
+		quit(false),
+		play(true) {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER)) {
 		throw runtime_error("SDL init");
 	}

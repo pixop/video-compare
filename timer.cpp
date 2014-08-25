@@ -9,10 +9,10 @@ extern "C" {
 using std::max;
 
 Timer::Timer() :
-	target_time(av_gettime()),
-	proportional(0),
-	integral(0),
-	derivative(0) {
+		target_time(av_gettime()),
+		proportional(0),
+		integral(0),
+		derivative(0) {
 }
 
 const double Timer::P = 0.0;

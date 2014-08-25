@@ -11,12 +11,14 @@ using std::function;
 once_flag Container::init_flag;
 
 Container::Container(const string &file_name) :
-	format_context(nullptr, [](AVFormatContext* c){avformat_close_input(&c);
-	                                               avformat_free_context(c);}),
-	codec_context_video(nullptr, [](AVCodecContext *c){avcodec_close(c);}), 
-	codec_context_audio(nullptr, [](AVCodecContext *c){avcodec_close(c);}),
-	conversion_context(nullptr, &sws_freeContext) {
-	call_once(init_flag, [](){ av_register_all(); });
+		format_context(nullptr, [](AVFormatContext* c){
+			avformat_close_input(&c);
+			avformat_free_context(c);
+		}),
+		codec_context_video(nullptr, [](AVCodecContext *c){avcodec_close(c);}),
+		codec_context_audio(nullptr, [](AVCodecContext *c){avcodec_close(c);}),
+		conversion_context(nullptr, &sws_freeContext) {
+	call_once(init_flag, [](){av_register_all();});
 	parse_header(file_name);
 	find_streams();
 	find_codecs();
