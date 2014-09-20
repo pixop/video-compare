@@ -8,18 +8,10 @@ extern "C" {
 
 using std::max;
 
-Timer::Timer() :
-		target_time(av_gettime()),
-		proportional(0),
-		integral(0),
-		derivative(0) {
+Timer::Timer() : target_time(av_gettime()) {
 }
 
-const double Timer::P = 0.0;
-const double Timer::I = -1.0;
-const double Timer::D = 0.0;
-
-void Timer::wait(const int64_t period) {
+void Timer::wait(int64_t period) {
 	target_time += period;
 
 	int64_t lag = target_time - av_gettime();
