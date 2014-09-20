@@ -5,7 +5,6 @@
 #include "player.h"
 
 using std::logic_error;
-using std::string;
 using std::exception;
 using std::cerr;
 using std::endl;
