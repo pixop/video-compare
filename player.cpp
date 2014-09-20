@@ -142,7 +142,7 @@ void Player::decode_video() {
 
 void Player::video() {
 	try {
-		int64_t frame_pts = 0;
+		int64_t last_pts = 0;
 
 		for (uint64_t frame_number = 0;; ++frame_number) {
 
@@ -158,13 +158,13 @@ void Player::video() {
 					break;
 				}
 
-				int64_t frame_delay = frame->pts - frame_pts;
-				frame_pts = frame->pts;
-
 				if (frame_number) {
+					int64_t frame_delay = frame->pts - last_pts;
+					last_pts = frame->pts;
 					timer->wait(frame_delay);
 
 				} else {
+					last_pts = frame->pts;
 					timer->reset();
 				}
 
