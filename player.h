@@ -26,7 +26,7 @@ private:
 
 	std::vector<std::thread> stages;
 
-	static const size_t queue_size;
+	static const size_t queue_size {512 * 1024 * 1024};
 
 public:
 	Player(const std::string &file_name);

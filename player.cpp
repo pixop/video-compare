@@ -22,8 +22,6 @@ using std::endl;
 using std::runtime_error;
 using std::max;
 
-const size_t Player::queue_size = 512 * 1048576;
-
 Player::Player(const string &file_name) :
 		container(new Container(file_name)),
 		display(new Display(container->get_width(), container->get_height())),
