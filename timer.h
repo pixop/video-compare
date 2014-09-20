@@ -16,7 +16,7 @@ private:
 public:
 	Timer();
 	void wait(int64_t period);
-	void reset();
+	void update();
 
 private:
 	int64_t adjust() const;

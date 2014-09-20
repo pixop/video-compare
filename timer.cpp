@@ -8,7 +8,8 @@ extern "C" {
 
 using std::max;
 
-Timer::Timer() : target_time(av_gettime()) {
+Timer::Timer() {
+	update();
 }
 
 void Timer::wait(int64_t period) {
@@ -28,7 +29,7 @@ void Timer::wait(int64_t period) {
 
 }
 
-void Timer::reset() {
+void Timer::update() {
 	target_time = av_gettime();
 }
 

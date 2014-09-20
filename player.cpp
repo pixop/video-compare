@@ -163,7 +163,7 @@ void Player::video() {
 
 				} else {
 					last_pts = frame->pts;
-					timer->reset();
+					timer->update();
 				}
 
 				display->refresh(*frame);
@@ -171,7 +171,7 @@ void Player::video() {
 			} else {
 				milliseconds sleep(10);
 				sleep_for(sleep);
-				timer->reset();
+				timer->update();
 			}
 		}
 	} catch (exception &e) {
