@@ -32,8 +32,8 @@ Player::Player(const string &file_name) :
 			unique_ptr<AVPacket, function<void(AVPacket*)>>>(queue_size)),
 		frame_queue(new Queue<
 			unique_ptr<AVFrame, function<void(AVFrame*)>>>(queue_size)) {
-	stages.emplace_back(thread(&Player::demultiplex, this));
-	stages.emplace_back(thread(&Player::decode_video, this));
+	stages.push_back(thread(&Player::demultiplex, this));
+	stages.push_back(thread(&Player::decode_video, this));
 
 	video();
 
@@ -98,7 +98,7 @@ void Player::decode_video() {
 			// Decode packet
 			int finished_frame;
 			container->decode_frame(
-				frame_decoded, finished_frame, move(packet));
+				frame_decoded.get(), finished_frame, packet.get());
 
 			// If a whole frame has been decoded,
 			// adjust time stamps and add to queue
@@ -123,7 +123,8 @@ void Player::decode_video() {
 				   	container->get_width(), container->get_height()) < 0) {
 					throw runtime_error("Allocating picture"); 
 				}	
-				container->convert_frame(move(frame_decoded), frame_converted);
+				container->convert_frame(
+					frame_decoded.get(), frame_converted.get());
 
 				if (!frame_queue->push(
 					move(frame_converted),
