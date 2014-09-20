@@ -26,10 +26,8 @@ Player::Player(const string &file_name) :
 		container(new Container(file_name)),
 		display(new Display(container->get_width(), container->get_height())),
 		timer(new Timer),
-		packet_queue(new Queue<
-			unique_ptr<AVPacket, function<void(AVPacket*)>>>(queue_size)),
-		frame_queue(new Queue<
-			unique_ptr<AVFrame, function<void(AVFrame*)>>>(queue_size)) {
+		packet_queue(new PacketQueue(queue_size)),
+		frame_queue(new FrameQueue(queue_size)) {
 	stages.push_back(thread(&Player::demultiplex, this));
 	stages.push_back(thread(&Player::decode_video, this));
 
