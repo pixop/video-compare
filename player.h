@@ -17,16 +17,16 @@ extern "C" {
 
 class Player {
 private:
-	std::unique_ptr<Container> container;
-	std::unique_ptr<Display> display;
-	std::unique_ptr<Timer> timer;
+	std::unique_ptr<Container> container_;
+	std::unique_ptr<Display> display_;
+	std::unique_ptr<Timer> timer_;
 
-	std::unique_ptr<PacketQueue> packet_queue;
-	std::unique_ptr<FrameQueue> frame_queue;
+	std::unique_ptr<PacketQueue> packet_queue_;
+	std::unique_ptr<FrameQueue> frame_queue_;
 
-	std::vector<std::thread> stages;
+	std::vector<std::thread> stages_;
 
-	static const size_t queue_size {5};
+	static const size_t queue_size_ {5};
 
 public:
 	Player(const std::string &file_name);
