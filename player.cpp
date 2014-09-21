@@ -37,8 +37,8 @@ Player::Player(const string &file_name) :
 
 Player::~Player() {
 
-	frame_queue->set_quit();
-	packet_queue->set_quit();
+	frame_queue->quit();
+	packet_queue->quit();
 
 	for (auto &stage : stages) {
 		stage.join();
@@ -56,13 +56,13 @@ void Player::demultiplex() {
 
 			// Read frame into AVPacket
 			if (!container->read_frame(*packet)) {
-				packet_queue->set_finished();
+				packet_queue->finished();
 				break;
 			}
 
 			// Move into queue if first video stream
 			if (packet->stream_index == container->get_video_stream()) {
-				if (!packet_queue->push(move(packet), packet->size)) {
+				if (!packet_queue->push(move(packet))) {
 					break;
 				}
 			}
@@ -87,7 +87,7 @@ void Player::decode_video() {
 
 			// Read packet from queue
 			if (!packet_queue->pop(packet)) {
-				frame_queue->set_finished();
+				frame_queue->finished();
 				break;
 			}
 
@@ -122,11 +122,7 @@ void Player::decode_video() {
 				container->convert_frame(
 					frame_decoded.get(), frame_converted.get());
 
-				if (!frame_queue->push(
-					move(frame_converted),
-					avpicture_get_size(container->get_pixel_format(),
-					                   container->get_width(),
-					                   container->get_height()))) {
+				if (!frame_queue->push(move(frame_converted))) {
 					break;
 				}
 			}

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include <queue>
 #include <mutex>
 #include <condition_variable>
@@ -14,61 +13,54 @@ template <class T>
 class Queue {
 protected:
 	// Data
-	std::queue<T> data_queue;
-
-	// Size of data
-	std::queue<size_t> size_queue;
-	size_t size_total;
-	size_t size_limit;
+	std::queue<T> queue_;
+	typename std::queue<T>::size_type size_max_;
 
 	// Thread gubbins
-	std::mutex m;
-	std::condition_variable full;
-	std::condition_variable empty;
+	std::mutex mutex_;
+	std::condition_variable full_;
+	std::condition_variable empty_;
 
 	// Exit
-	std::atomic_bool quit;
-	std::atomic_bool finished;
+	std::atomic_bool quit_{false};
+	std::atomic_bool finished_{false};
 
 public:
 	Queue(const size_t size_max);
 
-	bool push(T &&data, const size_t size);
+	bool push(T &&data);
 	bool pop(T &data);
 
-	// Don't wait for more data when queue empty
-	void set_finished();
-	// Don't push or pop anymore
-	void set_quit();
+	// The queue has finished accepting input
+	void finished();
+	// The queue will cannot be pushed or popped
+	void quit();
 
 };
 
-using PacketQueue = Queue<std::unique_ptr<AVPacket,
-                                          std::function<void(AVPacket*)>>>;
-using FrameQueue = Queue<std::unique_ptr<AVFrame,
-                                         std::function<void(AVFrame*)>>>;
+using PacketQueue =
+	Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>>;
+using FrameQueue =
+	Queue<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>>;
 
 template <class T>
-Queue<T>::Queue(const size_t size_max) : size_total(0), size_limit(size_max) {
-	quit = false;
-	finished = false;
+Queue<T>::Queue(size_t size_max) :
+		size_max_{size_max} {
 }
 
 template <class T>
-bool Queue<T>::push(T &&data, const size_t size) {
-	std::unique_lock<std::mutex> lock(m);
+bool Queue<T>::push(T &&data) {
+	std::unique_lock<std::mutex> lock(mutex_);
 
-	while (!quit && !finished) {
+	while (!quit_ && !finished_) {
 
-		if (size_total + size <= size_limit) {
-			data_queue.push(std::move(data));
-			size_queue.push(size);
-			size_total += size;
+		if (queue_.size() < size_max_) {
+			queue_.push(std::move(data));
 
-			empty.notify_all();
+			empty_.notify_all();
 			return true;
 		} else {
-			full.wait(lock);
+			full_.wait(lock);
 		}
 	}
 
@@ -77,22 +69,20 @@ bool Queue<T>::push(T &&data, const size_t size) {
 
 template <class T>
 bool Queue<T>::pop(T &data) {
-	std::unique_lock<std::mutex> lock(m);
+	std::unique_lock<std::mutex> lock(mutex_);
 
-	while (!quit) {
+	while (!quit_) {
 
-		if (!data_queue.empty()) {
-			data = std::move(data_queue.front());
-			data_queue.pop();
-			size_total -= size_queue.front();
-			size_queue.pop();
+		if (!queue_.empty()) {
+			data = std::move(queue_.front());
+			queue_.pop();
 
-			full.notify_all();
+			full_.notify_all();
 			return true;
-		} else if (data_queue.empty() && finished) {
+		} else if (queue_.empty() && finished_) {
 			return false;
 		} else {
-			empty.wait(lock);
+			empty_.wait(lock);
 		}
 	}
 
@@ -100,14 +90,14 @@ bool Queue<T>::pop(T &data) {
 };
 
 template <class T>
-void Queue<T>::set_finished() {
-	finished = true;
-	empty.notify_all();
+void Queue<T>::finished() {
+	finished_ = true;
+	empty_.notify_all();
 }
 
 template <class T>
-void Queue<T>::set_quit() {
-	quit = true;
-	empty.notify_all();
-	full.notify_all();
+void Queue<T>::quit() {
+	quit_ = true;
+	empty_.notify_all();
+	full_.notify_all();
 }
