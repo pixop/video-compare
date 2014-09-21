@@ -65,7 +65,7 @@ bool Queue<T>::push(T &&data) {
 	}
 
 	return false;
-};
+}
 
 template <class T>
 bool Queue<T>::pop(T &data) {
@@ -87,7 +87,7 @@ bool Queue<T>::pop(T &data) {
 	}
 
 	return false;
-};
+}
 
 template <class T>
 void Queue<T>::finished() {
