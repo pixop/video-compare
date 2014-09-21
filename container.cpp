@@ -8,14 +8,14 @@ using std::runtime_error;
 using std::unique_ptr;
 using std::function;
 
-once_flag Container::init_flag;
+once_flag Container::init_flag_;
 
 Container::Container(const string &file_name) :
-		format_context(nullptr),
-		codec_context_video(nullptr),
-		codec_context_audio(nullptr),
-		conversion_context(nullptr) {
-	call_once(init_flag, av_register_all);
+		format_context_(nullptr),
+		codec_context_video_(nullptr),
+		codec_context_audio_(nullptr),
+		conversion_context_(nullptr) {
+	call_once(init_flag_, av_register_all);
 	parse_header(file_name);
 	find_streams();
 	find_codecs();
@@ -23,32 +23,32 @@ Container::Container(const string &file_name) :
 }
 
 void Container::parse_header(const string &file_name) {
-	format_context = avformat_alloc_context();
-	if (avformat_open_input(&format_context, file_name.c_str(),
+	format_context_ = avformat_alloc_context();
+	if (avformat_open_input(&format_context_, file_name.c_str(),
 	                        nullptr, nullptr) < 0) {
 		throw runtime_error("Error opening input");
 	}
 }
 
 Container::~Container() {
-	sws_freeContext(conversion_context);
-	avcodec_close(codec_context_audio);
-	avcodec_close(codec_context_video);
-	avformat_close_input(&format_context);
-	avformat_free_context(format_context);
+	sws_freeContext(conversion_context_);
+	avcodec_close(codec_context_audio_);
+	avcodec_close(codec_context_video_);
+	avformat_close_input(&format_context_);
+	avformat_free_context(format_context_);
 }
 
 void Container::find_streams() {
-	if (avformat_find_stream_info(format_context, nullptr) < 0) {
+	if (avformat_find_stream_info(format_context_, nullptr) < 0) {
 		throw runtime_error("Finding stream information");
 	}
 
-	for (size_t i = 0; i < format_context->nb_streams; ++i) {
-		size_t codec_type = format_context->streams[i]->codec->codec_type;
+	for (size_t i = 0; i < format_context_->nb_streams; ++i) {
+		size_t codec_type = format_context_->streams[i]->codec->codec_type;
 		if (codec_type == AVMEDIA_TYPE_VIDEO) {
-			video_stream.push_back(i);
+			video_stream_.push_back(i);
 		} else if (codec_type == AVMEDIA_TYPE_AUDIO) {
-			audio_stream.push_back(i);
+			audio_stream_.push_back(i);
 		}
 	}
 
@@ -59,27 +59,27 @@ void Container::find_streams() {
 
 void Container::find_codecs() {
 	if (is_video()) {
-		codec_context_video =
-			format_context->streams[video_stream.front()]->codec;
+		codec_context_video_ =
+			format_context_->streams[video_stream_.front()]->codec;
 		const auto codec_video =
-			avcodec_find_decoder(codec_context_video->codec_id);
+			avcodec_find_decoder(codec_context_video_->codec_id);
 		if (!codec_video) {
 			throw runtime_error("Unsupported video codec");
 		}
-		if (avcodec_open2(codec_context_video,
+		if (avcodec_open2(codec_context_video_,
 		                  codec_video, nullptr) < 0) {
 			throw runtime_error("Opening video codec");
 		}
 	}
 	if (is_audio()) {
-		codec_context_audio =
-			format_context->streams[audio_stream.front()]->codec;
+		codec_context_audio_ =
+			format_context_->streams[audio_stream_.front()]->codec;
 		const auto codec_audio =
-			avcodec_find_decoder(codec_context_audio->codec_id);
+			avcodec_find_decoder(codec_context_audio_->codec_id);
 		if (!codec_audio) {
 			throw runtime_error("Unsupported audio codec");
 		}
-		if (avcodec_open2(codec_context_audio,
+		if (avcodec_open2(codec_context_audio_,
 		                  codec_audio, nullptr) < 0) {
 			throw runtime_error("Opening audio codec");
 		}
@@ -87,7 +87,7 @@ void Container::find_codecs() {
 }
 
 void Container::setup_conversion_context() {
-	conversion_context =
+	conversion_context_ =
 		sws_getContext(
 			// Source
 			get_width(), get_height(), get_pixel_format(), 
@@ -98,18 +98,18 @@ void Container::setup_conversion_context() {
 }
 
 bool Container::read_frame(AVPacket &packet) {
-	return av_read_frame(format_context, &packet) >= 0;
+	return av_read_frame(format_context_, &packet) >= 0;
 }
 
 void Container::decode_frame(AVFrame* frame, int &finished, AVPacket* packet) {
-	if (avcodec_decode_video2(codec_context_video,
+	if (avcodec_decode_video2(codec_context_video_,
 	                          frame, &finished, packet) < 0) {
 		throw runtime_error("Decoding video");
 	}
 }
 
 void Container::convert_frame(AVFrame* src, AVFrame* dst) {
-	sws_scale(conversion_context,
+	sws_scale(conversion_context_,
 		// Source
 		src->data, src->linesize, 0, get_height(),
 		// Destination
@@ -117,44 +117,44 @@ void Container::convert_frame(AVFrame* src, AVFrame* dst) {
 }
 
 void Container::decode_audio(AVFrame* frame, int &finished, AVPacket* packet) {
-	if (avcodec_decode_audio4(codec_context_video,
+	if (avcodec_decode_audio4(codec_context_video_,
 	                          frame, &finished, packet) < 0) {
 		throw runtime_error("Decoding audio");
 	}
 }
 
 bool Container::is_video() const {
-	return video_stream.size();
+	return video_stream_.size();
 }
 
 bool Container::is_audio() const {
-	return audio_stream.size();
+	return audio_stream_.size();
 }
 
 int Container::get_video_stream() const {
-	return video_stream.front();
+	return video_stream_.front();
 }
 
 int Container::get_audio_stream() const {
-	return audio_stream.front();
+	return audio_stream_.front();
 }
 
 unsigned Container::get_width() const {
-	return codec_context_video->width;
+	return codec_context_video_->width;
 }
 
 unsigned Container::get_height() const {
-	return codec_context_video->height;
+	return codec_context_video_->height;
 }
 
 AVPixelFormat Container::get_pixel_format() const {
-	return codec_context_video->pix_fmt;
+	return codec_context_video_->pix_fmt;
 }
 
 AVRational Container::get_video_time_base() const {
-	return codec_context_video->time_base;
+	return codec_context_video_->time_base;
 }
 
 AVRational Container::get_container_time_base() const {
-	return format_context->streams[video_stream.front()]->time_base;
+	return format_context_->streams[video_stream_.front()]->time_base;
 }

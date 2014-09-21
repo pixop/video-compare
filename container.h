@@ -16,28 +16,19 @@ extern "C" {
 class Container {
 private:
 	// Load codecs once
-	static std::once_flag init_flag;
+	static std::once_flag init_flag_;
 
 	// Container information
-	AVFormatContext* format_context;
-	AVCodecContext* codec_context_video;
-	AVCodecContext* codec_context_audio;
+	AVFormatContext* format_context_;
+	AVCodecContext* codec_context_video_;
+	AVCodecContext* codec_context_audio_;
 
 	// Stream indices
-	std::vector<int> video_stream;
-	std::vector<int> audio_stream;
+	std::vector<int> video_stream_;
+	std::vector<int> audio_stream_;
 
 	// Conversion context to YUV for output
-	SwsContext* conversion_context;
-
-	// Read container to setup format context
-	void parse_header(const std::string &file_name);
-	// Register streams
-	void find_streams();
-	// Register codecs and open them
-	void find_codecs();
-	// Register conversion context
-	void setup_conversion_context();
+	SwsContext* conversion_context_;
 
 public:
 	// Setup before reading
@@ -66,4 +57,13 @@ public:
 	AVRational get_video_time_base() const;
 	AVRational get_container_time_base() const;
 
+private:
+	// Read container to setup format context
+	void parse_header(const std::string &file_name);
+	// Register streams
+	void find_streams();
+	// Register codecs and open them
+	void find_codecs();
+	// Register conversion context
+	void setup_conversion_context();
 };
