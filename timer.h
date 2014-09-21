@@ -4,14 +4,15 @@
 
 class Timer {
 private:
-	int64_t target_time;
-	int64_t proportional {};
-	int64_t integral {};
-	int64_t derivative {};
+	int64_t target_time_;
 
-	constexpr static double P {0.0};
-	constexpr static double I {-1.0};
-	constexpr static double D {0.0};
+	int64_t proportional_{};
+	int64_t integral_{};
+	int64_t derivative_{};
+
+	constexpr static double P_{0.0};
+	constexpr static double I_{-1.0};
+	constexpr static double D_{0.0};
 
 public:
 	Timer();
