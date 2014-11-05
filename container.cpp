@@ -1,7 +1,9 @@
 #include "container.h"
 
 #include <iostream>
+#include <algorithm>
 
+using std::min;
 using std::once_flag;
 using std::string;
 using std::runtime_error;
@@ -117,9 +119,16 @@ void Container::convert_frame(AVFrame* src, AVFrame* dst) {
 }
 
 void Container::decode_audio(AVFrame* frame, int &finished, AVPacket* packet) {
-	if (avcodec_decode_audio4(codec_context_video_,
-	                          frame, &finished, packet) < 0) {
-		throw runtime_error("Decoding audio");
+	while (packet->size) {
+		auto size = avcodec_decode_audio4(
+			codec_context_audio_, frame, &finished, packet);
+		if (size < 0) {
+			throw runtime_error("Decoding audio.");
+		}
+
+		auto decoded = min(size, packet->size);
+		packet->data += decoded;
+		packet->size -= decoded;
 	}
 }
 
