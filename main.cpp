@@ -1,13 +1,13 @@
-#include <string>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 #include "player.h"
 
-using std::logic_error;
-using std::exception;
 using std::cerr;
 using std::endl;
+using std::exception;
+using std::logic_error;
 
 int main(int argc, char** argv) {
 	try {

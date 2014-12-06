@@ -1,6 +1,6 @@
 CXX = g++
 CXXFLAGS = -g -Wall -Wextra -Wextra -pedantic -Wdisabled-optimization -Wctor-dtor-privacy -Wmissing-declarations -Woverloaded-virtual -Wshadow -Wno-unused -Winline -std=c++11 -D__STDC_CONSTANT_MACROS
-LDLIBS = -lavformat -lavcodec -lavutil -lswscale `sdl2-config --libs` 
+LDLIBS = -lavformat -lavcodec -lavutil -lswscale `sdl2-config --libs`
 
 TARGET = player
 
