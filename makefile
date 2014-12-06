@@ -1,28 +1,28 @@
-CC = g++
-CFLAGS = -g -Wall -Wextra -Wextra
-LDFLAGS = -lavformat -lavcodec -lavutil -lswscale `sdl2-config --cflags --libs` -std=c++11 -D__STDC_CONSTANT_MACROS
+CXX = g++
+CXXFLAGS = -g -Wall -Wextra -Wextra -pedantic -Wdisabled-optimization -Wctor-dtor-privacy -Wmissing-declarations -Woverloaded-virtual -Wshadow -Wno-unused -Winline -std=c++11 -D__STDC_CONSTANT_MACROS
+LDLIBS = -lavformat -lavcodec -lavutil -lswscale `sdl2-config --libs` 
 
 TARGET = player
 
 all: $(TARGET)
 
 player: main.o player.o container.o display.o timer.o
-	$(CC) $(CFLAGS) -o $(TARGET) main.o container.o player.o display.o timer.o $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -o $(TARGET) main.o container.o player.o display.o timer.o $(LDLIBS)
 
 main.o: main.cpp player.h
-	$(CC) $(CFLAGS) -c main.cpp $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -c main.cpp
 
 player.o: player.cpp player.h container.h display.h queue.h timer.h
-	$(CC) $(CFLAGS) -c player.cpp $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -c player.cpp
 
 container.o: container.cpp container.h
-	$(CC) $(CFLAGS) -c container.cpp $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -c container.cpp
 
 display.o: display.cpp display.h
-	$(CC) $(CFLAGS) -c display.cpp $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -c display.cpp
 
 timer.o: timer.cpp timer.h
-	$(CC) $(CFLAGS) -c timer.cpp $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -c timer.cpp
 
 clean:
 	rm -f *.o $(TARGET)
