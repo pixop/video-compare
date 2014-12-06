@@ -1,5 +1,3 @@
 language: cpp
-compiler:
-    - clang
-    - gcc
+compiler: clang
 script: make
