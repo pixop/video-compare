@@ -1,12 +1,14 @@
-CXXFLAGS = -g -Wall -Wextra -Wextra -pedantic -Wdisabled-optimization -Wctor-dtor-privacy -Wmissing-declarations -Woverloaded-virtual -Wshadow -Wno-unused -Winline -std=c++11 -D__STDC_CONSTANT_MACROS
+CXXFLAGS = -g3 -std=c++11 -D__STDC_CONSTANT_MACROS \
+		   -Wall -Wextra -Wextra -pedantic \
+		   -Wdisabled-optimization -Wctor-dtor-privacy -Wmissing-declarations \
+		   -Woverloaded-virtual -Wshadow -Wno-unused -Winline
 LDLIBS = -lavformat -lavcodec -lavutil -lswscale `sdl2-config --libs`
 
 TARGET = player
+OBJECTS = main.o player.o container.o display.o timer.o
 
-all: $(TARGET)
-
-player: main.o player.o container.o display.o timer.o
-	$(CXX) $(CXXFLAGS) -o $(TARGET) main.o container.o player.o display.o timer.o $(LDLIBS)
+$(TARGET): $(OBJECTS)
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJECTS) $(LDLIBS)
 
 main.o: main.cpp player.h
 	$(CXX) $(CXXFLAGS) -c main.cpp
@@ -24,5 +26,4 @@ timer.o: timer.cpp timer.h
 	$(CXX) $(CXXFLAGS) -c timer.cpp
 
 clean:
-	rm -f *.o $(TARGET)
-
+	$(RM) $(OBJECTS) $(TARGET)
