@@ -1,42 +1,25 @@
 #include "player.h"
-
+#include <algorithm>
 #include <chrono>
 #include <iostream>
-#include <algorithm>
-
-
 extern "C" {
 	#include <libavutil/time.h>
 }
 
-
-using std::string;
-using std::unique_ptr;
-using std::function;
-using std::thread;
-using std::chrono::milliseconds;
-using std::this_thread::sleep_for;
-using std::exception;
-using std::cerr;
-using std::endl;
-using std::runtime_error;
-using std::max;
-
-Player::Player(const string &file_name) :
-		container_(new Container(file_name)),
-		display_(new Display(container_->get_width(), container_->get_height())),
-		timer_(new Timer),
-		packet_queue_(new PacketQueue(queue_size_)),
-		frame_queue_(new FrameQueue(queue_size_)) {
-	stages_.push_back(thread(&Player::demultiplex, this));
-	stages_.push_back(thread(&Player::decode_video, this));
+Player::Player(const std::string &file_name) :
+	container_(new Container(file_name)),
+	display_(new Display(container_->get_width(), container_->get_height())),
+	timer_(new Timer),
+	packet_queue_(new PacketQueue(queue_size_)),
+	frame_queue_(new FrameQueue(queue_size_)) {
+	stages_.push_back(std::thread(&Player::demultiplex, this));
+	stages_.push_back(std::thread(&Player::decode_video, this));
 
 	video();
 
 }
 
 Player::~Player() {
-
 	frame_queue_->quit();
 	packet_queue_->quit();
 
@@ -49,7 +32,7 @@ void Player::demultiplex() {
 	try {
 		for (;;) {
 			// Create AVPacket
-			unique_ptr<AVPacket, function<void(AVPacket*)>> packet(
+			std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet(
 				new AVPacket, [](AVPacket* p){ av_free_packet(p); delete p; });
 			av_init_packet(packet.get());
 			packet->data = nullptr;
@@ -67,8 +50,8 @@ void Player::demultiplex() {
 				}
 			}
 		}
-	} catch (exception &e) {
-		cerr << "Demuxing error: " << e.what() << endl;
+	} catch (std::exception &e) {
+		std::cerr << "Demuxing error: " << e.what() << std::endl;
 		exit(1);
 	}
 }
@@ -80,9 +63,9 @@ void Player::decode_video() {
 	try {
 		for (;;) {
 			// Create AVFrame and AVQueue
-			unique_ptr<AVFrame, function<void(AVFrame*)>> frame_decoded(
+			std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_decoded(
 				av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); });
-			unique_ptr<AVPacket, function<void(AVPacket*)>> packet(
+			std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet(
 				nullptr, [](AVPacket* p){ av_free_packet(p); delete p; });
 
 			// Read packet from queue
@@ -104,20 +87,20 @@ void Player::decode_video() {
 					container_->get_container_time_base(),
 					microseconds);
 
-				unique_ptr<AVFrame, function<void(AVFrame*)>> frame_converted(
+				std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted(
 					av_frame_alloc(),
 					[](AVFrame* f){ avpicture_free(
 						reinterpret_cast<AVPicture*>(f));
 						av_frame_free(&f); });
 				if (av_frame_copy_props(frame_converted.get(),
 				    frame_decoded.get()) < 0) {
-					throw runtime_error("Copying frame properties");
+					throw std::runtime_error("Copying frame properties");
 				}
 				if (avpicture_alloc(
 					reinterpret_cast<AVPicture*>(frame_converted.get()),
 					container_->get_pixel_format(),
 					container_->get_width(), container_->get_height()) < 0) {
-					throw runtime_error("Allocating picture"); 
+					throw std::runtime_error("Allocating picture");
 				}	
 				container_->convert_frame(
 					frame_decoded.get(), frame_converted.get());
@@ -127,8 +110,8 @@ void Player::decode_video() {
 				}
 			}
 		}
-	} catch (exception &e) {
-		cerr << "Decoding error: " <<  e.what() << endl;
+	} catch (std::exception &e) {
+		std::cerr << "Decoding error: " <<  e.what() << std::endl;
 		exit(1);
 	}
 
@@ -146,7 +129,7 @@ void Player::video() {
 				break;
 
 			} else if (display_->get_play()) {
-				unique_ptr<AVFrame, function<void(AVFrame*)>> frame(
+				std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame(
 					nullptr, [](AVFrame* f){ av_frame_free(&f); });
 				if (!frame_queue_->pop(frame)) {
 					break;
@@ -165,13 +148,13 @@ void Player::video() {
 				display_->refresh(*frame);
 
 			} else {
-				milliseconds sleep(10);
-				sleep_for(sleep);
+				std::chrono::milliseconds sleep(10);
+				std::this_thread::sleep_for(sleep);
 				timer_->update();
 			}
 		}
-	} catch (exception &e) {
-		cerr << "Display error: " <<  e.what() << endl;
+	} catch (std::exception &e) {
+		std::cerr << "Display error: " <<  e.what() << std::endl;
 		exit(1);
 	}
 }

@@ -1,19 +1,15 @@
 #pragma once
-
 #include "container.h"
 #include "display.h"
-#include "timer.h"
 #include "queue.h"
-
+#include "timer.h"
 #include <memory>
-#include <vector>
-#include <thread>
 #include <string>
-
+#include <thread>
+#include <vector>
 extern "C" {
 	#include <libavcodec/avcodec.h>
 }
-
 
 class Player {
 private:
@@ -26,7 +22,7 @@ private:
 
 	std::vector<std::thread> stages_;
 
-	static const size_t queue_size_ {5};
+	static const size_t queue_size_{5};
 
 public:
 	Player(const std::string &file_name);
@@ -35,5 +31,4 @@ public:
 	void demultiplex();
 	void decode_video();
 	void video();
-
 };
