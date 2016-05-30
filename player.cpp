@@ -8,11 +8,11 @@ extern "C" {
 }
 
 Player::Player(const std::string &file_name) :
-	container_{new Container(file_name)},
-	display_{new Display(container_->get_width(), container_->get_height())},
+	container_{new Container{file_name}},
+	display_{new Display{container_->get_width(), container_->get_height()}},
 	timer_{new Timer},
-	packet_queue_{new PacketQueue(queue_size_)},
-	frame_queue_{new FrameQueue(queue_size_)} {
+	packet_queue_{new PacketQueue{queue_size_}},
+	frame_queue_{new FrameQueue{queue_size_}} {
 }
 
 Player::~Player() {
@@ -34,8 +34,8 @@ void Player::demultiplex() {
 	try {
 		for (;;) {
 			// Create AVPacket
-			std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet(
-				new AVPacket, [](AVPacket* p){ av_packet_unref(p); delete p; });
+			std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet{
+				new AVPacket, [](AVPacket* p){ av_packet_unref(p); delete p; }};
 			av_init_packet(packet.get());
 			packet->data = nullptr;
 
@@ -65,10 +65,10 @@ void Player::decode_video() {
 	try {
 		for (;;) {
 			// Create AVFrame and AVQueue
-			std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_decoded(
-				av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); });
-			std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet(
-				nullptr, [](AVPacket* p){ av_packet_unref(p); delete p; });
+			std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_decoded{
+				av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); }};
+			std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet{
+				nullptr, [](AVPacket* p){ av_packet_unref(p); delete p; }};
 
 			// Read packet from queue
 			if (!packet_queue_->pop(packet)) {
@@ -89,9 +89,9 @@ void Player::decode_video() {
 					container_->get_container_time_base(),
 					microseconds);
 
-				std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted(
+				std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted{
 					av_frame_alloc(),
-					[](AVFrame* f){ av_free(f->data[0]); });
+					[](AVFrame* f){ av_free(f->data[0]); }};
 				if (av_frame_copy_props(frame_converted.get(),
 				    frame_decoded.get()) < 0) {
 					throw std::runtime_error("Copying frame properties");
@@ -129,8 +129,8 @@ void Player::video() {
 				break;
 
 			} else if (display_->get_play()) {
-				std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame(
-					nullptr, [](AVFrame* f){ av_frame_free(&f); });
+				std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame{
+					nullptr, [](AVFrame* f){ av_frame_free(&f); }};
 				if (!frame_queue_->pop(frame)) {
 					break;
 				}
