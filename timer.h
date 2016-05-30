@@ -3,7 +3,7 @@
 
 class Timer {
 private:
-	int64_t target_time_;
+	int64_t target_time_{};
 
 	int64_t proportional_{};
 	int64_t integral_{};

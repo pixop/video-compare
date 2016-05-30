@@ -8,13 +8,13 @@ extern "C" {
 }
 
 Player::Player(const std::string &file_name) :
-	container_(new Container(file_name)),
-	display_(new Display(container_->get_width(), container_->get_height())),
-	timer_(new Timer),
-	packet_queue_(new PacketQueue(queue_size_)),
-	frame_queue_(new FrameQueue(queue_size_)) {
-	stages_.push_back(std::thread(&Player::demultiplex, this));
-	stages_.push_back(std::thread(&Player::decode_video, this));
+	container_{new Container(file_name)},
+	display_{new Display(container_->get_width(), container_->get_height())},
+	timer_{new Timer},
+	packet_queue_{new PacketQueue(queue_size_)},
+	frame_queue_{new FrameQueue(queue_size_)} {
+	stages_.emplace_back(&Player::demultiplex, this);
+	stages_.emplace_back(&Player::decode_video, this);
 
 	video();
 

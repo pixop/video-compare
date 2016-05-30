@@ -4,11 +4,7 @@
 
 std::once_flag Container::init_flag_;
 
-Container::Container(const std::string &file_name) :
-		format_context_(nullptr),
-		codec_context_video_(nullptr),
-		codec_context_audio_(nullptr),
-		conversion_context_(nullptr) {
+Container::Container(const std::string &file_name) {
 	call_once(init_flag_, av_register_all);
 	parse_header(file_name);
 	find_streams();

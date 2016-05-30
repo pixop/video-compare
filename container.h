@@ -16,16 +16,16 @@ private:
 	static std::once_flag init_flag_;
 
 	// Container information
-	AVFormatContext* format_context_;
-	AVCodecContext* codec_context_video_;
-	AVCodecContext* codec_context_audio_;
+	AVFormatContext* format_context_{nullptr};
+	AVCodecContext* codec_context_video_{nullptr};
+	AVCodecContext* codec_context_audio_{nullptr};
 
 	// Stream indices
 	std::vector<int> video_stream_;
 	std::vector<int> audio_stream_;
 
 	// Conversion context to YUV for output
-	SwsContext* conversion_context_;
+	SwsContext* conversion_context_{nullptr};
 
 public:
 	// Setup before reading

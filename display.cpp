@@ -2,9 +2,7 @@
 #include <iostream>
 #include <stdexcept>
 
-Display::Display(const unsigned width, const unsigned height) :
-		quit(false),
-		play(true) {
+Display::Display(const unsigned width, const unsigned height) {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER)) {
 		throw std::runtime_error("SDL init");
 	}
