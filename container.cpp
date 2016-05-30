@@ -94,7 +94,7 @@ void Container::setup_conversion_context() {
 			// Source
 			get_width(), get_height(), get_pixel_format(), 
 			// Destination
-			get_width(), get_height(), PIX_FMT_YUV420P,
+			get_width(), get_height(), AV_PIX_FMT_YUV420P,
 			// Filters
 			SWS_BICUBIC, nullptr, nullptr, nullptr);
 }

@@ -4,6 +4,7 @@
 #include <iostream>
 extern "C" {
 	#include <libavutil/time.h>
+	#include <libavutil/imgutils.h>
 }
 
 Player::Player(const std::string &file_name) :
@@ -33,7 +34,7 @@ void Player::demultiplex() {
 		for (;;) {
 			// Create AVPacket
 			std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet(
-				new AVPacket, [](AVPacket* p){ av_free_packet(p); delete p; });
+				new AVPacket, [](AVPacket* p){ av_packet_unref(p); delete p; });
 			av_init_packet(packet.get());
 			packet->data = nullptr;
 
@@ -66,7 +67,7 @@ void Player::decode_video() {
 			std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_decoded(
 				av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); });
 			std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet(
-				nullptr, [](AVPacket* p){ av_free_packet(p); delete p; });
+				nullptr, [](AVPacket* p){ av_packet_unref(p); delete p; });
 
 			// Read packet from queue
 			if (!packet_queue_->pop(packet)) {
@@ -89,17 +90,15 @@ void Player::decode_video() {
 
 				std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted(
 					av_frame_alloc(),
-					[](AVFrame* f){ avpicture_free(
-						reinterpret_cast<AVPicture*>(f));
-						av_frame_free(&f); });
+					[](AVFrame* f){ av_free(f->data[0]); });
 				if (av_frame_copy_props(frame_converted.get(),
 				    frame_decoded.get()) < 0) {
 					throw std::runtime_error("Copying frame properties");
 				}
-				if (avpicture_alloc(
-					reinterpret_cast<AVPicture*>(frame_converted.get()),
-					container_->get_pixel_format(),
-					container_->get_width(), container_->get_height()) < 0) {
+				if (av_image_alloc(
+					frame_converted->data, frame_converted->linesize,
+					container_->get_width(), container_->get_height(),
+					container_->get_pixel_format(), 1) < 0) {
 					throw std::runtime_error("Allocating picture");
 				}	
 				container_->convert_frame(
