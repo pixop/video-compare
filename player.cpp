@@ -13,11 +13,6 @@ Player::Player(const std::string &file_name) :
 	timer_{new Timer},
 	packet_queue_{new PacketQueue(queue_size_)},
 	frame_queue_{new FrameQueue(queue_size_)} {
-	stages_.emplace_back(&Player::demultiplex, this);
-	stages_.emplace_back(&Player::decode_video, this);
-
-	video();
-
 }
 
 Player::~Player() {
@@ -27,6 +22,12 @@ Player::~Player() {
 	for (auto &stage : stages_) {
 		stage.join();
 	}
+}
+
+void Player::operator()() {
+	stages_.emplace_back(&Player::demultiplex, this);
+	stages_.emplace_back(&Player::decode_video, this);
+	video();
 }
 
 void Player::demultiplex() {

@@ -9,7 +9,8 @@ int main(int argc, char** argv) {
 			throw std::logic_error{"Not enough arguments"};
 		}
 
-		Player player{argv[1]};
+		Player play{argv[1]};
+		play();
 	}
 
 	catch (std::exception &e) {
