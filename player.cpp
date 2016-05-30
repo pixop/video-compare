@@ -135,7 +135,7 @@ void Player::video() {
 				}
 
 				if (frame_number) {
-					int64_t frame_delay = frame->pts - last_pts;
+					const int64_t frame_delay = frame->pts - last_pts;
 					last_pts = frame->pts;
 					timer_->wait(frame_delay);
 

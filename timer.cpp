@@ -8,17 +8,16 @@ Timer::Timer() {
 	update();
 }
 
-void Timer::wait(int64_t period) {
+void Timer::wait(const int64_t period) {
 	target_time_ += period;
 
-	int64_t lag = target_time_ - av_gettime();
-	lag += adjust();
+	const int64_t lag = target_time_ - av_gettime() + adjust();
 
 	if (lag > 0) {
 		av_usleep(static_cast<unsigned>(lag));
 	}
 
-	int64_t error = av_gettime() - target_time_;
+	const int64_t error = av_gettime() - target_time_;
 	derivative_ = error - proportional_;
 	integral_ += error;
 	proportional_ = error;
