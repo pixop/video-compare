@@ -1,12 +1,8 @@
 #include "timer.h"
-
 #include <algorithm>
-
 extern "C" {
 	#include <libavutil/time.h>
 }
-
-using std::max;
 
 Timer::Timer() {
 	update();

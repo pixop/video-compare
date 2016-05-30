@@ -1,18 +1,10 @@
 #include "container.h"
-
-#include <iostream>
 #include <algorithm>
+#include <iostream>
 
-using std::min;
-using std::once_flag;
-using std::string;
-using std::runtime_error;
-using std::unique_ptr;
-using std::function;
+std::once_flag Container::init_flag_;
 
-once_flag Container::init_flag_;
-
-Container::Container(const string &file_name) :
+Container::Container(const std::string &file_name) :
 		format_context_(nullptr),
 		codec_context_video_(nullptr),
 		codec_context_audio_(nullptr),
@@ -24,11 +16,11 @@ Container::Container(const string &file_name) :
 	setup_conversion_context();
 }
 
-void Container::parse_header(const string &file_name) {
+void Container::parse_header(const std::string &file_name) {
 	format_context_ = avformat_alloc_context();
 	if (avformat_open_input(&format_context_, file_name.c_str(),
 	                        nullptr, nullptr) < 0) {
-		throw runtime_error("Error opening input");
+		throw std::runtime_error("Error opening input");
 	}
 }
 
@@ -42,7 +34,7 @@ Container::~Container() {
 
 void Container::find_streams() {
 	if (avformat_find_stream_info(format_context_, nullptr) < 0) {
-		throw runtime_error("Finding stream information");
+		throw std::runtime_error("Finding stream information");
 	}
 
 	for (size_t i = 0; i < format_context_->nb_streams; ++i) {
@@ -55,7 +47,7 @@ void Container::find_streams() {
 	}
 
 	if (!is_video() && !is_audio()) {
-		throw runtime_error("No audio or video stream");
+		throw std::runtime_error("No audio or video stream");
 	}
 }
 
@@ -66,11 +58,11 @@ void Container::find_codecs() {
 		const auto codec_video =
 			avcodec_find_decoder(codec_context_video_->codec_id);
 		if (!codec_video) {
-			throw runtime_error("Unsupported video codec");
+			throw std::runtime_error("Unsupported video codec");
 		}
 		if (avcodec_open2(codec_context_video_,
 		                  codec_video, nullptr) < 0) {
-			throw runtime_error("Opening video codec");
+			throw std::runtime_error("Opening video codec");
 		}
 	}
 	if (is_audio()) {
@@ -79,11 +71,11 @@ void Container::find_codecs() {
 		const auto codec_audio =
 			avcodec_find_decoder(codec_context_audio_->codec_id);
 		if (!codec_audio) {
-			throw runtime_error("Unsupported audio codec");
+			throw std::runtime_error("Unsupported audio codec");
 		}
 		if (avcodec_open2(codec_context_audio_,
 		                  codec_audio, nullptr) < 0) {
-			throw runtime_error("Opening audio codec");
+			throw std::runtime_error("Opening audio codec");
 		}
 	}
 }
@@ -106,7 +98,7 @@ bool Container::read_frame(AVPacket &packet) {
 void Container::decode_frame(AVFrame* frame, int &finished, AVPacket* packet) {
 	if (avcodec_decode_video2(codec_context_video_,
 	                          frame, &finished, packet) < 0) {
-		throw runtime_error("Decoding video");
+		throw std::runtime_error("Decoding video");
 	}
 }
 
@@ -123,10 +115,10 @@ void Container::decode_audio(AVFrame* frame, int &finished, AVPacket* packet) {
 		auto size = avcodec_decode_audio4(
 			codec_context_audio_, frame, &finished, packet);
 		if (size < 0) {
-			throw runtime_error("Decoding audio.");
+			throw std::runtime_error("Decoding audio.");
 		}
 
-		auto decoded = min(size, packet->size);
+		auto decoded = std::min(size, packet->size);
 		packet->data += decoded;
 		packet->size -= decoded;
 	}

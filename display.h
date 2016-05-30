@@ -1,13 +1,10 @@
 #pragma once
-
+#include "SDL2/SDL.h"
+#include "SDL2/SDL_thread.h"
 #include <atomic>
-
 extern "C" {
 	#include <libavcodec/avcodec.h>
 }
-
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_thread.h>
 
 class Display {
 private:
@@ -31,5 +28,4 @@ public:
 
 	bool get_quit();
 	bool get_play();
-
 };
