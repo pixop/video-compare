@@ -7,71 +7,71 @@ Display::Display(const unsigned width, const unsigned height) {
 		throw std::runtime_error("SDL init");
 	}
 
-	window = SDL_CreateWindow(
+	window_ = SDL_CreateWindow(
 		"player", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 		width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
-	if (!window) {
+	if (!window_) {
 		throw std::runtime_error("SDL window");
 	}
 
-	renderer = SDL_CreateRenderer(
-		window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-	if (!renderer) {
+	renderer_ = SDL_CreateRenderer(
+		window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+	if (!renderer_) {
 		throw std::runtime_error("SDL renderer");
 	}
 
-	texture = SDL_CreateTexture(
-		renderer, SDL_PIXELFORMAT_YV12, SDL_TEXTUREACCESS_STREAMING,
+	texture_ = SDL_CreateTexture(
+		renderer_, SDL_PIXELFORMAT_YV12, SDL_TEXTUREACCESS_STREAMING,
 		width, height);
-	if (!texture) {
+	if (!texture_) {
 		throw std::runtime_error("SDL texture");
 	}
 
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-	SDL_RenderSetLogicalSize(renderer, width, height);
+	SDL_RenderSetLogicalSize(renderer_, width, height);
 
-	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-	SDL_RenderClear(renderer);
-	SDL_RenderPresent(renderer);
+	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+	SDL_RenderClear(renderer_);
+	SDL_RenderPresent(renderer_);
 }
 
 Display::~Display() {
-	SDL_DestroyTexture(texture);
-	SDL_DestroyRenderer(renderer);
-	SDL_DestroyWindow(window);
+	SDL_DestroyTexture(texture_);
+	SDL_DestroyRenderer(renderer_);
+	SDL_DestroyWindow(window_);
 	SDL_Quit();
 }
 
 void Display::refresh(AVFrame &frame) {
 	if (SDL_UpdateYUVTexture(
-		texture, nullptr,
+		texture_, nullptr,
 		frame.data[0], frame.linesize[0],
 		frame.data[1], frame.linesize[1],
 		frame.data[2], frame.linesize[2])) {
 		throw std::runtime_error("SDL texture update");
 	}
-	SDL_RenderClear(renderer);
-	SDL_RenderCopy(renderer, texture, nullptr, nullptr);
-	SDL_RenderPresent(renderer);
+	SDL_RenderClear(renderer_);
+	SDL_RenderCopy(renderer_, texture_, nullptr, nullptr);
+	SDL_RenderPresent(renderer_);
 }
 
 void Display::input() {
-	if (SDL_PollEvent(&event)) {
-		switch (event.type) {
+	if (SDL_PollEvent(&event_)) {
+		switch (event_.type) {
 		case SDL_KEYUP:
-			switch (event.key.keysym.sym) {
+			switch (event_.key.keysym.sym) {
 			case SDLK_ESCAPE:
-				quit = true;
+				quit_ = true;
 				break;
 			case SDLK_SPACE:
-				play = !play;
+				play_ = !play_;
 				break;
 			default:
 				break;
 			}
 			break;
 		case SDL_QUIT:
-			quit = true;
+			quit_ = true;
 			break;
 		default:
 			break;
@@ -80,9 +80,9 @@ void Display::input() {
 }
 
 bool Display::get_quit() {
-	return quit;
+	return quit_;
 }
 
 bool Display::get_play() {
-	return play;
+	return play_;
 }

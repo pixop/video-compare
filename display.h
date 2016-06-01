@@ -8,13 +8,13 @@ extern "C" {
 
 class Display {
 private:
-	bool quit{false};
-	bool play{true};
+	bool quit_{false};
+	bool play_{true};
 
-	SDL_Window* window{nullptr};
-	SDL_Renderer* renderer{nullptr};
-	SDL_Texture* texture{nullptr};
-	SDL_Event event;
+	SDL_Window* window_{nullptr};
+	SDL_Renderer* renderer_{nullptr};
+	SDL_Texture* texture_{nullptr};
+	SDL_Event event_;
 
 public:
 	Display(const unsigned width, const unsigned height);
