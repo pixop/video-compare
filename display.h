@@ -3,19 +3,24 @@
 #include <array>
 #include <memory>
 
+struct SDL {
+	SDL();
+	~SDL();
+};
+
 class Display {
 private:
 	bool quit_{false};
 	bool play_{true};
 
-	SDL_Window* window_{nullptr};
-	SDL_Renderer* renderer_{nullptr};
-	SDL_Texture* texture_{nullptr};
+	SDL sdl_;
+	std::unique_ptr<SDL_Window, void(*)(SDL_Window*)> window_;
+	std::unique_ptr<SDL_Renderer, void(*)(SDL_Renderer*)> renderer_;
+	std::unique_ptr<SDL_Texture, void(*)(SDL_Texture*)> texture_;
 	SDL_Event event_;
 
 public:
 	Display(const unsigned width, const unsigned height);
-	~Display();
 
 	// Copy frame to display
 	void refresh(
