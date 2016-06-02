@@ -1,9 +1,10 @@
 #pragma once
 #include <cstdint>
+#include <chrono>
 
 class Timer {
 private:
-	int64_t target_time_{};
+	std::chrono::time_point<std::chrono::high_resolution_clock> target_time_;
 
 	int64_t proportional_{};
 	int64_t integral_{};
