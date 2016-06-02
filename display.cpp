@@ -42,12 +42,13 @@ Display::~Display() {
 	SDL_Quit();
 }
 
-void Display::refresh(AVFrame &frame) {
+void Display::refresh(
+	std::array<uint8_t*, 3> planes, std::array<size_t, 3> pitches) {
 	if (SDL_UpdateYUVTexture(
 		texture_, nullptr,
-		frame.data[0], frame.linesize[0],
-		frame.data[1], frame.linesize[1],
-		frame.data[2], frame.linesize[2])) {
+		planes[0], pitches[0],
+		planes[1], pitches[1],
+		planes[2], pitches[2])) {
 		throw std::runtime_error("SDL texture update");
 	}
 	SDL_RenderClear(renderer_);

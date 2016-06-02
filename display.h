@@ -1,9 +1,7 @@
 #pragma once
 #include "SDL2/SDL.h"
+#include <array>
 #include <atomic>
-extern "C" {
-	#include <libavcodec/avcodec.h>
-}
 
 class Display {
 private:
@@ -20,7 +18,8 @@ public:
 	~Display();
 
 	// Copy frame to display
-	void refresh(AVFrame &frame);
+	void refresh(
+		std::array<uint8_t*, 3> planes, std::array<size_t, 3> pitches);
 
 	// Handle events
 	void input();

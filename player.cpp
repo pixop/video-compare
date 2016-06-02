@@ -145,7 +145,11 @@ void Player::video() {
 					timer_->update();
 				}
 
-				display_->refresh(*frame);
+				display_->refresh(
+					{frame->data[0], frame->data[1], frame->data[2]},
+					{static_cast<size_t>(frame->linesize[0]),
+					 static_cast<size_t>(frame->linesize[1]),
+					 static_cast<size_t>(frame->linesize[2])});
 
 			} else {
 				std::chrono::milliseconds sleep(10);
