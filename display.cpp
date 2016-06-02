@@ -1,5 +1,4 @@
 #include "display.h"
-#include <iostream>
 #include <stdexcept>
 
 Display::Display(const unsigned width, const unsigned height) {

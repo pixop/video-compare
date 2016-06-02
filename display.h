@@ -1,7 +1,7 @@
 #pragma once
 #include "SDL2/SDL.h"
 #include <array>
-#include <atomic>
+#include <memory>
 
 class Display {
 private:
