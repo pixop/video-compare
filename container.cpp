@@ -10,20 +10,20 @@ Container::Container(const std::string &file_name) {
 	setup_conversion_context();
 }
 
-void Container::parse_header(const std::string &file_name) {
-	format_context_ = avformat_alloc_context();
-	if (avformat_open_input(&format_context_, file_name.c_str(),
-	                        nullptr, nullptr) < 0) {
-		throw std::runtime_error("Error opening input");
-	}
-}
-
 Container::~Container() {
 	sws_freeContext(conversion_context_);
 	avcodec_close(codec_context_audio_);
 	avcodec_close(codec_context_video_);
 	avformat_close_input(&format_context_);
 	avformat_free_context(format_context_);
+}
+
+void Container::parse_header(const std::string &file_name) {
+	format_context_ = avformat_alloc_context();
+	if (avformat_open_input(&format_context_, file_name.c_str(),
+	                        nullptr, nullptr) < 0) {
+		throw std::runtime_error("Error opening input");
+	}
 }
 
 void Container::find_streams() {
