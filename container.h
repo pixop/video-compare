@@ -12,9 +12,6 @@ extern "C" {
 
 class Container {
 private:
-	// Load codecs once
-	static std::once_flag init_flag_;
-
 	// Container information
 	AVFormatContext* format_context_{nullptr};
 	AVCodecContext* codec_context_video_{nullptr};

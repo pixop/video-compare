@@ -2,10 +2,8 @@
 #include <algorithm>
 #include <iostream>
 
-std::once_flag Container::init_flag_;
-
 Container::Container(const std::string &file_name) {
-	call_once(init_flag_, av_register_all);
+	av_register_all();
 	parse_header(file_name);
 	find_streams();
 	find_codecs();
