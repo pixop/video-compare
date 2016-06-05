@@ -10,6 +10,8 @@ obj = $(src:.cpp=.o)
 dep = $(obj:.o=.d)
 target = player
 
+all: $(target)
+
 $(target): $(obj)
 	$(CXX) -o $@ $^ $(LDLIBS)
 
@@ -17,6 +19,9 @@ $(target): $(obj)
 
 %.d: %.cpp
 	@$(CXX) $(CXXFLAGS) $< -MM -MT $(@:.d=.o) >$@
+
+test: $(target)
+	./$(target) test.mkv
 
 .PHONY: clean
 clean:
