@@ -8,8 +8,10 @@ extern "C" {
 }
 
 Player::Player(const std::string &file_name) :
-	container_{new Container{file_name}},
-	display_{new Display{container_->get_width(), container_->get_height()}},
+	demuxer_{new Demuxer{file_name}},
+	video_decoder_{new VideoDecoder{demuxer_->video_codec_context()}},
+	format_converter_{new FormatConverter{video_decoder_->width(), video_decoder_->height(), video_decoder_->pixel_format(), AV_PIX_FMT_YUV420P}},
+	display_{new Display{video_decoder_->width(), video_decoder_->height()}},
 	timer_{new Timer},
 	packet_queue_{new PacketQueue{queue_size_}},
 	frame_queue_{new FrameQueue{queue_size_}} {
@@ -40,13 +42,13 @@ void Player::demultiplex() {
 			packet->data = nullptr;
 
 			// Read frame into AVPacket
-			if (!container_->read_frame(*packet)) {
+			if (!(*demuxer_)(*packet)) {
 				packet_queue_->finished();
 				break;
 			}
 
 			// Move into queue if first video stream
-			if (packet->stream_index == container_->get_video_stream()) {
+			if (packet->stream_index == demuxer_->video_stream_index()) {
 				if (!packet_queue_->push(move(packet))) {
 					break;
 				}
@@ -78,7 +80,7 @@ void Player::decode_video() {
 
 			// Decode packet
 			int finished_frame;
-			container_->decode_frame(
+			(*video_decoder_)(
 				frame_decoded.get(), finished_frame, packet.get());
 
 			// If a whole frame has been decoded,
@@ -86,7 +88,7 @@ void Player::decode_video() {
 			if (finished_frame) {
 				frame_decoded->pts = av_rescale_q(
 					frame_decoded->pkt_dts,
-					container_->get_container_time_base(),
+					demuxer_->time_base(),
 					microseconds);
 
 				std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted{
@@ -98,11 +100,11 @@ void Player::decode_video() {
 				}
 				if (av_image_alloc(
 					frame_converted->data, frame_converted->linesize,
-					container_->get_width(), container_->get_height(),
-					container_->get_pixel_format(), 1) < 0) {
+					video_decoder_->width(), video_decoder_->height(),
+					video_decoder_->pixel_format(), 1) < 0) {
 					throw std::runtime_error("Allocating picture");
 				}	
-				container_->convert_frame(
+				(*format_converter_)(
 					frame_decoded.get(), frame_converted.get());
 
 				if (!frame_queue_->push(move(frame_converted))) {

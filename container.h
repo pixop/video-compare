@@ -1,8 +1,6 @@
 #pragma once
-#include <memory>
 #include <mutex>
 #include <string>
-#include <vector>
 extern "C" {
 	#include "libavcodec/avcodec.h"
 	#include "libavformat/avformat.h"
@@ -10,54 +8,41 @@ extern "C" {
 	#include "libswscale/swscale.h"
 }
 
-class Container {
-private:
-	// Container information
-	AVFormatContext* format_context_{nullptr};
-	AVCodecContext* codec_context_video_{nullptr};
-	AVCodecContext* codec_context_audio_{nullptr};
-
-	// Stream indices
-	std::vector<int> video_stream_;
-	std::vector<int> audio_stream_;
-
-	// Conversion context to YUV for output
-	SwsContext* conversion_context_{nullptr};
-
+class Demuxer {
 public:
-	// Setup before reading
-	Container(const std::string &file_name);
-	~Container();
-
-	// Read into a single packet
-	bool read_frame(AVPacket &packet);
-
-	// Decode a single packet
-	void decode_frame(AVFrame* frame, int &got_frame, AVPacket* packet);
-
-	// Convert a frame to YUV for output
-	void convert_frame(AVFrame* src, AVFrame* dst);
-
-	// Decode audio packets
-	void decode_audio(AVFrame* frame, int &got_frame, AVPacket* packet);
-
-	bool is_video() const;
-	bool is_audio() const;
-	int get_video_stream() const;
-	int get_audio_stream() const;
-	unsigned get_width() const;
-	unsigned get_height() const;
-	AVPixelFormat get_pixel_format() const;
-	AVRational get_video_time_base() const;
-	AVRational get_container_time_base() const;
+	Demuxer(const std::string &file_name);
+	~Demuxer();
+	AVCodecContext* video_codec_context();
+	int video_stream_index() const;
+	AVRational time_base() const;
+	bool operator()(AVPacket &packet);
 
 private:
-	// Read container to setup format context
-	void parse_header(const std::string &file_name);
-	// Register streams
-	void find_streams();
-	// Register codecs and open them
-	void find_codecs();
-	// Register conversion context
-	void setup_conversion_context();
+	AVFormatContext* format_context_{};
+	int video_stream_index_{};
+};
+
+class VideoDecoder {
+public:
+	VideoDecoder(AVCodecContext* codec_context);
+	~VideoDecoder();
+	void operator()(AVFrame* frame, int &finished, AVPacket* packet);
+	unsigned width() const;
+	unsigned height() const;
+	AVPixelFormat pixel_format() const;
+	AVRational time_base() const;
+private:
+	AVCodecContext* codec_context_{};
+};
+
+class FormatConverter {
+public:
+	FormatConverter(
+		size_t width, size_t height,
+		AVPixelFormat input_pixel_format, AVPixelFormat output_pixel_format);
+	void operator()(AVFrame* src, AVFrame* dst);
+private:
+	size_t width_;
+	size_t height_;
+	SwsContext* conversion_context_{};
 };

@@ -21,7 +21,9 @@ private:
 	void decode_video();
 	void video();
 private:
-	std::unique_ptr<Container> container_;
+	std::unique_ptr<Demuxer> demuxer_;
+	std::unique_ptr<VideoDecoder> video_decoder_;
+	std::unique_ptr<FormatConverter> format_converter_;
 	std::unique_ptr<Display> display_;
 	std::unique_ptr<Timer> timer_;
 	std::unique_ptr<PacketQueue> packet_queue_;
