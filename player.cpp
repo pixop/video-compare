@@ -19,19 +19,18 @@ Player::Player(const std::string &file_name) :
 	frame_queue_{new FrameQueue{queue_size_}} {
 }
 
-Player::~Player() {
-	frame_queue_->quit();
-	packet_queue_->quit();
-
-	for (auto &stage : stages_) {
-		stage.join();
-	}
-}
-
 void Player::operator()() {
 	stages_.emplace_back(&Player::demultiplex, this);
 	stages_.emplace_back(&Player::decode_video, this);
 	video();
+
+	for (auto &stage : stages_) {
+		stage.join();
+	}
+
+	if (exception_) {
+		std::rethrow_exception(exception_);
+	}
 }
 
 void Player::demultiplex() {
@@ -57,17 +56,17 @@ void Player::demultiplex() {
 				}
 			}
 		}
-	} catch (std::exception &e) {
-		std::cerr << "Demuxing error: " << e.what() << std::endl;
-		exit(1);
+	} catch (...) {
+		exception_ = std::current_exception();
+		frame_queue_->quit();
+		packet_queue_->quit();
 	}
 }
 
 void Player::decode_video() {
-
-	const AVRational microseconds = {1, 1000000};
-
 	try {
+		const AVRational microseconds = {1, 1000000};
+
 		for (;;) {
 			// Create AVFrame and AVQueue
 			std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
@@ -117,11 +116,11 @@ void Player::decode_video() {
 				}
 			}
 		}
-	} catch (std::exception &e) {
-		std::cerr << "Decoding error: " <<  e.what() << std::endl;
-		exit(1);
+	} catch (...) {
+		exception_ = std::current_exception();
+		frame_queue_->quit();
+		packet_queue_->quit();
 	}
-
 }
 
 void Player::video() {
@@ -164,8 +163,11 @@ void Player::video() {
 				timer_->update();
 			}
 		}
-	} catch (std::exception &e) {
-		std::cerr << "Display error: " <<  e.what() << std::endl;
-		exit(1);
+
+	} catch (...) {
+		exception_ = std::current_exception();
 	}
+
+	frame_queue_->quit();
+	packet_queue_->quit();
 }

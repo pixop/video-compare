@@ -6,6 +6,7 @@
 #include "timer.h"
 #include "video_decoder.h"
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -16,7 +17,6 @@ extern "C" {
 class Player {
 public:
 	Player(const std::string &file_name);
-	~Player();
 	void operator()();
 private:
 	void demultiplex();
@@ -32,4 +32,5 @@ private:
 	std::unique_ptr<FrameQueue> frame_queue_;
 	std::vector<std::thread> stages_;
 	static const size_t queue_size_{5};
+	std::exception_ptr exception_{};
 };
