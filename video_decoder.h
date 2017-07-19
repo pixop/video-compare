@@ -6,7 +6,8 @@ extern "C" {
 class VideoDecoder {
 public:
 	VideoDecoder(AVCodecContext* codec_context);
-	~VideoDecoder(); void operator()(AVFrame* frame, int &finished, AVPacket* packet);
+	~VideoDecoder();
+	void operator()(AVFrame* frame, int &finished, AVPacket* packet);
 	unsigned width() const;
 	unsigned height() const;
 	AVPixelFormat pixel_format() const;

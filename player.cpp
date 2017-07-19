@@ -10,7 +10,9 @@ extern "C" {
 Player::Player(const std::string &file_name) :
 	demuxer_{new Demuxer{file_name}},
 	video_decoder_{new VideoDecoder{demuxer_->video_codec_context()}},
-	format_converter_{new FormatConverter{video_decoder_->width(), video_decoder_->height(), video_decoder_->pixel_format(), AV_PIX_FMT_YUV420P}},
+	format_converter_{new FormatConverter{
+		video_decoder_->width(), video_decoder_->height(),
+		video_decoder_->pixel_format(), AV_PIX_FMT_YUV420P}},
 	display_{new Display{video_decoder_->width(), video_decoder_->height()}},
 	timer_{new Timer},
 	packet_queue_{new PacketQueue{queue_size_}},
@@ -37,7 +39,8 @@ void Player::demultiplex() {
 		for (;;) {
 			// Create AVPacket
 			std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet{
-				new AVPacket, [](AVPacket* p){ av_packet_unref(p); delete p; }};
+				new AVPacket,
+				[](AVPacket* p){ av_packet_unref(p); delete p; }};
 			av_init_packet(packet.get());
 			packet->data = nullptr;
 
@@ -67,8 +70,9 @@ void Player::decode_video() {
 	try {
 		for (;;) {
 			// Create AVFrame and AVQueue
-			std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_decoded{
-				av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); }};
+			std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
+				frame_decoded{
+					av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); }};
 			std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet{
 				nullptr, [](AVPacket* p){ av_packet_unref(p); delete p; }};
 
@@ -91,9 +95,10 @@ void Player::decode_video() {
 					demuxer_->time_base(),
 					microseconds);
 
-				std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted{
-					av_frame_alloc(),
-					[](AVFrame* f){ av_free(f->data[0]); }};
+				std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
+					frame_converted{
+						av_frame_alloc(),
+						[](AVFrame* f){ av_free(f->data[0]); }};
 				if (av_frame_copy_props(frame_converted.get(),
 				    frame_decoded.get()) < 0) {
 					throw std::runtime_error("Copying frame properties");
