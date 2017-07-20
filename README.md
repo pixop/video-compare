@@ -6,7 +6,7 @@ Video player written in C++14 using FFmpeg libraries and SDL2
 Usage
 -----
 
-./player video.mp4
+    ./player video.mp4
 
 Controls
 --------
