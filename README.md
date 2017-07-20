@@ -1,4 +1,4 @@
 player
 ======
 
-Video player written in C++11 using FFmpeg libraries and SDL2
+Video player written in C++14 using FFmpeg libraries and SDL2

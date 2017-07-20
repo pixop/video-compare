@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -g3 -std=c++11 -D__STDC_CONSTANT_MACROS \
+CXXFLAGS = -g3 -std=c++14 -D__STDC_CONSTANT_MACROS \
 		   -Wall -Wextra -Wextra -pedantic \
 		   -Wdisabled-optimization -Wctor-dtor-privacy -Wmissing-declarations \
 		   -Woverloaded-virtual -Wshadow -Wno-unused -Winline

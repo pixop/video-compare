@@ -7,16 +7,20 @@ extern "C" {
 	#include <libavutil/imgutils.h>
 }
 
+const size_t Player::queue_size_{5};
+
 Player::Player(const std::string &file_name) :
-	demuxer_{new Demuxer{file_name}},
-	video_decoder_{new VideoDecoder{demuxer_->video_codec_parameters()}},
-	format_converter_{new FormatConverter{
+	demuxer_{std::make_unique<Demuxer>(file_name)},
+	video_decoder_{std::make_unique<VideoDecoder>(
+		demuxer_->video_codec_parameters())},
+	format_converter_{std::make_unique<FormatConverter>(
 		video_decoder_->width(), video_decoder_->height(),
-		video_decoder_->pixel_format(), AV_PIX_FMT_YUV420P}},
-	display_{new Display{video_decoder_->width(), video_decoder_->height()}},
-	timer_{new Timer},
-	packet_queue_{new PacketQueue{queue_size_}},
-	frame_queue_{new FrameQueue{queue_size_}} {
+		video_decoder_->pixel_format(), AV_PIX_FMT_YUV420P)},
+	display_{std::make_unique<Display>(
+		video_decoder_->width(), video_decoder_->height())},
+	timer_{std::make_unique<Timer>()},
+	packet_queue_{std::make_unique<PacketQueue>(queue_size_)},
+	frame_queue_{std::make_unique<FrameQueue>(queue_size_)} {
 }
 
 void Player::operator()() {

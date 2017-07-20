@@ -31,6 +31,6 @@ private:
 	std::unique_ptr<PacketQueue> packet_queue_;
 	std::unique_ptr<FrameQueue> frame_queue_;
 	std::vector<std::thread> stages_;
-	static const size_t queue_size_{5};
+	static const size_t queue_size_;
 	std::exception_ptr exception_{};
 };
