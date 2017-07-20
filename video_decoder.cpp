@@ -17,10 +17,24 @@ VideoDecoder::~VideoDecoder() {
 	avcodec_close(codec_context_);
 }
 
-void VideoDecoder::operator()(
-	AVFrame* frame, int &finished, AVPacket* packet) {
-	ffmpeg::check(avcodec_decode_video2(
-		codec_context_, frame, &finished, packet));
+bool VideoDecoder::send(AVPacket* packet) {
+	auto ret = avcodec_send_packet(codec_context_, packet);
+	if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+		return false;
+	} else {
+		ffmpeg::check(ret);
+		return true;
+	}
+}
+
+bool VideoDecoder::receive(AVFrame* frame) {
+	auto ret = avcodec_receive_frame(codec_context_, frame);
+	if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+		return false;
+	} else {
+		ffmpeg::check(ret);
+		return true;
+	}
 }
 
 unsigned VideoDecoder::width() const {

@@ -81,38 +81,39 @@ void Player::decode_video() {
 				break;
 			}
 
-			// Decode packet
-			int finished_frame;
-			(*video_decoder_)(
-				frame_decoded.get(), finished_frame, packet.get());
+			// If the packet didn't send, receive more frames and try again
+			bool sent = false;
+			while (!sent) {
+				sent = video_decoder_->send(packet.get());
 
-			// If a whole frame has been decoded,
-			// adjust time stamps and add to queue
-			if (finished_frame) {
-				frame_decoded->pts = av_rescale_q(
-					frame_decoded->pkt_dts,
-					demuxer_->time_base(),
-					microseconds);
+				// If a whole frame has been decoded,
+				// adjust time stamps and add to queue
+				while (video_decoder_->receive(frame_decoded.get())) {
+					frame_decoded->pts = av_rescale_q(
+						frame_decoded->pkt_dts,
+						demuxer_->time_base(),
+						microseconds);
 
-				std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
-					frame_converted{
-						av_frame_alloc(),
-						[](AVFrame* f){ av_free(f->data[0]); }};
-				if (av_frame_copy_props(frame_converted.get(),
-				    frame_decoded.get()) < 0) {
-					throw std::runtime_error("Copying frame properties");
-				}
-				if (av_image_alloc(
-					frame_converted->data, frame_converted->linesize,
-					video_decoder_->width(), video_decoder_->height(),
-					video_decoder_->pixel_format(), 1) < 0) {
-					throw std::runtime_error("Allocating picture");
-				}	
-				(*format_converter_)(
-					frame_decoded.get(), frame_converted.get());
+					std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
+						frame_converted{
+							av_frame_alloc(),
+							[](AVFrame* f){ av_free(f->data[0]); }};
+					if (av_frame_copy_props(frame_converted.get(),
+						frame_decoded.get()) < 0) {
+						throw std::runtime_error("Copying frame properties");
+					}
+					if (av_image_alloc(
+						frame_converted->data, frame_converted->linesize,
+						video_decoder_->width(), video_decoder_->height(),
+						video_decoder_->pixel_format(), 1) < 0) {
+						throw std::runtime_error("Allocating picture");
+					}
+					(*format_converter_)(
+						frame_decoded.get(), frame_converted.get());
 
-				if (!frame_queue_->push(move(frame_converted))) {
-					break;
+					if (!frame_queue_->push(move(frame_converted))) {
+						break;
+					}
 				}
 			}
 		}

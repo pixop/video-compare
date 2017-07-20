@@ -7,7 +7,8 @@ class VideoDecoder {
 public:
 	VideoDecoder(AVCodecContext* codec_context);
 	~VideoDecoder();
-	void operator()(AVFrame* frame, int &finished, AVPacket* packet);
+	bool send(AVPacket* packet);
+	bool receive(AVFrame* frame);
 	unsigned width() const;
 	unsigned height() const;
 	AVPixelFormat pixel_format() const;
