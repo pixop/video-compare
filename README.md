@@ -11,11 +11,11 @@ Usage
 Controls
 --------
 
-Space: Toggle play/pause
-Escape: Quit
+* Space: Toggle play/pause
+* Escape: Quit
 
 Build
 -----
 
-    pacman -S ffmpeg sdl2
+    sudo pacman -S ffmpeg sdl2
     make
