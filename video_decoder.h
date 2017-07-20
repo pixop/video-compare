@@ -5,7 +5,7 @@ extern "C" {
 
 class VideoDecoder {
 public:
-	VideoDecoder(AVCodecContext* codec_context);
+	VideoDecoder(AVCodecParameters* codec_parameters);
 	~VideoDecoder();
 	bool send(AVPacket* packet);
 	bool receive(AVFrame* frame);

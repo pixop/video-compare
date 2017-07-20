@@ -9,7 +9,7 @@ extern "C" {
 
 Player::Player(const std::string &file_name) :
 	demuxer_{new Demuxer{file_name}},
-	video_decoder_{new VideoDecoder{demuxer_->video_codec_context()}},
+	video_decoder_{new VideoDecoder{demuxer_->video_codec_parameters()}},
 	format_converter_{new FormatConverter{
 		video_decoder_->width(), video_decoder_->height(),
 		video_decoder_->pixel_format(), AV_PIX_FMT_YUV420P}},

@@ -1,20 +1,23 @@
 #include "video_decoder.h"
 #include "ffmpeg.h"
 
-VideoDecoder::VideoDecoder(AVCodecContext* codec_context) :
-	codec_context_{codec_context} {
+VideoDecoder::VideoDecoder(AVCodecParameters* codec_parameters) {
 	avcodec_register_all();
-	const auto codec_video =
-		avcodec_find_decoder(codec_context_->codec_id);
-	if (!codec_video) {
+	const auto codec = avcodec_find_decoder(codec_parameters->codec_id);
+	if (!codec) {
 		throw ffmpeg::Error{"Unsupported video codec"};
 	}
-	ffmpeg::check(avcodec_open2(
-		codec_context_, codec_video, nullptr));
+	codec_context_ = avcodec_alloc_context3(codec);
+	if (!codec_context_) {
+		throw ffmpeg::Error{"Couldn't allocate video codec context"};
+	}
+	ffmpeg::check(avcodec_parameters_to_context(
+		codec_context_, codec_parameters));
+	ffmpeg::check(avcodec_open2(codec_context_, codec, nullptr));
 }
 
 VideoDecoder::~VideoDecoder() {
-	avcodec_close(codec_context_);
+	avcodec_free_context(&codec_context_);
 }
 
 bool VideoDecoder::send(AVPacket* packet) {

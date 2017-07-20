@@ -15,8 +15,8 @@ Demuxer::~Demuxer() {
 	avformat_close_input(&format_context_);
 }
 
-AVCodecContext* Demuxer::video_codec_context() {
-	return format_context_->streams[video_stream_index_]->codec;
+AVCodecParameters* Demuxer::video_codec_parameters() {
+	return format_context_->streams[video_stream_index_]->codecpar;
 }
 
 int Demuxer::video_stream_index() const {
