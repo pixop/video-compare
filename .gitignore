@@ -14,3 +14,6 @@
 
 # Executable
 player
+
+# Dependencies
+*.d
