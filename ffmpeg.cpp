@@ -1,4 +1,5 @@
 #include "ffmpeg.h"
+#include <string>
 
 namespace ffmpeg {
 std::string error_string(const int error_code) {

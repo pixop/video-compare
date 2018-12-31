@@ -1,5 +1,6 @@
 #include "video_decoder.h"
 #include "ffmpeg.h"
+#include <string>
 
 VideoDecoder::VideoDecoder(AVCodecParameters* codec_parameters) {
 	avcodec_register_all();

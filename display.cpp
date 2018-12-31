@@ -1,5 +1,6 @@
 #include "display.h"
 #include <stdexcept>
+#include <string>
 
 template <typename T>
 inline T check_SDL(T value, const std::string &message) {
