@@ -13,7 +13,7 @@
 *.a
 
 # Executable
-player
+video-compare
 
 # Dependencies
 *.d
