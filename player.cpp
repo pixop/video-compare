@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <thread>
 extern "C" {
 	#include <libavutil/time.h>
 	#include <libavutil/imgutils.h>
@@ -109,7 +110,7 @@ void Player::decode_video() {
 					if (av_image_alloc(
 						frame_converted->data, frame_converted->linesize,
 						video_decoder_->width(), video_decoder_->height(),
-						video_decoder_->pixel_format(), 1) < 0) {
+						format_converter_->output_pixel_format(), 1) < 0) {
 						throw std::runtime_error("Allocating picture");
 					}
 					(*format_converter_)(
@@ -143,7 +144,8 @@ void Player::video() {
 				std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame{
 					nullptr, [](AVFrame* f){ av_frame_free(&f); }};
 				if (!frame_queue_->pop(frame)) {
-					break;
+					std::this_thread::sleep_for(std::chrono::milliseconds(10));
+					continue;
 				}
 
 				if (frame_number) {
