@@ -3,7 +3,9 @@ video-compare
 
 Split screen video comparison tool written in C++14 using FFmpeg libraries and SDL2. 
 
-This tool can be used to visually compare e.g. the effect of codecs and resizing algorithms.
+This tool can be used to visually compare e.g. the effect of codecs and resizing algorithms on
+two video files played in sync. A movable slider enables easy viewing of the difference 
+between two files across any region of interest.
 
 Credits
 -------
