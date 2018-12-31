@@ -9,7 +9,7 @@ LDLIBS = -L/opt/local/lib/ -lavformat -lavcodec -lavutil -lswscale -lSDL2 -pthre
 src = $(wildcard *.cpp)
 obj = $(src:.cpp=.o)
 dep = $(obj:.o=.d)
-target = player
+target = video-compare
 
 all: $(target)
 
