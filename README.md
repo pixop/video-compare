@@ -1,7 +1,8 @@
 video-compare
 =============
 
-Split screen video comparison tool written in C++14 using FFmpeg libraries and SDL2.
+Split screen video comparison tool written in C++14 using FFmpeg libraries and SDL2. It is based on
+this player: https://github.com/pockethook/player
 
 This tool can be used to visually compare e.g. the effect of codecs and resizing algorithms.
 
