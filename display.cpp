@@ -26,7 +26,7 @@ SDL::~SDL() {
 Display::Display(const unsigned width, const unsigned height, const std::string &left_file_name,  const std::string &right_file_name) :
     font_{check_SDL(TTF_OpenFont("SourceCodePro-Regular.ttf", 16), "font open")},
 	window_{check_SDL(SDL_CreateWindow(
-		"player", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+		"video-compare", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 		width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE),
 		"window"), SDL_DestroyWindow},
 	renderer_{check_SDL(SDL_CreateRenderer(

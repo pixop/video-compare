@@ -1,4 +1,4 @@
-#include "player.h"
+#include "video_compare.h"
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -9,8 +9,8 @@ int main(int argc, char** argv) {
 			throw std::logic_error{"Two arguments to FFmpeg compatible video files must be supplied"};
 		}
 
-		Player play{argv[1], argv[2]};
-		play();
+		VideoCompare compare{argv[1], argv[2]};
+		compare();
 	}
 
 	catch (const std::exception &e) {

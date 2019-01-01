@@ -14,9 +14,9 @@ extern "C" {
 	#include <libavcodec/avcodec.h>
 }
 
-class Player {
+class VideoCompare {
 public:
-	Player(const std::string &left_file_name, const std::string &right_file_name);
+	VideoCompare(const std::string &left_file_name, const std::string &right_file_name);
 	void operator()();
 private:
 	void thread_demultiplex_left();

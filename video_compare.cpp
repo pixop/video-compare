@@ -1,4 +1,4 @@
-#include "player.h"
+#include "video_compare.h"
 #include <algorithm>
 #include <chrono>
 #include <iostream>
@@ -9,7 +9,7 @@ extern "C" {
 	#include <libavutil/imgutils.h>
 }
 
-const size_t Player::queue_size_{5};
+const size_t VideoCompare::queue_size_{5};
 
 static inline bool isBehind(int64_t frame1_pts, int64_t frame2_pts) {
 	float t1 = (float) frame1_pts / 1000000.0f;
@@ -20,7 +20,7 @@ static inline bool isBehind(int64_t frame1_pts, int64_t frame2_pts) {
 	return diff < -(1.0f / 60.0f);
 }
 
-Player::Player(const std::string &left_file_name, const std::string &right_file_name) :
+VideoCompare::VideoCompare(const std::string &left_file_name, const std::string &right_file_name) :
 	demuxer_{
 		std::make_unique<Demuxer>(left_file_name), 
 		std::make_unique<Demuxer>(right_file_name)},
@@ -42,11 +42,11 @@ Player::Player(const std::string &left_file_name, const std::string &right_file_
 		std::make_unique<FrameQueue>(queue_size_)} {
 }
 
-void Player::operator()() {
-	stages_.emplace_back(&Player::thread_demultiplex_left, this);
-	stages_.emplace_back(&Player::thread_demultiplex_right, this);
-	stages_.emplace_back(&Player::thread_decode_video_left, this);
-	stages_.emplace_back(&Player::thread_decode_video_right, this);
+void VideoCompare::operator()() {
+	stages_.emplace_back(&VideoCompare::thread_demultiplex_left, this);
+	stages_.emplace_back(&VideoCompare::thread_demultiplex_right, this);
+	stages_.emplace_back(&VideoCompare::thread_decode_video_left, this);
+	stages_.emplace_back(&VideoCompare::thread_decode_video_right, this);
 	video();
 
 	for (auto &stage : stages_) {
@@ -58,15 +58,15 @@ void Player::operator()() {
 	}
 }
 
-void Player::thread_demultiplex_left() {
+void VideoCompare::thread_demultiplex_left() {
 	demultiplex(0);
 }
 
-void Player::thread_demultiplex_right() {
+void VideoCompare::thread_demultiplex_right() {
 	demultiplex(1);
 }
 
-void Player::demultiplex(const int video_idx) {
+void VideoCompare::demultiplex(const int video_idx) {
 	try {
 		for (;;) {
 			if (seeking_ && readyToSeek_[1][video_idx]) {
@@ -104,15 +104,15 @@ void Player::demultiplex(const int video_idx) {
 	}
 }
 
-void Player::thread_decode_video_left() {
+void VideoCompare::thread_decode_video_left() {
 	decode_video(0);
 }
 
-void Player::thread_decode_video_right() {
+void VideoCompare::thread_decode_video_right() {
 	decode_video(1);
 }
 
-void Player::decode_video(const int video_idx) {
+void VideoCompare::decode_video(const int video_idx) {
 	try {
 		const AVRational microseconds = {1, 1000000};
 
@@ -183,7 +183,7 @@ void Player::decode_video(const int video_idx) {
 	}
 }
 
-void Player::video() {
+void VideoCompare::video() {
 	try {
 		std::deque<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>> left_frames;
 		std::deque<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>> right_frames;
