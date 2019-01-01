@@ -3,6 +3,7 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include <deque>
 extern "C" {
 	#include <libavutil/time.h>
 	#include <libavutil/imgutils.h>
@@ -184,17 +185,22 @@ void Player::decode_video(const int video_idx) {
 
 void Player::video() {
 	try {
+		std::deque<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>> left_frames;
+		std::deque<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>> right_frames;
+		int frame_offset = 0;
+
 		std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_left{
 			nullptr, [](AVFrame* f){ av_frame_free(&f); }};
 		std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_right{
 			nullptr, [](AVFrame* f){ av_frame_free(&f); }};
 
-		int64_t last_pts = 0;
+		int64_t left_pts = 0;
+		int64_t right_pts = 0;
 
 		for (uint64_t frame_number = 0;; ++frame_number) {
 			display_->input();
 
-			float current_position = last_pts / 1000000.0f;
+			float current_position = left_pts / 1000000.0f;
 
 			if (display_->get_seek_relative() != 0.0f) {
 				seeking_ = true;
@@ -238,18 +244,23 @@ void Player::video() {
 				seeking_ = false;
 
 				frame_queue_[0]->pop(frame_left);
+				left_pts = frame_left->pts;
+
 				frame_queue_[1]->pop(frame_right);
+				right_pts = frame_right->pts;
+
+				left_frames.clear();
+				right_frames.clear();
 
 				current_position = frame_left->pts / 1000000.0f;
 			}
+
+			bool store_frames = false;
 
 			if (display_->get_quit()) {
 				break;
 			} else {
 				bool adjusting = false;
-
-				int64_t left_pts = (frame_left != nullptr) ? frame_left->pts : 0;
-				int64_t right_pts = (frame_right != nullptr) ? frame_right->pts : 0;
 
 				if ((left_pts < 0) || isBehind(left_pts, right_pts)) {
 					adjusting = true;
@@ -266,8 +277,10 @@ void Player::video() {
 					if (!frame_queue_[0]->pop(frame_left) || !frame_queue_[1]->pop(frame_right)) {
 						timer_->update();
 					} else {
+						store_frames = true;
+
 						if (frame_number > 0) {
-							const int64_t frame_delay = frame_left->pts - last_pts;
+							const int64_t frame_delay = frame_left->pts - left_pts;
 							timer_->wait(frame_delay);
 						} else {
 							timer_->update();
@@ -278,22 +291,60 @@ void Player::video() {
 				}
 			}
 
-			last_pts = frame_left->pts;
+			if (frame_left != nullptr) {
+				left_pts = frame_left->pts;
+			}
+			if (frame_right != nullptr) {
+				right_pts = frame_right->pts;
+			}
+
+			if (store_frames) {
+				// TODO: use pair
+				if (left_frames.size() >= 50) {
+					left_frames.pop_back();
+				}
+				if (right_frames.size() >= 50) {
+					right_frames.pop_back();
+				}
+
+				left_frames.push_front(move(frame_left));
+				right_frames.push_front(move(frame_right));
+			} else {
+				if (frame_left != nullptr) {
+                    if (left_frames.size() > 0) {
+                        left_frames[0] = move(frame_left);
+                    } else {
+        				left_frames.push_front(move(frame_left));
+                    }
+				}
+				if (frame_right != nullptr) {
+                    if (right_frames.size() > 0) {
+                        right_frames[0] = move(frame_right);
+                    } else {
+        				right_frames.push_front(move(frame_right));
+                    }
+				}
+			}
+
+			frame_offset = std::min(std::max(0, frame_offset + display_->get_frame_offset_delta()), (int) left_frames.size() - 1);
+
+            char current_total_browsable[20];
+            sprintf(current_total_browsable, "%d/%d", frame_offset + 1, (int) left_frames.size());
 
 			if (!display_->get_swap_left_right()) {
 				display_->refresh(
-					{frame_left->data[0], frame_left->data[1], frame_left->data[2]},
-					{static_cast<size_t>(frame_left->linesize[0]), static_cast<size_t>(frame_left->linesize[1]), static_cast<size_t>(frame_left->linesize[2])},
-					{frame_right->data[0], frame_right->data[1], frame_right->data[2]},
-					{static_cast<size_t>(frame_right->linesize[0]), static_cast<size_t>(frame_right->linesize[1]), static_cast<size_t>(frame_right->linesize[2])},
-					max_width_, max_height_, frame_left->pts / 1000000.0f, frame_right->pts / 1000000.0f);
+					{left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
+					{static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
+					{right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
+					{static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
+					max_width_, max_height_, left_frames[frame_offset]->pts / 1000000.0f, right_frames[frame_offset]->pts / 1000000.0f, current_total_browsable);
 			} else {
 				display_->refresh(
-					{frame_right->data[0], frame_right->data[1], frame_right->data[2]},
-					{static_cast<size_t>(frame_right->linesize[0]), static_cast<size_t>(frame_right->linesize[1]), static_cast<size_t>(frame_right->linesize[2])},
-					{frame_left->data[0], frame_left->data[1], frame_left->data[2]},
-					{static_cast<size_t>(frame_left->linesize[0]), static_cast<size_t>(frame_left->linesize[1]), static_cast<size_t>(frame_left->linesize[2])},
-					max_width_, max_height_, frame_right->pts / 1000000.0f, frame_left->pts / 1000000.0f);
+					{right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
+					{static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
+					{left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
+					{static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
+					max_width_, max_height_, right_frames[frame_offset]->pts / 1000000.0f, left_frames[frame_offset]->pts / 1000000.0f, current_total_browsable);
 			}
 		}
 	} catch (...) {

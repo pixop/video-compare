@@ -59,7 +59,7 @@ Display::Display(const unsigned width, const unsigned height, const std::string 
 void Display::refresh(
     std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left,
     std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right,
-    const int width, const int height, const float left_position, const float right_position) {
+    const int width, const int height, const float left_position, const float right_position, const char *current_total_browsable) {
     // update video
     SDL_Rect render_quad_left = { 0, 0, mouse_x, height };
 	check_SDL(!SDL_UpdateYUVTexture(
@@ -91,6 +91,12 @@ void Display::refresh(
     int right_position_text_height = textSurface->h;
     SDL_FreeSurface(textSurface);
 
+    textSurface = TTF_RenderText_Blended(font_, current_total_browsable, textColor);
+    SDL_Texture *current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
+    int current_total_browsable_text_width = textSurface->w;
+    int current_total_browsable_text_height = textSurface->h;
+    SDL_FreeSurface(textSurface);
+
 	SDL_RenderClear(renderer_.get());
 
     // render video
@@ -107,6 +113,8 @@ void Display::refresh(
     SDL_RenderFillRect(renderer_.get(), &fill_rect);
     fill_rect = {width - 22 - right_position_text_width, 48, right_position_text_width + 4, right_position_text_height + 4};
     SDL_RenderFillRect(renderer_.get(), &fill_rect);
+    fill_rect = {width / 2 - current_total_browsable_text_width / 2, 18, current_total_browsable_text_width + 4, current_total_browsable_text_height + 4};
+    SDL_RenderFillRect(renderer_.get(), &fill_rect);
 
     // render text on top of background rectangle
     SDL_Rect text_rect = {20, 20, left_text_width, left_text_height};
@@ -117,6 +125,8 @@ void Display::refresh(
     SDL_RenderCopy(renderer_.get(), left_position_text_texture, NULL, &text_rect);
     text_rect = {width - 20 - right_position_text_width, 50, right_position_text_width, right_position_text_height};
     SDL_RenderCopy(renderer_.get(), right_position_text_texture, NULL, &text_rect);
+    text_rect = {width / 2 - current_total_browsable_text_width / 2, 20, current_total_browsable_text_width, current_total_browsable_text_height};
+    SDL_RenderCopy(renderer_.get(), current_total_browsable_text_texture, NULL, &text_rect);
 
     // render movable slider
     SDL_SetRenderDrawColor(renderer_.get(), 255, 255, 255, SDL_ALPHA_OPAQUE);
@@ -129,10 +139,11 @@ void Display::input() {
     SDL_GetMouseState(&mouse_x, &mouse_y);
 
     seek_relative_ = 0.0f;
+    frame_offset_delta_ = 0;
 
 	if (SDL_PollEvent(&event_)) {
 		switch (event_.type) {
-		case SDL_KEYUP:
+		case SDL_KEYDOWN:
 			switch (event_.key.keysym.sym) {
 			case SDLK_ESCAPE:
 				quit_ = true;
@@ -140,6 +151,12 @@ void Display::input() {
 			case SDLK_SPACE:
 				play_ = !play_;
 				break;
+			case SDLK_a:
+                frame_offset_delta_ += 1;
+                break;
+			case SDLK_d:
+                frame_offset_delta_ -= 1;
+                break;
 			case SDLK_s:
             {
 				swap_left_right_ = !swap_left_right_;
@@ -202,4 +219,8 @@ bool Display::get_swap_left_right() {
 
 float Display::get_seek_relative() {
 	return seek_relative_;
+}
+
+int Display::get_frame_offset_delta() {
+    return frame_offset_delta_;
 }

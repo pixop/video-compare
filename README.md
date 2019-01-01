@@ -31,6 +31,8 @@ Controls
 * Right arrow: Seek 1 second forward
 * Page up: Seek 600 seconds forward
 * S: Swap left and right video
+* A: Previous frame
+* D: Next frame
 
 Requirements
 ------------
@@ -41,3 +43,10 @@ Build
 -----
 
     make
+
+Notes
+-----
+
+I'm very sorry but the code is note very maintainable at the moment (too much copy'n'paste and lazy
+quick fixes). A lot of refactoring and clean-up is required when I have the time for it. Consider
+yourself warned! ;-)

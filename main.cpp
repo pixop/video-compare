@@ -6,7 +6,7 @@
 int main(int argc, char** argv) {
 	try {
 		if (argc != 3) {
-			throw std::logic_error{"Not enough arguments"};
+			throw std::logic_error{"Two arguments to FFmpeg compatible video files must be supplied"};
 		}
 
 		Player play{argv[1], argv[2]};
