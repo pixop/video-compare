@@ -36,6 +36,8 @@ Controls
 * A: Previous frame
 * D: Next frame
 
+Move the mouse horizontally to adjust the movable slider position.
+
 Requirements
 ------------
 
