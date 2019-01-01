@@ -24,6 +24,13 @@ Controls
 
 * Space: Toggle play/pause
 * Escape: Quit
+* Down arrow: Seek 15 seconds backward
+* Left arrow: Seek 1 second backward
+* Page down: Seek 600 seconds backward
+* Up arrow: Seek 15 seconds forward
+* Right arrow: Seek 1 second forward
+* Page up: Seek 600 seconds forward
+* S: Swap left and right video
 
 Requirements
 ------------
