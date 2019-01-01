@@ -9,6 +9,7 @@ public:
 	~VideoDecoder();
 	bool send(AVPacket* packet);
 	bool receive(AVFrame* frame);
+    void flush();
 	unsigned width() const;
 	unsigned height() const;
 	AVPixelFormat pixel_format() const;

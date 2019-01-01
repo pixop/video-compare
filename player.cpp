@@ -130,6 +130,8 @@ void Player::decode_video(const int video_idx) {
 			}
 
 			if (seeking_) {
+				video_decoder_[video_idx]->flush();
+
 				readyToSeek_[1][video_idx] = true;
 				
                 std::chrono::milliseconds sleep(10);

@@ -41,6 +41,10 @@ bool VideoDecoder::receive(AVFrame* frame) {
 	}
 }
 
+void VideoDecoder::flush() {
+    avcodec_flush_buffers(codec_context_);
+}
+
 unsigned VideoDecoder::width() const {
 	return codec_context_->width;
 }
