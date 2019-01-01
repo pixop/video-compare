@@ -7,7 +7,7 @@ This tool can be used to visually compare e.g. the effect of codecs and resizing
 two video files played in sync. A movable slider enables easy viewing of the difference 
 between two files across any region of interest.
 
-![Screenshot](screenshot.jpg?raw=true)
+![Screenshot](screenshot2.jpg?raw=true)
 
 Credits
 -------
