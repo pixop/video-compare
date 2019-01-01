@@ -10,13 +10,13 @@ extern "C" {
 
 const size_t Player::queue_size_{5};
 
-static inline bool areBehind(int64_t frame1_pts, int64_t frame2_pts) {
-	float t1 = frame1_pts / 1000000.0f;
-	float t2 = frame2_pts / 1000000.0f;
+static inline bool isBehind(int64_t frame1_pts, int64_t frame2_pts) {
+	float t1 = (float) frame1_pts / 1000000.0f;
+	float t2 = (float) frame2_pts / 1000000.0f;
 
 	float diff = t1 - t2;
 
-	return diff < (1.0f / 60.0f);
+	return diff < -(1.0f / 60.0f);
 }
 
 Player::Player(const std::string &left_file_name, const std::string &right_file_name) :
@@ -246,12 +246,15 @@ void Player::video() {
 			} else {
 				bool adjusting = false;
 
-				if ((frame_left != nullptr && frame_left->pts < 0) || (frame_left != nullptr && frame_right != nullptr && areBehind(frame_left->pts, frame_right->pts))) {
+				int64_t left_pts = (frame_left != nullptr) ? frame_left->pts : 0;
+				int64_t right_pts = (frame_right != nullptr) ? frame_right->pts : 0;
+
+				if ((left_pts < 0) || isBehind(left_pts, right_pts)) {
 					adjusting = true;
 
 					frame_queue_[0]->pop(frame_left);
 				}
-				if ((frame_right != nullptr && frame_right->pts < 0) || (frame_left != nullptr && frame_right != nullptr && areBehind(frame_right->pts, frame_left->pts))) {
+				if ((right_pts < 0) || isBehind(right_pts, left_pts)) {
 					adjusting = true;
 
 					frame_queue_[1]->pop(frame_right);
