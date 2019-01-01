@@ -12,7 +12,8 @@ between two files across any region of interest.
 Credits
 -------
 
-The code is mainly derived from the video player GitHub project: https://github.com/pockethook/player
+This tool was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on 
+the execellent video player GitHub project: https://github.com/pockethook/player
 
 Many thanks to the FFmpeg and SDL2 authors.
 
