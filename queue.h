@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <iostream>
 
 struct AVPacket;
 struct AVFrame;
@@ -36,6 +37,7 @@ public:
 	// The queue will cannot be pushed or popped
 	void quit();
 
+    void empty();
 };
 
 using PacketQueue =
@@ -99,5 +101,16 @@ template <class T>
 void Queue<T>::quit() {
 	quit_ = true;
 	empty_.notify_all();
+	full_.notify_all();
+}
+
+template <class T>
+void Queue<T>::empty() {
+	std::unique_lock<std::mutex> lock(mutex_);
+
+    while(!queue_.empty()) {
+        queue_.pop();
+    }
+
 	full_.notify_all();
 }

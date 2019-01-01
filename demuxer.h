@@ -12,6 +12,7 @@ public:
 	int video_stream_index() const;
 	AVRational time_base() const;
 	bool operator()(AVPacket &packet);
+    bool seek(const float position, const bool backward);
 
 private:
 	AVFormatContext* format_context_{};
