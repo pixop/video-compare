@@ -52,7 +52,7 @@ Build
 Notes
 -----
 
-The code is not maintainable at the moment (too much copy/paste and lazy solutions). 
-My intention has mainly been to quickly build a tool which gets the job done. 
+The code is hard to maintain at the moment (too much copy/paste and lazy solutions). 
+My intention has mainly been to build a tool in a few days which gets the job done. 
 A lot of refactoring and clean-up is required when I have the time for it. Consider 
 yourself warned! ;-)
