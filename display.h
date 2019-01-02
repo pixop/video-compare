@@ -35,6 +35,7 @@ private:
 
 public:
 	Display(const unsigned width, const unsigned height, const std::string &left_file_name,  const std::string &right_file_name);
+    ~Display();
 
 	// Copy frame to display
 	void refresh(

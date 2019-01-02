@@ -56,6 +56,11 @@ Display::Display(const unsigned width, const unsigned height, const std::string 
     SDL_FreeSurface(textSurface);
 }
 
+Display::~Display() {
+    SDL_DestroyTexture(left_text_texture);
+    SDL_DestroyTexture(right_text_texture);
+}
+
 void Display::refresh(
     std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left,
     std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right,
@@ -127,6 +132,11 @@ void Display::refresh(
     SDL_RenderCopy(renderer_.get(), right_position_text_texture, NULL, &text_rect);
     text_rect = {width / 2 - current_total_browsable_text_width / 2, 20, current_total_browsable_text_width, current_total_browsable_text_height};
     SDL_RenderCopy(renderer_.get(), current_total_browsable_text_texture, NULL, &text_rect);
+
+    // release memory
+    SDL_DestroyTexture(left_position_text_texture);
+    SDL_DestroyTexture(right_position_text_texture);
+    SDL_DestroyTexture(current_total_browsable_text_texture);
 
     // render movable slider
     SDL_SetRenderDrawColor(renderer_.get(), 255, 255, 255, SDL_ALPHA_OPAQUE);
