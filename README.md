@@ -52,6 +52,7 @@ Build
 Notes
 -----
 
-I'm very sorry but the code is note very maintainable at the moment (too much copy'n'paste and lazy
-quick fixes). A lot of refactoring and clean-up is required when I have the time for it. Consider
+The code is not maintainable at the moment (too much copy/paste and lazy solutions). 
+My intention has mainly been to quickly build a tool which gets the job done. 
+A lot of refactoring and clean-up is required when I have the time for it. Consider 
 yourself warned! ;-)
