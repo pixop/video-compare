@@ -13,7 +13,7 @@ Credits
 -------
 
 This tool was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on 
-the execellent video player GitHub project: https://github.com/pockethook/player
+the excellent video player GitHub project: https://github.com/pockethook/player
 
 Many thanks to the FFmpeg and SDL2 authors.
 
