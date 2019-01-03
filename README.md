@@ -42,7 +42,8 @@ Move the mouse horizontally to adjust the movable slider position.
 Requirements
 ------------
 
-Requires FFmpeg headers and development libraries to be installed, along with SDL2.
+Requires FFmpeg headers and development libraries to be installed, along with SDL2
+and its TrueType font rendering add on (libsdl2_ttf).
 
 Build
 -----
