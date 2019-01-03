@@ -198,61 +198,66 @@ void VideoCompare::video() {
 		int64_t right_pts = 0;
 
 		for (uint64_t frame_number = 0;; ++frame_number) {
+            std::string errorMessage = "";
+
 			display_->input();
 
 			float current_position = left_pts / 1000000.0f;
 
 			if (display_->get_seek_relative() != 0.0f) {
-				seeking_ = true;
-				readyToSeek_[0][0] = false;
-				readyToSeek_[0][1] = false;
-				readyToSeek_[1][0] = false;
-				readyToSeek_[1][1] = false;
+                if (packet_queue_[0]->isFinished() || packet_queue_[1]->isFinished()) {
+                    errorMessage = "Unable to perform seek (end of file reached)";
+                } else {
+                    seeking_ = true;
+                    readyToSeek_[0][0] = false;
+                    readyToSeek_[0][1] = false;
+                    readyToSeek_[1][0] = false;
+                    readyToSeek_[1][1] = false;
 
-				while(true) {
-					bool allEmpty = true;
-					
-					allEmpty = allEmpty && readyToSeek_[0][0];
-					allEmpty = allEmpty && readyToSeek_[0][1];
-					allEmpty = allEmpty && readyToSeek_[1][0];
-					allEmpty = allEmpty && readyToSeek_[1][1];
+                    while(true) {
+                        bool allEmpty = true;
+                        
+                        allEmpty = allEmpty && readyToSeek_[0][0];
+                        allEmpty = allEmpty && readyToSeek_[0][1];
+                        allEmpty = allEmpty && readyToSeek_[1][0];
+                        allEmpty = allEmpty && readyToSeek_[1][1];
 
-					if (allEmpty) {
-						break;
-					} else {
-						frame_queue_[0]->empty();
-						frame_queue_[1]->empty();
-					}
-				}
+                        if (allEmpty) {
+                            break;
+                        } else {
+                            frame_queue_[0]->empty();
+                            frame_queue_[1]->empty();
+                        }
+                    }
 
-				packet_queue_[0]->empty();
-				packet_queue_[1]->empty();
-				frame_queue_[0]->empty();
-				frame_queue_[1]->empty();
+                    packet_queue_[0]->empty();
+                    packet_queue_[1]->empty();
+                    frame_queue_[0]->empty();
+                    frame_queue_[1]->empty();
 
-				bool backward = display_->get_seek_relative() < 0.0f;
-				
-				if (!demuxer_[0]->seek(std::max(0.0f, current_position + display_->get_seek_relative()), backward) && !backward) {
-					// restore position if unable to perform forward seek
-					demuxer_[0]->seek(std::max(0.0f, current_position), true);
-				}
-				if (!demuxer_[1]->seek(std::max(0.0f, current_position + display_->get_seek_relative()), backward) && !backward) {
-					// restore position if unable to perform forward seek
-					demuxer_[1]->seek(std::max(0.0f, current_position), true);
-				};
+                    bool backward = display_->get_seek_relative() < 0.0f;
+                    
+                    if ((!demuxer_[0]->seek(std::max(0.0f, current_position + display_->get_seek_relative()), backward) && !backward) ||
+                        (!demuxer_[1]->seek(std::max(0.0f, current_position + display_->get_seek_relative()), backward) && !backward)) {
+                        // restore position if unable to perform forward seek
+                        errorMessage = "Unable to seek past end of file";
+                        demuxer_[0]->seek(std::max(0.0f, current_position), true);
+                        demuxer_[1]->seek(std::max(0.0f, current_position), true);
+                    };
 
-				seeking_ = false;
+                    seeking_ = false;
 
-				frame_queue_[0]->pop(frame_left);
-				left_pts = frame_left->pts;
+                    frame_queue_[0]->pop(frame_left);
+                    left_pts = frame_left->pts;
 
-				frame_queue_[1]->pop(frame_right);
-				right_pts = frame_right->pts;
+                    frame_queue_[1]->pop(frame_right);
+                    right_pts = frame_right->pts;
 
-				left_frames.clear();
-				right_frames.clear();
+                    left_frames.clear();
+                    right_frames.clear();
 
-				current_position = frame_left->pts / 1000000.0f;
+                    current_position = frame_left->pts / 1000000.0f;
+                }
 			}
 
 			bool store_frames = false;
@@ -337,14 +342,22 @@ void VideoCompare::video() {
 					{static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
 					{right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
 					{static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-					max_width_, max_height_, left_frames[frame_offset]->pts / 1000000.0f, right_frames[frame_offset]->pts / 1000000.0f, current_total_browsable);
+					max_width_, max_height_, 
+                    left_frames[frame_offset]->pts / 1000000.0f, 
+                    right_frames[frame_offset]->pts / 1000000.0f, 
+                    current_total_browsable,
+                    errorMessage);
 			} else {
 				display_->refresh(
 					{right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
 					{static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
 					{left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
 					{static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-					max_width_, max_height_, right_frames[frame_offset]->pts / 1000000.0f, left_frames[frame_offset]->pts / 1000000.0f, current_total_browsable);
+					max_width_, max_height_, 
+                    right_frames[frame_offset]->pts / 1000000.0f, 
+                    left_frames[frame_offset]->pts / 1000000.0f, 
+                    current_total_browsable,
+                    errorMessage);
 			}
 		}
 	} catch (...) {

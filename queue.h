@@ -33,6 +33,7 @@ public:
 	bool pop(T &data);
 
 	// The queue has finished accepting input
+    bool isFinished();
 	void finished();
 	// The queue will cannot be pushed or popped
 	void quit();
@@ -89,6 +90,11 @@ bool Queue<T>::pop(T &data) {
 	}
 
 	return false;
+}
+
+template <class T>
+bool Queue<T>::isFinished() {
+	return finished_;
 }
 
 template <class T>

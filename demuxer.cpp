@@ -35,10 +35,5 @@ bool Demuxer::operator()(AVPacket &packet) {
 bool Demuxer::seek(const float position, const bool backward) {
     int64_t seekTarget = int64_t(position * 1000000.0f);
 
-    if (av_seek_frame(format_context_, -1, seekTarget, backward ? AVSEEK_FLAG_BACKWARD : 0) < 0) {
-        std::cerr << "av_seek_frame failed" << std::endl;
-        return false;
-    }
-
-    return true;
+    return av_seek_frame(format_context_, -1, seekTarget, backward ? AVSEEK_FLAG_BACKWARD : 0) >= 0;
 }

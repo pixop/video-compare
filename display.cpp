@@ -3,6 +3,7 @@
 #include <string>
 #include <iostream>
 
+
 template <typename T>
 inline T check_SDL(T value, const std::string &message) {
 	if (!value) {
@@ -24,7 +25,8 @@ SDL::~SDL() {
 }
 
 Display::Display(const unsigned width, const unsigned height, const std::string &left_file_name,  const std::string &right_file_name) :
-    font_{check_SDL(TTF_OpenFont("SourceCodePro-Regular.ttf", 16), "font open")},
+    small_font_{check_SDL(TTF_OpenFont("SourceCodePro-Regular.ttf", 16), "font open")},
+    big_font_{check_SDL(TTF_OpenFont("SourceCodePro-Regular.ttf", 24), "font open")},
 	window_{check_SDL(SDL_CreateWindow(
 		"video-compare", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 		width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE),
@@ -43,13 +45,13 @@ Display::Display(const unsigned width, const unsigned height, const std::string 
 	SDL_RenderClear(renderer_.get());
 	SDL_RenderPresent(renderer_.get());
 
-    SDL_Surface* textSurface = TTF_RenderText_Blended(font_, left_file_name.c_str(), textColor);
+    SDL_Surface* textSurface = TTF_RenderText_Blended(small_font_, left_file_name.c_str(), textColor);
     left_text_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
     left_text_width = textSurface->w;
     left_text_height = textSurface->h;
     SDL_FreeSurface(textSurface);
 
-    textSurface = TTF_RenderText_Blended(font_, right_file_name.c_str(), textColor);
+    textSurface = TTF_RenderText_Blended(small_font_, right_file_name.c_str(), textColor);
     right_text_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
     right_text_width = textSurface->w;
     right_text_height = textSurface->h;
@@ -59,12 +61,20 @@ Display::Display(const unsigned width, const unsigned height, const std::string 
 Display::~Display() {
     SDL_DestroyTexture(left_text_texture);
     SDL_DestroyTexture(right_text_texture);
+    
+    if (error_message_texture != nullptr) {
+        SDL_DestroyTexture(error_message_texture);
+    }
 }
 
 void Display::refresh(
     std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left,
     std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right,
-    const int width, const int height, const float left_position, const float right_position, const char *current_total_browsable) {
+    const int width, const int height, 
+    const float left_position, 
+    const float right_position, 
+    const char *current_total_browsable,
+    const std::string &error_message) {
     // update video
     SDL_Rect render_quad_left = { 0, 0, mouse_x, height };
 	check_SDL(!SDL_UpdateYUVTexture(
@@ -79,29 +89,39 @@ void Display::refresh(
 		planes_right[1] + mouse_x / 2, pitches_right[1],
 		planes_right[2] + mouse_x / 2, pitches_right[2]), "right texture update");
 
-    // generate position texture
+    // generate dynamic textures
     char buffer[20];
 
     sprintf(buffer, "%.2f", left_position);
-    SDL_Surface* textSurface = TTF_RenderText_Blended(font_, buffer, textColor);
+    SDL_Surface* textSurface = TTF_RenderText_Blended(small_font_, buffer, textColor);
     SDL_Texture *left_position_text_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
     int left_position_text_width = textSurface->w;
     int left_position_text_height = textSurface->h;
     SDL_FreeSurface(textSurface);
 
     sprintf(buffer, "%.2f", right_position);
-    textSurface = TTF_RenderText_Blended(font_, buffer, textColor);
+    textSurface = TTF_RenderText_Blended(small_font_, buffer, textColor);
     SDL_Texture *right_position_text_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
     int right_position_text_width = textSurface->w;
     int right_position_text_height = textSurface->h;
     SDL_FreeSurface(textSurface);
 
-    textSurface = TTF_RenderText_Blended(font_, current_total_browsable, textColor);
+    textSurface = TTF_RenderText_Blended(small_font_, current_total_browsable, textColor);
     SDL_Texture *current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
     int current_total_browsable_text_width = textSurface->w;
     int current_total_browsable_text_height = textSurface->h;
     SDL_FreeSurface(textSurface);
 
+    if (!error_message.empty()) {
+        error_message_shown_at = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+        textSurface = TTF_RenderText_Blended(big_font_, error_message.c_str(), textColor);
+        error_message_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
+        error_message_width = textSurface->w;
+        error_message_height = textSurface->h;
+        SDL_FreeSurface(textSurface);
+    }
+
+    // clear everything
 	SDL_RenderClear(renderer_.get());
 
     // render video
@@ -118,7 +138,7 @@ void Display::refresh(
     SDL_RenderFillRect(renderer_.get(), &fill_rect);
     fill_rect = {width - 22 - right_position_text_width, 48, right_position_text_width + 4, right_position_text_height + 4};
     SDL_RenderFillRect(renderer_.get(), &fill_rect);
-    fill_rect = {width / 2 - current_total_browsable_text_width / 2, 18, current_total_browsable_text_width + 4, current_total_browsable_text_height + 4};
+    fill_rect = {width / 2 - current_total_browsable_text_width / 2 - 2, 18, current_total_browsable_text_width + 4, current_total_browsable_text_height + 4};
     SDL_RenderFillRect(renderer_.get(), &fill_rect);
 
     // render text on top of background rectangle
@@ -132,6 +152,20 @@ void Display::refresh(
     SDL_RenderCopy(renderer_.get(), right_position_text_texture, NULL, &text_rect);
     text_rect = {width / 2 - current_total_browsable_text_width / 2, 20, current_total_browsable_text_width, current_total_browsable_text_height};
     SDL_RenderCopy(renderer_.get(), current_total_browsable_text_texture, NULL, &text_rect);
+
+    // render (optional) error message
+    if (error_message_texture != nullptr) {
+        std::chrono::milliseconds now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+        float keep_alpha = std::max(sqrt(1.0f - (now - error_message_shown_at).count() / 1000.0f / 4.0f), 0.0f); 
+
+        SDL_SetRenderDrawColor(renderer_.get(), 0, 0, 0, 64 * keep_alpha);
+        fill_rect = {width / 2 - error_message_width / 2 - 2, height / 2 - error_message_height / 2 - 2, error_message_width + 4, error_message_height + 4};
+        SDL_RenderFillRect(renderer_.get(), &fill_rect);
+
+        SDL_SetTextureAlphaMod(error_message_texture, 255 * keep_alpha);
+        text_rect = {width / 2 - error_message_width / 2, height / 2 - error_message_height / 2, error_message_width, error_message_height};
+        SDL_RenderCopy(renderer_.get(), error_message_texture, NULL, &text_rect);
+    }
 
     // release memory
     SDL_DestroyTexture(left_position_text_texture);
