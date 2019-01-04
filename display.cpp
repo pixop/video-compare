@@ -38,7 +38,7 @@ Display::Display(const unsigned width, const unsigned height, const std::string 
 	texture_{check_SDL(SDL_CreateTexture(
 		renderer_.get(), SDL_PIXELFORMAT_YV12, SDL_TEXTUREACCESS_STREAMING,
 		width, height), "renderer"), SDL_DestroyTexture} {
-	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 	SDL_RenderSetLogicalSize(renderer_.get(), width, height);
 
 	SDL_SetRenderDrawColor(renderer_.get(), 0, 0, 0, 255);
@@ -127,6 +127,23 @@ void Display::refresh(
     // render video
 	SDL_RenderCopy(renderer_.get(), texture_.get(), nullptr, nullptr);
 
+    // zoomed area
+    int src_zoomed_size = 64;
+    int src_half_zoomed_size = src_zoomed_size / 2;
+    int dst_zoomed_size = src_zoomed_size * log(width) / log(2);
+    int dst_half_zoomed_size = dst_zoomed_size / 2;
+
+    if (zoom_left_) {
+        SDL_Rect src_zoomed_area = { std::min(std::max(0, mouse_x - src_half_zoomed_size), width), std::min(std::max(0, mouse_y - src_half_zoomed_size), height), src_zoomed_size, src_zoomed_size };
+        SDL_Rect dst_zoomed_area = { 0, height - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size };
+        SDL_RenderCopy(renderer_.get(), texture_.get(), &src_zoomed_area, &dst_zoomed_area);
+    }
+    if (zoom_right_) {
+        SDL_Rect src_zoomed_area = { std::min(std::max(0, mouse_x - src_half_zoomed_size), width), std::min(std::max(0, mouse_y - src_half_zoomed_size), height), src_zoomed_size, src_zoomed_size };
+        SDL_Rect dst_zoomed_area = { width - dst_zoomed_size, height - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size };
+        SDL_RenderCopy(renderer_.get(), texture_.get(), &src_zoomed_area, &dst_zoomed_area);
+    }
+
     // render background rectangles
     SDL_SetRenderDrawColor(renderer_.get(), 0, 0, 0, 64);
     SDL_SetRenderDrawBlendMode(renderer_.get(), SDL_BLENDMODE_BLEND);
@@ -172,9 +189,16 @@ void Display::refresh(
     SDL_DestroyTexture(right_position_text_texture);
     SDL_DestroyTexture(current_total_browsable_text_texture);
 
-    // render movable slider
+    // render movable slider(s)
     SDL_SetRenderDrawColor(renderer_.get(), 255, 255, 255, SDL_ALPHA_OPAQUE);
     SDL_RenderDrawLine(renderer_.get(), mouse_x, 0, mouse_x, height);
+
+    if (zoom_left_) {
+        SDL_RenderDrawLine(renderer_.get(), dst_half_zoomed_size, height - dst_zoomed_size, dst_half_zoomed_size, height);
+    }
+    if (zoom_right_) {
+        SDL_RenderDrawLine(renderer_.get(), width - dst_half_zoomed_size, height - dst_zoomed_size, width - dst_half_zoomed_size, height);
+    }
 
 	SDL_RenderPresent(renderer_.get());
 }
@@ -195,6 +219,12 @@ void Display::input() {
 			case SDLK_SPACE:
 				play_ = !play_;
 				break;
+			case SDLK_z:
+                zoom_left_ = true;
+                break;
+			case SDLK_c:
+                zoom_right_ = true;
+                break;
 			case SDLK_a:
                 frame_offset_delta_ += 1;
                 break;
@@ -239,6 +269,16 @@ void Display::input() {
 			default:
 				break;
 			}
+			break;
+		case SDL_KEYUP:
+			switch (event_.key.keysym.sym) {
+			case SDLK_z:
+                zoom_left_ = false;
+                break;
+			case SDLK_c:
+                zoom_right_ = false;
+                break;
+            }
 			break;
 		case SDL_QUIT:
 			quit_ = true;

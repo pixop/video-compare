@@ -36,6 +36,8 @@ Controls
 * S: Swap left and right video
 * A: Previous frame
 * D: Next frame
+* Z: Zoom area around cursor (result shown in lower left corner)
+* C: Zoom area around cursor (result shown in lower right corner)
 
 Move the mouse horizontally to adjust the movable slider position.
 

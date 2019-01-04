@@ -17,3 +17,9 @@ video-compare
 
 # Dependencies
 *.d
+
+# Videos
+*.mov
+
+# Mac OS X stuff
+.DS_Store
