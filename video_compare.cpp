@@ -20,7 +20,7 @@ static inline bool isBehind(int64_t frame1_pts, int64_t frame2_pts) {
 	return diff < -(1.0f / 60.0f);
 }
 
-VideoCompare::VideoCompare(const std::string &left_file_name, const std::string &right_file_name) :
+VideoCompare::VideoCompare(const bool half_mode_enabled, const std::string &left_file_name, const std::string &right_file_name) :
 	demuxer_{
 		std::make_unique<Demuxer>(left_file_name), 
 		std::make_unique<Demuxer>(right_file_name)},
@@ -32,7 +32,7 @@ VideoCompare::VideoCompare(const std::string &left_file_name, const std::string 
 	format_converter_{
 		std::make_unique<FormatConverter>(video_decoder_[0]->width(), video_decoder_[0]->height(), max_width_, max_height_, video_decoder_[0]->pixel_format(), AV_PIX_FMT_YUV420P),
 		std::make_unique<FormatConverter>(video_decoder_[1]->width(), video_decoder_[1]->height(), max_width_, max_height_, video_decoder_[1]->pixel_format(), AV_PIX_FMT_YUV420P)},
-	display_{std::make_unique<Display>(max_width_, max_height_, left_file_name, right_file_name)},
+	display_{std::make_unique<Display>(half_mode_enabled, max_width_, max_height_, left_file_name, right_file_name)},
 	timer_{std::make_unique<Timer>()},
 	packet_queue_{
 		std::make_unique<PacketQueue>(queue_size_),
@@ -342,7 +342,6 @@ void VideoCompare::video() {
 					{static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
 					{right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
 					{static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-					max_width_, max_height_, 
                     left_frames[frame_offset]->pts / 1000000.0f, 
                     right_frames[frame_offset]->pts / 1000000.0f, 
                     current_total_browsable,
@@ -353,7 +352,6 @@ void VideoCompare::video() {
 					{static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
 					{left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
 					{static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-					max_width_, max_height_, 
                     right_frames[frame_offset]->pts / 1000000.0f, 
                     left_frames[frame_offset]->pts / 1000000.0f, 
                     current_total_browsable,

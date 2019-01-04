@@ -16,7 +16,7 @@ extern "C" {
 
 class VideoCompare {
 public:
-	VideoCompare(const std::string &left_file_name, const std::string &right_file_name);
+	VideoCompare(const bool half_mode_enabled, const std::string &left_file_name, const std::string &right_file_name);
 	void operator()();
 private:
 	void thread_demultiplex_left();

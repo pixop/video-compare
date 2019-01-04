@@ -13,6 +13,10 @@ struct SDL {
 
 class Display {
 private:
+    bool half_mode_enabled_;
+    int width_;
+    int height_;
+
 	bool quit_{false};
 	bool play_{true};
     bool swap_left_right_{false};
@@ -46,14 +50,13 @@ private:
     int mouse_y;
 
 public:
-	Display(const unsigned width, const unsigned height, const std::string &left_file_name,  const std::string &right_file_name);
+	Display(const bool half_mode_enabled, const unsigned width, const unsigned height, const std::string &left_file_name,  const std::string &right_file_name);
     ~Display();
 
 	// Copy frame to display
 	void refresh(
 		std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left,
         std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right,
-        const int width, const int height, 
         const float left_position, 
         const float right_position, 
         const char *current_total_browsable,

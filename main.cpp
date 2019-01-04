@@ -1,18 +1,40 @@
 #include "video_compare.h"
+#include "argagg.h"
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <algorithm>
 
 int main(int argc, char** argv) {
 	try {
-		if (argc != 3) {
-			throw std::logic_error{"Two arguments to FFmpeg compatible video files must be supplied"};
-		}
+        argagg::parser argparser {{
+            { "help", {"--help"},
+            "shows this help message", 0},
+            { "half-mode", {"-h", "--half-mode"},
+            "downscale to half size for e.g. UHD on Retina displays", 0}
+        }};
 
-		VideoCompare compare{argv[1], argv[2]};
-		compare();
+        argagg::parser_results args;
+        args = argparser.parse(argc, argv);
+
+        if (args["help"] || args.count() == 0) {
+            std::ostringstream usage;
+            usage
+                << argv[0] << " 0.10-beta" << std::endl
+                << std::endl
+                << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl
+                << std::endl;
+            argagg::fmt_ostream fmt(std::cerr);
+            fmt << usage.str() << argparser;
+        } else {
+            if (args.pos.size() != 2) {
+                throw std::logic_error{"Two FFmpeg compatible video files must be supplied"};
+            }
+
+            VideoCompare compare{args["half-mode"], args.pos[0], args.pos[1]};
+            compare();
+        }
 	}
-
 	catch (const std::exception &e) {
 		std::cerr << "Error: " << e.what() << std::endl;
 		return -1;

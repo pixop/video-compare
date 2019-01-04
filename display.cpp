@@ -3,7 +3,6 @@
 #include <string>
 #include <iostream>
 
-
 template <typename T>
 inline T check_SDL(T value, const std::string &message) {
 	if (!value) {
@@ -24,12 +23,15 @@ SDL::~SDL() {
 	SDL_Quit();
 }
 
-Display::Display(const unsigned width, const unsigned height, const std::string &left_file_name,  const std::string &right_file_name) :
+Display::Display(const bool half_mode_enabled, const unsigned width, const unsigned height, const std::string &left_file_name,  const std::string &right_file_name) :
+    half_mode_enabled_{half_mode_enabled},
+    width_{half_mode_enabled ? (int) width / 2 : (int) width},
+    height_{half_mode_enabled ? (int) height / 2 : (int) height},
     small_font_{check_SDL(TTF_OpenFont("SourceCodePro-Regular.ttf", 16), "font open")},
     big_font_{check_SDL(TTF_OpenFont("SourceCodePro-Regular.ttf", 24), "font open")},
 	window_{check_SDL(SDL_CreateWindow(
 		"video-compare", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-		width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE),
+		width_, height_, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE),
 		"window"), SDL_DestroyWindow},
 	renderer_{check_SDL(SDL_CreateRenderer(
 		window_.get(), -1,
@@ -39,7 +41,7 @@ Display::Display(const unsigned width, const unsigned height, const std::string 
 		renderer_.get(), SDL_PIXELFORMAT_YV12, SDL_TEXTUREACCESS_STREAMING,
 		width, height), "renderer"), SDL_DestroyTexture} {
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-	SDL_RenderSetLogicalSize(renderer_.get(), width, height);
+	SDL_RenderSetLogicalSize(renderer_.get(), width_, height_);
 
 	SDL_SetRenderDrawColor(renderer_.get(), 0, 0, 0, 255);
 	SDL_RenderClear(renderer_.get());
@@ -70,24 +72,23 @@ Display::~Display() {
 void Display::refresh(
     std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left,
     std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right,
-    const int width, const int height, 
     const float left_position, 
     const float right_position, 
     const char *current_total_browsable,
     const std::string &error_message) {
     // update video
-    SDL_Rect render_quad_left = { 0, 0, mouse_x, height };
+    SDL_Rect render_quad_left = { 0, 0, half_mode_enabled_ ? mouse_x * 2 : mouse_x, half_mode_enabled_ ? height_ * 2 : height_ };
 	check_SDL(!SDL_UpdateYUVTexture(
 		texture_.get(), &render_quad_left,
 		planes_left[0], pitches_left[0],
 		planes_left[1], pitches_left[1],
 		planes_left[2], pitches_left[2]), "left texture update");
-    SDL_Rect render_quad_right = { mouse_x, 0, width - mouse_x, height };
+    SDL_Rect render_quad_right = { half_mode_enabled_ ? mouse_x * 2 : mouse_x, 0, half_mode_enabled_ ? ((width_ - mouse_x) * 2) : (width_ - mouse_x), half_mode_enabled_ ? height_ * 2 : height_ };
 	check_SDL(!SDL_UpdateYUVTexture(
 		texture_.get(), &render_quad_right,
-		planes_right[0] + mouse_x, pitches_right[0],
-		planes_right[1] + mouse_x / 2, pitches_right[1],
-		planes_right[2] + mouse_x / 2, pitches_right[2]), "right texture update");
+		planes_right[0] + (half_mode_enabled_ ? (mouse_x * 2) : mouse_x), pitches_right[0],
+		planes_right[1] + (half_mode_enabled_ ? mouse_x : mouse_x / 2), pitches_right[1],
+		planes_right[2] + (half_mode_enabled_ ? mouse_x : mouse_x / 2), pitches_right[2]), "right texture update");
 
     // generate dynamic textures
     char buffer[20];
@@ -130,17 +131,21 @@ void Display::refresh(
     // zoomed area
     int src_zoomed_size = 64;
     int src_half_zoomed_size = src_zoomed_size / 2;
-    int dst_zoomed_size = src_zoomed_size * log(width) / log(2);
+    int dst_zoomed_size = src_zoomed_size * log(width_) / log(2);
     int dst_half_zoomed_size = dst_zoomed_size / 2;
+    int mx = half_mode_enabled_ ? mouse_x * 2 : mouse_x;
+    int my = half_mode_enabled_ ? mouse_y * 2 : mouse_y;
+    int maxx = half_mode_enabled_ ? width_ * 2 : width_;
+    int maxy = half_mode_enabled_ ? height_ * 2 : height_;
 
     if (zoom_left_) {
-        SDL_Rect src_zoomed_area = { std::min(std::max(0, mouse_x - src_half_zoomed_size), width), std::min(std::max(0, mouse_y - src_half_zoomed_size), height), src_zoomed_size, src_zoomed_size };
-        SDL_Rect dst_zoomed_area = { 0, height - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size };
+        SDL_Rect src_zoomed_area = { std::min(std::max(0, mx - src_half_zoomed_size), maxx), std::min(std::max(0, my - src_half_zoomed_size), maxy), src_zoomed_size, src_zoomed_size };
+        SDL_Rect dst_zoomed_area = { 0, height_ - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size };
         SDL_RenderCopy(renderer_.get(), texture_.get(), &src_zoomed_area, &dst_zoomed_area);
     }
     if (zoom_right_) {
-        SDL_Rect src_zoomed_area = { std::min(std::max(0, mouse_x - src_half_zoomed_size), width), std::min(std::max(0, mouse_y - src_half_zoomed_size), height), src_zoomed_size, src_zoomed_size };
-        SDL_Rect dst_zoomed_area = { width - dst_zoomed_size, height - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size };
+        SDL_Rect src_zoomed_area = { std::min(std::max(0, mx - src_half_zoomed_size), maxx), std::min(std::max(0, my - src_half_zoomed_size), maxy), src_zoomed_size, src_zoomed_size };
+        SDL_Rect dst_zoomed_area = { width_ - dst_zoomed_size, height_ - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size };
         SDL_RenderCopy(renderer_.get(), texture_.get(), &src_zoomed_area, &dst_zoomed_area);
     }
 
@@ -149,25 +154,25 @@ void Display::refresh(
     SDL_SetRenderDrawBlendMode(renderer_.get(), SDL_BLENDMODE_BLEND);
     SDL_Rect fill_rect = {18, 18, left_text_width + 4, left_text_height + 4};
     SDL_RenderFillRect(renderer_.get(), &fill_rect);
-    fill_rect = {width - 22 - right_text_width, 18, right_text_width + 4, right_text_height + 4};
+    fill_rect = {width_ - 22 - right_text_width, 18, right_text_width + 4, right_text_height + 4};
     SDL_RenderFillRect(renderer_.get(), &fill_rect);
     fill_rect = {18, 48, left_position_text_width + 4, left_position_text_height + 4};
     SDL_RenderFillRect(renderer_.get(), &fill_rect);
-    fill_rect = {width - 22 - right_position_text_width, 48, right_position_text_width + 4, right_position_text_height + 4};
+    fill_rect = {width_ - 22 - right_position_text_width, 48, right_position_text_width + 4, right_position_text_height + 4};
     SDL_RenderFillRect(renderer_.get(), &fill_rect);
-    fill_rect = {width / 2 - current_total_browsable_text_width / 2 - 2, 18, current_total_browsable_text_width + 4, current_total_browsable_text_height + 4};
+    fill_rect = {width_ / 2 - current_total_browsable_text_width / 2 - 2, 18, current_total_browsable_text_width + 4, current_total_browsable_text_height + 4};
     SDL_RenderFillRect(renderer_.get(), &fill_rect);
 
     // render text on top of background rectangle
     SDL_Rect text_rect = {20, 20, left_text_width, left_text_height};
     SDL_RenderCopy(renderer_.get(), left_text_texture, NULL, &text_rect);
-    text_rect = {width - 20 - right_text_width, 20, right_text_width, right_text_height};
+    text_rect = {width_ - 20 - right_text_width, 20, right_text_width, right_text_height};
     SDL_RenderCopy(renderer_.get(), right_text_texture, NULL, &text_rect);
     text_rect = {20, 50, left_position_text_width, left_position_text_height};
     SDL_RenderCopy(renderer_.get(), left_position_text_texture, NULL, &text_rect);
-    text_rect = {width - 20 - right_position_text_width, 50, right_position_text_width, right_position_text_height};
+    text_rect = {width_ - 20 - right_position_text_width, 50, right_position_text_width, right_position_text_height};
     SDL_RenderCopy(renderer_.get(), right_position_text_texture, NULL, &text_rect);
-    text_rect = {width / 2 - current_total_browsable_text_width / 2, 20, current_total_browsable_text_width, current_total_browsable_text_height};
+    text_rect = {width_ / 2 - current_total_browsable_text_width / 2, 20, current_total_browsable_text_width, current_total_browsable_text_height};
     SDL_RenderCopy(renderer_.get(), current_total_browsable_text_texture, NULL, &text_rect);
 
     // render (optional) error message
@@ -176,11 +181,11 @@ void Display::refresh(
         float keep_alpha = std::max(sqrt(1.0f - (now - error_message_shown_at).count() / 1000.0f / 4.0f), 0.0f); 
 
         SDL_SetRenderDrawColor(renderer_.get(), 0, 0, 0, 64 * keep_alpha);
-        fill_rect = {width / 2 - error_message_width / 2 - 2, height / 2 - error_message_height / 2 - 2, error_message_width + 4, error_message_height + 4};
+        fill_rect = {width_ / 2 - error_message_width / 2 - 2, height_ / 2 - error_message_height / 2 - 2, error_message_width + 4, error_message_height + 4};
         SDL_RenderFillRect(renderer_.get(), &fill_rect);
 
         SDL_SetTextureAlphaMod(error_message_texture, 255 * keep_alpha);
-        text_rect = {width / 2 - error_message_width / 2, height / 2 - error_message_height / 2, error_message_width, error_message_height};
+        text_rect = {width_ / 2 - error_message_width / 2, height_ / 2 - error_message_height / 2, error_message_width, error_message_height};
         SDL_RenderCopy(renderer_.get(), error_message_texture, NULL, &text_rect);
     }
 
@@ -191,13 +196,13 @@ void Display::refresh(
 
     // render movable slider(s)
     SDL_SetRenderDrawColor(renderer_.get(), 255, 255, 255, SDL_ALPHA_OPAQUE);
-    SDL_RenderDrawLine(renderer_.get(), mouse_x, 0, mouse_x, height);
+    SDL_RenderDrawLine(renderer_.get(), mouse_x, 0, mouse_x, height_);
 
     if (zoom_left_) {
-        SDL_RenderDrawLine(renderer_.get(), dst_half_zoomed_size, height - dst_zoomed_size, dst_half_zoomed_size, height);
+        SDL_RenderDrawLine(renderer_.get(), dst_half_zoomed_size, height_ - dst_zoomed_size, dst_half_zoomed_size, height_);
     }
     if (zoom_right_) {
-        SDL_RenderDrawLine(renderer_.get(), width - dst_half_zoomed_size, height - dst_zoomed_size, width - dst_half_zoomed_size, height);
+        SDL_RenderDrawLine(renderer_.get(), width_ - dst_half_zoomed_size, height_ - dst_zoomed_size, width_ - dst_half_zoomed_size, height_);
     }
 
 	SDL_RenderPresent(renderer_.get());
