@@ -20,7 +20,17 @@ Many thanks to the FFmpeg and SDL2 authors.
 Usage
 -----
 
+Get help:
+
+    ./video-compare [--help]
+
+Launch in standard ("1-to-1" pixel mode):
+
     ./video-compare video1.mp4 video2.mp4
+
+Launch in half mode ("2-to-1" pixel mode) for e.g. displaying UHD 4K video on a Retina display:
+
+    ./video-compare -h video1.mp4 video2.mp4
 
 Controls
 --------
