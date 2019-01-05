@@ -10,8 +10,8 @@ int main(int argc, char** argv) {
         argagg::parser argparser {{
             { "help", {"--help"},
             "shows this help message", 0},
-            { "half-mode", {"-h", "--half-mode"},
-            "downscale to half size for e.g. UHD on Retina displays", 0}
+            { "high-dpi", {"-h", "--high-dpi"},
+            "allow high DPI mode for e.g. displaying UHD on Retina displays", 0}
         }};
 
         argagg::parser_results args;
@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
                 throw std::logic_error{"Two FFmpeg compatible video files must be supplied"};
             }
 
-            VideoCompare compare{args["half-mode"], args.pos[0], args.pos[1]};
+            VideoCompare compare{args["high-dpi"], args.pos[0], args.pos[1]};
             compare();
         }
 	}

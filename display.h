@@ -13,9 +13,16 @@ struct SDL {
 
 class Display {
 private:
-    bool half_mode_enabled_;
-    int width_;
-    int height_;
+    bool high_dpi_allowed_;
+    int video_width_;
+    int video_height_;
+    int drawable_width_;
+    int drawable_height_;
+    int window_width_;
+    int window_height_;
+    float window_to_drawable_width_factor;
+    float window_to_drawable_height_factor;
+    float font_scale;
 
 	bool quit_{false};
 	bool play_{true};
@@ -43,14 +50,14 @@ private:
 
 	std::unique_ptr<SDL_Window, void(*)(SDL_Window*)> window_;
 	std::unique_ptr<SDL_Renderer, void(*)(SDL_Renderer*)> renderer_;
-	std::unique_ptr<SDL_Texture, void(*)(SDL_Texture*)> texture_;
+	SDL_Texture *texture_;
 
 	SDL_Event event_;
     int mouse_x;
     int mouse_y;
 
 public:
-	Display(const bool half_mode_enabled, const unsigned width, const unsigned height, const std::string &left_file_name,  const std::string &right_file_name);
+	Display(const bool high_dpi_allowed, const unsigned width, const unsigned height, const std::string &left_file_name,  const std::string &right_file_name);
     ~Display();
 
 	// Copy frame to display

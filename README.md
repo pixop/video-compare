@@ -24,11 +24,13 @@ Get help:
 
     ./video-compare [--help]
 
-Launch in standard ("1-to-1" pixel mode):
+Launch in disallow high DPI mode. Video pixels become doubled on high DPI displays. Recommended
+for displaying HD 1080p video on e.g. a Retina 5K display:
 
     ./video-compare video1.mp4 video2.mp4
 
-Launch in half mode ("2-to-1" pixel mode) for e.g. displaying UHD 4K video on a Retina display:
+Allow high DPI mode on systems which supports that. Video pixels are displayed "1-to-1". Useful
+for e.g. displaying UHD 4K video on a Retina 5K display:
 
     ./video-compare -h video1.mp4 video2.mp4
 
@@ -65,7 +67,7 @@ Build
 Notes
 -----
 
-The code is hard to maintain at the moment (too much copy/paste and lazy solutions). 
+The code is hard to maintain at the moment (too many copy/paste and lazy solutions).
 My intention has mainly been to build a tool in a few days which gets the job done. 
-A lot of refactoring and clean-up is required when I have the time for it. Consider 
+A lot of refactoring and clean-up is required when I have the time for it. Consider
 yourself warned! ;-)
