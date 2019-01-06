@@ -8,9 +8,9 @@
 int main(int argc, char** argv) {
 	try {
         argagg::parser argparser {{
-            { "help", {"--help"},
-            "shows this help message", 0},
-            { "high-dpi", {"-h", "--high-dpi"},
+            { "help", {"-h", "--help"},
+            "show help", 0},
+            { "high-dpi", {"-d", "--high-dpi"},
             "allow high DPI mode for e.g. displaying UHD on Retina displays", 0}
         }};
 

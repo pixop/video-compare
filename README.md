@@ -4,8 +4,9 @@ video-compare
 Split screen video comparison tool written in C++14 using FFmpeg libraries and SDL2. 
 
 This tool can be used to visually compare e.g. the effect of codecs and resizing algorithms on
-two video files played in sync. A movable slider enables easy viewing of the difference 
-between two files across any region of interest.
+two video files played in sync. The videos do not have to be the same resolution, but must be
+the same frame rate. A movable slider enables easy viewing of the difference between two files
+across any region of interest.
 
 ![Screenshot](screenshot2.jpg?raw=true)
 
@@ -20,10 +21,6 @@ Many thanks to the FFmpeg and SDL2 authors.
 Usage
 -----
 
-Get help:
-
-    ./video-compare [--help]
-
 Launch in disallow high DPI mode. Video pixels become doubled on high DPI displays. Recommended
 for displaying HD 1080p video on e.g. a Retina 5K display:
 
@@ -32,7 +29,7 @@ for displaying HD 1080p video on e.g. a Retina 5K display:
 Allow high DPI mode on systems which supports that. Video pixels are displayed "1-to-1". Useful
 for e.g. displaying UHD 4K video on a Retina 5K display:
 
-    ./video-compare -h video1.mp4 video2.mp4
+    ./video-compare -d video1.mp4 video2.mp4
 
 Controls
 --------
