@@ -92,60 +92,38 @@ void Display::refresh(
     const float right_position, 
     const char *current_total_browsable,
     const std::string &error_message) {
+    bool compare_mode = show_left_ && show_right_;
+
     int draw_x = mouse_x * window_to_drawable_width_factor;
     int draw_y = mouse_y * window_to_drawable_width_factor;
-
-    // update video
-    SDL_Rect render_quad_left = { 0, 0, draw_x, drawable_height_ };
-	check_SDL(!SDL_UpdateYUVTexture(
-		texture_, &render_quad_left,
-		planes_left[0], pitches_left[0],
-		planes_left[1], pitches_left[1],
-		planes_left[2], pitches_left[2]), "left texture update");
-    SDL_Rect render_quad_right = { draw_x, 0, (drawable_width_ - draw_x), drawable_height_ };
-	check_SDL(!SDL_UpdateYUVTexture(
-		texture_, &render_quad_right,
-		planes_right[0] + draw_x, pitches_right[0],
-		planes_right[1] + draw_x / 2, pitches_right[1],
-		planes_right[2] + draw_x / 2, pitches_right[2]), "right texture update");
-
-    // generate dynamic textures
-    char buffer[20];
-
-    sprintf(buffer, "%.2f", left_position);
-    SDL_Surface* textSurface = TTF_RenderText_Blended(small_font_, buffer, textColor);
-    SDL_Texture *left_position_text_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
-    int left_position_text_width = textSurface->w;
-    int left_position_text_height = textSurface->h;
-    SDL_FreeSurface(textSurface);
-
-    sprintf(buffer, "%.2f", right_position);
-    textSurface = TTF_RenderText_Blended(small_font_, buffer, textColor);
-    SDL_Texture *right_position_text_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
-    int right_position_text_width = textSurface->w;
-    int right_position_text_height = textSurface->h;
-    SDL_FreeSurface(textSurface);
-
-    textSurface = TTF_RenderText_Blended(small_font_, current_total_browsable, textColor);
-    SDL_Texture *current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
-    int current_total_browsable_text_width = textSurface->w;
-    int current_total_browsable_text_height = textSurface->h;
-    SDL_FreeSurface(textSurface);
-
-    if (!error_message.empty()) {
-        error_message_shown_at = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-        textSurface = TTF_RenderText_Blended(big_font_, error_message.c_str(), textColor);
-        error_message_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
-        error_message_width = textSurface->w;
-        error_message_height = textSurface->h;
-        SDL_FreeSurface(textSurface);
-    }
 
     // clear everything
 	SDL_RenderClear(renderer_.get());
 
-    // render video
-	SDL_RenderCopy(renderer_.get(), texture_, nullptr, nullptr);
+    if (show_left_ || show_right_) {
+        int split_x = compare_mode ? draw_x : show_left_ ? drawable_width_ : 0;
+
+        // update video
+        if (show_left_) {
+            SDL_Rect render_quad_left = { 0, 0, split_x, drawable_height_ };
+                check_SDL(!SDL_UpdateYUVTexture(
+                    texture_, &render_quad_left,
+                    planes_left[0], pitches_left[0],
+                    planes_left[1], pitches_left[1],
+                    planes_left[2], pitches_left[2]), "left texture update");
+        }
+        if (show_right_) {
+            SDL_Rect render_quad_right = { split_x, 0, (drawable_width_ - split_x), drawable_height_ };
+            check_SDL(!SDL_UpdateYUVTexture(
+                texture_, &render_quad_right,
+                planes_right[0] + split_x, pitches_right[0],
+                planes_right[1] + split_x / 2, pitches_right[1],
+                planes_right[2] + split_x / 2, pitches_right[2]), "right texture update");
+        }
+
+        // render video
+        SDL_RenderCopy(renderer_.get(), texture_, nullptr, nullptr);
+    }
 
     // zoomed area
     int src_zoomed_size = 64;
@@ -166,38 +144,82 @@ void Display::refresh(
         }
     }
 
-    // render background rectangles
-    int border_extension = 2;
-    int border_extension_x2 = border_extension * 2;
-    int line1_y = 20;
-    int line2_y = line1_y + 30 * font_scale;
+    SDL_Rect fill_rect;
+    SDL_Rect text_rect;
+    SDL_Surface* textSurface;
 
-    SDL_SetRenderDrawColor(renderer_.get(), 0, 0, 0, 64);
-    SDL_SetRenderDrawBlendMode(renderer_.get(), SDL_BLENDMODE_BLEND);
-    SDL_Rect fill_rect = {line1_y - border_extension, line1_y - border_extension, left_text_width + border_extension_x2, left_text_height + border_extension_x2};
-    SDL_RenderFillRect(renderer_.get(), &fill_rect);
-    fill_rect = {drawable_width_ - line1_y - border_extension - right_text_width, line1_y - border_extension, right_text_width + border_extension_x2, right_text_height + border_extension_x2};
-    SDL_RenderFillRect(renderer_.get(), &fill_rect);
-    fill_rect = {line1_y - border_extension, line2_y - 2, left_position_text_width + border_extension_x2, left_position_text_height + border_extension_x2};
-    SDL_RenderFillRect(renderer_.get(), &fill_rect);
-    fill_rect = {drawable_width_ - line1_y - border_extension - right_position_text_width, line2_y - border_extension, right_position_text_width + border_extension_x2, right_position_text_height + border_extension_x2};
-    SDL_RenderFillRect(renderer_.get(), &fill_rect);
-    fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - 2, line1_y - border_extension, current_total_browsable_text_width + border_extension_x2, current_total_browsable_text_height + border_extension_x2};
-    SDL_RenderFillRect(renderer_.get(), &fill_rect);
+    if (show_hud_) {
+        // render background rectangles and text on top
+        char buffer[20];
+        int border_extension = 2;
+        int border_extension_x2 = border_extension * 2;
+        int line1_y = 20;
+        int line2_y = line1_y + 30 * font_scale;
 
-    // render text on top of background rectangle
-    SDL_Rect text_rect = {line1_y, line1_y, left_text_width, left_text_height};
-    SDL_RenderCopy(renderer_.get(), left_text_texture, NULL, &text_rect);
-    text_rect = {drawable_width_ - line1_y - right_text_width, line1_y, right_text_width, right_text_height};
-    SDL_RenderCopy(renderer_.get(), right_text_texture, NULL, &text_rect);
-    text_rect = {line1_y, line2_y, left_position_text_width, left_position_text_height};
-    SDL_RenderCopy(renderer_.get(), left_position_text_texture, NULL, &text_rect);
-    text_rect = {drawable_width_ - line1_y - right_position_text_width, line2_y, right_position_text_width, right_position_text_height};
-    SDL_RenderCopy(renderer_.get(), right_position_text_texture, NULL, &text_rect);
-    text_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, line1_y, current_total_browsable_text_width, current_total_browsable_text_height};
-    SDL_RenderCopy(renderer_.get(), current_total_browsable_text_texture, NULL, &text_rect);
+        SDL_SetRenderDrawColor(renderer_.get(), 0, 0, 0, 64);
+        SDL_SetRenderDrawBlendMode(renderer_.get(), SDL_BLENDMODE_BLEND);
+        if (show_left_) {
+            // file name and current position of left video
+            sprintf(buffer, "%.2f", left_position);
+            textSurface = TTF_RenderText_Blended(small_font_, buffer, textColor);
+            SDL_Texture *left_position_text_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
+            int left_position_text_width = textSurface->w;
+            int left_position_text_height = textSurface->h;
+            SDL_FreeSurface(textSurface);
+
+            fill_rect = {line1_y - border_extension, line1_y - border_extension, left_text_width + border_extension_x2, left_text_height + border_extension_x2};
+            SDL_RenderFillRect(renderer_.get(), &fill_rect);
+            fill_rect = {line1_y - border_extension, line2_y - border_extension, left_position_text_width + border_extension_x2, left_position_text_height + border_extension_x2};
+            SDL_RenderFillRect(renderer_.get(), &fill_rect);
+            text_rect = {line1_y, line1_y, left_text_width, left_text_height};
+            SDL_RenderCopy(renderer_.get(), left_text_texture, NULL, &text_rect);
+            text_rect = {line1_y, line2_y, left_position_text_width, left_position_text_height};
+            SDL_RenderCopy(renderer_.get(), left_position_text_texture, NULL, &text_rect);
+            SDL_DestroyTexture(left_position_text_texture);
+        }
+        if (show_right_) {
+            // file name and current position of right video
+            sprintf(buffer, "%.2f", right_position);
+            textSurface = TTF_RenderText_Blended(small_font_, buffer, textColor);
+            SDL_Texture *right_position_text_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
+            int right_position_text_width = textSurface->w;
+            int right_position_text_height = textSurface->h;
+            SDL_FreeSurface(textSurface);
+    
+            fill_rect = {drawable_width_ - line1_y - border_extension - right_text_width, line1_y - border_extension, right_text_width + border_extension_x2, right_text_height + border_extension_x2};
+            SDL_RenderFillRect(renderer_.get(), &fill_rect);
+            fill_rect = {drawable_width_ - line1_y - border_extension - right_position_text_width, line2_y - border_extension, right_position_text_width + border_extension_x2, right_position_text_height + border_extension_x2};
+            SDL_RenderFillRect(renderer_.get(), &fill_rect);
+            text_rect = {drawable_width_ - line1_y - right_text_width, line1_y, right_text_width, right_text_height};
+            SDL_RenderCopy(renderer_.get(), right_text_texture, NULL, &text_rect);
+            text_rect = {drawable_width_ - line1_y - right_position_text_width, line2_y, right_position_text_width, right_position_text_height};
+            SDL_RenderCopy(renderer_.get(), right_position_text_texture, NULL, &text_rect);
+            SDL_DestroyTexture(right_position_text_texture);
+        }
+
+        // current frame / no. in history buffer
+        textSurface = TTF_RenderText_Blended(small_font_, current_total_browsable, textColor);
+        SDL_Texture *current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
+        int current_total_browsable_text_width = textSurface->w;
+        int current_total_browsable_text_height = textSurface->h;
+        SDL_FreeSurface(textSurface);
+
+        fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension, line1_y - border_extension, current_total_browsable_text_width + border_extension_x2, current_total_browsable_text_height + border_extension_x2};
+        SDL_RenderFillRect(renderer_.get(), &fill_rect);
+        text_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, line1_y, current_total_browsable_text_width, current_total_browsable_text_height};
+        SDL_RenderCopy(renderer_.get(), current_total_browsable_text_texture, NULL, &text_rect);
+        SDL_DestroyTexture(current_total_browsable_text_texture);
+    }
 
     // render (optional) error message
+    if (!error_message.empty()) {
+        error_message_shown_at = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+        textSurface = TTF_RenderText_Blended(big_font_, error_message.c_str(), textColor);
+        error_message_texture = SDL_CreateTextureFromSurface(renderer_.get(), textSurface);
+        error_message_width = textSurface->w;
+        error_message_height = textSurface->h;
+        SDL_FreeSurface(textSurface);
+    }
     if (error_message_texture != nullptr) {
         std::chrono::milliseconds now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
         float keep_alpha = std::max(sqrt(1.0f - (now - error_message_shown_at).count() / 1000.0f / 4.0f), 0.0f); 
@@ -211,20 +233,17 @@ void Display::refresh(
         SDL_RenderCopy(renderer_.get(), error_message_texture, NULL, &text_rect);
     }
 
-    // release memory
-    SDL_DestroyTexture(left_position_text_texture);
-    SDL_DestroyTexture(right_position_text_texture);
-    SDL_DestroyTexture(current_total_browsable_text_texture);
+    if (show_hud_ && compare_mode) {
+        // render movable slider(s)
+        SDL_SetRenderDrawColor(renderer_.get(), 255, 255, 255, SDL_ALPHA_OPAQUE);
+        SDL_RenderDrawLine(renderer_.get(), draw_x, 0, draw_x, drawable_height_);
 
-    // render movable slider(s)
-    SDL_SetRenderDrawColor(renderer_.get(), 255, 255, 255, SDL_ALPHA_OPAQUE);
-    SDL_RenderDrawLine(renderer_.get(), draw_x, 0, draw_x, drawable_height_);
-
-    if (zoom_left_) {
-        SDL_RenderDrawLine(renderer_.get(), dst_half_zoomed_size, drawable_height_ - dst_zoomed_size, dst_half_zoomed_size, drawable_height_);
-    }
-    if (zoom_right_) {
-        SDL_RenderDrawLine(renderer_.get(), drawable_width_ - dst_half_zoomed_size, drawable_height_ - dst_zoomed_size, drawable_width_ - dst_half_zoomed_size, drawable_height_);
+        if (zoom_left_) {
+            SDL_RenderDrawLine(renderer_.get(), dst_half_zoomed_size, drawable_height_ - dst_zoomed_size, dst_half_zoomed_size, drawable_height_);
+        }
+        if (zoom_right_) {
+            SDL_RenderDrawLine(renderer_.get(), drawable_width_ - dst_half_zoomed_size, drawable_height_ - dst_zoomed_size, drawable_width_ - dst_half_zoomed_size, drawable_height_);
+        }
     }
 
 	SDL_RenderPresent(renderer_.get());
@@ -245,6 +264,15 @@ void Display::input() {
 				break;
 			case SDLK_SPACE:
 				play_ = !play_;
+				break;
+			case SDLK_1:
+				show_left_ = !show_left_;
+				break;
+			case SDLK_2:
+				show_right_ = !show_right_;
+				break;
+			case SDLK_3:
+				show_hud_ = !show_hud_;
 				break;
 			case SDLK_z:
                 zoom_left_ = true;

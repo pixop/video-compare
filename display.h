@@ -29,6 +29,9 @@ private:
     bool swap_left_right_{false};
     bool zoom_left_{false};
     bool zoom_right_{false};
+    bool show_left_{true};
+    bool show_right_{true};
+    bool show_hud_{true};
     float seek_relative_{0.0f};
     int frame_offset_delta_{0};
 

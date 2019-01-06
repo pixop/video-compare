@@ -52,6 +52,9 @@ Controls
 * D: Next frame
 * Z: Zoom area around cursor (result shown in lower left corner)
 * C: Zoom area around cursor (result shown in lower right corner)
+* 1: Toggle hide/show left video
+* 2: Toggle hide/show right video
+* 3: Toggle hide/show HUD
 
 Move the mouse horizontally to adjust the movable slider position.
 
