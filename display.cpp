@@ -28,8 +28,6 @@ Display::Display(const bool high_dpi_allowed, const unsigned width, const unsign
     high_dpi_allowed_{high_dpi_allowed},
     video_width_{(int) width},
     video_height_{(int) height},
-    //window_width_{(int) (high_dpi_enabled_ ? width / 2 : width)},
-    //window_height_{(int) (high_dpi_enabled_ ? height / 2 : height)},
 	window_{check_SDL(SDL_CreateWindow(
 		"video-compare", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 		high_dpi_allowed_ ? width / 2 : width, high_dpi_allowed_ ? height / 2 : height, high_dpi_allowed_ ? SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI : SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE),
