@@ -149,7 +149,7 @@ void Display::refresh(
     if (show_hud_) {
         // render background rectangles and text on top
         char buffer[20];
-        int border_extension = 2;
+        int border_extension = 3 * font_scale;
         int border_extension_x2 = border_extension * 2;
         int line1_y = 20;
         int line2_y = line1_y + 30 * font_scale;
