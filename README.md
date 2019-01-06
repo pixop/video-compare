@@ -3,17 +3,22 @@ video-compare
 
 Split screen video comparison tool written in C++14 using FFmpeg libraries and SDL2. 
 
-This tool can be used to visually compare e.g. the effect of codecs and resizing algorithms on
-two video files played in sync. The videos do not have to be the same resolution, but must be
-the same frame rate. A movable slider enables easy viewing of the difference between two files
-across any region of interest.
+`video-compare` can be used to visually compare e.g. the effect of codecs and resizing algorithms on
+two video files played in sync. The tool is not very restrictive as videos are not required to be the
+same resolution, color format, container format, codec or duration. However, for the best result video
+files should have the same frame rate.
+
+A movable slider enables easy viewing of the difference across any region of interest.
+
+Thanks to the versatility of FFmpeg, it is actually also possible to use `video-compare` to compare
+two images. The common PNG and JPEG formats have been successfully tested to work.
 
 ![Screenshot](screenshot2.jpg?raw=true)
 
 Credits
 -------
 
-This tool was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on 
+`video-compare` was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on
 the excellent video player GitHub project: https://github.com/pockethook/player
 
 Many thanks to the FFmpeg and SDL2 authors.
@@ -64,7 +69,9 @@ Build
 Notes
 -----
 
-The code is hard to maintain at the moment (too many copy/paste and lazy solutions).
+1. Audio playback is not supported.
+
+2. The code is hard to maintain at the moment (too many copy/paste and lazy solutions).
 My intention has mainly been to build a tool in a few days which gets the job done. 
 A lot of refactoring and clean-up is required when I have the time for it. Consider
 yourself warned! ;-)
