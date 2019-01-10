@@ -32,12 +32,15 @@ private:
     bool show_left_{true};
     bool show_right_{true};
     bool show_hud_{true};
+    bool subtraction_mode_{false};
     float seek_relative_{0.0f};
     int frame_offset_delta_{0};
 
 	SDL sdl_;
     TTF_Font *small_font_;
     TTF_Font *big_font_;
+    uint8_t *diff_buffer_;
+    std::array<uint8_t*, 3> diff_planes_;
 
     SDL_Texture *left_text_texture;
     SDL_Texture *right_text_texture;
@@ -58,6 +61,12 @@ private:
 	SDL_Event event_;
     int mouse_x;
     int mouse_y;
+
+private:
+    void update_difference(
+        std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left,
+        std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right,
+        int split_x);
 
 public:
 	Display(const bool high_dpi_allowed, const unsigned width, const unsigned height, const std::string &left_file_name,  const std::string &right_file_name);

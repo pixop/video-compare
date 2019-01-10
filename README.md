@@ -55,6 +55,7 @@ Controls
 * 1: Toggle hide/show left video
 * 2: Toggle hide/show right video
 * 3: Toggle hide/show HUD
+* 0: Toggle hide/show subtraction mode
 
 Move the mouse horizontally to adjust the movable slider position.
 
