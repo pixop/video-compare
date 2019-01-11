@@ -16,8 +16,11 @@ two images. The common PNG and JPEG formats have been successfully tested to wor
 Screenshots
 -----------
 
-![Visual compare mode](screenshot_1.jpg?raw=true "Visual compare mode")
-![Subtraction mode"](screenshot_2.jpg?raw=true "Subtraction mode")
+Visual compare mode:
+![Visual compare mode](screenshot_1.jpg?raw=true)
+
+Subtraction mode:
+![Subtraction mode"](screenshot_2.jpg?raw=true)
 
 Credits
 -------
