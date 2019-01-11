@@ -13,7 +13,6 @@ inline T check_SDL(T value, const std::string &message) {
 	}
 }
 
-
 inline int clampIntToByteRange(int value) {
     return value > 255 ? 255 : value < 0 ? 0 : value;
 }
