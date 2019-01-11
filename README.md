@@ -13,8 +13,11 @@ A movable slider enables easy viewing of the difference across any region of int
 Thanks to the versatility of FFmpeg, it is actually also possible to use `video-compare` to compare
 two images. The common PNG and JPEG formats have been successfully tested to work.
 
-![Screenshot](screenshot_1.jpg?raw=true)
-![Screenshot](screenshot_2.jpg?raw=true)
+Screenshots
+-----------
+
+![Visual compare mode](screenshot_1.jpg?raw=true "Visual compare mode")
+![Subtraction mode"](screenshot_2.jpg?raw=true "Subtraction mode")
 
 Credits
 -------
