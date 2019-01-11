@@ -19,7 +19,7 @@ Screenshots
 Visual compare mode:
 ![Visual compare mode](screenshot_1.jpg?raw=true)
 
-Subtraction mode:
+Subtraction mode (and zoom activated):
 ![Subtraction mode"](screenshot_2.jpg?raw=true)
 
 Credits
