@@ -228,7 +228,7 @@ void Display::refresh(
         int split_x = compare_mode ? draw_x : show_left_ ? drawable_width_ : 0;
 
         // update video
-        if (show_left_) {
+        if (show_left_ && (split_x > 0)) {
             SDL_Rect render_quad_left = { 0, 0, split_x, drawable_height_ };
             check_SDL(!SDL_UpdateYUVTexture(
                 texture_, &render_quad_left,
@@ -236,7 +236,7 @@ void Display::refresh(
                 planes_left[1], pitches_left[1],
                 planes_left[2], pitches_left[2]), "left texture update");
         }
-        if (show_right_) {
+        if (show_right_ && (split_x < (drawable_width_ - 1))) {
             SDL_Rect render_quad_right = { split_x, 0, (drawable_width_ - split_x), drawable_height_ };
 
             if (subtraction_mode_) {
@@ -253,6 +253,7 @@ void Display::refresh(
                     planes_right[0] + split_x, pitches_right[0],
                     planes_right[1] + split_x / 2, pitches_right[1],
                     planes_right[2] + split_x / 2, pitches_right[2]), "right texture update (video mode)");
+
             }
         }
 

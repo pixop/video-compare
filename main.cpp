@@ -1,3 +1,4 @@
+#define SDL_MAIN_HANDLED
 #include "video_compare.h"
 #include "argagg.h"
 #include <iostream>
