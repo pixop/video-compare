@@ -87,5 +87,5 @@ My intention has mainly been to build a tool in a few days which gets the job do
 A lot of refactoring and clean-up is required when I have the time for it. Consider
 yourself warned! ;-)
 
-3. There's a pre-built binary release available for Windows 64-bit. Linux and Mac users:
-please build from source.
+3. Pre-built Windows 64-bit releases are available from this page (simply extract the 
+.zip-archive and run `video-compare.exe` from a command prompt).
