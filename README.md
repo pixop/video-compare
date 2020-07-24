@@ -86,3 +86,6 @@ Notes
 My intention has mainly been to build a tool in a few days which gets the job done. 
 A lot of refactoring and clean-up is required when I have the time for it. Consider
 yourself warned! ;-)
+
+3. There's a pre-built binary release available for Windows 64-bit. Linux and Mac users:
+please build from source.
