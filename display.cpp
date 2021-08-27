@@ -57,8 +57,8 @@ Display::Display(const bool high_dpi_allowed, const unsigned width, const unsign
     window_to_drawable_height_factor = (float) drawable_height_ / (float) window_height_;
     font_scale = (window_to_drawable_width_factor + window_to_drawable_height_factor) / 2.0f;
 
-    small_font_ = check_SDL(TTF_OpenFont("/home/jon/projects/pixop/video-compare/SourceCodePro-Regular.ttf", 16 * font_scale), "font open");
-    big_font_ = check_SDL(TTF_OpenFont("/home/jon/projects/pixop/video-compare/SourceCodePro-Regular.ttf", 24 * font_scale), "font open");
+    small_font_ = check_SDL(TTF_OpenFont("SourceCodePro-Regular.ttf", 16 * font_scale), "font open");
+    big_font_ = check_SDL(TTF_OpenFont("SourceCodePro-Regular.ttf", 24 * font_scale), "font open");
 
 	SDL_RenderSetLogicalSize(renderer_.get(), drawable_width_, drawable_height_);
 	texture_ = check_SDL(SDL_CreateTexture(
