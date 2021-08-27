@@ -10,6 +10,8 @@ public:
 		size_t src_width, size_t src_height,
 		size_t dest_width, size_t dest_height,
 		AVPixelFormat input_pixel_format, AVPixelFormat output_pixel_format);
+	size_t src_width() const;
+	size_t src_height() const;
 	size_t dest_width() const;
 	size_t dest_height() const;
 	AVPixelFormat output_pixel_format() const;
