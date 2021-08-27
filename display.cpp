@@ -21,33 +21,6 @@ inline uint8_t clampIntToByte(int value) {
     return (uint8_t) clampIntToByteRange(value);
 }
 
-inline void yuvToRGB(uint8_t y8, uint8_t u8, uint8_t v8, int *rgb) {
-    int Y = y8;
-    int U = u8;
-    int V = v8;
-
-    int C = Y - 16;
-    int D = U - 128;
-    int E = V - 128;
-    int r = (298 * C + 409 * E + 128) >> 8;
-    int g = (298 * C - 100 * D - 208 * E + 128) >> 8;
-    int b = (298 * C + 516 * D + 128) >> 8;
-
-    rgb[0] = clampIntToByteRange(r);
-    rgb[1] = clampIntToByteRange(g);
-    rgb[2] = clampIntToByteRange(b);
-}
-
-inline void rgbToYUV(int R, int G, int B, uint8_t *yCbCr) {
-    int y = ((66 * R + 129 * G + 25 * B + 128) >> 8) + 16;
-    int u = ((-38 * R - 74 * G + 112 * B + 128) >> 8) + 128;
-    int v = ((112 * R - 94 * G - 18 * B + 128) >> 8) + 128;
-
-    yCbCr[0] = clampIntToByte(y);
-    yCbCr[1] = clampIntToByte(u);
-    yCbCr[2] = clampIntToByte(v);
-}
-
 static const SDL_Color textColor = {255, 255, 255, 0};
 
 SDL::SDL() {
@@ -84,12 +57,12 @@ Display::Display(const bool high_dpi_allowed, const unsigned width, const unsign
     window_to_drawable_height_factor = (float) drawable_height_ / (float) window_height_;
     font_scale = (window_to_drawable_width_factor + window_to_drawable_height_factor) / 2.0f;
 
-    small_font_ = check_SDL(TTF_OpenFont("SourceCodePro-Regular.ttf", 16 * font_scale), "font open");
-    big_font_ = check_SDL(TTF_OpenFont("SourceCodePro-Regular.ttf", 24 * font_scale), "font open");
+    small_font_ = check_SDL(TTF_OpenFont("/home/jon/projects/pixop/video-compare/SourceCodePro-Regular.ttf", 16 * font_scale), "font open");
+    big_font_ = check_SDL(TTF_OpenFont("/home/jon/projects/pixop/video-compare/SourceCodePro-Regular.ttf", 24 * font_scale), "font open");
 
 	SDL_RenderSetLogicalSize(renderer_.get(), drawable_width_, drawable_height_);
 	texture_ = check_SDL(SDL_CreateTexture(
-		renderer_.get(), SDL_PIXELFORMAT_YV12, SDL_TEXTUREACCESS_STREAMING,
+		renderer_.get(), SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING,
 		drawable_width_, drawable_height_), "renderer");
 
     SDL_Surface* textSurface = TTF_RenderText_Blended(small_font_, left_file_name.c_str(), textColor);
@@ -104,11 +77,10 @@ Display::Display(const bool high_dpi_allowed, const unsigned width, const unsign
     right_text_height = textSurface->h;
     SDL_FreeSurface(textSurface);
 
-    diff_buffer_ = new uint8_t[video_width_ * video_height_ + video_width_ * video_height_ / 2];
+    diff_buffer_ = new uint8_t[video_width_ * video_height_ * 3];
     uint8_t *diff_plane_0 = diff_buffer_;
-    uint8_t *diff_plane_1 = diff_plane_0 + video_width_ * video_height_;
-    uint8_t *diff_plane_2 = diff_plane_1 + video_width_ * video_height_ / 4;
-    diff_planes_ = {diff_plane_0, diff_plane_1, diff_plane_2};
+
+    diff_planes_ = {diff_plane_0, NULL, NULL};
 }
 
 Display::~Display() {
@@ -130,82 +102,52 @@ void Display::update_difference(
     std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left,
     std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right,
     int split_x) {
-    uint8_t *p_left_y = planes_left[0] + split_x;
-    uint8_t *p_left_u = planes_left[1] + split_x / 2;
-    uint8_t *p_left_v = planes_left[2] + split_x / 2;
+    uint8_t *p_left_r = planes_left[0] + split_x * 3;
+    uint8_t *p_left_g = planes_left[0] + split_x * 3 + 1;
+    uint8_t *p_left_b = planes_left[0] + split_x * 3 + 2;
 
-    uint8_t *p_right_y = planes_right[0] + split_x;
-    uint8_t *p_right_u = planes_right[1] + split_x / 2;
-    uint8_t *p_right_v = planes_right[2] + split_x / 2;
+    uint8_t *p_right_r = planes_right[0] + split_x * 3;
+    uint8_t *p_right_g = planes_right[0] + split_x * 3 + 1;
+    uint8_t *p_right_b = planes_right[0] + split_x * 3 + 2;
 
-    uint8_t *p_diff_y = diff_planes_[0] + split_x;
-    uint8_t *p_diff_u = diff_planes_[1] + split_x / 2;
-    uint8_t *p_diff_v = diff_planes_[2] + split_x / 2;
+    uint8_t *p_diff_r = diff_planes_[0] + split_x * 3;
+    uint8_t *p_diff_g = diff_planes_[0] + split_x * 3 + 1;
+    uint8_t *p_diff_b = diff_planes_[0] + split_x * 3 + 2;
 
     const int amplification = 2;
 
     for (int y = 0; y < video_height_; y++) {
-        for (int x = 0, xuv = 0; x < (video_width_ - split_x); x += 2) {
-            uint8_t yuv[3];
+        for (int x = 0; x < (video_width_ - split_x); x++) {
             int rgb1[3], rgb2[3], diff[3];
 
-            yuvToRGB(p_right_y[x], p_right_u[xuv], p_right_v[xuv], rgb1);
-            yuvToRGB(p_left_y[x], p_left_u[xuv], p_left_v[xuv], rgb2);
+            rgb1[0] = p_left_r[x * 3];
+            rgb1[1] = p_left_g[x * 3];
+            rgb1[2] = p_left_b[x * 3];
+
+            rgb2[0] = p_right_r[x * 3];
+            rgb2[1] = p_right_g[x * 3];
+            rgb2[2] = p_right_b[x * 3];
 
             diff[0] = abs(rgb1[0] - rgb2[0]) * amplification;
             diff[1] = abs(rgb1[1] - rgb2[1]) * amplification;
             diff[2] = abs(rgb1[2] - rgb2[2]) * amplification;
 
-            rgbToYUV(diff[0], diff[1], diff[2], yuv);
-
-            p_diff_y[x] = yuv[0];
-
-            if ((split_x & 1) == 1) {
-                if ((y & 1) == 0) {
-                    p_diff_u[xuv] = yuv[1];
-                    p_diff_v[xuv] = yuv[2];
-                }
-
-                if (x >= (drawable_width_ - split_x)) {
-                    break;
-                }
-
-                xuv++;
-            }
-
-            yuvToRGB(p_right_y[x + 1], p_right_u[xuv], p_right_v[xuv], rgb1);
-            yuvToRGB(p_left_y[x + 1], p_left_u[xuv], p_left_v[xuv], rgb2);
-
-            diff[0] = abs(rgb1[0] - rgb2[0]) * amplification;
-            diff[1] = abs(rgb1[1] - rgb2[1]) * amplification;
-            diff[2] = abs(rgb1[2] - rgb2[2]) * amplification;
-
-            rgbToYUV(diff[0], diff[1], diff[2], yuv);
-
-            p_diff_y[x + 1] = yuv[0];
-
-            if ((split_x & 1) == 0) {
-                if ((y & 1) == 0) {
-                    p_diff_u[xuv] = yuv[1];
-                    p_diff_v[xuv] = yuv[2];
-                }
-
-                xuv++;
-            }
+            p_diff_r[x * 3] = clampIntToByte(diff[0]);
+            p_diff_g[x * 3] = clampIntToByte(diff[1]);
+            p_diff_b[x * 3] = clampIntToByte(diff[2]);
         }
 
-        p_left_y += pitches_left[0];
-        p_right_y += pitches_right[0];
-        p_diff_y += video_width_;
+        p_left_r += pitches_left[0];
+        p_left_g += pitches_left[0];
+        p_left_b += pitches_left[0];
 
-        if ((y & 1) == 1) {
-            p_left_u += pitches_left[1];
-            p_left_v += pitches_left[2];
-            p_right_u += pitches_right[1];
-            p_right_v += pitches_right[2];
-            p_diff_u += video_width_ / 2;
-            p_diff_v += video_width_ / 2;
-        }
+        p_right_r += pitches_right[0];
+        p_right_g += pitches_right[0];
+        p_right_b += pitches_right[0];
+
+        p_diff_r += video_width_ * 3;
+        p_diff_g += video_width_ * 3;
+        p_diff_b += video_width_ * 3;
     }
 }
 
@@ -230,11 +172,8 @@ void Display::refresh(
         // update video
         if (show_left_ && (split_x > 0)) {
             SDL_Rect render_quad_left = { 0, 0, split_x, drawable_height_ };
-            check_SDL(!SDL_UpdateYUVTexture(
-                texture_, &render_quad_left,
-                planes_left[0], pitches_left[0],
-                planes_left[1], pitches_left[1],
-                planes_left[2], pitches_left[2]), "left texture update");
+
+            check_SDL(!SDL_UpdateTexture(texture_, &render_quad_left, planes_left[0], pitches_left[0]), "left texture update (video mode)");
         }
         if (show_right_ && (split_x < (drawable_width_ - 1))) {
             SDL_Rect render_quad_right = { split_x, 0, (drawable_width_ - split_x), drawable_height_ };
@@ -242,18 +181,11 @@ void Display::refresh(
             if (subtraction_mode_) {
                 update_difference(planes_left, pitches_left, planes_right, pitches_right, split_x);
 
-                check_SDL(!SDL_UpdateYUVTexture(
+                check_SDL(!SDL_UpdateTexture(
                     texture_, &render_quad_right,
-                    diff_planes_[0] + split_x, video_width_,
-                    diff_planes_[1] + split_x / 2, video_width_ / 2,
-                    diff_planes_[2] + split_x / 2, video_width_ / 2), "right texture update (subtraction mode)");
+                    diff_planes_[0] + split_x * 3, video_width_ * 3), "right texture update (subtraction mode)");
             } else {
-                check_SDL(!SDL_UpdateYUVTexture(
-                    texture_, &render_quad_right,
-                    planes_right[0] + split_x, pitches_right[0],
-                    planes_right[1] + split_x / 2, pitches_right[1],
-                    planes_right[2] + split_x / 2, pitches_right[2]), "right texture update (video mode)");
-
+                check_SDL(!SDL_UpdateTexture(texture_, &render_quad_right, planes_right[0] + split_x * 3, pitches_right[0]), "right texture update (video mode)");
             }
         }
 
