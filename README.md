@@ -86,3 +86,6 @@ Notes
 My intention has mainly been to build a tool in a few days which gets the job done. 
 A lot of refactoring and clean-up is required when I have the time for it. Consider
 yourself warned! ;-)
+
+3. Pre-built Windows 64-bit releases are available from this page (simply extract the 
+.zip-archive and run `video-compare.exe` from a command prompt).
