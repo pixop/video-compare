@@ -1,6 +1,7 @@
 #include "display.h"
 #include <stdexcept>
 #include <string>
+#include <sstream>
 #include <iostream>
 #include <memory>
 
@@ -57,8 +58,12 @@ Display::Display(const bool high_dpi_allowed, const unsigned width, const unsign
     window_to_drawable_height_factor = (float) drawable_height_ / (float) window_height_;
     font_scale = (window_to_drawable_width_factor + window_to_drawable_height_factor) / 2.0f;
 
-    small_font_ = check_SDL(TTF_OpenFont("SourceCodePro-Regular.ttf", 16 * font_scale), "font open");
-    big_font_ = check_SDL(TTF_OpenFont("SourceCodePro-Regular.ttf", 24 * font_scale), "font open");
+    std::stringstream ss;
+    ss << SDL_GetBasePath() << "SourceCodePro-Regular.ttf";
+    std::string font_filename = ss.str();
+
+    small_font_ = check_SDL(TTF_OpenFont(font_filename.c_str(), 16 * font_scale), "font open");
+    big_font_ = check_SDL(TTF_OpenFont(font_filename.c_str(), 24 * font_scale), "font open");
 
 	SDL_RenderSetLogicalSize(renderer_.get(), drawable_width_, drawable_height_);
 	texture_ = check_SDL(SDL_CreateTexture(
