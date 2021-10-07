@@ -14,7 +14,7 @@ int main(int argc, char **argv)
     {
         argagg::parser argparser{{{"help", {"-h", "--help"}, "show help", 0},
                                   {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
-                                  {"window-size", {"-w", "--window-size"}, "override window size specified as [width]x[height] (e.g. 800x600)", 1}}};
+                                  {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600)", 1}}};
 
         argagg::parser_results args;
         args = argparser.parse(argc, argv);
