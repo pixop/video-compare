@@ -43,6 +43,14 @@ for e.g. displaying UHD 4K video on a Retina 5K display:
 
     ./video-compare -d video1.mp4 video2.mp4
 
+Use a specific window size instead of deriving the window size from the video dimensions. The video 
+frame will be scaled to fit. Useful for downscaling high resolution video onto a low resolution 
+display:
+
+    ./video-compare -w 1280x720 video1.mp4 video2.mp4
+
+Note: The allow high DPI mode and window size arguments can be combined if so desired.
+
 Controls
 --------
 
