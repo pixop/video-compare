@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iostream>
 #include <memory>
+#include <cmath>
 
 template <typename T>
 inline T check_SDL(T value, const std::string &message)
@@ -57,7 +58,7 @@ Display::Display(const bool high_dpi_allowed, const std::tuple<int, int> window_
     renderer_ = check_SDL(SDL_CreateRenderer(
                               window_, -1,
                               SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC),
-                          "renderer");
+                            "renderer");
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 
@@ -189,16 +190,15 @@ void Display::refresh(
 {
     bool compare_mode = show_left_ && show_right_;
 
-    int draw_x = mouse_x * window_to_drawable_width_factor;
-    int draw_y = mouse_y * window_to_drawable_width_factor;
+    int mouse_video_x = std::round(float(mouse_x) * float(video_width_) / float(window_width_));
+    int mouse_video_y = std::round(float(mouse_y) * float(video_height_) / float(window_height_));
 
     // clear everything
     SDL_RenderClear(renderer_);
 
     if (show_left_ || show_right_)
     {
-        int split_x = compare_mode ? draw_x : show_left_ ? drawable_width_
-                                                         : 0;
+        int split_x = compare_mode ? mouse_video_x : show_left_ ? video_width_ : 0;
 
         // update video
         if (show_left_ && (split_x > 0))
@@ -207,9 +207,9 @@ void Display::refresh(
 
             check_SDL(!SDL_UpdateTexture(texture_, &render_quad_left, planes_left[0], pitches_left[0]), "left texture update (video mode)");
         }
-        if (show_right_ && (split_x < (drawable_width_ - 1)))
+        if (show_right_ && (split_x < (video_width_ - 1)))
         {
-            SDL_Rect render_quad_right = {split_x, 0, (drawable_width_ - split_x), video_height_};
+            SDL_Rect render_quad_right = {split_x, 0, (video_width_ - split_x), video_height_};
 
             if (subtraction_mode_)
             {
@@ -238,7 +238,7 @@ void Display::refresh(
 
     if (zoom_left_ || zoom_right_)
     {
-        SDL_Rect src_zoomed_area = {std::min(std::max(0, draw_x - src_half_zoomed_size), drawable_width_), std::min(std::max(0, draw_y - src_half_zoomed_size), drawable_height_), src_zoomed_size, src_zoomed_size};
+        SDL_Rect src_zoomed_area = {std::min(std::max(0, mouse_video_x - src_half_zoomed_size), video_width_), std::min(std::max(0, mouse_video_y - src_half_zoomed_size), video_height_), src_zoomed_size, src_zoomed_size};
 
         if (zoom_left_)
         {
@@ -348,6 +348,9 @@ void Display::refresh(
 
     if (show_hud_ && compare_mode)
     {
+        int draw_x = std::round(float(mouse_x) * window_to_drawable_width_factor);
+        int draw_y = std::round(float(mouse_y) * window_to_drawable_width_factor);
+
         // render movable slider(s)
         SDL_SetRenderDrawColor(renderer_, 255, 255, 255, SDL_ALPHA_OPAQUE);
         SDL_RenderDrawLine(renderer_, draw_x, 0, draw_x, drawable_height_);
