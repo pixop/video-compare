@@ -43,9 +43,16 @@ SDL::~SDL()
     SDL_Quit();
 }
 
-Display::Display(const bool high_dpi_allowed, const std::tuple<int, int> window_size, const unsigned width, const unsigned height, const std::string &left_file_name, const std::string &right_file_name) : high_dpi_allowed_{high_dpi_allowed},
-                                                                                                                                                                                                            video_width_{(int)width},
-                                                                                                                                                                                                            video_height_{(int)height}
+Display::Display(
+    const bool high_dpi_allowed,
+    const std::tuple<int, int> window_size,
+    const unsigned width,
+    const unsigned height,
+    const std::string &left_file_name,
+    const std::string &right_file_name) :
+    high_dpi_allowed_{high_dpi_allowed},
+    video_width_{(int)width},
+    video_height_{(int)height}
 {
     int window_width = std::get<0>(window_size) > 0 ? std::get<0>(window_size) : width;
     int window_height = std::get<1>(window_size) > 0 ? std::get<1>(window_size) : height;
