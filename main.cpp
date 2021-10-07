@@ -40,24 +40,21 @@ int main(int argc, char **argv)
             }
             if (args["window-size"])
             {
-                const std::string str = args["window-size"];
+                const std::string window_size_arg = args["window-size"];
                 const std::regex window_size_re("(\\d+)x(\\d+)");
 
-                if (!std::regex_match(str, window_size_re))
+                if (!std::regex_match(window_size_arg, window_size_re))
                 {
-                    throw std::logic_error{"Cannot parse window size (required format: [width]x[height], e.g. 800x600)"};
+                    throw std::logic_error{"Cannot parse window size argument (required format: [width]x[height], e.g. 800x600)"};
                 }
 
-                const std::regex delimiter("x");
+                const std::regex delimiter_re("x");
 
-                auto const vec = std::vector<std::string>(
-                    std::sregex_token_iterator{begin(str), end(str), delimiter, -1},
+                auto const token_vec = std::vector<std::string>(
+                    std::sregex_token_iterator{begin(window_size_arg), end(window_size_arg), delimiter_re, -1},
                     std::sregex_token_iterator{});
 
-                std::cout << "Hello"
-                          << " " << str << " " << vec[0] << std::endl;
-
-                window_size = std::make_tuple(std::stoi(vec[0]), std::stoi(vec[1]));
+                window_size = std::make_tuple(std::stoi(token_vec[0]), std::stoi(token_vec[1]));
             }
 
             VideoCompare compare{args["high-dpi"], window_size, args.pos[0], args.pos[1]};
