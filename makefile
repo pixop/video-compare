@@ -1,5 +1,5 @@
 CXX = g++
-#CXX = i686-w64-mingw32-g++
+#CXX = x86_64-w64-mingw32-g++
 CXXFLAGS = -g3 -Ofast -mavx2 -std=c++14 -D__STDC_CONSTANT_MACROS \
 		   -Wall -Wextra -Wextra -pedantic \
 		   -Wdisabled-optimization -Wctor-dtor-privacy -Wmissing-declarations \
