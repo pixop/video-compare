@@ -37,6 +37,7 @@ private:
     bool subtraction_mode_{false};
     float seek_relative_{0.0f};
     int frame_offset_delta_{0};
+    bool seek_from_start_{false};
 
     SDL sdl_;
     TTF_Font *small_font_;
@@ -90,5 +91,6 @@ public:
     bool get_play();
     bool get_swap_left_right();
     float get_seek_relative();
+    bool get_seek_from_start();
     int get_frame_offset_delta();
 };

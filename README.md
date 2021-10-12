@@ -72,7 +72,8 @@ Controls
 * 3: Toggle hide/show HUD
 * 0: Toggle video/subtraction mode
 
-Move the mouse horizontally to adjust the movable slider position.
+Move the mouse horizontally to adjust the movable slider position. Click the mouse to perform a time
+seek based on the width of the window and the horizontal position of the slider.
 
 Requirements
 ------------
