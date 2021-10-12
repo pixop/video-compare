@@ -236,9 +236,17 @@ void VideoCompare::video() {
                     frame_queue_[1]->empty();
 
                     bool backward = display_->get_seek_relative() < 0.0f;
+                    float next_position = 0;
+                    if (display_->get_seek_from_start()) {
+                        // seek from start based on first stream duration in seconds
+                        next_position = (demuxer_[0]->duration() * av_q2d(AV_TIME_BASE_Q) * display_->get_seek_relative());
+			std::cout << next_position << std::endl;
+                    } else {
+                        next_position = current_position + display_->get_seek_relative();
+                    }
                     
-                    if ((!demuxer_[0]->seek(std::max(0.0f, current_position + display_->get_seek_relative()), backward) && !backward) ||
-                        (!demuxer_[1]->seek(std::max(0.0f, current_position + display_->get_seek_relative()), backward) && !backward)) {
+                    if ((!demuxer_[0]->seek(std::max(0.0f, next_position), backward) && !backward) ||
+                        (!demuxer_[1]->seek(std::max(0.0f, next_position), backward) && !backward)) {
                         // restore position if unable to perform forward seek
                         errorMessage = "Unable to seek past end of file";
                         demuxer_[0]->seek(std::max(0.0f, current_position), true);

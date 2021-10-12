@@ -380,12 +380,17 @@ void Display::input()
     SDL_GetMouseState(&mouse_x, &mouse_y);
 
     seek_relative_ = 0.0f;
+    seek_from_start_ = false;
     frame_offset_delta_ = 0;
 
     while (SDL_PollEvent(&event_))
     {
         switch (event_.type)
         {
+        case SDL_MOUSEBUTTONDOWN:
+             seek_relative_ = float(mouse_x) / float(drawable_width_);
+             seek_from_start_ = true;
+             break;
         case SDL_KEYDOWN:
             switch (event_.key.keysym.sym)
             {
@@ -496,6 +501,11 @@ bool Display::get_swap_left_right()
 float Display::get_seek_relative()
 {
     return seek_relative_;
+}
+
+bool Display::get_seek_from_start()
+{
+    return seek_from_start_;
 }
 
 int Display::get_frame_offset_delta()
