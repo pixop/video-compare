@@ -240,7 +240,6 @@ void VideoCompare::video() {
                     if (display_->get_seek_from_start()) {
                         // seek from start based on first stream duration in seconds
                         next_position = (demuxer_[0]->duration() * av_q2d(AV_TIME_BASE_Q) * display_->get_seek_relative());
-			std::cout << next_position << std::endl;
                     } else {
                         next_position = current_position + display_->get_seek_relative();
                     }
