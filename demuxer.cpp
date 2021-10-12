@@ -28,6 +28,10 @@ AVRational Demuxer::time_base() const {
 	return format_context_->streams[video_stream_index_]->time_base;
 }
 
+int64_t Demuxer::duration() const {
+	return format_context_->duration;
+}
+
 bool Demuxer::operator()(AVPacket &packet) {
 	return av_read_frame(format_context_, &packet) >= 0;
 }
