@@ -388,7 +388,7 @@ void Display::input()
         switch (event_.type)
         {
         case SDL_MOUSEBUTTONDOWN:
-             seek_relative_ = float(mouse_x) / float(drawable_width_);
+             seek_relative_ = float(mouse_x) / float(window_width_);
              seek_from_start_ = true;
              break;
         case SDL_KEYDOWN:
