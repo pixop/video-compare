@@ -3,10 +3,20 @@ CXX = g++
 CXXFLAGS = -g3 -Ofast -mavx2 -std=c++14 -D__STDC_CONSTANT_MACROS \
 		   -Wall -Wextra -Wextra -pedantic \
 		   -Wdisabled-optimization -Wctor-dtor-privacy -Wmissing-declarations \
-		   -Woverloaded-virtual -Wshadow -Wno-unused -Winline \
-		   -I/opt/local/include/
-LDLIBS = -L/opt/local/lib/ -lavformat -lavcodec -lavutil -lswscale -lSDL2 -lSDL2_ttf -pthread
-#LDLIBS = -L/usr/local/lib/ -lavformat -lavcodec -lavutil -lswresample -lswscale -lSDL2 -lSDL2_ttf -pthread -lz -liconv -lbcrypt -lbz2 -lws2_32 -lsecur32 -lole32
+		   -Woverloaded-virtual -Wshadow -Wno-unused -Winline
+LDLIBS = -lavformat -lavcodec -lavutil -lswscale -lSDL2 -lSDL2_ttf -pthread
+#LDLIBS = -lavformat -lavcodec -lavutil -lswresample -lswscale -lSDL2 -lSDL2_ttf -pthread -lz -liconv -lbcrypt -lbz2 -lws2_32 -lsecur32 -lole32
+
+ifneq "$(wildcard /opt/homebrew)" ""
+  CXXFLAGS += -I/opt/homebrew/include/
+  LDLIBS += -L/opt/homebrew/lib/
+else ifneq "$(wildcard /opt/local)" ""
+  CXXFLAGS += -I/opt/local/include/
+  LDLIBS += -L/opt/local/lib/
+else
+  CXXFLAGS += -I/usr/local/include/
+  LDLIBS += -L/usr/local/lib/
+endif
 
 src = $(wildcard *.cpp)
 obj = $(src:.cpp=.o)
