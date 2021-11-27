@@ -57,9 +57,11 @@ Display::Display(
     int window_width = std::get<0>(window_size) > 0 ? std::get<0>(window_size) : width;
     int window_height = std::get<1>(window_size) > 0 ? std::get<1>(window_size) : height;
 
+    const int create_window_flags = strcmp(SDL_GetPlatform(), "Windows") == 0 ? SDL_WINDOW_SHOWN : SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+
     window_ = check_SDL(SDL_CreateWindow(
                             "video-compare", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                            high_dpi_allowed_ ? window_width / 2 : window_width, high_dpi_allowed_ ? window_height / 2 : window_height, high_dpi_allowed_ ? SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI : SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE),
+                            high_dpi_allowed_ ? window_width / 2 : window_width, high_dpi_allowed_ ? window_height / 2 : window_height, high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
                         "window");
 
     renderer_ = check_SDL(SDL_CreateRenderer(
