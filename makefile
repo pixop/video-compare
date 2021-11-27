@@ -1,11 +1,15 @@
-CXX = g++
-#CXX = x86_64-w64-mingw32-g++
 CXXFLAGS = -g3 -Ofast -mavx2 -std=c++14 -D__STDC_CONSTANT_MACROS \
 		   -Wall -Wextra -Wextra -pedantic \
 		   -Wdisabled-optimization -Wctor-dtor-privacy -Wmissing-declarations \
 		   -Woverloaded-virtual -Wshadow -Wno-unused -Winline
-LDLIBS = -lavformat -lavcodec -lavutil -lswscale -lSDL2 -lSDL2_ttf -pthread
-#LDLIBS = -lavformat -lavcodec -lavutil -lswresample -lswscale -lSDL2 -lSDL2_ttf -pthread -lz -liconv -lbcrypt -lbz2 -lws2_32 -lsecur32 -lole32
+
+ifeq ($(shell uname), CYGWIN_NT-10.0)
+  CXX = x86_64-w64-mingw32-g++
+  LDLIBS = -lavformat -lavcodec -lavutil -lswresample -lswscale -lSDL2 -lSDL2_ttf -pthread -lz -liconv -lbcrypt -lbz2 -lws2_32 -lsecur32 -lole32
+else
+  CXX = g++
+  LDLIBS = -lavformat -lavcodec -lavutil -lswscale -lSDL2 -lSDL2_ttf -pthread
+endif
 
 ifneq "$(wildcard /opt/homebrew)" ""
   CXXFLAGS += -I/opt/homebrew/include/
