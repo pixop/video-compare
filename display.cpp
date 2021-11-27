@@ -57,7 +57,7 @@ Display::Display(
     int window_width = std::get<0>(window_size) > 0 ? std::get<0>(window_size) : width;
     int window_height = std::get<1>(window_size) > 0 ? std::get<1>(window_size) : height;
 
-    const int create_window_flags = strcmp(SDL_GetPlatform(), "Windows") == 0 ? SDL_WINDOW_SHOWN : SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+    const int create_window_flags = SDL_WINDOW_SHOWN;
 
     window_ = check_SDL(SDL_CreateWindow(
                             "video-compare", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
