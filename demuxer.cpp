@@ -6,6 +6,10 @@ Demuxer::Demuxer(const std::string &file_name) {
 	av_register_all();
 	ffmpeg::check(avformat_open_input(
 		&format_context_, file_name.c_str(), nullptr, nullptr));
+
+	format_context_->probesize = 100000000;
+	format_context_->max_analyze_duration = 100000000;
+
 	ffmpeg::check(avformat_find_stream_info(
 		format_context_, nullptr));
 	video_stream_index_ = ffmpeg::check(av_find_best_stream(
