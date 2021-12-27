@@ -52,9 +52,11 @@ display:
 The allow high DPI mode and window size arguments can be combined if so desired.
 
 Note that in order to work, the `SourceCodePro-Regular.ttf` font must be located in the same directory 
-as the executable. It is recommended to run the compiled software from its source folder to ensure access
-to external dependencies.
+as the main executable. It is recommended to just leave the compiled executable in its source folder to 
+ensure access to external dependencies. Running the program from a different working directory is fine:
 
+    [foo]/[bar]/[video-compare-source-code]/video-compare video1.mp4 video2.mp4
+    
 Controls
 --------
 
