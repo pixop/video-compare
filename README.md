@@ -49,7 +49,11 @@ display:
 
     ./video-compare -w 1280x720 video1.mp4 video2.mp4
 
-Note: The allow high DPI mode and window size arguments can be combined if so desired.
+The allow high DPI mode and window size arguments can be combined if so desired.
+
+Note that in order to work, the `SourceCodePro-Regular.ttf` font must be located in the same directory 
+as the executable. It is recommended to run the compiled software from its source folder to ensure access
+to external dependencies.
 
 Controls
 --------
