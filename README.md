@@ -56,7 +56,7 @@ as the main executable. It is recommended to just leave the compiled executable 
 ensure access to external dependencies. Running the program from a different working directory is fine:
 
     [path-to-video-compare-source-code]/video-compare video1.mp4 video2.mp4
-    
+
 Controls
 --------
 
