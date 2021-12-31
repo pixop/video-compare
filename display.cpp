@@ -344,7 +344,7 @@ void Display::refresh(
     if (error_message_texture != nullptr)
     {
         std::chrono::milliseconds now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-        float keep_alpha = std::max(sqrt(1.0f - (now - error_message_shown_at).count() / 1000.0f / 4.0f), 0.0f);
+        float keep_alpha = std::max(sqrtf(1.0f - (now - error_message_shown_at).count() / 1000.0f / 4.0f), 0.0f);
 
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 64 * keep_alpha);
         fill_rect = {drawable_width_ / 2 - error_message_width / 2 - 2, drawable_height_ / 2 - error_message_height / 2 - 2, error_message_width + 4, error_message_height + 4};
