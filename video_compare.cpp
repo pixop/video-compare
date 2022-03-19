@@ -198,8 +198,8 @@ void VideoCompare::video() {
         std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_right{
             nullptr, [](AVFrame* f){ av_frame_free(&f); }};
 
-        int64_t left_pts = 0, delta_left_pts = 0;
-        int64_t right_pts = 0, delta_right_pts = 0;
+        int64_t left_pts = 0, left_previous_coded_picture_number = 0, delta_left_pts = 0;
+        int64_t right_pts = 0, right_previous_coded_picture_number = 0, delta_right_pts = 0;
 
         for (uint64_t frame_number = 0;; ++frame_number) {
             std::string errorMessage = "";
@@ -260,9 +260,11 @@ void VideoCompare::video() {
 
                     frame_queue_[0]->pop(frame_left);
                     left_pts = frame_left->pts;
+                    left_previous_coded_picture_number = frame_left->coded_picture_number;
 
                     frame_queue_[1]->pop(frame_right);
                     right_pts = frame_right->pts - (time_shift_ms_ * MILLISEC_TO_AV_TIME);
+                    right_previous_coded_picture_number = frame_right->coded_picture_number;
 
                     left_frames.clear();
                     right_frames.clear();
@@ -272,25 +274,22 @@ void VideoCompare::video() {
             }
 
             bool store_frames = false;
-            bool update_delta = false;
 
             if (display_->get_quit()) {
                 break;
             } else {
                 bool adjusting = false;
 
-                // use the delta between current PTS and last adjusted PTS as a tolerance which determines whether we have to adjust
+                // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
                 if ((left_pts < 0) || isBehind(left_pts, right_pts, delta_left_pts)) {
                     adjusting = true;
 
                     frame_queue_[0]->pop(frame_left);
-                    update_delta = true;
                 }
                 if ((right_pts < 0) || isBehind(right_pts, left_pts, delta_right_pts)) {
                     adjusting = true;
 
                     frame_queue_[1]->pop(frame_right);
-                    update_delta = true;
                 }
 
                 if (!adjusting && display_->get_play()) {
@@ -306,28 +305,30 @@ void VideoCompare::video() {
                             timer_->update();
                         }
                     }
-
-                    update_delta = true;
                 } else {
                     timer_->update();
                 }
             }
 
             if (frame_left != nullptr) {
-                if (update_delta) {
-                    delta_left_pts = frame_left->pts - left_pts;
+                if ((frame_left->coded_picture_number - left_previous_coded_picture_number) == 1) {
+                    int64_t new_delta = frame_left->pts - left_pts;
+                    delta_left_pts = new_delta;
                 }
 
                 left_pts = frame_left->pts;
+                left_previous_coded_picture_number = frame_left->coded_picture_number;
             }
             if (frame_right != nullptr) {
                 float new_right_pts = frame_right->pts - (time_shift_ms_ * MILLISEC_TO_AV_TIME);
 
-                if (update_delta) {
-                    delta_right_pts = new_right_pts - right_pts;
+                if ((frame_right->coded_picture_number - right_previous_coded_picture_number) == 1) {
+                    int64_t new_delta = new_right_pts - right_pts;
+                    delta_right_pts = new_delta;
                 }
 
                 right_pts = new_right_pts;
+                right_previous_coded_picture_number = frame_right->coded_picture_number;
             }
 
             if (store_frames) {
