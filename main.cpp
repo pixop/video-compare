@@ -9,7 +9,7 @@
 #include <regex>
 #include <vector>
 
-bool fileExists(std::string filename)
+bool fileExists(const std::string &filename)
 {
     std::ifstream fin(filename.c_str());
     return fin.is_open();
