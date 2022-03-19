@@ -1,5 +1,5 @@
 CXXFLAGS = -g3 -Ofast -mavx2 -std=c++14 -D__STDC_CONSTANT_MACROS \
-		   -Wall -Wextra -Wno-deprecated \
+		   -Wall -Wextra -Wno-deprecated -Wno-deprecated-declarations \
 		   -Wdisabled-optimization -Wctor-dtor-privacy \
 		   -Woverloaded-virtual -Wno-unused
 
