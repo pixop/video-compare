@@ -18,7 +18,7 @@ extern "C"
 class VideoCompare
 {
 public:
-    VideoCompare(const bool high_dpi_allowed, const std::tuple<int, int> window_size, const std::string &left_file_name, const std::string &right_file_name);
+    VideoCompare(const bool high_dpi_allowed, const std::tuple<int, int> window_size, const double time_shift_ms, const std::string &left_file_name, const std::string &right_file_name);
     void operator()();
 
 private:
@@ -32,6 +32,7 @@ private:
     void video();
 
 private:
+    double time_shift_ms_;
     std::unique_ptr<Demuxer> demuxer_[2];
     std::unique_ptr<VideoDecoder> video_decoder_[2];
     size_t max_width_;
