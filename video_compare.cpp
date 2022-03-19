@@ -1,4 +1,5 @@
 #include "video_compare.h"
+#include "ffmpeg.h"
 #include <algorithm>
 #include <chrono>
 #include <iostream>
@@ -12,15 +13,16 @@ extern "C" {
 const size_t VideoCompare::queue_size_{5};
 
 static inline bool isBehind(int64_t frame1_pts, int64_t frame2_pts) {
-	float t1 = (float) frame1_pts / 1000000.0f;
-	float t2 = (float) frame2_pts / 1000000.0f;
+	float t1 = (float) frame1_pts * AV_TIME_TO_SEC;
+	float t2 = (float) frame2_pts * AV_TIME_TO_SEC;
 
 	float diff = t1 - t2;
 
 	return diff < -(1.0f / 60.0f);
 }
 
-VideoCompare::VideoCompare(const bool high_dpi_allowed, const std::tuple<int, int> window_size, const std::string &left_file_name, const std::string &right_file_name) :
+VideoCompare::VideoCompare(const bool high_dpi_allowed, const std::tuple<int, int> window_size, const double time_shift_ms, const std::string &left_file_name, const std::string &right_file_name) :
+    time_shift_ms_(time_shift_ms),
 	demuxer_{
 		std::make_unique<Demuxer>(left_file_name), 
 		std::make_unique<Demuxer>(right_file_name)},
@@ -114,7 +116,7 @@ void VideoCompare::thread_decode_video_right() {
 
 void VideoCompare::decode_video(const int video_idx) {
 	try {
-		const AVRational microseconds = {1, 1000000};
+		const AVRational microseconds = {1, AV_TIME_BASE};
 
 		for (;;) {
 			// Create AVFrame and AVQueue
@@ -202,7 +204,7 @@ void VideoCompare::video() {
 
 			display_->input();
 
-			float current_position = left_pts / 1000000.0f;
+			float current_position = left_pts * AV_TIME_TO_SEC;
 
 			if (display_->get_seek_relative() != 0.0f) {
                 if (packet_queue_[0]->isFinished() || packet_queue_[1]->isFinished()) {
@@ -239,7 +241,7 @@ void VideoCompare::video() {
                     float next_position = 0;
                     if (display_->get_seek_from_start()) {
                         // seek from start based on first stream duration in seconds
-                        next_position = (demuxer_[0]->duration() * av_q2d(AV_TIME_BASE_Q) * display_->get_seek_relative());
+                        next_position = (demuxer_[0]->duration() * AV_TIME_TO_SEC * display_->get_seek_relative());
                     } else {
                         next_position = current_position + display_->get_seek_relative();
                     }
@@ -258,12 +260,12 @@ void VideoCompare::video() {
                     left_pts = frame_left->pts;
 
                     frame_queue_[1]->pop(frame_right);
-                    right_pts = frame_right->pts;
+                    right_pts = frame_right->pts - (time_shift_ms_ * MILLISEC_TO_AV_TIME);
 
                     left_frames.clear();
                     right_frames.clear();
 
-                    current_position = frame_left->pts / 1000000.0f;
+                    current_position = frame_left->pts * AV_TIME_TO_SEC;
                 }
 			}
 
@@ -307,7 +309,7 @@ void VideoCompare::video() {
 				left_pts = frame_left->pts;
 			}
 			if (frame_right != nullptr) {
-				right_pts = frame_right->pts;
+				right_pts = frame_right->pts - (time_shift_ms_ * MILLISEC_TO_AV_TIME);
 			}
 
 			if (store_frames) {
@@ -349,8 +351,8 @@ void VideoCompare::video() {
 					{static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
 					{right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
 					{static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                    left_frames[frame_offset]->pts / 1000000.0f, 
-                    right_frames[frame_offset]->pts / 1000000.0f, 
+                    left_frames[frame_offset]->pts * AV_TIME_TO_SEC,
+                    right_frames[frame_offset]->pts * AV_TIME_TO_SEC,
                     current_total_browsable,
                     errorMessage);
 			} else {
@@ -359,8 +361,8 @@ void VideoCompare::video() {
 					{static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
 					{left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
 					{static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                    right_frames[frame_offset]->pts / 1000000.0f, 
-                    left_frames[frame_offset]->pts / 1000000.0f, 
+                    right_frames[frame_offset]->pts * AV_TIME_TO_SEC,
+                    left_frames[frame_offset]->pts * AV_TIME_TO_SEC,
                     current_total_browsable,
                     errorMessage);
 			}
