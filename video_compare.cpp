@@ -12,13 +12,15 @@ extern "C" {
 
 const size_t VideoCompare::queue_size_{5};
 
-static inline bool isBehind(int64_t frame1_pts, int64_t frame2_pts) {
-	float t1 = (float) frame1_pts * AV_TIME_TO_SEC;
-	float t2 = (float) frame2_pts * AV_TIME_TO_SEC;
+static inline bool isBehind(int64_t frame1_pts, int64_t frame2_pts, int64_t delta_pts) {
+    float t1 = (float) frame1_pts * AV_TIME_TO_SEC;
+    float t2 = (float) frame2_pts * AV_TIME_TO_SEC;
+    float delta_s = (float) delta_pts * AV_TIME_TO_SEC;
 
-	float diff = t1 - t2;
+    float diff = t1 - t2;
+    float tolerance = std::max(delta_s, 1.0f / 120.0f);
 
-	return diff < -(1.0f / 60.0f);
+    return diff < -tolerance;
 }
 
 VideoCompare::VideoCompare(const bool high_dpi_allowed, const std::tuple<int, int> window_size, const double time_shift_ms, const std::string &left_file_name, const std::string &right_file_name) :
@@ -27,7 +29,7 @@ VideoCompare::VideoCompare(const bool high_dpi_allowed, const std::tuple<int, in
 		std::make_unique<Demuxer>(left_file_name), 
 		std::make_unique<Demuxer>(right_file_name)},
 	video_decoder_{
-		std::make_unique<VideoDecoder>(demuxer_[0]->video_codec_parameters()), 
+		std::make_unique<VideoDecoder>(demuxer_[0]->video_codec_parameters()),
 		std::make_unique<VideoDecoder>(demuxer_[1]->video_codec_parameters())},
 	max_width_{std::max(video_decoder_[0]->width(), video_decoder_[1]->width())},
 	max_height_{std::max(video_decoder_[0]->height(), video_decoder_[1]->height())},
@@ -76,7 +78,7 @@ void VideoCompare::demultiplex(const int video_idx) {
 
                 std::chrono::milliseconds sleep(10);
                 std::this_thread::sleep_for(sleep);	
-				continue;			
+				continue;
 			}
 
 			// Create AVPacket
@@ -139,7 +141,7 @@ void VideoCompare::decode_video(const int video_idx) {
 				
                 std::chrono::milliseconds sleep(10);
                 std::this_thread::sleep_for(sleep);	
-				continue;			
+				continue;
 			}
 
 			// If the packet didn't send, receive more frames and try again
@@ -196,8 +198,8 @@ void VideoCompare::video() {
 		std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_right{
 			nullptr, [](AVFrame* f){ av_frame_free(&f); }};
 
-		int64_t left_pts = 0;
-		int64_t right_pts = 0;
+        int64_t left_pts = 0, last_adjusted_left_pts = 0;
+        int64_t right_pts = 0, last_adjusted_right_pts = 0;
 
 		for (uint64_t frame_number = 0;; ++frame_number) {
             std::string errorMessage = "";
@@ -257,10 +259,10 @@ void VideoCompare::video() {
                     seeking_ = false;
 
                     frame_queue_[0]->pop(frame_left);
-                    left_pts = frame_left->pts;
+                    last_adjusted_left_pts = left_pts = frame_left->pts;
 
                     frame_queue_[1]->pop(frame_right);
-                    right_pts = frame_right->pts - (time_shift_ms_ * MILLISEC_TO_AV_TIME);
+                    last_adjusted_right_pts = right_pts = frame_right->pts - (time_shift_ms_ * MILLISEC_TO_AV_TIME);
 
                     left_frames.clear();
                     right_frames.clear();
@@ -276,16 +278,19 @@ void VideoCompare::video() {
 			} else {
 				bool adjusting = false;
 
-				if ((left_pts < 0) || isBehind(left_pts, right_pts)) {
-					adjusting = true;
+                // use the delta between current PTS and last adjusted PTS as a tolerance which determines whether we have to adjust
+                if ((left_pts < 0) || isBehind(left_pts, right_pts, left_pts - last_adjusted_left_pts)) {
+                    adjusting = true;
+                    last_adjusted_left_pts = left_pts;
 
-					frame_queue_[0]->pop(frame_left);
-				}
-				if ((right_pts < 0) || isBehind(right_pts, left_pts)) {
-					adjusting = true;
+                    frame_queue_[0]->pop(frame_left);
+                }
+                if ((right_pts < 0) || isBehind(right_pts, left_pts, right_pts - last_adjusted_right_pts)) {
+                    adjusting = true;
+                    last_adjusted_right_pts = right_pts;
 
-					frame_queue_[1]->pop(frame_right);
-				}
+                    frame_queue_[1]->pop(frame_right);
+                }
 
 				if (!adjusting && display_->get_play()) {
 					if (!frame_queue_[0]->pop(frame_left) || !frame_queue_[1]->pop(frame_right)) {
