@@ -1,7 +1,7 @@
 CXXFLAGS = -g3 -Ofast -mavx2 -std=c++14 -D__STDC_CONSTANT_MACROS \
 		   -Wall -Wextra -Wno-deprecated \
-		   -Wdisabled-optimization -Wctor-dtor-privacy -Wmissing-declarations \
-		   -Woverloaded-virtual -Wshadow -Wno-unused -Winline
+		   -Wdisabled-optimization -Wctor-dtor-privacy \
+		   -Woverloaded-virtual -Wno-unused
 
 ifeq ($(shell uname), CYGWIN_NT-10.0)
   CXX = x86_64-w64-mingw32-g++
