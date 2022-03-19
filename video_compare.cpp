@@ -312,8 +312,7 @@ void VideoCompare::video() {
 
             if (frame_left != nullptr) {
                 if ((frame_left->coded_picture_number - left_previous_coded_picture_number) == 1) {
-                    int64_t new_delta = frame_left->pts - left_pts;
-                    delta_left_pts = new_delta;
+                    delta_left_pts = frame_left->pts - left_pts;
                 }
 
                 left_pts = frame_left->pts;
@@ -323,8 +322,7 @@ void VideoCompare::video() {
                 float new_right_pts = frame_right->pts - (time_shift_ms_ * MILLISEC_TO_AV_TIME);
 
                 if ((frame_right->coded_picture_number - right_previous_coded_picture_number) == 1) {
-                    int64_t new_delta = new_right_pts - right_pts;
-                    delta_right_pts = new_delta;
+                    delta_right_pts = new_right_pts - right_pts;
                 }
 
                 right_pts = new_right_pts;
