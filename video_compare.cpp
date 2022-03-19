@@ -362,26 +362,28 @@ void VideoCompare::video() {
             char current_total_browsable[20];
             sprintf(current_total_browsable, "%d/%d", frame_offset + 1, (int) left_frames.size());
 
-            if (!display_->get_swap_left_right()) {
-                display_->refresh(
-                    {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
-                    {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                    {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
-                    {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                    left_frames[frame_offset]->pts * AV_TIME_TO_SEC,
-                    right_frames[frame_offset]->pts * AV_TIME_TO_SEC,
-                    current_total_browsable,
-                    errorMessage);
-            } else {
-                display_->refresh(
-                    {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
-                    {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                    {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
-                    {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                    right_frames[frame_offset]->pts * AV_TIME_TO_SEC,
-                    left_frames[frame_offset]->pts * AV_TIME_TO_SEC,
-                    current_total_browsable,
-                    errorMessage);
+            if (frame_offset >= 0) {
+                if (!display_->get_swap_left_right()) {
+                    display_->refresh(
+                        {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
+                        {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
+                        {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
+                        {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
+                        left_frames[frame_offset]->pts * AV_TIME_TO_SEC,
+                        right_frames[frame_offset]->pts * AV_TIME_TO_SEC,
+                        current_total_browsable,
+                        errorMessage);
+                } else {
+                    display_->refresh(
+                        {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
+                        {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
+                        {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
+                        {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
+                        right_frames[frame_offset]->pts * AV_TIME_TO_SEC,
+                        left_frames[frame_offset]->pts * AV_TIME_TO_SEC,
+                        current_total_browsable,
+                        errorMessage);
+                }
             }
         }
     } catch (...) {
