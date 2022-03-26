@@ -95,10 +95,21 @@ and its TrueType font rendering add on (libsdl2_ttf).
 
 1. Audio playback is not supported.
 
-2. The code is hard to maintain at the moment (too many copy/paste and lazy solutions).
-   My intention has mainly been to build a tool in a few days which gets the job done.
-   A lot of refactoring and clean-up is required when I have the time for it. Consider
-   yourself warned! ;-)
-
-3. Pre-built Windows 64-bit releases are available from this page (simply extract the
+2. Pre-built Windows 64-bit releases are available from this page (simply extract the
    .zip-archive and run `video-compare.exe` from a command prompt).
+
+## Practical tips
+
+### Send To integration in Windows File Explorer
+
+You can fire up video-compare directly from the File Explorer when you don't need to specify 
+any other arguments than the inputs via Right click -> Send To -> video-compare. 
+[Here is a screen recording which shows how it works](https://files.catbox.moe/tg6c1m.mp4).
+
+To get video-compare to appear in the `Send To` field you will need to open the `send to` folder, which 
+you can access by typing `shell:sendto` in Run (Windows + R), then simply make a shortcut to `video-compare.exe`.
+
+You can do that quickly by selecting two files, then right clicking any of them, pressing N (focuses se**n**d to), 
+then V (selects **v**ideo-compare).
+
+Thanks to [couleurm](https://github.com/couleurm) for the sharing this tip.
