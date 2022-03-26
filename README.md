@@ -106,10 +106,10 @@ You can fire up the tool directly from the File Explorer when you don't need to 
 any other arguments than the inputs via Right click -> Send To -> video-compare. 
 [Here is a screen recording which shows how this integration works](https://files.catbox.moe/tg6c1m.mp4).
 
-To get video-compare to appear in the `Send To` field you will need to open the `send to` folder, which 
-you can access by typing `shell:sendto` in Run (Windows + R), then simply make a shortcut to `video-compare.exe`.
-
 You can do that quickly by selecting two files, then right clicking any of them, pressing N (focuses se**n**d to), 
 then V (selects **v**ideo-compare).
+
+To get video-compare to appear in the `Send To` field you will need to open the `send to` folder, which 
+you can access by typing `shell:sendto` in Run (Windows + R), then simply make a shortcut to `video-compare.exe`.
 
 Thanks to [couleurm](https://github.com/couleurm) for the sharing this tip.
