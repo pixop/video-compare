@@ -1,4 +1,5 @@
 #include "display.h"
+#include "source_code_pro_regular_ttf.h"
 #include <stdexcept>
 #include <string>
 #include <sstream>
@@ -49,10 +50,9 @@ Display::Display(
     const unsigned width,
     const unsigned height,
     const std::string &left_file_name,
-    const std::string &right_file_name) :
-    high_dpi_allowed_{high_dpi_allowed},
-    video_width_{(int)width},
-    video_height_{(int)height}
+    const std::string &right_file_name) : high_dpi_allowed_{high_dpi_allowed},
+                                          video_width_{(int)width},
+                                          video_height_{(int)height}
 {
     int window_width = std::get<0>(window_size) > 0 ? std::get<0>(window_size) : width;
     int window_height = std::get<1>(window_size) > 0 ? std::get<1>(window_size) : height;
@@ -67,7 +67,7 @@ Display::Display(
     renderer_ = check_SDL(SDL_CreateRenderer(
                               window_, -1,
                               SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC),
-                            "renderer");
+                          "renderer");
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 
@@ -82,12 +82,9 @@ Display::Display(
     window_to_drawable_height_factor = (float)drawable_height_ / (float)window_height_;
     font_scale = (window_to_drawable_width_factor + window_to_drawable_height_factor) / 2.0f;
 
-    std::stringstream ss;
-    ss << SDL_GetBasePath() << "SourceCodePro-Regular.ttf";
-    std::string font_filename = ss.str();
-
-    small_font_ = check_SDL(TTF_OpenFont(font_filename.c_str(), 16 * font_scale), "font open");
-    big_font_ = check_SDL(TTF_OpenFont(font_filename.c_str(), 24 * font_scale), "font open");
+    SDL_RWops *embedded_font = SDL_RWFromConstMem(source_code_pro_regular_ttf, source_code_pro_regular_ttf_len);
+    small_font_ = check_SDL(TTF_OpenFontRW(embedded_font, 0, 16 * font_scale), "font open");
+    big_font_ = check_SDL(TTF_OpenFontRW(embedded_font, 0, 24 * font_scale), "font open");
 
     SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
     texture_ = check_SDL(SDL_CreateTexture(
@@ -207,7 +204,8 @@ void Display::refresh(
 
     if (show_left_ || show_right_)
     {
-        int split_x = compare_mode ? mouse_video_x : show_left_ ? video_width_ : 0;
+        int split_x = compare_mode ? mouse_video_x : show_left_ ? video_width_
+                                                                : 0;
 
         // update video
         if (show_left_ && (split_x > 0))
@@ -390,9 +388,9 @@ void Display::input()
         switch (event_.type)
         {
         case SDL_MOUSEBUTTONDOWN:
-             seek_relative_ = float(mouse_x) / float(window_width_);
-             seek_from_start_ = true;
-             break;
+            seek_relative_ = float(mouse_x) / float(window_width_);
+            seek_from_start_ = true;
+            break;
         case SDL_KEYDOWN:
             switch (event_.key.keysym.sym)
             {

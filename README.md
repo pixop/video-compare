@@ -51,13 +51,7 @@ right video. Useful when videos are slightly out of sync:
 
     ./video-compare -t 80 video1.mp4 video2.mp4
 
-The above arguments can be combined in any order.
-
-Note that in order to work, the `SourceCodePro-Regular.ttf` font must be located in the same directory
-as the main executable. It is recommended to leave the compiled software in its source folder to
-ensure access to external dependencies and run the program from a different working directory:
-
-    [path-to-video-compare-source-code]/video-compare video1.mp4 video2.mp4
+The above arguments can be combined in any order, of course.
 
 ## Controls
 
