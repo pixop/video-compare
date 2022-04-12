@@ -89,7 +89,7 @@ and its TrueType font rendering add on (libsdl2_ttf).
 
 1. Audio playback is not supported.
 
-2. Pre-built Windows 64-bit releases are available from this page (simply extract the
+2. Pre-built Windows 10 64-bit releases are available from this page (simply extract the
    .zip-archive and run `video-compare.exe` from a command prompt).
 
 ## Practical tips
