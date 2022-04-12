@@ -1,5 +1,7 @@
 # video-compare
 
+[![GitHub release](https://img.shields.io/github/release/pixop/video-compare)](https://github.com/pixop/video-compare/releases)
+
 Split screen video comparison tool written in C++14 using FFmpeg libraries and SDL2.
 
 `video-compare` can be used to visually compare e.g. the effect of codecs and resizing algorithms on
