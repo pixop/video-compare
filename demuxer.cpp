@@ -3,7 +3,9 @@
 #include <iostream>
 
 Demuxer::Demuxer(const std::string &file_name) {
+#if (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 6, 102))
 	av_register_all();
+#endif
 	ffmpeg::check(avformat_open_input(
 		&format_context_, file_name.c_str(), nullptr, nullptr));
 

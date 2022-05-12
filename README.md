@@ -1,5 +1,7 @@
 # video-compare
 
+[![GitHub release](https://img.shields.io/github/release/pixop/video-compare)](https://github.com/pixop/video-compare/releases)
+
 Split screen video comparison tool written in C++14 using FFmpeg libraries and SDL2.
 
 `video-compare` can be used to visually compare e.g. the effect of codecs and resizing algorithms on
@@ -89,7 +91,7 @@ and its TrueType font rendering add on (libsdl2_ttf).
 
 1. Audio playback is not supported.
 
-2. Pre-built Windows 64-bit releases are available from this page (simply extract the
+2. Pre-built Windows 10 64-bit releases are available from this page (simply extract the
    .zip-archive and run `video-compare.exe` from a command prompt).
 
 ## Practical tips
@@ -98,7 +100,10 @@ and its TrueType font rendering add on (libsdl2_ttf).
 
 You can fire up the tool directly from the File Explorer when you don't need to specify 
 any other arguments than the inputs via Right click -> Send To -> video-compare. 
-[Here is a screen recording which shows how this integration works](https://files.catbox.moe/tg6c1m.mp4).
+
+Here is how this integration works:
+
+https://user-images.githubusercontent.com/8549626/166630445-c8c511b7-005f-48aa-83bc-0eb9676cfa2a.mp4
 
 You can do that quickly by selecting two files, then right clicking any of them, pressing N (focuses se**n**d to), 
 then V (selects **v**ideo-compare).
@@ -106,4 +111,4 @@ then V (selects **v**ideo-compare).
 To get video-compare to appear in the `Send To` field you will need to open the `send to` folder, which 
 you can access by typing `shell:sendto` in Run (Windows + R), then simply make a shortcut to `video-compare.exe`.
 
-Thanks to [couleurm](https://github.com/couleurm) for the sharing this tip.
+Thanks to [couleurm](https://github.com/couleurm) for the sharing this tip and creating the screen recording above.

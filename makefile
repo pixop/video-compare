@@ -5,8 +5,8 @@ CXXFLAGS = -g3 -Ofast -mavx2 -std=c++14 -D__STDC_CONSTANT_MACROS \
 
 ifeq ($(shell uname), CYGWIN_NT-10.0)
   CXX = x86_64-w64-mingw32-g++
-  CXXFLAGS = -Iffmpeg-4.4.1-full_build-shared/include/
-  LDLIBS = -Lffmpeg-4.4.1-full_build-shared/lib/ -lavformat -lavcodec -lavutil -lswresample -lswscale -lSDL2 -lSDL2_ttf
+  CXXFLAGS += -Iffmpeg-5.0.1-full_build-shared/include/
+  LDLIBS = -Lffmpeg-5.0.1-full_build-shared/lib/ -lavformat -lavcodec -lavutil -lswresample -lswscale -lSDL2 -lSDL2_ttf
 else
   CXX = g++
   LDLIBS = -lavformat -lavcodec -lavutil -lswscale -lSDL2 -lSDL2_ttf -pthread
