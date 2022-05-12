@@ -1,0 +1,2 @@
+# exclude font from Linguist stats (it's going to skew the project towards being written in C if included)
+source_code_pro_regular_ttf.h -linguist-vendored
