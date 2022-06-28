@@ -83,6 +83,14 @@ seek based on the horizontal position of the slider relative to the window width
 Requires FFmpeg headers and development libraries to be installed, along with SDL2
 and its TrueType font rendering add on (libsdl2_ttf).
 
+On macOS, these dependencies can be installed with [Homebrew](https://brew.sh/):
+
+```sh
+brew install ffmpeg sdl2 sdl2_ttf
+```
+
+<small>`video-compare` will hopefully be [added to Homebrew in the future](https://github.com/pixop/video-compare/issues/1)</small>
+
 ## Build
 
     make
