@@ -89,7 +89,7 @@ On macOS, these dependencies can be installed with [Homebrew](https://brew.sh/):
 brew install ffmpeg sdl2 sdl2_ttf
 ```
 
-<small>`video-compare` will hopefully be [added to Homebrew in the future](https://github.com/pixop/video-compare/issues/1)</small>
+<small>`video-compare` will hopefully be [added to Homebrew in the future](https://github.com/pixop/video-compare/issues/1).</small>
 
 ## Build
 
