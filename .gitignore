@@ -23,3 +23,7 @@ video-compare
 
 # Mac OS X stuff
 .DS_Store
+
+# PNG files
+*.png
+

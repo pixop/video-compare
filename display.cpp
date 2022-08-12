@@ -4,8 +4,13 @@
 #include <string>
 #include <sstream>
 #include <iostream>
+#include <iomanip>
 #include <memory>
 #include <cmath>
+#include <libgen.h>
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 template <typename T>
 inline T check_SDL(T value, const std::string &message)
@@ -31,6 +36,20 @@ inline uint8_t clampIntToByte(int value)
     return (uint8_t)clampIntToByteRange(value);
 }
 
+// Credits to Kemin Zhou for this approach which does not require Boost or C++17
+// https://stackoverflow.com/questions/4430780/how-can-i-extract-the-file-name-and-extension-from-a-path-in-c
+std::string getFileStem(const std::string& filePath) {
+   char* buff = new char[filePath.size()+1];
+   strcpy(buff, filePath.c_str());
+   std::string tmp = std::string(basename(buff));
+   std::string::size_type i = tmp.rfind('.');
+   if (i != std::string::npos) {
+      tmp = tmp.substr(0,i);
+   }
+   delete[] buff;
+   return tmp;
+}
+
 static const SDL_Color textColor = {255, 255, 255, 0};
 
 SDL::SDL()
@@ -52,7 +71,9 @@ Display::Display(
     const std::string &left_file_name,
     const std::string &right_file_name) : high_dpi_allowed_{high_dpi_allowed},
                                           video_width_{(int)width},
-                                          video_height_{(int)height}
+                                          video_height_{(int)height},
+                                          left_file_stem_{getFileStem(left_file_name)},
+                                          right_file_stem_{getFileStem(right_file_name)}
 {
     int window_width = std::get<0>(window_size) > 0 ? std::get<0>(window_size) : width;
     int window_height = std::get<1>(window_size) > 0 ? std::get<1>(window_size) : height;
@@ -78,13 +99,13 @@ Display::Display(
     SDL_GL_GetDrawableSize(window_, &drawable_width_, &drawable_height_);
     SDL_GetWindowSize(window_, &window_width_, &window_height_);
 
-    window_to_drawable_width_factor = (float)drawable_width_ / (float)window_width_;
-    window_to_drawable_height_factor = (float)drawable_height_ / (float)window_height_;
-    font_scale = (window_to_drawable_width_factor + window_to_drawable_height_factor) / 2.0f;
+    window_to_drawable_width_factor_ = (float)drawable_width_ / (float)window_width_;
+    window_to_drawable_height_factor_ = (float)drawable_height_ / (float)window_height_;
+    font_scale_ = (window_to_drawable_width_factor_ + window_to_drawable_height_factor_) / 2.0f;
 
     SDL_RWops *embedded_font = SDL_RWFromConstMem(source_code_pro_regular_ttf, source_code_pro_regular_ttf_len);
-    small_font_ = check_SDL(TTF_OpenFontRW(embedded_font, 0, 16 * font_scale), "font open");
-    big_font_ = check_SDL(TTF_OpenFontRW(embedded_font, 0, 24 * font_scale), "font open");
+    small_font_ = check_SDL(TTF_OpenFontRW(embedded_font, 0, 16 * font_scale_), "font open");
+    big_font_ = check_SDL(TTF_OpenFontRW(embedded_font, 0, 24 * font_scale_), "font open");
 
     SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
     texture_ = check_SDL(SDL_CreateTexture(
@@ -93,15 +114,15 @@ Display::Display(
                          "renderer");
 
     SDL_Surface *textSurface = TTF_RenderText_Blended(small_font_, left_file_name.c_str(), textColor);
-    left_text_texture = SDL_CreateTextureFromSurface(renderer_, textSurface);
-    left_text_width = textSurface->w;
-    left_text_height = textSurface->h;
+    left_text_texture_ = SDL_CreateTextureFromSurface(renderer_, textSurface);
+    left_text_width_ = textSurface->w;
+    left_text_height_ = textSurface->h;
     SDL_FreeSurface(textSurface);
 
     textSurface = TTF_RenderText_Blended(small_font_, right_file_name.c_str(), textColor);
-    right_text_texture = SDL_CreateTextureFromSurface(renderer_, textSurface);
-    right_text_width = textSurface->w;
-    right_text_height = textSurface->h;
+    right_text_texture_ = SDL_CreateTextureFromSurface(renderer_, textSurface);
+    right_text_width_ = textSurface->w;
+    right_text_height_ = textSurface->h;
     SDL_FreeSurface(textSurface);
 
     diff_buffer_ = new uint8_t[video_width_ * video_height_ * 3];
@@ -113,12 +134,12 @@ Display::Display(
 Display::~Display()
 {
     SDL_DestroyTexture(texture_);
-    SDL_DestroyTexture(left_text_texture);
-    SDL_DestroyTexture(right_text_texture);
+    SDL_DestroyTexture(left_text_texture_);
+    SDL_DestroyTexture(right_text_texture_);
 
-    if (error_message_texture != nullptr)
+    if (error_message_texture_ != nullptr)
     {
-        SDL_DestroyTexture(error_message_texture);
+        SDL_DestroyTexture(error_message_texture_);
     }
 
     TTF_CloseFont(small_font_);
@@ -186,6 +207,28 @@ void Display::update_difference(
     }
 }
 
+void Display::save_image_frames(
+        std::array<uint8_t *, 3> planes_left, std::array<size_t, 3> pitches_left,
+        std::array<uint8_t *, 3> planes_right, std::array<size_t, 3> pitches_right)
+{
+    std::ostringstream left_filename, right_filename;
+    left_filename << left_file_stem_ << "_" << std::setw(4) << std::setfill('0') << saved_image_number << ".png";
+    right_filename << right_file_stem_ << "_" << std::setw(4) << std::setfill('0') << saved_image_number << ".png";
+
+    if (!stbi_write_png(left_filename.str().c_str(), video_width_, video_height_, 3, planes_left[0], pitches_left[0])) {
+        std::cout << "Error saving left video PNG image to file: " << left_filename.str() << std::endl;
+        return;
+    } 
+    if (!stbi_write_png(right_filename.str().c_str(), video_width_, video_height_, 3, planes_right[0], pitches_right[0])) {
+        std::cout << "Error saving right video PNG image to file: " << left_filename.str() << std::endl;
+        return;
+    }
+
+    std::cout << "Saved " << left_filename.str() << " and " << right_filename.str() << std::endl;
+
+    saved_image_number++;
+}
+
 void Display::refresh(
     std::array<uint8_t *, 3> planes_left, std::array<size_t, 3> pitches_left,
     std::array<uint8_t *, 3> planes_right, std::array<size_t, 3> pitches_right,
@@ -194,10 +237,15 @@ void Display::refresh(
     const char *current_total_browsable,
     const std::string &error_message)
 {
+    if (save_image_frames_) {
+        save_image_frames(planes_left, pitches_left, planes_right, pitches_right);
+        save_image_frames_ = false;
+    }
+
     bool compare_mode = show_left_ && show_right_;
 
-    int mouse_video_x = std::round(float(mouse_x) * float(video_width_) / float(window_width_));
-    int mouse_video_y = std::round(float(mouse_y) * float(video_height_) / float(window_height_));
+    int mouse_video_x = std::round(float(mouse_x_) * float(video_width_) / float(window_width_));
+    int mouse_video_y = std::round(float(mouse_y_) * float(video_height_) / float(window_height_));
 
     // clear everything
     SDL_RenderClear(renderer_);
@@ -267,10 +315,10 @@ void Display::refresh(
     {
         // render background rectangles and text on top
         char buffer[20];
-        int border_extension = 3 * font_scale;
+        int border_extension = 3 * font_scale_;
         int border_extension_x2 = border_extension * 2;
         int line1_y = 20;
-        int line2_y = line1_y + 30 * font_scale;
+        int line2_y = line1_y + 30 * font_scale_;
 
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 64);
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
@@ -284,12 +332,12 @@ void Display::refresh(
             int left_position_text_height = textSurface->h;
             SDL_FreeSurface(textSurface);
 
-            fill_rect = {line1_y - border_extension, line1_y - border_extension, left_text_width + border_extension_x2, left_text_height + border_extension_x2};
+            fill_rect = {line1_y - border_extension, line1_y - border_extension, left_text_width_ + border_extension_x2, left_text_height_ + border_extension_x2};
             SDL_RenderFillRect(renderer_, &fill_rect);
             fill_rect = {line1_y - border_extension, line2_y - border_extension, left_position_text_width + border_extension_x2, left_position_text_height + border_extension_x2};
             SDL_RenderFillRect(renderer_, &fill_rect);
-            text_rect = {line1_y, line1_y, left_text_width, left_text_height};
-            SDL_RenderCopy(renderer_, left_text_texture, NULL, &text_rect);
+            text_rect = {line1_y, line1_y, left_text_width_, left_text_height_};
+            SDL_RenderCopy(renderer_, left_text_texture_, NULL, &text_rect);
             text_rect = {line1_y, line2_y, left_position_text_width, left_position_text_height};
             SDL_RenderCopy(renderer_, left_position_text_texture, NULL, &text_rect);
             SDL_DestroyTexture(left_position_text_texture);
@@ -304,12 +352,12 @@ void Display::refresh(
             int right_position_text_height = textSurface->h;
             SDL_FreeSurface(textSurface);
 
-            fill_rect = {drawable_width_ - line1_y - border_extension - right_text_width, line1_y - border_extension, right_text_width + border_extension_x2, right_text_height + border_extension_x2};
+            fill_rect = {drawable_width_ - line1_y - border_extension - right_text_width_, line1_y - border_extension, right_text_width_ + border_extension_x2, right_text_height_ + border_extension_x2};
             SDL_RenderFillRect(renderer_, &fill_rect);
             fill_rect = {drawable_width_ - line1_y - border_extension - right_position_text_width, line2_y - border_extension, right_position_text_width + border_extension_x2, right_position_text_height + border_extension_x2};
             SDL_RenderFillRect(renderer_, &fill_rect);
-            text_rect = {drawable_width_ - line1_y - right_text_width, line1_y, right_text_width, right_text_height};
-            SDL_RenderCopy(renderer_, right_text_texture, NULL, &text_rect);
+            text_rect = {drawable_width_ - line1_y - right_text_width_, line1_y, right_text_width_, right_text_height_};
+            SDL_RenderCopy(renderer_, right_text_texture_, NULL, &text_rect);
             text_rect = {drawable_width_ - line1_y - right_position_text_width, line2_y, right_position_text_width, right_position_text_height};
             SDL_RenderCopy(renderer_, right_position_text_texture, NULL, &text_rect);
             SDL_DestroyTexture(right_position_text_texture);
@@ -332,31 +380,31 @@ void Display::refresh(
     // render (optional) error message
     if (!error_message.empty())
     {
-        error_message_shown_at = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+        error_message_shown_at_ = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
         textSurface = TTF_RenderText_Blended(big_font_, error_message.c_str(), textColor);
-        error_message_texture = SDL_CreateTextureFromSurface(renderer_, textSurface);
-        error_message_width = textSurface->w;
-        error_message_height = textSurface->h;
+        error_message_texture_ = SDL_CreateTextureFromSurface(renderer_, textSurface);
+        error_message_width_ = textSurface->w;
+        error_message_height_ = textSurface->h;
         SDL_FreeSurface(textSurface);
     }
-    if (error_message_texture != nullptr)
+    if (error_message_texture_ != nullptr)
     {
         std::chrono::milliseconds now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-        float keep_alpha = std::max(sqrtf(1.0f - (now - error_message_shown_at).count() / 1000.0f / 4.0f), 0.0f);
+        float keep_alpha = std::max(sqrtf(1.0f - (now - error_message_shown_at_).count() / 1000.0f / 4.0f), 0.0f);
 
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 64 * keep_alpha);
-        fill_rect = {drawable_width_ / 2 - error_message_width / 2 - 2, drawable_height_ / 2 - error_message_height / 2 - 2, error_message_width + 4, error_message_height + 4};
+        fill_rect = {drawable_width_ / 2 - error_message_width_ / 2 - 2, drawable_height_ / 2 - error_message_height_ / 2 - 2, error_message_width_ + 4, error_message_height_ + 4};
         SDL_RenderFillRect(renderer_, &fill_rect);
 
-        SDL_SetTextureAlphaMod(error_message_texture, 255 * keep_alpha);
-        text_rect = {drawable_width_ / 2 - error_message_width / 2, drawable_height_ / 2 - error_message_height / 2, error_message_width, error_message_height};
-        SDL_RenderCopy(renderer_, error_message_texture, NULL, &text_rect);
+        SDL_SetTextureAlphaMod(error_message_texture_, 255 * keep_alpha);
+        text_rect = {drawable_width_ / 2 - error_message_width_ / 2, drawable_height_ / 2 - error_message_height_ / 2, error_message_width_, error_message_height_};
+        SDL_RenderCopy(renderer_, error_message_texture_, NULL, &text_rect);
     }
 
     if (show_hud_ && compare_mode)
     {
-        int draw_x = std::round(float(mouse_x) * window_to_drawable_width_factor);
-        int draw_y = std::round(float(mouse_y) * window_to_drawable_width_factor);
+        int draw_x = std::round(float(mouse_x_) * window_to_drawable_width_factor_);
+        int draw_y = std::round(float(mouse_y_) * window_to_drawable_width_factor_);
 
         // render movable slider(s)
         SDL_SetRenderDrawColor(renderer_, 255, 255, 255, SDL_ALPHA_OPAQUE);
@@ -377,7 +425,7 @@ void Display::refresh(
 
 void Display::input()
 {
-    SDL_GetMouseState(&mouse_x, &mouse_y);
+    SDL_GetMouseState(&mouse_x_, &mouse_y_);
 
     seek_relative_ = 0.0f;
     seek_from_start_ = false;
@@ -388,7 +436,7 @@ void Display::input()
         switch (event_.type)
         {
         case SDL_MOUSEBUTTONDOWN:
-            seek_relative_ = float(mouse_x) / float(window_width_);
+            seek_relative_ = float(mouse_x_) / float(window_width_);
             seek_from_start_ = true;
             break;
         case SDL_KEYDOWN:
@@ -428,19 +476,22 @@ void Display::input()
             {
                 swap_left_right_ = !swap_left_right_;
 
-                SDL_Texture *temp = left_text_texture;
-                left_text_texture = right_text_texture;
-                right_text_texture = temp;
+                SDL_Texture *temp = left_text_texture_;
+                left_text_texture_ = right_text_texture_;
+                right_text_texture_ = temp;
 
-                int temp_dim = left_text_width;
-                left_text_width = right_text_width;
-                right_text_width = temp_dim;
+                int temp_dim = left_text_width_;
+                left_text_width_ = right_text_width_;
+                right_text_width_ = temp_dim;
 
-                temp_dim = left_text_height;
-                left_text_height = right_text_height;
-                right_text_height = temp_dim;
+                temp_dim = left_text_height_;
+                left_text_height_ = right_text_height_;
+                right_text_height_ = temp_dim;
                 break;
             }
+            case SDLK_f:
+                save_image_frames_ = true;
+                break;
             case SDLK_LEFT:
                 seek_relative_ -= 1.0f;
                 break;
