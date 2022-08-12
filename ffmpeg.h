@@ -2,6 +2,7 @@
 #include <array>
 #include <stdexcept>
 extern "C" {
+	#include "libavcodec/version.h"
 	#include "libavutil/avutil.h"
 }
 
