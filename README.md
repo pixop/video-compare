@@ -27,7 +27,7 @@ Subtraction mode (and zoom activated):
 `video-compare` was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on
 the excellent video player GitHub project: https://github.com/pockethook/player
 
-Many thanks to the FFmpeg and SDL2 authors.
+Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://github.com/libsdl-org/SDL) and [stb](https://github.com/nothings/stb) authors.
 
 ## Usage
 
