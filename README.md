@@ -83,7 +83,13 @@ seek based on the horizontal position of the slider relative to the window width
 Requires FFmpeg headers and development libraries to be installed, along with SDL2
 and its TrueType font rendering add on (libsdl2_ttf).
 
-On macOS, these dependencies can be installed with [Homebrew](https://brew.sh/):
+On Debian GNU/Linux the required development packages can be installed via `apt`:
+
+```sh
+apt install libavformat-dev libswscale-dev libsdl2-dev libsdl2-ttf-dev
+```
+
+For macOS, these dependencies can be installed with [Homebrew](https://brew.sh/):
 
 ```sh
 brew install ffmpeg sdl2 sdl2_ttf
