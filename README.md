@@ -68,6 +68,7 @@ The above arguments can be combined in any order, of course.
 - S: Swap left and right video
 - A: Previous frame
 - D: Next frame
+- F: Save current video frames as PNG images (in the current directory)
 - Z: Zoom area around cursor (result shown in lower left corner)
 - C: Zoom area around cursor (result shown in lower right corner)
 - 1: Toggle hide/show left video
