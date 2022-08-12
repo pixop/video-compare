@@ -27,7 +27,7 @@ Subtraction mode (and zoom activated):
 `video-compare` was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on
 the excellent video player GitHub project: https://github.com/pockethook/player
 
-Many thanks to the FFmpeg and SDL2 authors.
+Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://github.com/libsdl-org/SDL) and [stb](https://github.com/nothings/stb) authors.
 
 ## Usage
 
@@ -68,6 +68,7 @@ The above arguments can be combined in any order, of course.
 - S: Swap left and right video
 - A: Previous frame
 - D: Next frame
+- F: Save the current video frames as PNG images in the current directory
 - Z: Zoom area around cursor (result shown in lower left corner)
 - C: Zoom area around cursor (result shown in lower right corner)
 - 1: Toggle hide/show left video
