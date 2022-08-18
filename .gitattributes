@@ -1,2 +1,3 @@
-# exclude font from Linguist stats (it's going to skew the project towards being written in C if included)
+# exclude font and third party library from Linguist stats (it's going to skew the project towards being written in C if included)
 source_code_pro_regular_ttf.h linguist-vendored
+stb_image_write.h linguist-vendored
