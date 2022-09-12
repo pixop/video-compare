@@ -39,14 +39,19 @@ inline uint8_t clampIntToByte(int value)
 // Credits to Kemin Zhou for this approach which does not require Boost or C++17
 // https://stackoverflow.com/questions/4430780/how-can-i-extract-the-file-name-and-extension-from-a-path-in-c
 std::string getFileStem(const std::string& filePath) {
-   char* buff = new char[filePath.size()+1];
+   char* buff = new char[filePath.size() + 1];
    strcpy(buff, filePath.c_str());
+
    std::string tmp = std::string(basename(buff));
-   std::string::size_type i = tmp.rfind('.');
+
+   const std::string::size_type i = tmp.rfind('.');
+
    if (i != std::string::npos) {
-      tmp = tmp.substr(0,i);
+      tmp = tmp.substr(0, i);
    }
+
    delete[] buff;
+
    return tmp;
 }
 
