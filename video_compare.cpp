@@ -201,6 +201,9 @@ void VideoCompare::video() {
         int64_t left_pts = 0, left_previous_coded_picture_number = 0, delta_left_pts = 0;
         int64_t right_pts = 0, right_previous_coded_picture_number = 0, delta_right_pts = 0;
 
+        int64_t right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME;
+        int total_right_time_shifted = 0;
+
         for (uint64_t frame_number = 0;; ++frame_number) {
             std::string errorMessage = "";
 
@@ -208,10 +211,23 @@ void VideoCompare::video() {
 
             float current_position = left_pts * AV_TIME_TO_SEC;
 
-            if (display_->get_seek_relative() != 0.0f) {
+            if ((display_->get_seek_relative() != 0.0f) || (display_->get_shift_right_frames() != 0)) {
+                total_right_time_shifted += display_->get_shift_right_frames();
+
                 if (packet_queue_[0]->isFinished() || packet_queue_[1]->isFinished()) {
                     errorMessage = "Unable to perform seek (end of file reached)";
                 } else {
+                    // a couple of frames must be decoded for delta_right_pts to be valid 
+                    if (delta_right_pts > 0) {
+                        // requires right video delta to have been determined
+                        right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * delta_right_pts;
+
+                        // round down to nearest 2 ms
+                        right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
+                    } else {
+                        errorMessage = "Unable to time shift right video";
+                    }
+
                     seeking_ = true;
                     readyToSeek_[0][0] = false;
                     readyToSeek_[0][1] = false;
@@ -239,8 +255,8 @@ void VideoCompare::video() {
                     frame_queue_[0]->empty();
                     frame_queue_[1]->empty();
 
-                    bool backward = display_->get_seek_relative() < 0.0f;
-                    float next_position = 0;
+                    float next_position;
+
                     if (display_->get_seek_from_start()) {
                         // seek from start based on first stream duration in seconds
                         next_position = (demuxer_[0]->duration() * AV_TIME_TO_SEC * display_->get_seek_relative());
@@ -248,6 +264,8 @@ void VideoCompare::video() {
                         next_position = current_position + display_->get_seek_relative();
                     }
                     
+                    bool backward = (display_->get_seek_relative() < 0.0f) || (display_->get_shift_right_frames() != 0);
+
                     if ((!demuxer_[0]->seek(std::max(0.0f, next_position), backward) && !backward) ||
                         (!demuxer_[1]->seek(std::max(0.0f, next_position), backward) && !backward)) {
                         // restore position if unable to perform forward seek
@@ -263,7 +281,7 @@ void VideoCompare::video() {
                     left_previous_coded_picture_number = frame_left->coded_picture_number;
 
                     frame_queue_[1]->pop(frame_right);
-                    right_pts = frame_right->pts - (time_shift_ms_ * MILLISEC_TO_AV_TIME);
+                    right_pts = frame_right->pts - right_time_shift;
                     right_previous_coded_picture_number = frame_right->coded_picture_number;
 
                     left_frames.clear();
@@ -311,18 +329,18 @@ void VideoCompare::video() {
             }
 
             if (frame_left != nullptr) {
-                if ((frame_left->coded_picture_number - left_previous_coded_picture_number) == 1) {
-                    delta_left_pts = frame_left->pts - left_pts;
+                if (abs(frame_left->coded_picture_number - left_previous_coded_picture_number) == 1) {
+                    delta_left_pts = abs(frame_left->pts - left_pts);
                 }
 
                 left_pts = frame_left->pts;
                 left_previous_coded_picture_number = frame_left->coded_picture_number;
             }
             if (frame_right != nullptr) {
-                float new_right_pts = frame_right->pts - (time_shift_ms_ * MILLISEC_TO_AV_TIME);
+                float new_right_pts = frame_right->pts - right_time_shift;
 
-                if ((frame_right->coded_picture_number - right_previous_coded_picture_number) == 1) {
-                    delta_right_pts = new_right_pts - right_pts;
+                if (abs(frame_right->coded_picture_number - right_previous_coded_picture_number) == 1) {
+                    delta_right_pts = abs(new_right_pts - right_pts);
                 }
 
                 right_pts = new_right_pts;

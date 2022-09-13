@@ -80,6 +80,8 @@ The above arguments can be combined in any order, of course.
 - 2: Toggle hide/show right video
 - 3: Toggle hide/show HUD
 - 0: Toggle video/subtraction mode
+- +: Time-shift right video 1 frame forward
+- -: Time-shift right video 1 frame backward
 
 Move the mouse horizontally to adjust the movable slider position. Click the mouse to perform a time
 seek based on the horizontal position of the slider relative to the window width.
