@@ -53,6 +53,11 @@ right video. Useful when videos are slightly out of sync:
 
     ./video-compare -t 80 video1.mp4 video2.mp4
 
+Display videos stacked vertically at full size without a slider (`hstack` for horizontal stacking is
+also supported):
+
+    ./video-compare -m vstack video1.mp4 video2.mp4
+
 The above arguments can be combined in any order, of course.
 
 ## Controls

@@ -6,7 +6,6 @@
 #include <iostream>
 #include <iomanip>
 #include <memory>
-#include <cmath>
 #include <libgen.h>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -69,19 +68,21 @@ SDL::~SDL()
 }
 
 Display::Display(
+    const Mode mode,
     const bool high_dpi_allowed,
     const std::tuple<int, int> window_size,
     const unsigned width,
     const unsigned height,
     const std::string &left_file_name,
-    const std::string &right_file_name) : high_dpi_allowed_{high_dpi_allowed},
+    const std::string &right_file_name) : mode_{mode},
+                                          high_dpi_allowed_{high_dpi_allowed},
                                           video_width_{(int)width},
                                           video_height_{(int)height},
                                           left_file_stem_{getFileStem(left_file_name)},
                                           right_file_stem_{getFileStem(right_file_name)}
 {
-    int window_width = std::get<0>(window_size) > 0 ? std::get<0>(window_size) : width;
-    int window_height = std::get<1>(window_size) > 0 ? std::get<1>(window_size) : height;
+    const int window_width = std::get<0>(window_size) > 0 ? std::get<0>(window_size) : mode == Mode::hstack ? width * 2 : width;
+    const int window_height = std::get<1>(window_size) > 0 ? std::get<1>(window_size) : mode == Mode::vstack ? height * 2 : height;
 
     const int create_window_flags = SDL_WINDOW_SHOWN;
 
@@ -106,6 +107,9 @@ Display::Display(
 
     window_to_drawable_width_factor_ = (float)drawable_width_ / (float)window_width_;
     window_to_drawable_height_factor_ = (float)drawable_height_ / (float)window_height_;
+    screen_to_video_width_factor_ = float(video_width_) / float(window_width_) * ((mode_ == Mode::hstack) ? 2.f : 1.f);
+    screen_to_video_height_factor_ = float(video_height_) / float(window_height_) * ((mode_ == Mode::vstack) ? 2.f : 1.f);
+
     font_scale_ = (window_to_drawable_width_factor_ + window_to_drawable_height_factor_) / 2.0f;
 
     SDL_RWops *embedded_font = SDL_RWFromConstMem(source_code_pro_regular_ttf, source_code_pro_regular_ttf_len);
@@ -115,7 +119,7 @@ Display::Display(
     SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
     texture_ = check_SDL(SDL_CreateTexture(
                              renderer_, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING,
-                             width, height),
+                             mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height),
                          "renderer");
 
     SDL_Surface *textSurface = TTF_RenderText_Blended(small_font_, left_file_name.c_str(), textColor);
@@ -249,45 +253,52 @@ void Display::refresh(
 
     bool compare_mode = show_left_ && show_right_;
 
-    int mouse_video_x = std::round(float(mouse_x_) * float(video_width_) / float(window_width_));
-    int mouse_video_y = std::round(float(mouse_y_) * float(video_height_) / float(window_height_));
+    int mouse_video_x = std::round(float(mouse_x_) * screen_to_video_width_factor_);
+    int mouse_video_y = std::round(float(mouse_y_) * screen_to_video_height_factor_);
 
     // clear everything
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
     SDL_RenderClear(renderer_);
 
     if (show_left_ || show_right_)
     {
-        int split_x = compare_mode ? mouse_video_x : show_left_ ? video_width_
-                                                                : 0;
+        int split_x = (compare_mode && mode_ == Mode::split) ? mouse_video_x : show_left_ ? video_width_ : 0;
 
         // update video
         if (show_left_ && (split_x > 0))
         {
-            SDL_Rect render_quad_left = {0, 0, split_x, video_height_};
+            SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
+            SDL_Rect screen_render_quad_left = video_to_screen_space(tex_render_quad_left);
 
-            check_SDL(!SDL_UpdateTexture(texture_, &render_quad_left, planes_left[0], pitches_left[0]), "left texture update (video mode)");
+            check_SDL(!SDL_UpdateTexture(texture_, &tex_render_quad_left, planes_left[0], pitches_left[0]), "left texture update (video mode)");
+
+            SDL_RenderCopy(renderer_, texture_, &tex_render_quad_left, &screen_render_quad_left);
         }
-        if (show_right_ && (split_x < (video_width_ - 1)))
+        if (show_right_ && ((split_x < (video_width_ - 1)) || mode_ != Mode::split))
         {
-            SDL_Rect render_quad_right = {split_x, 0, (video_width_ - split_x), video_height_};
+            int start_right = (mode_ == Mode::split) ? split_x : 0;
+            int right_x_offset = (mode_ == Mode::hstack) ? video_width_ : 0;
+            int right_y_offset = (mode_ == Mode::vstack) ? video_height_ : 0;
+
+            SDL_Rect tex_render_quad_right = {right_x_offset + start_right, right_y_offset, (video_width_ - start_right), video_height_};
+            SDL_Rect screen_render_quad_right = video_to_screen_space(tex_render_quad_right);
 
             if (subtraction_mode_)
             {
-                update_difference(planes_left, pitches_left, planes_right, pitches_right, split_x);
+                update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
 
                 check_SDL(!SDL_UpdateTexture(
-                              texture_, &render_quad_right,
-                              diff_planes_[0] + split_x * 3, video_width_ * 3),
+                              texture_, &tex_render_quad_right,
+                              diff_planes_[0] + start_right * 3, video_width_ * 3),
                           "right texture update (subtraction mode)");
             }
             else
             {
-                check_SDL(!SDL_UpdateTexture(texture_, &render_quad_right, planes_right[0] + split_x * 3, pitches_right[0]), "right texture update (video mode)");
+                check_SDL(!SDL_UpdateTexture(texture_, &tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0]), "right texture update (video mode)");
             }
-        }
 
-        // render video
-        SDL_RenderCopy(renderer_, texture_, nullptr, nullptr);
+            SDL_RenderCopy(renderer_, texture_, &tex_render_quad_right, &screen_render_quad_right);
+        }
     }
 
     // zoomed area
@@ -298,7 +309,7 @@ void Display::refresh(
 
     if (zoom_left_ || zoom_right_)
     {
-        SDL_Rect src_zoomed_area = {std::min(std::max(0, mouse_video_x - src_half_zoomed_size), video_width_), std::min(std::max(0, mouse_video_y - src_half_zoomed_size), video_height_), src_zoomed_size, src_zoomed_size};
+        SDL_Rect src_zoomed_area = {std::min(std::max(0, mouse_video_x - src_half_zoomed_size), video_width_ * ((mode_ == Mode::hstack) ? 2 : 1)), std::min(std::max(0, mouse_video_y - src_half_zoomed_size), video_height_ * ((mode_ == Mode::vstack) ? 2 : 1)), src_zoomed_size, src_zoomed_size};
 
         if (zoom_left_)
         {
@@ -312,8 +323,8 @@ void Display::refresh(
         }
     }
 
-    SDL_Rect fill_rect;
-    SDL_Rect text_rect;
+    SDL_Rect fill1_rect, fill2_rect;
+    SDL_Rect text1_rect, text2_rect;
     SDL_Surface *textSurface;
 
     if (show_hud_)
@@ -337,14 +348,14 @@ void Display::refresh(
             int left_position_text_height = textSurface->h;
             SDL_FreeSurface(textSurface);
 
-            fill_rect = {line1_y - border_extension, line1_y - border_extension, left_text_width_ + border_extension_x2, left_text_height_ + border_extension_x2};
-            SDL_RenderFillRect(renderer_, &fill_rect);
-            fill_rect = {line1_y - border_extension, line2_y - border_extension, left_position_text_width + border_extension_x2, left_position_text_height + border_extension_x2};
-            SDL_RenderFillRect(renderer_, &fill_rect);
-            text_rect = {line1_y, line1_y, left_text_width_, left_text_height_};
-            SDL_RenderCopy(renderer_, left_text_texture_, NULL, &text_rect);
-            text_rect = {line1_y, line2_y, left_position_text_width, left_position_text_height};
-            SDL_RenderCopy(renderer_, left_position_text_texture, NULL, &text_rect);
+            fill1_rect = {line1_y - border_extension, line1_y - border_extension, left_text_width_ + border_extension_x2, left_text_height_ + border_extension_x2};
+            SDL_RenderFillRect(renderer_, &fill1_rect);
+            fill2_rect = {line1_y - border_extension, line2_y - border_extension, left_position_text_width + border_extension_x2, left_position_text_height + border_extension_x2};
+            SDL_RenderFillRect(renderer_, &fill2_rect);
+            text1_rect = {line1_y, line1_y, left_text_width_, left_text_height_};
+            SDL_RenderCopy(renderer_, left_text_texture_, NULL, &text1_rect);
+            text2_rect = {line1_y, line2_y, left_position_text_width, left_position_text_height};
+            SDL_RenderCopy(renderer_, left_position_text_texture, NULL, &text2_rect);
             SDL_DestroyTexture(left_position_text_texture);
         }
         if (show_right_)
@@ -357,28 +368,40 @@ void Display::refresh(
             int right_position_text_height = textSurface->h;
             SDL_FreeSurface(textSurface);
 
-            fill_rect = {drawable_width_ - line1_y - border_extension - right_text_width_, line1_y - border_extension, right_text_width_ + border_extension_x2, right_text_height_ + border_extension_x2};
-            SDL_RenderFillRect(renderer_, &fill_rect);
-            fill_rect = {drawable_width_ - line1_y - border_extension - right_position_text_width, line2_y - border_extension, right_position_text_width + border_extension_x2, right_position_text_height + border_extension_x2};
-            SDL_RenderFillRect(renderer_, &fill_rect);
-            text_rect = {drawable_width_ - line1_y - right_text_width_, line1_y, right_text_width_, right_text_height_};
-            SDL_RenderCopy(renderer_, right_text_texture_, NULL, &text_rect);
-            text_rect = {drawable_width_ - line1_y - right_position_text_width, line2_y, right_position_text_width, right_position_text_height};
-            SDL_RenderCopy(renderer_, right_position_text_texture, NULL, &text_rect);
+            if (mode_ == Mode::vstack)
+            {
+                fill1_rect = {line1_y - border_extension, drawable_height_ - line2_y - right_text_height_ - border_extension, right_text_width_ + border_extension_x2, right_text_height_ + border_extension_x2};
+                fill2_rect = {line1_y - border_extension, drawable_height_ - line1_y - right_text_height_ - border_extension, right_position_text_width + border_extension_x2, right_position_text_height + border_extension_x2};
+                text1_rect = {line1_y, drawable_height_ - line2_y - right_text_height_, right_text_width_, right_text_height_};
+                text2_rect = {line1_y, drawable_height_ - line1_y - right_text_height_, right_position_text_width, right_position_text_height};
+            }
+            else
+            {
+                fill1_rect = {drawable_width_ - line1_y - border_extension - right_text_width_, line1_y - border_extension, right_text_width_ + border_extension_x2, right_text_height_ + border_extension_x2};
+                fill2_rect = {drawable_width_ - line1_y - border_extension - right_position_text_width, line2_y - border_extension, right_position_text_width + border_extension_x2, right_position_text_height + border_extension_x2};
+                text1_rect = {drawable_width_ - line1_y - right_text_width_, line1_y, right_text_width_, right_text_height_};
+                text2_rect = {drawable_width_ - line1_y - right_position_text_width, line2_y, right_position_text_width, right_position_text_height};
+            }
+
+            SDL_RenderFillRect(renderer_, &fill1_rect);
+            SDL_RenderFillRect(renderer_, &fill2_rect);
+            SDL_RenderCopy(renderer_, right_text_texture_, NULL, &text1_rect);
+            SDL_RenderCopy(renderer_, right_position_text_texture, NULL, &text2_rect);
+
             SDL_DestroyTexture(right_position_text_texture);
         }
 
-        // current frame / no. in history buffer
+        // current frame / number of frames in history buffer
         textSurface = TTF_RenderText_Blended(small_font_, current_total_browsable, textColor);
         SDL_Texture *current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, textSurface);
         int current_total_browsable_text_width = textSurface->w;
         int current_total_browsable_text_height = textSurface->h;
         SDL_FreeSurface(textSurface);
 
-        fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension, line1_y - border_extension, current_total_browsable_text_width + border_extension_x2, current_total_browsable_text_height + border_extension_x2};
-        SDL_RenderFillRect(renderer_, &fill_rect);
-        text_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, line1_y, current_total_browsable_text_width, current_total_browsable_text_height};
-        SDL_RenderCopy(renderer_, current_total_browsable_text_texture, NULL, &text_rect);
+        fill1_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension, line1_y - border_extension, current_total_browsable_text_width + border_extension_x2, current_total_browsable_text_height + border_extension_x2};
+        SDL_RenderFillRect(renderer_, &fill1_rect);
+        text1_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, line1_y, current_total_browsable_text_width, current_total_browsable_text_height};
+        SDL_RenderCopy(renderer_, current_total_browsable_text_texture, NULL, &text1_rect);
         SDL_DestroyTexture(current_total_browsable_text_texture);
     }
 
@@ -398,15 +421,15 @@ void Display::refresh(
         float keep_alpha = std::max(sqrtf(1.0f - (now - error_message_shown_at_).count() / 1000.0f / 4.0f), 0.0f);
 
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 64 * keep_alpha);
-        fill_rect = {drawable_width_ / 2 - error_message_width_ / 2 - 2, drawable_height_ / 2 - error_message_height_ / 2 - 2, error_message_width_ + 4, error_message_height_ + 4};
-        SDL_RenderFillRect(renderer_, &fill_rect);
+        fill1_rect = {drawable_width_ / 2 - error_message_width_ / 2 - 2, drawable_height_ / 2 - error_message_height_ / 2 - 2, error_message_width_ + 4, error_message_height_ + 4};
+        SDL_RenderFillRect(renderer_, &fill1_rect);
 
         SDL_SetTextureAlphaMod(error_message_texture_, 255 * keep_alpha);
-        text_rect = {drawable_width_ / 2 - error_message_width_ / 2, drawable_height_ / 2 - error_message_height_ / 2, error_message_width_, error_message_height_};
-        SDL_RenderCopy(renderer_, error_message_texture_, NULL, &text_rect);
+        text1_rect = {drawable_width_ / 2 - error_message_width_ / 2, drawable_height_ / 2 - error_message_height_ / 2, error_message_width_, error_message_height_};
+        SDL_RenderCopy(renderer_, error_message_texture_, NULL, &text1_rect);
     }
 
-    if (show_hud_ && compare_mode)
+    if (mode_ == Mode::split && show_hud_ && compare_mode)
     {
         int draw_x = std::round(float(mouse_x_) * window_to_drawable_width_factor_);
         int draw_y = std::round(float(mouse_y_) * window_to_drawable_width_factor_);

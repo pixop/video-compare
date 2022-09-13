@@ -23,7 +23,7 @@ static inline bool isBehind(int64_t frame1_pts, int64_t frame2_pts, int64_t delt
     return diff < -tolerance;
 }
 
-VideoCompare::VideoCompare(const bool high_dpi_allowed, const std::tuple<int, int> window_size, const double time_shift_ms, const std::string &left_file_name, const std::string &right_file_name) :
+VideoCompare::VideoCompare(const Display::Mode display_mode, const bool high_dpi_allowed, const std::tuple<int, int> window_size, const double time_shift_ms, const std::string &left_file_name, const std::string &right_file_name) :
     time_shift_ms_(time_shift_ms),
     demuxer_{
         std::make_unique<Demuxer>(left_file_name),
@@ -36,7 +36,7 @@ VideoCompare::VideoCompare(const bool high_dpi_allowed, const std::tuple<int, in
     format_converter_{
         std::make_unique<FormatConverter>(video_decoder_[0]->width(), video_decoder_[0]->height(), max_width_, max_height_, video_decoder_[0]->pixel_format(), AV_PIX_FMT_RGB24),
         std::make_unique<FormatConverter>(video_decoder_[1]->width(), video_decoder_[1]->height(), max_width_, max_height_, video_decoder_[1]->pixel_format(), AV_PIX_FMT_RGB24)},
-    display_{std::make_unique<Display>(high_dpi_allowed, window_size, max_width_, max_height_, left_file_name, right_file_name)},
+    display_{std::make_unique<Display>(display_mode, high_dpi_allowed, window_size, max_width_, max_height_, left_file_name, right_file_name)},
     timer_{std::make_unique<Timer>()},
     packet_queue_{
         std::make_unique<PacketQueue>(queue_size_),
