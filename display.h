@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <chrono>
+#include <cmath>
 
 struct SDL
 {
@@ -14,16 +15,28 @@ struct SDL
 
 class Display
 {
+public:
+    enum Mode
+    {
+        split,
+        vstack,
+        hstack
+    };
+
 private:
-    bool high_dpi_allowed_;
-    int video_width_;
-    int video_height_;
+    const Mode mode_;
+    const bool high_dpi_allowed_;
+    const int video_width_;
+    const int video_height_;
+
     int drawable_width_;
     int drawable_height_;
     int window_width_;
     int window_height_;
     float window_to_drawable_width_factor_;
     float window_to_drawable_height_factor_;
+    float screen_to_video_width_factor_;
+    float screen_to_video_height_factor_;
     float font_scale_;
 
     bool quit_{false};
@@ -80,8 +93,24 @@ private:
         std::array<uint8_t *, 3> planes_left, std::array<size_t, 3> pitches_left,
         std::array<uint8_t *, 3> planes_right, std::array<size_t, 3> pitches_right);
 
+    inline int static round(const float value)
+    {
+        return static_cast<int>(std::round(value));
+    }
+
+    SDL_Rect video_to_screen_space(const SDL_Rect &rect)
+    {
+        return
+        {
+            round(float(rect.x) / screen_to_video_width_factor_),
+            round(float(rect.y) / screen_to_video_height_factor_),
+            round(float(rect.w) / screen_to_video_width_factor_),
+            round(float(rect.h) / screen_to_video_height_factor_)
+        };
+    }
+
 public:
-    Display(const bool high_dpi_allowed, const std::tuple<int, int> window_size, const unsigned width, const unsigned height, const std::string &left_file_name, const std::string &right_file_name);
+    Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<int, int> window_size, const unsigned width, const unsigned height, const std::string &left_file_name, const std::string &right_file_name);
     ~Display();
 
     // Copy frame to display

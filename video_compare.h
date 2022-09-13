@@ -18,7 +18,7 @@ extern "C"
 class VideoCompare
 {
 public:
-    VideoCompare(const bool high_dpi_allowed, const std::tuple<int, int> window_size, const double time_shift_ms, const std::string &left_file_name, const std::string &right_file_name);
+    VideoCompare(const Display::Mode display_mode, const bool high_dpi_allowed, const std::tuple<int, int> window_size, const double time_shift_ms, const std::string &left_file_name, const std::string &right_file_name);
     void operator()();
 
 private:

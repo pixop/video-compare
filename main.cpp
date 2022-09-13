@@ -21,6 +21,7 @@ int main(int argc, char **argv)
     {
         argagg::parser argparser{{{"help", {"-h", "--help"}, "show help", 0},
                                   {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
+                                  {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
                                   {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600)", 1},
                                   {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of milliseconds", 1}}};
 
@@ -29,12 +30,13 @@ int main(int argc, char **argv)
 
         std::tuple<int, int> window_size(-1, -1);
         double time_shift_ms = 0;
+        Display::Mode display_mode = Display::Mode::split;
 
         if (args["help"] || args.count() == 0)
         {
             std::ostringstream usage;
             usage
-                << argv[0] << " 20220412-github" << std::endl
+                << argv[0] << " 20220913-github" << std::endl
                 << std::endl
                 << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl
                 << std::endl;
@@ -56,6 +58,27 @@ int main(int argc, char **argv)
                 if (!fileExists(args.pos[1]))
                 {
                     throw std::logic_error{"Unable to open the right video file"};
+                }
+            }
+            if (args["display-mode"])
+            {
+                const std::string display_mode_arg = args["display-mode"];
+
+                if (display_mode_arg == "split")
+                {
+                    display_mode = Display::Mode::split;
+                }
+                else if (display_mode_arg == "vstack")
+                {
+                    display_mode = Display::Mode::vstack;
+                }
+                else if (display_mode_arg == "hstack")
+                {
+                    display_mode = Display::Mode::hstack;
+                }
+                else
+                {
+                    throw std::logic_error{"Cannot parse display mode argument (valid options: split, vstack, hstack)"};
                 }
             }
             if (args["window-size"])
@@ -89,7 +112,7 @@ int main(int argc, char **argv)
                 time_shift_ms = std::stod(time_shift_arg);
             }
 
-            VideoCompare compare{args["high-dpi"], window_size, time_shift_ms, args.pos[0], args.pos[1]};
+            VideoCompare compare{display_mode, args["high-dpi"], window_size, time_shift_ms, args.pos[0], args.pos[1]};
             compare();
         }
     }
