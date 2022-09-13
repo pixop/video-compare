@@ -50,6 +50,7 @@ private:
     bool subtraction_mode_{false};
     float seek_relative_{0.0f};
     int frame_offset_delta_{0};
+    int shift_right_frames_{0};
     bool seek_from_start_{false};
     bool save_image_frames_{false};
 
@@ -131,4 +132,5 @@ public:
     float get_seek_relative();
     bool get_seek_from_start();
     int get_frame_offset_delta();
+    int get_shift_right_frames();
 };

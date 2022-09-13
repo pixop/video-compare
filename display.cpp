@@ -458,6 +458,7 @@ void Display::input()
     seek_relative_ = 0.0f;
     seek_from_start_ = false;
     frame_offset_delta_ = 0;
+    shift_right_frames_ = 0;
 
     while (SDL_PollEvent(&event_))
     {
@@ -477,15 +478,19 @@ void Display::input()
                 play_ = !play_;
                 break;
             case SDLK_1:
+            case SDLK_KP_1:
                 show_left_ = !show_left_;
                 break;
             case SDLK_2:
+            case SDLK_KP_2:
                 show_right_ = !show_right_;
                 break;
             case SDLK_3:
+            case SDLK_KP_3:
                 show_hud_ = !show_hud_;
                 break;
             case SDLK_0:
+            case SDLK_KP_0:
                 subtraction_mode_ = !subtraction_mode_;
                 break;
             case SDLK_z:
@@ -495,10 +500,10 @@ void Display::input()
                 zoom_right_ = true;
                 break;
             case SDLK_a:
-                frame_offset_delta_ += 1;
+                frame_offset_delta_++;
                 break;
             case SDLK_d:
-                frame_offset_delta_ -= 1;
+                frame_offset_delta_--;
                 break;
             case SDLK_s:
             {
@@ -537,6 +542,14 @@ void Display::input()
                 break;
             case SDLK_PAGEUP:
                 seek_relative_ += 600.0f;
+                break;
+            case SDLK_PLUS:
+            case SDLK_KP_PLUS:
+                shift_right_frames_++;
+                break;
+            case SDLK_MINUS:
+            case SDLK_KP_MINUS:
+                shift_right_frames_--;
                 break;
             default:
                 break;
@@ -590,4 +603,9 @@ bool Display::get_seek_from_start()
 int Display::get_frame_offset_delta()
 {
     return frame_offset_delta_;
+}
+
+int Display::get_shift_right_frames()
+{
+    return shift_right_frames_;
 }
