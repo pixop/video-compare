@@ -1,5 +1,6 @@
 #include "video_compare.h"
 #include "ffmpeg.h"
+#include "sorted_flat_deque.h"
 #include <algorithm>
 #include <chrono>
 #include <iostream>
@@ -198,8 +199,10 @@ void VideoCompare::video() {
         std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_right{
             nullptr, [](AVFrame* f){ av_frame_free(&f); }};
 
-        int64_t left_pts = 0, left_previous_coded_picture_number = 0, delta_left_pts = 0;
-        int64_t right_pts = 0, right_previous_coded_picture_number = 0, delta_right_pts = 0;
+        int64_t left_pts = 0, left_decoded_picture_number = 0, left_previous_decoded_picture_number = -1, delta_left_pts = 0;
+        int64_t right_pts = 0, right_decoded_picture_number = 0, right_previous_decoded_picture_number = -1, delta_right_pts = 0;
+
+        sorted_flat_deque<int32_t> left_deque(8), right_deque(8);
 
         int64_t right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME;
         int total_right_time_shifted = 0;
@@ -217,16 +220,9 @@ void VideoCompare::video() {
                 if (packet_queue_[0]->isFinished() || packet_queue_[1]->isFinished()) {
                     errorMessage = "Unable to perform seek (end of file reached)";
                 } else {
-                    // a couple of frames must be decoded for delta_right_pts to be valid 
-                    if (delta_right_pts > 0) {
-                        // requires right video delta to have been determined
-                        right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * delta_right_pts;
-
-                        // round down to nearest 2 ms
-                        right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
-                    } else {
-                        errorMessage = "Unable to time shift right video";
-                    }
+                    // compute effective time shift and round down to nearest 2 ms
+                    right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
+                    right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
 
                     seeking_ = true;
                     readyToSeek_[0][0] = false;
@@ -278,11 +274,13 @@ void VideoCompare::video() {
 
                     frame_queue_[0]->pop(frame_left);
                     left_pts = frame_left->pts;
-                    left_previous_coded_picture_number = frame_left->coded_picture_number;
+                    left_previous_decoded_picture_number = -1;
+                    left_decoded_picture_number = 1;
 
                     frame_queue_[1]->pop(frame_right);
                     right_pts = frame_right->pts - right_time_shift;
-                    right_previous_coded_picture_number = frame_right->coded_picture_number;
+                    right_previous_decoded_picture_number = -1;
+                    right_decoded_picture_number = 1;
 
                     left_frames.clear();
                     right_frames.clear();
@@ -302,18 +300,32 @@ void VideoCompare::video() {
                 if ((left_pts < 0) || isBehind(left_pts, right_pts, delta_left_pts)) {
                     adjusting = true;
 
-                    frame_queue_[0]->pop(frame_left);
+                    if (frame_queue_[0]->pop(frame_left)) {
+                        left_decoded_picture_number++;
+                    }
                 }
                 if ((right_pts < 0) || isBehind(right_pts, left_pts, delta_right_pts)) {
                     adjusting = true;
 
-                    frame_queue_[1]->pop(frame_right);
+                    if (frame_queue_[1]->pop(frame_right)) {
+                        right_decoded_picture_number++;
+                    }
                 }
 
                 if (!adjusting && display_->get_play()) {
                     if (!frame_queue_[0]->pop(frame_left) || !frame_queue_[1]->pop(frame_right)) {
+                        if (frame_left != nullptr) {
+                            left_decoded_picture_number++;
+                        }
+                        if (frame_right != nullptr) {
+                            right_decoded_picture_number++;
+                        }
+
                         timer_->update();
                     } else {
+                        left_decoded_picture_number++;
+                        right_decoded_picture_number++;
+
                         store_frames = true;
 
                         if (frame_number > 0) {
@@ -329,22 +341,24 @@ void VideoCompare::video() {
             }
 
             if (frame_left != nullptr) {
-                if (abs(frame_left->coded_picture_number - left_previous_coded_picture_number) == 1) {
-                    delta_left_pts = abs(frame_left->pts - left_pts);
+                if ((left_decoded_picture_number - left_previous_decoded_picture_number) == 1) {
+                    left_deque.push_back(frame_left->pts - left_pts);
+                    delta_left_pts = left_deque.average();
                 }
 
                 left_pts = frame_left->pts;
-                left_previous_coded_picture_number = frame_left->coded_picture_number;
+                left_previous_decoded_picture_number = left_decoded_picture_number;
             }
             if (frame_right != nullptr) {
                 float new_right_pts = frame_right->pts - right_time_shift;
 
-                if (abs(frame_right->coded_picture_number - right_previous_coded_picture_number) == 1) {
-                    delta_right_pts = abs(new_right_pts - right_pts);
+                if ((right_decoded_picture_number - right_previous_decoded_picture_number) == 1) {
+                    right_deque.push_back(new_right_pts - right_pts);
+                    delta_right_pts = right_deque.average();
                 }
 
                 right_pts = new_right_pts;
-                right_previous_coded_picture_number = frame_right->coded_picture_number;
+                right_previous_decoded_picture_number = right_decoded_picture_number;
             }
 
             if (store_frames) {
