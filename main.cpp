@@ -49,17 +49,6 @@ int main(int argc, char **argv)
             {
                 throw std::logic_error{"Two FFmpeg compatible video files must be supplied"};
             }
-            else
-            {
-                if (!fileExists(args.pos[0]))
-                {
-                    throw std::logic_error{"Unable to open the left video file"};
-                }
-                if (!fileExists(args.pos[1]))
-                {
-                    throw std::logic_error{"Unable to open the right video file"};
-                }
-            }
             if (args["display-mode"])
             {
                 const std::string display_mode_arg = args["display-mode"];
