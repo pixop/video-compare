@@ -1,19 +1,12 @@
 #define SDL_MAIN_HANDLED
 #include "video_compare.h"
 #include "argagg.h"
-#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <algorithm>
 #include <regex>
 #include <vector>
-
-bool fileExists(const std::string &filename)
-{
-    std::ifstream fin(filename.c_str());
-    return fin.is_open();
-}
 
 int main(int argc, char **argv)
 {
