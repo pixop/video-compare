@@ -432,7 +432,6 @@ void Display::refresh(
     if (mode_ == Mode::split && show_hud_ && compare_mode)
     {
         int draw_x = std::round(float(mouse_x_) * window_to_drawable_width_factor_);
-        int draw_y = std::round(float(mouse_y_) * window_to_drawable_width_factor_);
 
         // render movable slider(s)
         SDL_SetRenderDrawColor(renderer_, 255, 255, 255, SDL_ALPHA_OPAQUE);
