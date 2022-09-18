@@ -101,12 +101,15 @@ private:
 
     SDL_Rect video_to_screen_space(const SDL_Rect &rect)
     {
+        const float width_scale = (high_dpi_allowed_ ? 2.f : 1.f) / screen_to_video_width_factor_;
+        const float height_scale = (high_dpi_allowed_ ? 2.f : 1.f) / screen_to_video_height_factor_;
+
         return
         {
-            round(float(rect.x) / screen_to_video_width_factor_),
-            round(float(rect.y) / screen_to_video_height_factor_),
-            round(float(rect.w) / screen_to_video_width_factor_),
-            round(float(rect.h) / screen_to_video_height_factor_)
+            round(float(rect.x) * width_scale),
+            round(float(rect.y) * height_scale),
+            round(float(rect.w) * width_scale),
+            round(float(rect.h) * height_scale)
         };
     }
 
