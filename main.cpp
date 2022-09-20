@@ -39,13 +39,18 @@
         delete argv;
     }
 #else
+    #define UNUSED(x) (void)(x)
+
     char** get_argv (int* argc, char **argv)
     {
+        UNUSED(argc);
         return argv;
     }
 
     void free_argv (int argc, char** argv)
     {
+        UNUSED(argc);
+        UNUSED(argv);
     }
 #endif
 
