@@ -79,7 +79,7 @@ int main(int argc, char **argv)
         {
             std::ostringstream usage;
             usage
-                << argv[0] << " 20220918-github" << std::endl
+                << argv[0] << " 20220920-github" << std::endl
                 << std::endl
                 << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl
                 << std::endl;
