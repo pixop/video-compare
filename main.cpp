@@ -8,8 +8,53 @@
 #include <regex>
 #include <vector>
 
+#ifdef _WIN32
+    #include <Windows.h>
+
+    // Credits to Mircea Neacsu, https://github.com/neacsum/utf8
+    char** get_argv (int* argc, char **argv)
+    {
+        char** uargv = nullptr;
+        wchar_t** wargv = CommandLineToArgvW (GetCommandLineW (), argc);
+        if (wargv)
+        {
+            uargv = new char* [*argc];
+            for (int i = 0; i < *argc; i++)
+            {
+                int nc = WideCharToMultiByte (CP_UTF8, 0, wargv[i], -1, 0, 0, 0, 0);
+                uargv[i] = new char[nc + 1];
+                WideCharToMultiByte (CP_UTF8, 0, wargv[i], -1, uargv[i], nc, 0, 0);
+            }
+            LocalFree (wargv);
+        }
+        return uargv;
+    }
+
+    void free_argv (int argc, char** argv)
+    {
+        for (int i = 0; i < argc; i++)
+        {
+            delete argv[i];
+        }
+        delete argv;
+    }
+#else
+    char** get_argv (int* argc, char **argv)
+    {
+        return argv;
+    }
+
+    void free_argv (int argc, char** argv)
+    {
+    }
+#endif
+
 int main(int argc, char **argv)
 {
+    int exit_code = 0;
+
+    char **argv_decoded = get_argv(&argc, argv);
+
     try
     {
         argagg::parser argparser{{{"help", {"-h", "--help"}, "show help", 0},
@@ -19,7 +64,7 @@ int main(int argc, char **argv)
                                   {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of milliseconds", 1}}};
 
         argagg::parser_results args;
-        args = argparser.parse(argc, argv);
+        args = argparser.parse(argc, argv_decoded);
 
         std::tuple<int, int> window_size(-1, -1);
         double time_shift_ms = 0;
@@ -101,8 +146,10 @@ int main(int argc, char **argv)
     catch (const std::exception &e)
     {
         std::cerr << "Error: " << e.what() << std::endl;
-        return -1;
+        exit_code = -1;
     }
 
-    return 0;
+    free_argv(argc, argv_decoded);
+
+    return exit_code;
 }
