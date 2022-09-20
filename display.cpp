@@ -122,13 +122,13 @@ Display::Display(
                              mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height),
                          "renderer");
 
-    SDL_Surface *textSurface = TTF_RenderText_Blended(small_font_, left_file_name.c_str(), textColor);
+    SDL_Surface *textSurface = TTF_RenderUTF8_Blended(small_font_, left_file_name.c_str(), textColor);
     left_text_texture_ = SDL_CreateTextureFromSurface(renderer_, textSurface);
     left_text_width_ = textSurface->w;
     left_text_height_ = textSurface->h;
     SDL_FreeSurface(textSurface);
 
-    textSurface = TTF_RenderText_Blended(small_font_, right_file_name.c_str(), textColor);
+    textSurface = TTF_RenderUTF8_Blended(small_font_, right_file_name.c_str(), textColor);
     right_text_texture_ = SDL_CreateTextureFromSurface(renderer_, textSurface);
     right_text_width_ = textSurface->w;
     right_text_height_ = textSurface->h;
