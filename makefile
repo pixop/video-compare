@@ -1,4 +1,4 @@
-CXXFLAGS = -g3 -Ofast -mavx -std=c++14 -D__STDC_CONSTANT_MACROS \
+CXXFLAGS = -g3 -Ofast -std=c++14 -D__STDC_CONSTANT_MACROS \
 		   -Wall -Wextra -Wno-deprecated -Wno-deprecated-declarations \
 		   -Wdisabled-optimization -Wctor-dtor-privacy \
 		   -Woverloaded-virtual -Wno-unused -Wno-missing-field-initializers
