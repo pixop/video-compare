@@ -107,11 +107,11 @@ brew install ffmpeg sdl2 sdl2_ttf
 
 ## Build
 
-Compile and link the source code into the `video-compare` executable stored in the current directory:
+Compile the source code:
 
     make
     
-To perform a system wide installation of `video-compare`:
+The linked `video-compare` executable will be created in the soure code directory. To perform a system wide installation:
 
     make install
 
