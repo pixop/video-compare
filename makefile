@@ -15,12 +15,15 @@ endif
 ifneq "$(wildcard /opt/homebrew)" ""
   CXXFLAGS += -I/opt/homebrew/include/
   LDLIBS += -L/opt/homebrew/lib/
+  BINDIR = /opt/homebrew/bin/
 else ifneq "$(wildcard /opt/local)" ""
   CXXFLAGS += -I/opt/local/include/
   LDLIBS += -L/opt/local/lib/
+  BINDIR = /opt/local/bin/
 else
   CXXFLAGS += -I/usr/local/include/
   LDLIBS += -L/usr/local/lib/
+  BINDIR = /usr/local/bin/
 endif
 
 src = $(wildcard *.cpp)
@@ -44,3 +47,6 @@ test: $(target)
 .PHONY: clean
 clean:
 	$(RM) $(obj) $(target) $(dep)
+
+install: $(target)
+	install video-compare $(BINDIR)
