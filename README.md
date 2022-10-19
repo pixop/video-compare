@@ -107,7 +107,15 @@ brew install ffmpeg sdl2 sdl2_ttf
 
 ## Build
 
+Compile the source code:
+
     make
+    
+The linked `video-compare` executable will be created in the soure code directory. To perform a system wide installation:
+
+    make install
+
+Note that in most environments you probably need root privileges to perform this operation (hint: use e.g. `sudo`).
 
 ## Notes
 
