@@ -115,7 +115,7 @@ The linked `video-compare` executable will be created in the soure code director
 
     make install
 
-Note that in most environments you probably need root privileges to perform this operation (hint: use e.g. `sudo`).
+Note that root privileges are required to perform this operation in most environments (hint: use e.g. `sudo`).
 
 ## Notes
 
