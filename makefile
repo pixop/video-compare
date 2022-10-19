@@ -49,4 +49,4 @@ clean:
 	$(RM) $(obj) $(target) $(dep)
 
 install: $(target)
-	install video-compare $(BINDIR)
+	install -s video-compare $(BINDIR)
