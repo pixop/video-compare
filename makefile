@@ -3,10 +3,10 @@ CXXFLAGS = -g3 -Ofast -std=c++14 -D__STDC_CONSTANT_MACROS \
 		   -Wdisabled-optimization -Wctor-dtor-privacy \
 		   -Woverloaded-virtual -Wno-unused -Wno-missing-field-initializers
 
-ifeq ($(shell uname), CYGWIN_NT-10.0)
+ifeq ($(findstring CYGWIN_NT-10.0, $(shell uname)), CYGWIN_NT-10.0)
   CXX = x86_64-w64-mingw32-g++
-  CXXFLAGS += -Iffmpeg-5.0.1-full_build-shared/include/
-  LDLIBS = -Lffmpeg-5.0.1-full_build-shared/lib/ -lavformat -lavcodec -lavutil -lswresample -lswscale -lSDL2 -lSDL2_ttf
+  CXXFLAGS += -Iffmpeg-5.1.2-full_build-shared/include/
+  LDLIBS = -Lffmpeg-5.1.2-full_build-shared/lib/ -lavformat -lavcodec -lavutil -lswresample -lswscale -lSDL2 -lSDL2_ttf
 else
   CXX = g++
   LDLIBS = -lavformat -lavcodec -lavutil -lswscale -lSDL2 -lSDL2_ttf -pthread
