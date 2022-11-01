@@ -56,9 +56,8 @@
 
 int main(int argc, char **argv)
 {
-    int exit_code = 0;
-
     char **argv_decoded = get_argv(&argc, argv);
+    int exit_code = 0;
 
     try
     {
@@ -116,11 +115,11 @@ int main(int argc, char **argv)
             if (args["window-size"])
             {
                 const std::string window_size_arg = args["window-size"];
-                const std::regex window_size_re("(\\d+)x(\\d+)");
+                const std::regex window_size_re("(\\d*)x(\\d*)");
 
                 if (!std::regex_match(window_size_arg, window_size_re))
                 {
-                    throw std::logic_error{"Cannot parse window size argument (required format: [width]x[height], e.g. 800x600)"};
+                    throw std::logic_error{"Cannot parse window size argument (required format: [width]x[height], e.g. 800x600, 1280x or x480)"};
                 }
 
                 const std::regex delimiter_re("x");
@@ -129,7 +128,7 @@ int main(int argc, char **argv)
                     std::sregex_token_iterator{begin(window_size_arg), end(window_size_arg), delimiter_re, -1},
                     std::sregex_token_iterator{});
 
-                window_size = std::make_tuple(std::stoi(token_vec[0]), std::stoi(token_vec[1]));
+                window_size = std::make_tuple(!token_vec[0].empty() ? std::stoi(token_vec[0]) : -1, !token_vec[1].empty() ? std::stoi(token_vec[1]) : -1);
             }
             if (args["time-shift"])
             {

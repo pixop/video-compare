@@ -42,8 +42,9 @@ for e.g. displaying UHD 4K video on a Retina 5K display:
     ./video-compare -d video1.mp4 video2.mp4
 
 Use a specific window size instead of deriving the window size from the video dimensions. The video
-frame will be scaled to fit. Useful for downscaling high resolution video onto a low resolution
-display:
+frame will be scaled to fit. If either width or height is left out, the missing value will be calculated
+from the other specified dimension so that aspect ratio is maintained. Useful for downscaling high resolution
+video onto a low resolution display:
 
     ./video-compare -w 1280x720 video1.mp4 video2.mp4
 
@@ -110,7 +111,7 @@ brew install ffmpeg sdl2 sdl2_ttf
 Compile the source code:
 
     make
-    
+
 The linked `video-compare` executable will be created in the soure code directory. To perform a system wide installation:
 
     make install
@@ -128,17 +129,17 @@ Note that root privileges are required to perform this operation in most environ
 
 ### Send To integration in Windows File Explorer
 
-You can fire up the tool directly from the File Explorer when you don't need to specify 
-any other arguments than the inputs via Right click -> Send To -> video-compare. 
+You can fire up the tool directly from the File Explorer when you don't need to specify
+any other arguments than the inputs via Right click -> Send To -> video-compare.
 
 Here is how this integration works:
 
 https://user-images.githubusercontent.com/8549626/166630445-c8c511b7-005f-48aa-83bc-0eb9676cfa2a.mp4
 
-You can do that quickly by selecting two files, then right clicking any of them, pressing N (focuses se**n**d to), 
+You can do that quickly by selecting two files, then right clicking any of them, pressing N (focuses se**n**d to),
 then V (selects **v**ideo-compare).
 
-To get video-compare to appear in the `Send To` field you will need to open the `send to` folder, which 
+To get video-compare to appear in the `Send To` field you will need to open the `send to` folder, which
 you can access by typing `shell:sendto` in Run (Windows + R), then simply make a shortcut to `video-compare.exe`.
 
 Thanks to [couleurm](https://github.com/couleurm) for the sharing this tip and creating the screen recording above.
