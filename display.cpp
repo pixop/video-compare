@@ -81,8 +81,35 @@ Display::Display(
                                           left_file_stem_{getFileStem(left_file_name)},
                                           right_file_stem_{getFileStem(right_file_name)}
 {
-    const int window_width = std::get<0>(window_size) > 0 ? std::get<0>(window_size) : mode == Mode::hstack ? width * 2 : width;
-    const int window_height = std::get<1>(window_size) > 0 ? std::get<1>(window_size) : mode == Mode::vstack ? height * 2 : height;
+    const int auto_width = mode == Mode::hstack ? width * 2 : width;
+    const int auto_height = mode == Mode::vstack ? height * 2 : height;
+
+    int window_width;
+    int window_height;
+
+    if (std::get<0>(window_size) < 0 && std::get<1>(window_size) < 0)
+    {
+        window_width = auto_width;
+        window_height = auto_height;
+    }
+    else
+    {
+        if (std::get<0>(window_size) < 0)
+        {
+            window_height = std::get<1>(window_size);
+            window_width = (float) auto_width / (float) auto_height * window_height;
+        }
+        else if (std::get<1>(window_size) < 0)
+        {
+            window_width = std::get<0>(window_size);
+            window_height = (float) auto_height / (float) auto_width * window_width;
+        }
+        else
+        {
+            window_width = std::get<0>(window_size);
+            window_height = std::get<1>(window_size);
+        }
+    }
 
     const int create_window_flags = SDL_WINDOW_SHOWN;
 
