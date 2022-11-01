@@ -128,7 +128,7 @@ int main(int argc, char **argv)
                     std::sregex_token_iterator{begin(window_size_arg), end(window_size_arg), delimiter_re, -1},
                     std::sregex_token_iterator{});
 
-                window_size = std::make_tuple(!token_vec[0].empty() ? std::stoi(token_vec[0]) : -1, !token_vec[1].empty() ? std::stoi(token_vec[1]) : -1);
+                window_size = std::make_tuple(!token_vec[0].empty() ? std::stoi(token_vec[0]) : -1, token_vec.size() == 2 ? std::stoi(token_vec[1]) : -1);
             }
             if (args["time-shift"])
             {
