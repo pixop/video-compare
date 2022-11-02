@@ -64,7 +64,7 @@ int main(int argc, char **argv)
         argagg::parser argparser{{{"help", {"-h", "--help"}, "show help", 0},
                                   {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
                                   {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
-                                  {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600)", 1},
+                                  {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
                                   {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of milliseconds", 1}}};
 
         argagg::parser_results args;
