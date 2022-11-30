@@ -156,8 +156,6 @@ bool VideoCompare::process_packet(const int video_idx, AVPacket *packet, AVFrame
 
 void VideoCompare::decode_video(const int video_idx) {
     try {
-        AVPacket *prev_packet = nullptr;
-
         for (;;) {
             // Create AVFrame and AVQueue
             std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
@@ -167,10 +165,8 @@ void VideoCompare::decode_video(const int video_idx) {
 
             // Read packet from queue
             if (!packet_queue_[video_idx]->pop(packet)) {
-                if (prev_packet != nullptr) {
-                    // Decode frames cached in the decoder
-                    while (process_packet(video_idx, prev_packet, frame_decoded.get()));
-                }
+                // Decode frames cached in the decoder
+                while (process_packet(video_idx, packet.get(), frame_decoded.get()));
 
                 frame_queue_[video_idx]->finished();
                 break;
@@ -188,8 +184,6 @@ void VideoCompare::decode_video(const int video_idx) {
 
             // If the packet didn't send, receive more frames and try again
             while (!process_packet(video_idx, packet.get(), frame_decoded.get()) && !seeking_);
-
-            prev_packet = packet.get();
         }
     } catch (...) {
         exception_ = std::current_exception();
