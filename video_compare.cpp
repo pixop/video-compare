@@ -117,20 +117,61 @@ void VideoCompare::thread_decode_video_right() {
     decode_video(1);
 }
 
+bool VideoCompare::process_packet(const int video_idx, AVPacket *packet, AVFrame *frame_decoded) {
+    const AVRational microseconds = {1, AV_TIME_BASE};
+
+    bool sent = video_decoder_[video_idx]->send(packet);
+
+    // If a whole frame has been decoded,
+    // adjust time stamps and add to queue
+    while (video_decoder_[video_idx]->receive(frame_decoded)) {
+        frame_decoded->pts = av_rescale_q(
+            frame_decoded->pts,
+            demuxer_[video_idx]->time_base(),
+            microseconds);
+
+        std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
+            frame_converted{ av_frame_alloc(), [](AVFrame* f){ av_free(f->data[0]); }};
+
+        if (av_frame_copy_props(frame_converted.get(),
+            frame_decoded) < 0) {
+            throw std::runtime_error("Copying frame properties");
+        }
+        if (av_image_alloc(
+            frame_converted->data, frame_converted->linesize,
+            format_converter_[video_idx]->dest_width(), format_converter_[video_idx]->dest_height(),
+            format_converter_[video_idx]->output_pixel_format(), 1) < 0) {
+            throw std::runtime_error("Allocating picture");
+        }
+        (*format_converter_[video_idx])(
+            frame_decoded, frame_converted.get());
+
+        if (!frame_queue_[video_idx]->push(move(frame_converted))) {
+            break;
+        }
+    }
+
+    return sent;
+}
+
 void VideoCompare::decode_video(const int video_idx) {
     try {
-        const AVRational microseconds = {1, AV_TIME_BASE};
+        AVPacket *prev_packet = nullptr;
 
         for (;;) {
             // Create AVFrame and AVQueue
             std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
-                frame_decoded{
-                    av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); }};
-            std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet{
-                nullptr, [](AVPacket* p){ av_packet_unref(p); delete p; }};
+                frame_decoded{ av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); }};
+            std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>
+                packet{ nullptr, [](AVPacket* p){ av_packet_unref(p); delete p; }};
 
             // Read packet from queue
             if (!packet_queue_[video_idx]->pop(packet)) {
+                if (prev_packet != nullptr) {
+                    // Decode frames cached in the decoder
+                    while (process_packet(video_idx, prev_packet, frame_decoded.get()));
+                }
+
                 frame_queue_[video_idx]->finished();
                 break;
             }
@@ -146,40 +187,9 @@ void VideoCompare::decode_video(const int video_idx) {
             }
 
             // If the packet didn't send, receive more frames and try again
-            bool sent = false;
-            while (!sent && !seeking_) {
-                sent = video_decoder_[video_idx]->send(packet.get());
+            while (!process_packet(video_idx, packet.get(), frame_decoded.get()) && !seeking_);
 
-                // If a whole frame has been decoded,
-                // adjust time stamps and add to queue
-                while (video_decoder_[video_idx]->receive(frame_decoded.get())) {
-                    frame_decoded->pts = av_rescale_q(
-                        frame_decoded->pkt_dts,
-                        demuxer_[video_idx]->time_base(),
-                        microseconds);
-
-                    std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
-                        frame_converted{
-                            av_frame_alloc(),
-                            [](AVFrame* f){ av_free(f->data[0]); }};
-                    if (av_frame_copy_props(frame_converted.get(),
-                        frame_decoded.get()) < 0) {
-                        throw std::runtime_error("Copying frame properties");
-                    }
-                    if (av_image_alloc(
-                        frame_converted->data, frame_converted->linesize,
-                        format_converter_[video_idx]->dest_width(), format_converter_[video_idx]->dest_height(),
-                        format_converter_[video_idx]->output_pixel_format(), 1) < 0) {
-                        throw std::runtime_error("Allocating picture");
-                    }
-                    (*format_converter_[video_idx])(
-                        frame_decoded.get(), frame_converted.get());
-
-                    if (!frame_queue_[video_idx]->push(move(frame_converted))) {
-                        break;
-                    }
-                }
-            }
+            prev_packet = packet.get();
         }
     } catch (...) {
         exception_ = std::current_exception();
