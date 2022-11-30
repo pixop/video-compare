@@ -165,7 +165,7 @@ void VideoCompare::decode_video(const int video_idx) {
 
             // Read packet from queue
             if (!packet_queue_[video_idx]->pop(packet)) {
-                // Decode frames cached in the decoder
+                // Flush remaining frames cached in the decoder
                 while (process_packet(video_idx, packet.get(), frame_decoded.get()));
 
                 frame_queue_[video_idx]->finished();
