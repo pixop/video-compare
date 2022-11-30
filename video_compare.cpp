@@ -157,7 +157,7 @@ bool VideoCompare::process_packet(const int video_idx, AVPacket *packet, AVFrame
 void VideoCompare::decode_video(const int video_idx) {
     try {
         for (;;) {
-            // Create AVFrame and AVQueue
+            // Create AVFrame and AVPacket
             std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
                 frame_decoded{ av_frame_alloc(), [](AVFrame* f){ av_frame_free(&f); }};
             std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>
