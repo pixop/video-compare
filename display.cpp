@@ -26,13 +26,12 @@ inline T check_SDL(T value, const std::string &message)
 
 inline int clampIntToByteRange(int value)
 {
-    return value > 255 ? 255 : value < 0 ? 0
-                                         : value;
+    return value > 255 ? 255 : value < 0 ? 0 : value;
 }
 
 inline uint8_t clampIntToByte(int value)
 {
-    return (uint8_t)clampIntToByteRange(value);
+    return (uint8_t) clampIntToByteRange(value);
 }
 
 // Credits to Kemin Zhou for this approach which does not require Boost or C++17
