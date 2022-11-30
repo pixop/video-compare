@@ -28,6 +28,7 @@ private:
 
     void thread_decode_video_left();
     void thread_decode_video_right();
+    bool process_packet(const int video_idx, AVPacket *packet, AVFrame *frame_decoded);
     void decode_video(const int video_idx);
     void video();
 
