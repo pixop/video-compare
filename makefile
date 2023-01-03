@@ -6,10 +6,10 @@ CXXFLAGS = -g3 -Ofast -std=c++14 -D__STDC_CONSTANT_MACROS \
 ifeq ($(findstring CYGWIN_NT-10.0, $(shell uname)), CYGWIN_NT-10.0)
   CXX = x86_64-w64-mingw32-g++
   CXXFLAGS += -Iffmpeg-5.1.2-full_build-shared/include/
-  LDLIBS = -Lffmpeg-5.1.2-full_build-shared/lib/ -lavformat -lavcodec -lavutil -lswresample -lswscale -lSDL2 -lSDL2_ttf
+  LDLIBS = -Lffmpeg-5.1.2-full_build-shared/lib/ -lavformat -lavcodec -lavfilter -lavutil -lswresample -lswscale -lSDL2 -lSDL2_ttf
 else
   CXX = g++
-  LDLIBS = -lavformat -lavcodec -lavutil -lswscale -lSDL2 -lSDL2_ttf -pthread
+  LDLIBS = -lavformat -lavcodec -lavfilter -lavutil -lswscale -lSDL2 -lSDL2_ttf -pthread
 endif
 
 ifneq "$(wildcard /opt/homebrew)" ""
