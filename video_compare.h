@@ -5,6 +5,7 @@
 #include "queue.h"
 #include "timer.h"
 #include "video_decoder.h"
+#include "video_filterer.h"
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -36,6 +37,7 @@ private:
     double time_shift_ms_;
     std::unique_ptr<Demuxer> demuxer_[2];
     std::unique_ptr<VideoDecoder> video_decoder_[2];
+    std::unique_ptr<VideoFilterer> video_filterer_[2];
     size_t max_width_;
     size_t max_height_;
     std::unique_ptr<FormatConverter> format_converter_[2];

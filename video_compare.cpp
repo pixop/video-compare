@@ -32,11 +32,14 @@ VideoCompare::VideoCompare(const Display::Mode display_mode, const bool high_dpi
     video_decoder_{
         std::make_unique<VideoDecoder>(demuxer_[0]->video_codec_parameters()),
         std::make_unique<VideoDecoder>(demuxer_[1]->video_codec_parameters())},
-    max_width_{std::max(video_decoder_[0]->width(), video_decoder_[1]->width())},
-    max_height_{std::max(video_decoder_[0]->height(), video_decoder_[1]->height())},
+    video_filterer_{
+        std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get()),
+        std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get())},
+    max_width_{std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width())},
+    max_height_{std::max(video_filterer_[0]->dest_height(), video_filterer_[1]->dest_height())},
     format_converter_{
-        std::make_unique<FormatConverter>(video_decoder_[0]->width(), video_decoder_[0]->height(), max_width_, max_height_, video_decoder_[0]->pixel_format(), AV_PIX_FMT_RGB24),
-        std::make_unique<FormatConverter>(video_decoder_[1]->width(), video_decoder_[1]->height(), max_width_, max_height_, video_decoder_[1]->pixel_format(), AV_PIX_FMT_RGB24)},
+        std::make_unique<FormatConverter>(video_filterer_[0]->dest_width(), video_filterer_[0]->dest_height(), max_width_, max_height_, video_decoder_[0]->pixel_format(), AV_PIX_FMT_RGB24),
+        std::make_unique<FormatConverter>(video_filterer_[1]->dest_width(), video_filterer_[1]->dest_height(), max_width_, max_height_, video_decoder_[1]->pixel_format(), AV_PIX_FMT_RGB24)},
     display_{std::make_unique<Display>(display_mode, high_dpi_allowed, window_size, max_width_, max_height_, left_file_name, right_file_name)},
     timer_{std::make_unique<Timer>()},
     packet_queue_{
@@ -130,24 +133,40 @@ bool VideoCompare::process_packet(const int video_idx, AVPacket *packet, AVFrame
             demuxer_[video_idx]->time_base(),
             microseconds);
 
+        // send decodes frame to filterer
+        if (!video_filterer_[video_idx]->send(frame_decoded)) {
+            throw std::runtime_error("Error while feeding the filtergraph");
+        }
+
         std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
-            frame_converted{ av_frame_alloc(), [](AVFrame* f){ av_free(f->data[0]); }};
+            frame_filtered{ av_frame_alloc(), [](AVFrame* f){ av_free(f->data[0]); }};
 
-        if (av_frame_copy_props(frame_converted.get(),
-            frame_decoded) < 0) {
-            throw std::runtime_error("Copying frame properties");
-        }
-        if (av_image_alloc(
-            frame_converted->data, frame_converted->linesize,
-            format_converter_[video_idx]->dest_width(), format_converter_[video_idx]->dest_height(),
-            format_converter_[video_idx]->output_pixel_format(), 1) < 0) {
-            throw std::runtime_error("Allocating picture");
-        }
-        (*format_converter_[video_idx])(
-            frame_decoded, frame_converted.get());
+        while(true) {
+            // get next filtered frame
+            if (!video_filterer_[video_idx]->receive(frame_filtered.get())) {
+                break;
+            }
 
-        if (!frame_queue_[video_idx]->push(move(frame_converted))) {
-            break;
+            // scale and convert pixel format before pushing to frame queue for displaying
+            std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
+                frame_converted{ av_frame_alloc(), [](AVFrame* f){ av_free(f->data[0]); }};
+
+            if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
+                throw std::runtime_error("Copying filtered frame properties");
+            }
+            if (av_image_alloc(
+                frame_converted->data, frame_converted->linesize,
+                format_converter_[video_idx]->dest_width(), format_converter_[video_idx]->dest_height(),
+                format_converter_[video_idx]->output_pixel_format(), 1) < 0) {
+                throw std::runtime_error("Allocating converted picture");
+            }
+            (*format_converter_[video_idx])(frame_filtered.get(), frame_converted.get());
+
+            av_frame_unref(frame_filtered.get());
+
+            if (!frame_queue_[video_idx]->push(move(frame_converted))) {
+                return sent;
+            }
         }
     }
 
