@@ -98,14 +98,6 @@ On Debian GNU/Linux the required development packages can be installed via `apt`
 apt install libavformat-dev libswscale-dev libsdl2-dev libsdl2-ttf-dev
 ```
 
-For macOS, these dependencies can be installed with [Homebrew](https://brew.sh/):
-
-```sh
-brew install ffmpeg sdl2 sdl2_ttf
-```
-
-<small>`video-compare` will hopefully be [added to Homebrew in the future](https://github.com/pixop/video-compare/issues/1).</small>
-
 ## Build
 
 Compile the source code:
