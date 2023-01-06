@@ -14,6 +14,16 @@ A movable slider enables easy viewing of the difference across any region of int
 Thanks to the versatility of FFmpeg, it is actually also possible to use `video-compare` to compare
 two images. The common PNG and JPEG formats have been successfully tested to work.
 
+## Installation
+
+Install [via Homebrew](https://formulae.brew.sh/formula/video-compare):
+
+```
+brew install video-compare
+```
+
+Or [build it yourself](#build).
+
 ## Screenshots
 
 Visual compare mode:
