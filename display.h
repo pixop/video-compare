@@ -113,6 +113,8 @@ private:
         };
     }
 
+    void render_text(const int x, const int y, SDL_Texture *texture, const int texture_width, const int texture_height, const int border_extension, const int max_text_width, const bool left_adjust);
+
 public:
     Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<int, int> window_size, const unsigned width, const unsigned height, const std::string &left_file_name, const std::string &right_file_name);
     ~Display();
