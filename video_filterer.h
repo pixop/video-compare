@@ -17,18 +17,16 @@ public:
 
     size_t src_width() const;
     size_t src_height() const;
+    AVPixelFormat src_pixel_format() const;
     size_t dest_width() const;
     size_t dest_height() const;
+    AVPixelFormat dest_pixel_format() const;
 
 private:
-    int init_filters(const AVCodecContext *dec_ctx, const AVRational time_base, const char *filter_description);
+    int init_filters(const AVCodecContext *dec_ctx, const AVRational time_base, const std::string &filter_description);
 
 private:
-    const VideoDecoder *video_decoder_;
-
-    bool swap_dimensions_;
-
-    AVFilterContext *buffersink_ctx_;
     AVFilterContext *buffersrc_ctx_;
+    AVFilterContext *buffersink_ctx_;
     AVFilterGraph *filter_graph_;
 };

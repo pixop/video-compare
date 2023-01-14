@@ -123,7 +123,7 @@ public:
         std::array<uint8_t *, 3> planes_right, std::array<size_t, 3> pitches_right,
         const float left_position,
         const float right_position,
-        const char *current_total_browsable,
+        const std::string &current_total_browsable,
         const std::string &error_message);
 
     // Handle events
