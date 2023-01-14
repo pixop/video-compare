@@ -1,6 +1,7 @@
 #include "video_compare.h"
 #include "ffmpeg.h"
 #include "sorted_flat_deque.h"
+#include "string_utils.h"
 #include <algorithm>
 #include <chrono>
 #include <iostream>
@@ -38,8 +39,8 @@ VideoCompare::VideoCompare(const Display::Mode display_mode, const bool high_dpi
     max_width_{std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width())},
     max_height_{std::max(video_filterer_[0]->dest_height(), video_filterer_[1]->dest_height())},
     format_converter_{
-        std::make_unique<FormatConverter>(video_filterer_[0]->dest_width(), video_filterer_[0]->dest_height(), max_width_, max_height_, video_decoder_[0]->pixel_format(), AV_PIX_FMT_RGB24),
-        std::make_unique<FormatConverter>(video_filterer_[1]->dest_width(), video_filterer_[1]->dest_height(), max_width_, max_height_, video_decoder_[1]->pixel_format(), AV_PIX_FMT_RGB24)},
+        std::make_unique<FormatConverter>(video_filterer_[0]->dest_width(), video_filterer_[0]->dest_height(), max_width_, max_height_, video_filterer_[0]->dest_pixel_format(), AV_PIX_FMT_RGB24),
+        std::make_unique<FormatConverter>(video_filterer_[1]->dest_width(), video_filterer_[1]->dest_height(), max_width_, max_height_, video_filterer_[1]->dest_pixel_format(), AV_PIX_FMT_RGB24)},
     display_{std::make_unique<Display>(display_mode, high_dpi_allowed, window_size, max_width_, max_height_, left_file_name, right_file_name)},
     timer_{std::make_unique<Timer>()},
     packet_queue_{
@@ -414,8 +415,7 @@ void VideoCompare::video() {
 
             frame_offset = std::min(std::max(0, frame_offset + display_->get_frame_offset_delta()), (int) left_frames.size() - 1);
 
-            char current_total_browsable[20];
-            sprintf(current_total_browsable, "%d/%d", frame_offset + 1, (int) left_frames.size());
+            const std::string current_total_browsable = string_sprintf("%d/%d", frame_offset + 1, (int) left_frames.size());
 
             if (frame_offset >= 0) {
                 if (!display_->get_swap_left_right()) {

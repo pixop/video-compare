@@ -1,5 +1,6 @@
 #include "display.h"
 #include "source_code_pro_regular_ttf.h"
+#include "string_utils.h"
 #include <stdexcept>
 #include <string>
 #include <sstream>
@@ -163,7 +164,7 @@ Display::Display(
     diff_buffer_ = new uint8_t[video_width_ * video_height_ * 3];
     uint8_t *diff_plane_0 = diff_buffer_;
 
-    diff_planes_ = {diff_plane_0, NULL, NULL};
+    diff_planes_ = {diff_plane_0, nullptr, nullptr};
 }
 
 Display::~Display()
@@ -269,7 +270,7 @@ void Display::refresh(
     std::array<uint8_t *, 3> planes_right, std::array<size_t, 3> pitches_right,
     const float left_position,
     const float right_position,
-    const char *current_total_browsable,
+    const std::string &current_total_browsable,
     const std::string &error_message)
 {
     if (save_image_frames_) {
@@ -356,7 +357,6 @@ void Display::refresh(
     if (show_hud_)
     {
         // render background rectangles and text on top
-        char buffer[20];
         int border_extension = 3 * font_scale_;
         int border_extension_x2 = border_extension * 2;
         int line1_y = 20;
@@ -367,8 +367,8 @@ void Display::refresh(
         if (show_left_)
         {
             // file name and current position of left video
-            sprintf(buffer, "%.2f", left_position);
-            textSurface = TTF_RenderText_Blended(small_font_, buffer, textColor);
+            const std::string left_pos_str = string_sprintf("%.2f", left_position);
+            textSurface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), textColor);
             SDL_Texture *left_position_text_texture = SDL_CreateTextureFromSurface(renderer_, textSurface);
             int left_position_text_width = textSurface->w;
             int left_position_text_height = textSurface->h;
@@ -379,16 +379,16 @@ void Display::refresh(
             fill2_rect = {line1_y - border_extension, line2_y - border_extension, left_position_text_width + border_extension_x2, left_position_text_height + border_extension_x2};
             SDL_RenderFillRect(renderer_, &fill2_rect);
             text1_rect = {line1_y, line1_y, left_text_width_, left_text_height_};
-            SDL_RenderCopy(renderer_, left_text_texture_, NULL, &text1_rect);
+            SDL_RenderCopy(renderer_, left_text_texture_, nullptr, &text1_rect);
             text2_rect = {line1_y, line2_y, left_position_text_width, left_position_text_height};
-            SDL_RenderCopy(renderer_, left_position_text_texture, NULL, &text2_rect);
+            SDL_RenderCopy(renderer_, left_position_text_texture, nullptr, &text2_rect);
             SDL_DestroyTexture(left_position_text_texture);
         }
         if (show_right_)
         {
             // file name and current position of right video
-            sprintf(buffer, "%.2f", right_position);
-            textSurface = TTF_RenderText_Blended(small_font_, buffer, textColor);
+            const std::string right_pos_str = string_sprintf("%.2f", right_position);
+            textSurface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), textColor);
             SDL_Texture *right_position_text_texture = SDL_CreateTextureFromSurface(renderer_, textSurface);
             int right_position_text_width = textSurface->w;
             int right_position_text_height = textSurface->h;
@@ -411,14 +411,14 @@ void Display::refresh(
 
             SDL_RenderFillRect(renderer_, &fill1_rect);
             SDL_RenderFillRect(renderer_, &fill2_rect);
-            SDL_RenderCopy(renderer_, right_text_texture_, NULL, &text1_rect);
-            SDL_RenderCopy(renderer_, right_position_text_texture, NULL, &text2_rect);
+            SDL_RenderCopy(renderer_, right_text_texture_, nullptr, &text1_rect);
+            SDL_RenderCopy(renderer_, right_position_text_texture, nullptr, &text2_rect);
 
             SDL_DestroyTexture(right_position_text_texture);
         }
 
         // current frame / number of frames in history buffer
-        textSurface = TTF_RenderText_Blended(small_font_, current_total_browsable, textColor);
+        textSurface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), textColor);
         SDL_Texture *current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, textSurface);
         int current_total_browsable_text_width = textSurface->w;
         int current_total_browsable_text_height = textSurface->h;
@@ -427,7 +427,7 @@ void Display::refresh(
         fill1_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension, line1_y - border_extension, current_total_browsable_text_width + border_extension_x2, current_total_browsable_text_height + border_extension_x2};
         SDL_RenderFillRect(renderer_, &fill1_rect);
         text1_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, line1_y, current_total_browsable_text_width, current_total_browsable_text_height};
-        SDL_RenderCopy(renderer_, current_total_browsable_text_texture, NULL, &text1_rect);
+        SDL_RenderCopy(renderer_, current_total_browsable_text_texture, nullptr, &text1_rect);
         SDL_DestroyTexture(current_total_browsable_text_texture);
     }
 
@@ -452,7 +452,7 @@ void Display::refresh(
 
         SDL_SetTextureAlphaMod(error_message_texture_, 255 * keep_alpha);
         text1_rect = {drawable_width_ / 2 - error_message_width_ / 2, drawable_height_ / 2 - error_message_height_ / 2, error_message_width_, error_message_height_};
-        SDL_RenderCopy(renderer_, error_message_texture_, NULL, &text1_rect);
+        SDL_RenderCopy(renderer_, error_message_texture_, nullptr, &text1_rect);
     }
 
     if (mode_ == Mode::split && show_hud_ && compare_mode)

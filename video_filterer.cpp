@@ -1,84 +1,82 @@
 #include "video_filterer.h"
 #include "ffmpeg.h"
+#include "string_utils.h"
 #include <string>
 #include <iostream>
 
-VideoFilterer::VideoFilterer(const Demuxer *demuxer, const VideoDecoder *video_decoder) :
-    video_decoder_(video_decoder),
-    swap_dimensions_((demuxer->rotation() == 90) || (demuxer->rotation() == 270)) {
-    char common_filters[256] = ""; // e.g. "yadif," (see FFmpeg documentation, please do not add any scaling and/or pixel format conversion filters for now)
-    const char *rotation_filters;
+VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder *video_decoder) :
+    filter_graph_(avfilter_graph_alloc()) {
+    std::vector<std::string> filters;
+
+    // see FFmpeg documentation for more info on video filters
+    //
+    // filters.push_back("format=gray");
+    // filters.push_back("yadif");
 
     if (demuxer->rotation() == 90) {
-        rotation_filters = "transpose=clock";
+        filters.push_back("transpose=clock");
     } else if (demuxer->rotation() == 270) {
-        rotation_filters = "transpose=cclock";
+        filters.push_back("transpose=cclock");
     } else if (demuxer->rotation() == 180) {
-        rotation_filters = "hflip,vflip";
+        filters.push_back("hflip");
+        filters.push_back("vflip");
     } else {
-        rotation_filters = "copy";
+        filters.push_back("copy");
     }
 
-    ffmpeg::check(init_filters(video_decoder->codec_context(), demuxer->time_base(), strcat(common_filters, rotation_filters)));
+    ffmpeg::check(init_filters(video_decoder->codec_context(), demuxer->time_base(), string_join(filters, ",")));
 }
 
 VideoFilterer::~VideoFilterer() {
     avfilter_graph_free(&filter_graph_);
 }
 
-int VideoFilterer::init_filters(const AVCodecContext *dec_ctx, const AVRational time_base, const char *filter_description)
+int VideoFilterer::init_filters(const AVCodecContext *dec_ctx, const AVRational time_base, const std::string &filter_description)
 {
-    char args[512];
-    int ret = 0;
-    const AVFilter *buffersrc  = avfilter_get_by_name("buffer");
-    const AVFilter *buffersink = avfilter_get_by_name("buffersink");
     AVFilterInOut *outputs = avfilter_inout_alloc();
     AVFilterInOut *inputs  = avfilter_inout_alloc();
 
-    filter_graph_ = avfilter_graph_alloc();
+    int ret = 0;
 
     if (!outputs || !inputs || !filter_graph_) {
         ret = AVERROR(ENOMEM);
-        goto end;
+    } else {
+        // buffer video source: the decoded frames go here
+        const AVFilter *buffersrc  = avfilter_get_by_name("buffer");
+        const std::string args = string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d",
+                dec_ctx->width, dec_ctx->height,
+                dec_ctx->pix_fmt,
+                time_base.num, time_base.den,
+                dec_ctx->sample_aspect_ratio.num, dec_ctx->sample_aspect_ratio.den);
+
+        ret = avfilter_graph_create_filter(&buffersrc_ctx_, buffersrc, "in", args.c_str(), nullptr, filter_graph_);
+        if (ret < 0) {
+            throw ffmpeg::Error{"Cannot create buffer source"};
+        }
+
+        // buffer video sink: terminate the filter chain
+        const AVFilter *buffersink = avfilter_get_by_name("buffersink");
+
+        ret = avfilter_graph_create_filter(&buffersink_ctx_, buffersink, "out", nullptr, nullptr, filter_graph_);
+        if (ret < 0) {
+            throw ffmpeg::Error{"Cannot create buffer sink"};
+        }
+
+        outputs->name       = av_strdup("in");
+        outputs->filter_ctx = buffersrc_ctx_;
+        outputs->pad_idx    = 0;
+        outputs->next       = nullptr;
+
+        inputs->name       = av_strdup("out");
+        inputs->filter_ctx = buffersink_ctx_;
+        inputs->pad_idx    = 0;
+        inputs->next       = nullptr;
+
+        if ((ret = avfilter_graph_parse_ptr(filter_graph_, filter_description.c_str(), &inputs, &outputs, nullptr)) >= 0) {
+            ret = avfilter_graph_config(filter_graph_, nullptr);
+        }
     }
 
-    /* buffer video source: the decoded frames from the decoder will be inserted here. */
-    snprintf(args, sizeof(args),
-            "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d",
-            dec_ctx->width, dec_ctx->height, dec_ctx->pix_fmt,
-            time_base.num, time_base.den,
-            dec_ctx->sample_aspect_ratio.num, dec_ctx->sample_aspect_ratio.den);
-
-    ret = avfilter_graph_create_filter(&buffersrc_ctx_, buffersrc, "in",
-                                       args, nullptr, filter_graph_);
-    if (ret < 0) {
-        throw ffmpeg::Error{"Cannot create buffer source"};
-    }
-
-    /* buffer video sink: to terminate the filter chain. */
-    ret = avfilter_graph_create_filter(&buffersink_ctx_, buffersink, "out",
-                                       nullptr, nullptr, filter_graph_);
-    if (ret < 0) {
-        throw ffmpeg::Error{"Cannot create buffer sink"};
-    }
-
-    outputs->name       = av_strdup("in");
-    outputs->filter_ctx = buffersrc_ctx_;
-    outputs->pad_idx    = 0;
-    outputs->next       = nullptr;
-
-    inputs->name       = av_strdup("out");
-    inputs->filter_ctx = buffersink_ctx_;
-    inputs->pad_idx    = 0;
-    inputs->next       = nullptr;
-
-    if ((ret = avfilter_graph_parse_ptr(filter_graph_, filter_description, &inputs, &outputs, nullptr)) < 0)
-        goto end;
-
-    if ((ret = avfilter_graph_config(filter_graph_, nullptr)) < 0)
-        goto end;
-
-end:
     avfilter_inout_free(&inputs);
     avfilter_inout_free(&outputs);
 
@@ -101,17 +99,25 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
 }
 
 size_t VideoFilterer::src_width() const {
-    return video_decoder_->width();
+    return buffersrc_ctx_->outputs[0]->w;
 }
 
 size_t VideoFilterer::src_height() const {
-    return video_decoder_->height();
+    return buffersrc_ctx_->outputs[0]->w;
+}
+
+AVPixelFormat VideoFilterer::src_pixel_format() const {
+    return static_cast<AVPixelFormat>(buffersrc_ctx_->outputs[0]->format);
 }
 
 size_t VideoFilterer::dest_width() const {
-    return swap_dimensions_ ? src_height() : src_width();
+    return buffersink_ctx_->inputs[0]->w;
 }
 
 size_t VideoFilterer::dest_height() const {
-    return swap_dimensions_ ? src_width() : src_height();
+    return buffersink_ctx_->inputs[0]->h;
+}
+
+AVPixelFormat VideoFilterer::dest_pixel_format() const {
+    return static_cast<AVPixelFormat>(buffersink_ctx_->inputs[0]->format);
 }
