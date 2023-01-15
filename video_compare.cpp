@@ -14,13 +14,13 @@ extern "C" {
 
 const size_t VideoCompare::queue_size_{5};
 
-static inline bool isBehind(int64_t frame1_pts, int64_t frame2_pts, int64_t delta_pts) {
-  float t1 = (float)frame1_pts * AV_TIME_TO_SEC;
-  float t2 = (float)frame2_pts * AV_TIME_TO_SEC;
-  float delta_s = (float)delta_pts * AV_TIME_TO_SEC;
+static inline bool is_behind(int64_t frame1_pts, int64_t frame2_pts, int64_t delta_pts) {
+  float t1 = static_cast<float>(frame1_pts) * AV_TIME_TO_SEC;
+  float t2 = static_cast<float>(frame2_pts) * AV_TIME_TO_SEC;
+  float delta_s = static_cast<float>(delta_pts) * AV_TIME_TO_SEC;
 
   float diff = t1 - t2;
-  float tolerance = std::max(delta_s, 1.0f / 120.0f);
+  float tolerance = std::max(delta_s, 1.0F / 120.0F);
 
   return diff < -tolerance;
 }
@@ -90,7 +90,7 @@ void VideoCompare::demultiplex(const int video_idx) {
 
       // Move into queue if first video stream
       if (packet->stream_index == demuxer_[video_idx]->video_stream_index()) {
-        if (!packet_queue_[video_idx]->push(move(packet))) {
+        if (!packet_queue_[video_idx]->push(std::move(packet))) {
           break;
         }
       }
@@ -146,7 +146,7 @@ bool VideoCompare::process_packet(const int video_idx, AVPacket* packet, AVFrame
 
       av_frame_unref(frame_filtered.get());
 
-      if (!frame_queue_[video_idx]->push(move(frame_converted))) {
+      if (!frame_queue_[video_idx]->push(std::move(frame_converted))) {
         return sent;
       }
     }
@@ -168,8 +168,9 @@ void VideoCompare::decode_video(const int video_idx) {
       // Read packet from queue
       if (!packet_queue_[video_idx]->pop(packet)) {
         // Flush remaining frames cached in the decoder
-        while (process_packet(video_idx, packet.get(), frame_decoded.get()))
+        while (process_packet(video_idx, packet.get(), frame_decoded.get())) {
           ;
+        }
 
         frame_queue_[video_idx]->finished();
         break;
@@ -186,8 +187,9 @@ void VideoCompare::decode_video(const int video_idx) {
       }
 
       // If the packet didn't send, receive more frames and try again
-      while (!process_packet(video_idx, packet.get(), frame_decoded.get()) && !seeking_)
+      while (!process_packet(video_idx, packet.get(), frame_decoded.get()) && !seeking_) {
         ;
+      }
     }
   } catch (...) {
     exception_ = std::current_exception();
@@ -205,22 +207,29 @@ void VideoCompare::video() {
     std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_left{nullptr, [](AVFrame* f) { av_frame_free(&f); }};
     std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_right{nullptr, [](AVFrame* f) { av_frame_free(&f); }};
 
-    int64_t left_pts = 0, left_decoded_picture_number = 0, left_previous_decoded_picture_number = -1, delta_left_pts = 0;
-    int64_t right_pts = 0, right_decoded_picture_number = 0, right_previous_decoded_picture_number = -1, delta_right_pts = 0;
+    int64_t left_pts = 0;
+    int64_t left_decoded_picture_number = 0;
+    int64_t left_previous_decoded_picture_number = -1;
+    int64_t delta_left_pts = 0;
+    int64_t right_pts = 0;
+    int64_t right_decoded_picture_number = 0;
+    int64_t right_previous_decoded_picture_number = -1;
+    int64_t delta_right_pts = 0;
 
-    sorted_flat_deque<int32_t> left_deque(8), right_deque(8);
+    sorted_flat_deque<int32_t> left_deque(8);
+    sorted_flat_deque<int32_t> right_deque(8);
 
     int64_t right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME;
     int total_right_time_shifted = 0;
 
     for (uint64_t frame_number = 0;; ++frame_number) {
-      std::string errorMessage = "";
+      std::string errorMessage;
 
       display_->input();
 
       float current_position = left_pts * AV_TIME_TO_SEC;
 
-      if ((display_->get_seek_relative() != 0.0f) || (display_->get_shift_right_frames() != 0)) {
+      if ((display_->get_seek_relative() != 0.0F) || (display_->get_shift_right_frames() != 0)) {
         total_right_time_shifted += display_->get_shift_right_frames();
 
         if (packet_queue_[0]->isFinished() || packet_queue_[1]->isFinished()) {
@@ -237,19 +246,18 @@ void VideoCompare::video() {
           readyToSeek_[1][1] = false;
 
           while (true) {
-            bool allEmpty = true;
+            bool all_empty = true;
 
-            allEmpty = allEmpty && readyToSeek_[0][0];
-            allEmpty = allEmpty && readyToSeek_[0][1];
-            allEmpty = allEmpty && readyToSeek_[1][0];
-            allEmpty = allEmpty && readyToSeek_[1][1];
+            all_empty = all_empty && readyToSeek_[0][0];
+            all_empty = all_empty && readyToSeek_[0][1];
+            all_empty = all_empty && readyToSeek_[1][0];
+            all_empty = all_empty && readyToSeek_[1][1];
 
-            if (allEmpty) {
+            if (all_empty) {
               break;
-            } else {
-              frame_queue_[0]->empty();
-              frame_queue_[1]->empty();
             }
+            frame_queue_[0]->empty();
+            frame_queue_[1]->empty();
           }
 
           packet_queue_[0]->empty();
@@ -266,13 +274,13 @@ void VideoCompare::video() {
             next_position = current_position + display_->get_seek_relative();
           }
 
-          bool backward = (display_->get_seek_relative() < 0.0f) || (display_->get_shift_right_frames() != 0);
+          bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
 
-          if ((!demuxer_[0]->seek(std::max(0.0f, next_position), backward) && !backward) || (!demuxer_[1]->seek(std::max(0.0f, next_position), backward) && !backward)) {
+          if ((!demuxer_[0]->seek(std::max(0.0F, next_position), backward) && !backward) || (!demuxer_[1]->seek(std::max(0.0F, next_position), backward) && !backward)) {
             // restore position if unable to perform forward seek
             errorMessage = "Unable to seek past end of file";
-            demuxer_[0]->seek(std::max(0.0f, current_position), true);
-            demuxer_[1]->seek(std::max(0.0f, current_position), true);
+            demuxer_[0]->seek(std::max(0.0F, current_position), true);
+            demuxer_[1]->seek(std::max(0.0F, current_position), true);
           };
 
           seeking_ = false;
@@ -302,14 +310,14 @@ void VideoCompare::video() {
         bool adjusting = false;
 
         // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
-        if ((left_pts < 0) || isBehind(left_pts, right_pts, delta_left_pts)) {
+        if ((left_pts < 0) || is_behind(left_pts, right_pts, delta_left_pts)) {
           adjusting = true;
 
           if (frame_queue_[0]->pop(frame_left)) {
             left_decoded_picture_number++;
           }
         }
-        if ((right_pts < 0) || isBehind(right_pts, left_pts, delta_right_pts)) {
+        if ((right_pts < 0) || is_behind(right_pts, left_pts, delta_right_pts)) {
           adjusting = true;
 
           if (frame_queue_[1]->pop(frame_right)) {
@@ -367,7 +375,7 @@ void VideoCompare::video() {
       }
 
       if (store_frames) {
-        // TODO: use pair
+        // TODO(jon): use pair
         if (left_frames.size() >= 50) {
           left_frames.pop_back();
         }
@@ -375,28 +383,28 @@ void VideoCompare::video() {
           right_frames.pop_back();
         }
 
-        left_frames.push_front(move(frame_left));
-        right_frames.push_front(move(frame_right));
+        left_frames.push_front(std::move(frame_left));
+        right_frames.push_front(std::move(frame_right));
       } else {
         if (frame_left != nullptr) {
-          if (left_frames.size() > 0) {
-            left_frames[0] = move(frame_left);
+          if (!left_frames.empty()) {
+            left_frames[0] = std::move(frame_left);
           } else {
-            left_frames.push_front(move(frame_left));
+            left_frames.push_front(std::move(frame_left));
           }
         }
         if (frame_right != nullptr) {
-          if (right_frames.size() > 0) {
-            right_frames[0] = move(frame_right);
+          if (!right_frames.empty()) {
+            right_frames[0] = std::move(frame_right);
           } else {
-            right_frames.push_front(move(frame_right));
+            right_frames.push_front(std::move(frame_right));
           }
         }
       }
 
-      frame_offset = std::min(std::max(0, frame_offset + display_->get_frame_offset_delta()), (int)left_frames.size() - 1);
+      frame_offset = std::min(std::max(0, frame_offset + display_->get_frame_offset_delta()), static_cast<int>(left_frames.size()) - 1);
 
-      const std::string current_total_browsable = string_sprintf("%d/%d", frame_offset + 1, (int)left_frames.size());
+      const std::string current_total_browsable = string_sprintf("%d/%d", frame_offset + 1, static_cast<int>(left_frames.size()));
 
       if (frame_offset >= 0) {
         if (!display_->get_swap_left_right()) {

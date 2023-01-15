@@ -10,25 +10,24 @@
 #include "stb_image_write.h"
 
 template <typename T>
-inline T check_SDL(T value, const std::string& message) {
+inline T check_sdl(T value, const std::string& message) {
   if (!value) {
     throw std::runtime_error{"SDL " + message};
-  } else {
-    return value;
   }
+  return value;
 }
 
-inline int clampIntToByteRange(int value) {
+inline int clamp_int_to_byte_range(int value) {
   return value > 255 ? 255 : value < 0 ? 0 : value;
 }
 
-inline uint8_t clampIntToByte(int value) {
-  return (uint8_t)clampIntToByteRange(value);
+inline uint8_t clamp_int_to_byte(int value) {
+  return static_cast<uint8_t>(clamp_int_to_byte_range(value));
 }
 
 // Credits to Kemin Zhou for this approach which does not require Boost or C++17
 // https://stackoverflow.com/questions/4430780/how-can-i-extract-the-file-name-and-extension-from-a-path-in-c
-std::string getFileStem(const std::string& filePath) {
+std::string get_file_stem(const std::string& filePath) {
   char* buff = new char[filePath.size() + 1];
   strcpy(buff, filePath.c_str());
 
@@ -45,13 +44,13 @@ std::string getFileStem(const std::string& filePath) {
   return tmp;
 }
 
-static const SDL_Color textColor = {255, 255, 255, 0};
+static const SDL_Color text_color = {255, 255, 255, 0};
 
 static std::string format_position(const float position) {
-  const float roundedPosition = std::round(position * 1000.0f) / 1000.0f;
+  const float rounded_position = std::round(position * 1000.0F) / 1000.0F;
 
-  const int seconds = roundedPosition;
-  const int milliseconds = (roundedPosition - static_cast<float>(seconds)) * 1000.0f;
+  const int seconds = rounded_position;
+  const int milliseconds = (rounded_position - static_cast<float>(seconds)) * 1000.0F;
   const int minutes = seconds / 60;
   const int hours = minutes / 60;
 
@@ -66,8 +65,8 @@ static std::string format_position(const float position) {
 }
 
 SDL::SDL() {
-  check_SDL(!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER), "SDL init");
-  check_SDL(!TTF_Init(), "TTF init");
+  check_sdl(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) == 0, "SDL init");
+  check_sdl(TTF_Init() == 0, "TTF init");
 }
 
 SDL::~SDL() {
@@ -75,7 +74,7 @@ SDL::~SDL() {
 }
 
 Display::Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<int, int> window_size, const unsigned width, const unsigned height, const std::string& left_file_name, const std::string& right_file_name)
-    : mode_{mode}, high_dpi_allowed_{high_dpi_allowed}, video_width_{(int)width}, video_height_{(int)height}, left_file_stem_{getFileStem(left_file_name)}, right_file_stem_{getFileStem(right_file_name)} {
+    : mode_{mode}, high_dpi_allowed_{high_dpi_allowed}, video_width_{static_cast<int>(width)}, video_height_{static_cast<int>(height)}, left_file_stem_{get_file_stem(left_file_name)}, right_file_stem_{get_file_stem(right_file_name)} {
   const int auto_width = mode == Mode::hstack ? width * 2 : width;
   const int auto_height = mode == Mode::vstack ? height * 2 : height;
 
@@ -88,10 +87,10 @@ Display::Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<
   } else {
     if (std::get<0>(window_size) < 0) {
       window_height = std::get<1>(window_size);
-      window_width = (float)auto_width / (float)auto_height * window_height;
+      window_width = static_cast<float>(auto_width) / static_cast<float>(auto_height) * window_height;
     } else if (std::get<1>(window_size) < 0) {
       window_width = std::get<0>(window_size);
-      window_height = (float)auto_height / (float)auto_width * window_width;
+      window_height = static_cast<float>(auto_height) / static_cast<float>(auto_width) * window_width;
     } else {
       window_width = std::get<0>(window_size);
       window_height = std::get<1>(window_size);
@@ -100,11 +99,11 @@ Display::Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<
 
   const int create_window_flags = SDL_WINDOW_SHOWN;
 
-  window_ = check_SDL(SDL_CreateWindow("video-compare", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, high_dpi_allowed_ ? window_width / 2 : window_width, high_dpi_allowed_ ? window_height / 2 : window_height,
+  window_ = check_sdl(SDL_CreateWindow("video-compare", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, high_dpi_allowed_ ? window_width / 2 : window_width, high_dpi_allowed_ ? window_height / 2 : window_height,
                                        high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
                       "window");
 
-  renderer_ = check_SDL(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "renderer");
+  renderer_ = check_sdl(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "renderer");
 
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 
@@ -115,12 +114,12 @@ Display::Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<
   SDL_GL_GetDrawableSize(window_, &drawable_width_, &drawable_height_);
   SDL_GetWindowSize(window_, &window_width_, &window_height_);
 
-  window_to_drawable_width_factor_ = (float)drawable_width_ / (float)window_width_;
-  window_to_drawable_height_factor_ = (float)drawable_height_ / (float)window_height_;
-  screen_to_video_width_factor_ = float(video_width_) / float(window_width_) * ((mode_ == Mode::hstack) ? 2.f : 1.f);
-  screen_to_video_height_factor_ = float(video_height_) / float(window_height_) * ((mode_ == Mode::vstack) ? 2.f : 1.f);
+  window_to_drawable_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
+  window_to_drawable_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);
+  screen_to_video_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::hstack) ? 2.F : 1.F);
+  screen_to_video_height_factor_ = static_cast<float>(video_height_) / static_cast<float>(window_height_) * ((mode_ == Mode::vstack) ? 2.F : 1.F);
 
-  font_scale_ = (window_to_drawable_width_factor_ + window_to_drawable_height_factor_) / 2.0f;
+  font_scale_ = (window_to_drawable_width_factor_ + window_to_drawable_height_factor_) / 2.0F;
 
   border_extension_ = 3 * font_scale_;
   double_border_extension_ = border_extension_ * 2;
@@ -135,23 +134,23 @@ Display::Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<
   }
 
   SDL_RWops* embedded_font = SDL_RWFromConstMem(source_code_pro_regular_ttf, source_code_pro_regular_ttf_len);
-  small_font_ = check_SDL(TTF_OpenFontRW(embedded_font, 0, 16 * font_scale_), "font open");
-  big_font_ = check_SDL(TTF_OpenFontRW(embedded_font, 0, 24 * font_scale_), "font open");
+  small_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 16 * font_scale_), "font open");
+  big_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 24 * font_scale_), "font open");
 
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
-  texture_ = check_SDL(SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height), "renderer");
+  texture_ = check_sdl(SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height), "renderer");
 
-  SDL_Surface* textSurface = TTF_RenderUTF8_Blended(small_font_, left_file_name.c_str(), textColor);
-  left_text_texture_ = SDL_CreateTextureFromSurface(renderer_, textSurface);
-  left_text_width_ = textSurface->w;
-  left_text_height_ = textSurface->h;
-  SDL_FreeSurface(textSurface);
+  SDL_Surface* text_surface = TTF_RenderUTF8_Blended(small_font_, left_file_name.c_str(), text_color);
+  left_text_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
+  left_text_width_ = text_surface->w;
+  left_text_height_ = text_surface->h;
+  SDL_FreeSurface(text_surface);
 
-  textSurface = TTF_RenderUTF8_Blended(small_font_, right_file_name.c_str(), textColor);
-  right_text_texture_ = SDL_CreateTextureFromSurface(renderer_, textSurface);
-  right_text_width_ = textSurface->w;
-  right_text_height_ = textSurface->h;
-  SDL_FreeSurface(textSurface);
+  text_surface = TTF_RenderUTF8_Blended(small_font_, right_file_name.c_str(), text_color);
+  right_text_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
+  right_text_width_ = text_surface->w;
+  right_text_height_ = text_surface->h;
+  SDL_FreeSurface(text_surface);
 
   diff_buffer_ = new uint8_t[video_width_ * video_height_ * 3];
   uint8_t* diff_plane_0 = diff_buffer_;
@@ -194,7 +193,9 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 
   for (int y = 0; y < video_height_; y++) {
     for (int x = 0; x < (video_width_ - split_x); x++) {
-      int rgb1[3], rgb2[3], diff[3];
+      int rgb1[3];
+      int rgb2[3];
+      int diff[3];
 
       rgb1[0] = p_left_r[x * 3];
       rgb1[1] = p_left_g[x * 3];
@@ -208,9 +209,9 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
       diff[1] = abs(rgb1[1] - rgb2[1]) * amplification;
       diff[2] = abs(rgb1[2] - rgb2[2]) * amplification;
 
-      p_diff_r[x * 3] = clampIntToByte(diff[0]);
-      p_diff_g[x * 3] = clampIntToByte(diff[1]);
-      p_diff_b[x * 3] = clampIntToByte(diff[2]);
+      p_diff_r[x * 3] = clamp_int_to_byte(diff[0]);
+      p_diff_g[x * 3] = clamp_int_to_byte(diff[1]);
+      p_diff_b[x * 3] = clamp_int_to_byte(diff[2]);
     }
 
     p_left_r += pitches_left[0];
@@ -230,14 +231,14 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right) {
   const std::string left_filename = string_sprintf("%s_%04d.png", left_file_stem_.c_str(), saved_image_number);
 
-  if (!stbi_write_png(left_filename.c_str(), video_width_, video_height_, 3, planes_left[0], pitches_left[0])) {
+  if (stbi_write_png(left_filename.c_str(), video_width_, video_height_, 3, planes_left[0], pitches_left[0]) == 0) {
     std::cout << "Error saving left video PNG image to file: " << left_filename << std::endl;
     return;
   }
 
   const std::string right_filename = string_sprintf("%s_%04d.png", right_file_stem_.c_str(), saved_image_number);
 
-  if (!stbi_write_png(right_filename.c_str(), video_width_, video_height_, 3, planes_right[0], pitches_right[0])) {
+  if (stbi_write_png(right_filename.c_str(), video_width_, video_height_, 3, planes_right[0], pitches_right[0]) == 0) {
     std::cout << "Error saving right video PNG image to file: " << right_filename << std::endl;
     return;
   }
@@ -267,11 +268,14 @@ void Display::render_text(const int x, const int y, SDL_Texture* texture, const 
 
   // render gradient
   if (gradient_amount > 0) {
-    Uint8 drawColorR, drawColorG, drawColorB, drawColorA;
-    Uint8 alphaMod;
+    Uint8 drawColorR;
+    Uint8 drawColorG;
+    Uint8 drawColorB;
+    Uint8 drawColorA;
+    Uint8 alpha_mod;
 
     SDL_GetRenderDrawColor(renderer_, &drawColorR, &drawColorG, &drawColorB, &drawColorA);
-    SDL_GetTextureAlphaMod(texture, &alphaMod);
+    SDL_GetTextureAlphaMod(texture, &alpha_mod);
 
     fill_rect.x--;
     fill_rect.w = 1;
@@ -285,13 +289,13 @@ void Display::render_text(const int x, const int y, SDL_Texture* texture, const 
       SDL_SetRenderDrawColor(renderer_, drawColorR, drawColorG, drawColorB, drawColorA * i / gradient_amount);
       SDL_RenderFillRect(renderer_, &fill_rect);
 
-      SDL_SetTextureAlphaMod(texture, alphaMod * i / gradient_amount);
+      SDL_SetTextureAlphaMod(texture, alpha_mod * i / gradient_amount);
       SDL_RenderCopy(renderer_, texture, &src_rect, &text_rect);
     }
 
     // reset
     SDL_SetRenderDrawColor(renderer_, drawColorR, drawColorG, drawColorB, drawColorA);
-    SDL_SetTextureAlphaMod(texture, alphaMod);
+    SDL_SetTextureAlphaMod(texture, alpha_mod);
   }
 }
 
@@ -310,8 +314,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
   bool compare_mode = show_left_ && show_right_;
 
-  int mouse_video_x = std::round(float(mouse_x_) * screen_to_video_width_factor_);
-  int mouse_video_y = std::round(float(mouse_y_) * screen_to_video_height_factor_);
+  int mouse_video_x = std::round(static_cast<float>(mouse_x_) * screen_to_video_width_factor_);
+  int mouse_video_y = std::round(static_cast<float>(mouse_y_) * screen_to_video_height_factor_);
 
   // clear everything
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
@@ -325,7 +329,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
       SDL_Rect screen_render_quad_left = video_to_screen_space(tex_render_quad_left);
 
-      check_SDL(!SDL_UpdateTexture(texture_, &tex_render_quad_left, planes_left[0], pitches_left[0]), "left texture update (video mode)");
+      check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_left, planes_left[0], pitches_left[0]) == 0, "left texture update (video mode)");
 
       SDL_RenderCopy(renderer_, texture_, &tex_render_quad_left, &screen_render_quad_left);
     }
@@ -340,9 +344,9 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       if (subtraction_mode_) {
         update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
 
-        check_SDL(!SDL_UpdateTexture(texture_, &tex_render_quad_right, diff_planes_[0] + start_right * 3, video_width_ * 3), "right texture update (subtraction mode)");
+        check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, diff_planes_[0] + start_right * 3, video_width_ * 3) == 0, "right texture update (subtraction mode)");
       } else {
-        check_SDL(!SDL_UpdateTexture(texture_, &tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0]), "right texture update (video mode)");
+        check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0]) == 0, "right texture update (video mode)");
       }
 
       SDL_RenderCopy(renderer_, texture_, &tex_render_quad_right, &screen_render_quad_right);
@@ -352,7 +356,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   // zoomed area
   int src_zoomed_size = 64;
   int src_half_zoomed_size = src_zoomed_size / 2;
-  int dst_zoomed_size = drawable_height_ * 0.5f;
+  int dst_zoomed_size = drawable_height_ * 0.5F;
   int dst_half_zoomed_size = dst_zoomed_size / 2;
 
   if (zoom_left_ || zoom_right_) {
@@ -371,7 +375,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
   SDL_Rect fill1_rect;
   SDL_Rect text1_rect;
-  SDL_Surface* textSurface;
+  SDL_Surface* text_surface;
 
   if (show_hud_) {
     // render background rectangles and text on top
@@ -381,11 +385,11 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     if (show_left_) {
       // file name and current position of left video
       const std::string left_pos_str = format_position(left_position);
-      textSurface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), textColor);
-      SDL_Texture* left_position_text_texture = SDL_CreateTextureFromSurface(renderer_, textSurface);
-      int left_position_text_width = textSurface->w;
-      int left_position_text_height = textSurface->h;
-      SDL_FreeSurface(textSurface);
+      text_surface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), text_color);
+      SDL_Texture* left_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+      int left_position_text_width = text_surface->w;
+      int left_position_text_height = text_surface->h;
+      SDL_FreeSurface(text_surface);
 
       render_text(line1_y_, line1_y_, left_text_texture_, left_text_width_, left_text_height_, border_extension_, true);
       render_text(line1_y_, line2_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
@@ -395,14 +399,16 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     if (show_right_) {
       // file name and current position of right video
       const std::string right_pos_str = format_position(right_position);
-      textSurface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), textColor);
-      SDL_Texture* right_position_text_texture = SDL_CreateTextureFromSurface(renderer_, textSurface);
-      int right_position_text_width = textSurface->w;
-      int right_position_text_height = textSurface->h;
-      SDL_FreeSurface(textSurface);
+      text_surface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), text_color);
+      SDL_Texture* right_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+      int right_position_text_width = text_surface->w;
+      int right_position_text_height = text_surface->h;
+      SDL_FreeSurface(text_surface);
 
-      int text1_x, text1_y;
-      int text2_x, text2_y;
+      int text1_x;
+      int text1_y;
+      int text2_x;
+      int text2_y;
 
       if (mode_ == Mode::vstack) {
         text1_x = line1_y_;
@@ -423,11 +429,11 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     }
 
     // current frame / number of frames in history buffer
-    textSurface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), textColor);
-    SDL_Texture* current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, textSurface);
-    int current_total_browsable_text_width = textSurface->w;
-    int current_total_browsable_text_height = textSurface->h;
-    SDL_FreeSurface(textSurface);
+    text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), text_color);
+    SDL_Texture* current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+    int current_total_browsable_text_width = text_surface->w;
+    int current_total_browsable_text_height = text_surface->h;
+    SDL_FreeSurface(text_surface);
 
     int text_y = (mode_ == Mode::vstack) ? middle_y_ : line2_y_;
 
@@ -442,15 +448,15 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   // render (optional) error message
   if (!error_message.empty()) {
     error_message_shown_at_ = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-    textSurface = TTF_RenderText_Blended(big_font_, error_message.c_str(), textColor);
-    error_message_texture_ = SDL_CreateTextureFromSurface(renderer_, textSurface);
-    error_message_width_ = textSurface->w;
-    error_message_height_ = textSurface->h;
-    SDL_FreeSurface(textSurface);
+    text_surface = TTF_RenderText_Blended(big_font_, error_message.c_str(), text_color);
+    error_message_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
+    error_message_width_ = text_surface->w;
+    error_message_height_ = text_surface->h;
+    SDL_FreeSurface(text_surface);
   }
   if (error_message_texture_ != nullptr) {
     std::chrono::milliseconds now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-    float keep_alpha = std::max(sqrtf(1.0f - (now - error_message_shown_at_).count() / 1000.0f / 4.0f), 0.0f);
+    float keep_alpha = std::max(sqrtf(1.0F - (now - error_message_shown_at_).count() / 1000.0F / 4.0F), 0.0F);
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 64 * keep_alpha);
     fill1_rect = {drawable_width_ / 2 - error_message_width_ / 2 - 2, drawable_height_ / 2 - error_message_height_ / 2 - 2, error_message_width_ + 4, error_message_height_ + 4};
@@ -462,7 +468,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   }
 
   if (mode_ == Mode::split && show_hud_ && compare_mode) {
-    int draw_x = std::round(float(mouse_x_) * window_to_drawable_width_factor_);
+    int draw_x = std::round(static_cast<float>(mouse_x_) * window_to_drawable_width_factor_);
 
     // render movable slider(s)
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, SDL_ALPHA_OPAQUE);
@@ -482,15 +488,15 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 void Display::input() {
   SDL_GetMouseState(&mouse_x_, &mouse_y_);
 
-  seek_relative_ = 0.0f;
+  seek_relative_ = 0.0F;
   seek_from_start_ = false;
   frame_offset_delta_ = 0;
   shift_right_frames_ = 0;
 
-  while (SDL_PollEvent(&event_)) {
+  while (SDL_PollEvent(&event_) != 0) {
     switch (event_.type) {
       case SDL_MOUSEBUTTONDOWN:
-        seek_relative_ = float(mouse_x_) / float(window_width_);
+        seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
         seek_from_start_ = true;
         break;
       case SDL_KEYDOWN:
@@ -549,22 +555,22 @@ void Display::input() {
             save_image_frames_ = true;
             break;
           case SDLK_LEFT:
-            seek_relative_ -= 1.0f;
+            seek_relative_ -= 1.0F;
             break;
           case SDLK_DOWN:
-            seek_relative_ -= 10.0f;
+            seek_relative_ -= 10.0F;
             break;
           case SDLK_PAGEDOWN:
-            seek_relative_ -= 600.0f;
+            seek_relative_ -= 600.0F;
             break;
           case SDLK_RIGHT:
-            seek_relative_ += 1.0f;
+            seek_relative_ += 1.0F;
             break;
           case SDLK_UP:
-            seek_relative_ += 10.0f;
+            seek_relative_ += 10.0F;
             break;
           case SDLK_PAGEUP:
-            seek_relative_ += 600.0f;
+            seek_relative_ += 600.0F;
             break;
           case SDLK_PLUS:
           case SDLK_KP_PLUS:
@@ -597,30 +603,30 @@ void Display::input() {
   }
 }
 
-bool Display::get_quit() {
+bool Display::get_quit() const {
   return quit_;
 }
 
-bool Display::get_play() {
+bool Display::get_play() const {
   return play_;
 }
 
-bool Display::get_swap_left_right() {
+bool Display::get_swap_left_right() const {
   return swap_left_right_;
 }
 
-float Display::get_seek_relative() {
+float Display::get_seek_relative() const {
   return seek_relative_;
 }
 
-bool Display::get_seek_from_start() {
+bool Display::get_seek_from_start() const {
   return seek_from_start_;
 }
 
-int Display::get_frame_offset_delta() {
+int Display::get_frame_offset_delta() const {
   return frame_offset_delta_;
 }
 
-int Display::get_shift_right_frames() {
+int Display::get_shift_right_frames() const {
   return shift_right_frames_;
 }

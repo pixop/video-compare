@@ -40,8 +40,8 @@ int Demuxer::rotation() const {
 
   uint8_t* displaymatrix = av_stream_get_side_data(format_context_->streams[video_stream_index_], AV_PKT_DATA_DISPLAYMATRIX, nullptr);
 
-  if (displaymatrix) {
-    theta = -av_display_rotation_get((int32_t*)displaymatrix);
+  if (displaymatrix != nullptr) {
+    theta = -av_display_rotation_get(reinterpret_cast<int32_t*>(displaymatrix));
   }
 
   theta -= 360 * floor(theta / 360 + 0.9 / 360);
@@ -54,7 +54,7 @@ bool Demuxer::operator()(AVPacket& packet) {
 }
 
 bool Demuxer::seek(const float position, const bool backward) {
-  int64_t seekTarget = int64_t(position * AV_TIME_BASE);
+  int64_t seek_target = static_cast<int64_t>(position * AV_TIME_BASE);
 
-  return av_seek_frame(format_context_, -1, seekTarget, backward ? AVSEEK_FLAG_BACKWARD : 0) >= 0;
+  return av_seek_frame(format_context_, -1, seek_target, backward ? AVSEEK_FLAG_BACKWARD : 0) >= 0;
 }
