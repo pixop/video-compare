@@ -22,5 +22,5 @@ void Timer::update() {
 }
 
 int64_t Timer::adjust() const {
-  return P_ * proportional_ + I_ * integral_ + D_ * derivative_;
+  return P * proportional_ + I * integral_ + D * derivative_;
 }

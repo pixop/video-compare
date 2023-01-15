@@ -27,13 +27,13 @@ class Queue {
   std::atomic_bool finished_{false};
 
  public:
-  Queue(const size_t size_max);
+  explicit Queue(size_t size_max);
 
   bool push(T&& data);
   bool pop(T& data);
 
   // The queue has finished accepting input
-  bool isFinished();
+  bool is_finished();
   void finished();
   // The queue will cannot be pushed or popped
   void quit();
@@ -57,9 +57,8 @@ bool Queue<T>::push(T&& data) {
 
       empty_.notify_all();
       return true;
-    } else {
-      full_.wait(lock);
     }
+    full_.wait(lock);
   }
 
   return false;
@@ -76,18 +75,18 @@ bool Queue<T>::pop(T& data) {
 
       full_.notify_all();
       return true;
-    } else if (queue_.empty() && finished_) {
-      return false;
-    } else {
-      empty_.wait(lock);
     }
+    if (queue_.empty() && finished_) {
+      return false;
+    }
+    empty_.wait(lock);
   }
 
   return false;
 }
 
 template <class T>
-bool Queue<T>::isFinished() {
+bool Queue<T>::is_finished() {
   return finished_;
 }
 

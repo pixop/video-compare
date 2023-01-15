@@ -7,7 +7,7 @@ extern "C" {
 
 class Demuxer {
  public:
-  Demuxer(const std::string& file_name);
+  explicit Demuxer(const std::string& file_name);
   ~Demuxer();
   AVCodecParameters* video_codec_parameters();
   int video_stream_index() const;
@@ -15,7 +15,7 @@ class Demuxer {
   int64_t duration() const;
   int rotation() const;
   bool operator()(AVPacket& packet);
-  bool seek(const float position, const bool backward);
+  bool seek(float position, bool backward);
 
  private:
   AVFormatContext* format_context_{};

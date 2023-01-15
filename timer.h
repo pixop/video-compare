@@ -10,9 +10,9 @@ class Timer {
   int64_t integral_{};
   int64_t derivative_{};
 
-  constexpr static double P_{0.0};
-  constexpr static double I_{-1.0};
-  constexpr static double D_{0.0};
+  constexpr static double P{0.0};
+  constexpr static double I{-1.0};
+  constexpr static double D{0.0};
 
  public:
   Timer();

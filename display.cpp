@@ -44,7 +44,7 @@ std::string get_file_stem(const std::string& filePath) {
   return tmp;
 }
 
-static const SDL_Color text_color = {255, 255, 255, 0};
+static const SDL_Color TEXT_COLOR = {255, 255, 255, 0};
 
 static std::string format_position(const float position) {
   const float rounded_position = std::round(position * 1000.0F) / 1000.0F;
@@ -133,20 +133,20 @@ Display::Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<
     max_text_width_ = drawable_width_ - double_border_extension_ - line1_y_;
   }
 
-  SDL_RWops* embedded_font = SDL_RWFromConstMem(source_code_pro_regular_ttf, source_code_pro_regular_ttf_len);
+  SDL_RWops* embedded_font = SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN);
   small_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 16 * font_scale_), "font open");
   big_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 24 * font_scale_), "font open");
 
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
   texture_ = check_sdl(SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height), "renderer");
 
-  SDL_Surface* text_surface = TTF_RenderUTF8_Blended(small_font_, left_file_name.c_str(), text_color);
+  SDL_Surface* text_surface = TTF_RenderUTF8_Blended(small_font_, left_file_name.c_str(), TEXT_COLOR);
   left_text_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
   left_text_width_ = text_surface->w;
   left_text_height_ = text_surface->h;
   SDL_FreeSurface(text_surface);
 
-  text_surface = TTF_RenderUTF8_Blended(small_font_, right_file_name.c_str(), text_color);
+  text_surface = TTF_RenderUTF8_Blended(small_font_, right_file_name.c_str(), TEXT_COLOR);
   right_text_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
   right_text_width_ = text_surface->w;
   right_text_height_ = text_surface->h;
@@ -229,14 +229,14 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 }
 
 void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right) {
-  const std::string left_filename = string_sprintf("%s_%04d.png", left_file_stem_.c_str(), saved_image_number);
+  const std::string left_filename = string_sprintf("%s_%04d.png", left_file_stem_.c_str(), saved_image_number_);
 
   if (stbi_write_png(left_filename.c_str(), video_width_, video_height_, 3, planes_left[0], pitches_left[0]) == 0) {
     std::cout << "Error saving left video PNG image to file: " << left_filename << std::endl;
     return;
   }
 
-  const std::string right_filename = string_sprintf("%s_%04d.png", right_file_stem_.c_str(), saved_image_number);
+  const std::string right_filename = string_sprintf("%s_%04d.png", right_file_stem_.c_str(), saved_image_number_);
 
   if (stbi_write_png(right_filename.c_str(), video_width_, video_height_, 3, planes_right[0], pitches_right[0]) == 0) {
     std::cout << "Error saving right video PNG image to file: " << right_filename << std::endl;
@@ -245,7 +245,7 @@ void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<
 
   std::cout << "Saved " << left_filename << " and " << right_filename << std::endl;
 
-  saved_image_number++;
+  saved_image_number_++;
 }
 
 void Display::render_text(const int x, const int y, SDL_Texture* texture, const int texture_width, const int texture_height, const int border_extension, const bool left_adjust) {
@@ -268,13 +268,13 @@ void Display::render_text(const int x, const int y, SDL_Texture* texture, const 
 
   // render gradient
   if (gradient_amount > 0) {
-    Uint8 drawColorR;
-    Uint8 drawColorG;
-    Uint8 drawColorB;
-    Uint8 drawColorA;
+    Uint8 draw_color_r;
+    Uint8 draw_color_g;
+    Uint8 draw_color_b;
+    Uint8 draw_color_a;
     Uint8 alpha_mod;
 
-    SDL_GetRenderDrawColor(renderer_, &drawColorR, &drawColorG, &drawColorB, &drawColorA);
+    SDL_GetRenderDrawColor(renderer_, &draw_color_r, &draw_color_g, &draw_color_b, &draw_color_a);
     SDL_GetTextureAlphaMod(texture, &alpha_mod);
 
     fill_rect.x--;
@@ -286,7 +286,7 @@ void Display::render_text(const int x, const int y, SDL_Texture* texture, const 
     text_rect.w = 1;
 
     for (int i = (gradient_amount - 1); i >= 0; i--, fill_rect.x--, src_rect.x--, text_rect.x--) {
-      SDL_SetRenderDrawColor(renderer_, drawColorR, drawColorG, drawColorB, drawColorA * i / gradient_amount);
+      SDL_SetRenderDrawColor(renderer_, draw_color_r, draw_color_g, draw_color_b, draw_color_a * i / gradient_amount);
       SDL_RenderFillRect(renderer_, &fill_rect);
 
       SDL_SetTextureAlphaMod(texture, alpha_mod * i / gradient_amount);
@@ -294,7 +294,7 @@ void Display::render_text(const int x, const int y, SDL_Texture* texture, const 
     }
 
     // reset
-    SDL_SetRenderDrawColor(renderer_, drawColorR, drawColorG, drawColorB, drawColorA);
+    SDL_SetRenderDrawColor(renderer_, draw_color_r, draw_color_g, draw_color_b, draw_color_a);
     SDL_SetTextureAlphaMod(texture, alpha_mod);
   }
 }
@@ -385,7 +385,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     if (show_left_) {
       // file name and current position of left video
       const std::string left_pos_str = format_position(left_position);
-      text_surface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), text_color);
+      text_surface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), TEXT_COLOR);
       SDL_Texture* left_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
       int left_position_text_width = text_surface->w;
       int left_position_text_height = text_surface->h;
@@ -399,7 +399,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     if (show_right_) {
       // file name and current position of right video
       const std::string right_pos_str = format_position(right_position);
-      text_surface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), text_color);
+      text_surface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), TEXT_COLOR);
       SDL_Texture* right_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
       int right_position_text_width = text_surface->w;
       int right_position_text_height = text_surface->h;
@@ -429,7 +429,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     }
 
     // current frame / number of frames in history buffer
-    text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), text_color);
+    text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), TEXT_COLOR);
     SDL_Texture* current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
     int current_total_browsable_text_width = text_surface->w;
     int current_total_browsable_text_height = text_surface->h;
@@ -448,7 +448,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   // render (optional) error message
   if (!error_message.empty()) {
     error_message_shown_at_ = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-    text_surface = TTF_RenderText_Blended(big_font_, error_message.c_str(), text_color);
+    text_surface = TTF_RenderText_Blended(big_font_, error_message.c_str(), TEXT_COLOR);
     error_message_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
     error_message_width_ = text_surface->w;
     error_message_height_ = text_surface->h;

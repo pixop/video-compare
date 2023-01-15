@@ -17,21 +17,20 @@ extern "C" {
 
 class VideoCompare {
  public:
-  VideoCompare(const Display::Mode display_mode, const bool high_dpi_allowed, const std::tuple<int, int> window_size, const double time_shift_ms, const std::string& left_file_name, const std::string& right_file_name);
+  VideoCompare(Display::Mode display_mode, bool high_dpi_allowed, std::tuple<int, int> window_size, double time_shift_ms, const std::string& left_file_name, const std::string& right_file_name);
   void operator()();
 
  private:
   void thread_demultiplex_left();
   void thread_demultiplex_right();
-  void demultiplex(const int video_idx);
+  void demultiplex(int video_idx);
 
   void thread_decode_video_left();
   void thread_decode_video_right();
-  bool process_packet(const int video_idx, AVPacket* packet, AVFrame* frame_decoded);
-  void decode_video(const int video_idx);
+  bool process_packet(int video_idx, AVPacket* packet, AVFrame* frame_decoded);
+  void decode_video(int video_idx);
   void video();
 
- private:
   double time_shift_ms_;
   std::unique_ptr<Demuxer> demuxer_[2];
   std::unique_ptr<VideoDecoder> video_decoder_[2];
@@ -44,7 +43,7 @@ class VideoCompare {
   std::unique_ptr<PacketQueue> packet_queue_[2];
   std::unique_ptr<FrameQueue> frame_queue_[2];
   std::vector<std::thread> stages_;
-  static const size_t queue_size_;
+  static const size_t QUEUE_SIZE;
   std::exception_ptr exception_{};
   volatile bool seeking_{false};
   volatile bool readyToSeek_[2][2];
