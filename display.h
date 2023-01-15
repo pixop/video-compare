@@ -117,11 +117,11 @@ class Display {
   // Handle events
   void input();
 
-  bool get_quit();
-  bool get_play();
-  bool get_swap_left_right();
-  float get_seek_relative();
-  bool get_seek_from_start();
-  int get_frame_offset_delta();
-  int get_shift_right_frames();
+  bool get_quit() const;
+  bool get_play() const;
+  bool get_swap_left_right() const;
+  float get_seek_relative() const;
+  bool get_seek_from_start() const;
+  int get_frame_offset_delta() const;
+  int get_shift_right_frames() const;
 };

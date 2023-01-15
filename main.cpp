@@ -36,7 +36,7 @@ void free_argv(int argc, char** argv) {
 #else
 #define UNUSED(x) (void)(x)
 
-char** get_argv(int* argc, char** argv) {
+char** get_argv(const int* argc, char** argv) {
   UNUSED(argc);
   return argv;
 }

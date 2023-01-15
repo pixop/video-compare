@@ -36,7 +36,7 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
 
   int ret = 0;
 
-  if (!outputs || !inputs || !filter_graph_) {
+  if ((outputs == nullptr) || (inputs == nullptr) || (filter_graph_ == nullptr)) {
     ret = AVERROR(ENOMEM);
   } else {
     // buffer video source: the decoded frames go here
@@ -87,10 +87,9 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
 
   if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
     return false;
-  } else {
-    ffmpeg::check(ret);
-    return true;
   }
+  ffmpeg::check(ret);
+  return true;
 }
 
 size_t VideoFilterer::src_width() const {
