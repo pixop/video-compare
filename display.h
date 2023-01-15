@@ -41,7 +41,7 @@ class Display {
   bool show_right_{true};
   bool show_hud_{true};
   bool subtraction_mode_{false};
-  float seek_relative_{0.0f};
+  float seek_relative_{0.0F};
   int frame_offset_delta_{0};
   int shift_right_frames_{0};
   bool seek_from_start_{false};
@@ -82,26 +82,25 @@ class Display {
 
   const std::string left_file_stem_;
   const std::string right_file_stem_;
-  int saved_image_number{1};
+  int saved_image_number_{1};
 
- private:
   void update_difference(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x);
 
   void save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right);
 
   inline int static round(const float value) { return static_cast<int>(std::round(value)); }
 
-  SDL_Rect video_to_screen_space(const SDL_Rect& rect) {
-    const float width_scale = (high_dpi_allowed_ ? 2.f : 1.f) / screen_to_video_width_factor_;
-    const float height_scale = (high_dpi_allowed_ ? 2.f : 1.f) / screen_to_video_height_factor_;
+  SDL_Rect video_to_screen_space(const SDL_Rect& rect) const {
+    const float width_scale = (high_dpi_allowed_ ? 2.F : 1.F) / screen_to_video_width_factor_;
+    const float height_scale = (high_dpi_allowed_ ? 2.F : 1.F) / screen_to_video_height_factor_;
 
-    return {round(float(rect.x) * width_scale), round(float(rect.y) * height_scale), round(float(rect.w) * width_scale), round(float(rect.h) * height_scale)};
+    return {round(static_cast<float>(rect.x) * width_scale), round(static_cast<float>(rect.y) * height_scale), round(static_cast<float>(rect.w) * width_scale), round(static_cast<float>(rect.h) * height_scale)};
   }
 
-  void render_text(const int x, const int y, SDL_Texture* texture, const int texture_width, const int texture_height, const int border_extension, const bool left_adjust);
+  void render_text(int x, int y, SDL_Texture* texture, int texture_width, int texture_height, int border_extension, bool left_adjust);
 
  public:
-  Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<int, int> window_size, const unsigned width, const unsigned height, const std::string& left_file_name, const std::string& right_file_name);
+  Display(Mode mode, bool high_dpi_allowed, std::tuple<int, int> window_size, unsigned width, unsigned height, const std::string& left_file_name, const std::string& right_file_name);
   ~Display();
 
   // Copy frame to display
@@ -109,8 +108,8 @@ class Display {
                std::array<size_t, 3> pitches_left,
                std::array<uint8_t*, 3> planes_right,
                std::array<size_t, 3> pitches_right,
-               const float left_position,
-               const float right_position,
+               float left_position,
+               float right_position,
                const std::string& current_total_browsable,
                const std::string& error_message);
 

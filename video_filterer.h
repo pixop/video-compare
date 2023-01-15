@@ -23,9 +23,8 @@ class VideoFilterer {
   AVPixelFormat dest_pixel_format() const;
 
  private:
-  int init_filters(const AVCodecContext* dec_ctx, const AVRational time_base, const std::string& filter_description);
+  int init_filters(const AVCodecContext* dec_ctx, AVRational time_base, const std::string& filter_description);
 
- private:
   AVFilterContext* buffersrc_ctx_;
   AVFilterContext* buffersink_ctx_;
   AVFilterGraph* filter_graph_;

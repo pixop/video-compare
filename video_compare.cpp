@@ -12,7 +12,7 @@ extern "C" {
 #include <libavutil/time.h>
 }
 
-const size_t VideoCompare::queue_size_{5};
+const size_t VideoCompare::QUEUE_SIZE{5};
 
 static inline bool is_behind(int64_t frame1_pts, int64_t frame2_pts, int64_t delta_pts) {
   float t1 = static_cast<float>(frame1_pts) * AV_TIME_TO_SEC;
@@ -36,8 +36,8 @@ VideoCompare::VideoCompare(const Display::Mode display_mode, const bool high_dpi
                         std::make_unique<FormatConverter>(video_filterer_[1]->dest_width(), video_filterer_[1]->dest_height(), max_width_, max_height_, video_filterer_[1]->dest_pixel_format(), AV_PIX_FMT_RGB24)},
       display_{std::make_unique<Display>(display_mode, high_dpi_allowed, window_size, max_width_, max_height_, left_file_name, right_file_name)},
       timer_{std::make_unique<Timer>()},
-      packet_queue_{std::make_unique<PacketQueue>(queue_size_), std::make_unique<PacketQueue>(queue_size_)},
-      frame_queue_{std::make_unique<FrameQueue>(queue_size_), std::make_unique<FrameQueue>(queue_size_)} {}
+      packet_queue_{std::make_unique<PacketQueue>(QUEUE_SIZE), std::make_unique<PacketQueue>(QUEUE_SIZE)},
+      frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {}
 
 void VideoCompare::operator()() {
   stages_.emplace_back(&VideoCompare::thread_demultiplex_left, this);
@@ -223,7 +223,7 @@ void VideoCompare::video() {
     int total_right_time_shifted = 0;
 
     for (uint64_t frame_number = 0;; ++frame_number) {
-      std::string errorMessage;
+      std::string error_message;
 
       display_->input();
 
@@ -232,8 +232,8 @@ void VideoCompare::video() {
       if ((display_->get_seek_relative() != 0.0F) || (display_->get_shift_right_frames() != 0)) {
         total_right_time_shifted += display_->get_shift_right_frames();
 
-        if (packet_queue_[0]->isFinished() || packet_queue_[1]->isFinished()) {
-          errorMessage = "Unable to perform seek (end of file reached)";
+        if (packet_queue_[0]->is_finished() || packet_queue_[1]->is_finished()) {
+          error_message = "Unable to perform seek (end of file reached)";
         } else {
           // compute effective time shift and round down to nearest 2 ms
           right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
@@ -278,7 +278,7 @@ void VideoCompare::video() {
 
           if ((!demuxer_[0]->seek(std::max(0.0F, next_position), backward) && !backward) || (!demuxer_[1]->seek(std::max(0.0F, next_position), backward) && !backward)) {
             // restore position if unable to perform forward seek
-            errorMessage = "Unable to seek past end of file";
+            error_message = "Unable to seek past end of file";
             demuxer_[0]->seek(std::max(0.0F, current_position), true);
             demuxer_[1]->seek(std::max(0.0F, current_position), true);
           };
@@ -412,13 +412,13 @@ void VideoCompare::video() {
                             {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
                             {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
                             {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                            left_frames[frame_offset]->pts * AV_TIME_TO_SEC, right_frames[frame_offset]->pts * AV_TIME_TO_SEC, current_total_browsable, errorMessage);
+                            left_frames[frame_offset]->pts * AV_TIME_TO_SEC, right_frames[frame_offset]->pts * AV_TIME_TO_SEC, current_total_browsable, error_message);
         } else {
           display_->refresh({right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
                             {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
                             {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
                             {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                            right_frames[frame_offset]->pts * AV_TIME_TO_SEC, left_frames[frame_offset]->pts * AV_TIME_TO_SEC, current_total_browsable, errorMessage);
+                            right_frames[frame_offset]->pts * AV_TIME_TO_SEC, left_frames[frame_offset]->pts * AV_TIME_TO_SEC, current_total_browsable, error_message);
         }
       }
     }
