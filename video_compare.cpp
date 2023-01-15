@@ -407,18 +407,21 @@ void VideoCompare::video() {
       const std::string current_total_browsable = string_sprintf("%d/%d", frame_offset + 1, static_cast<int>(left_frames.size()));
 
       if (frame_offset >= 0) {
+        const std::string left_picture_type(1, av_get_picture_type_char(left_frames[frame_offset]->pict_type));
+        const std::string right_picture_type(1, av_get_picture_type_char(right_frames[frame_offset]->pict_type));
+
         if (!display_->get_swap_left_right()) {
           display_->refresh({left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
                             {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
                             {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
                             {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                            left_frames[frame_offset]->pts * AV_TIME_TO_SEC, right_frames[frame_offset]->pts * AV_TIME_TO_SEC, current_total_browsable, error_message);
+                            left_frames[frame_offset]->pts * AV_TIME_TO_SEC, left_picture_type, right_frames[frame_offset]->pts * AV_TIME_TO_SEC, right_picture_type, current_total_browsable, error_message);
         } else {
           display_->refresh({right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
                             {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
                             {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
                             {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                            right_frames[frame_offset]->pts * AV_TIME_TO_SEC, left_frames[frame_offset]->pts * AV_TIME_TO_SEC, current_total_browsable, error_message);
+                            right_frames[frame_offset]->pts * AV_TIME_TO_SEC, right_picture_type, left_frames[frame_offset]->pts * AV_TIME_TO_SEC, left_picture_type, current_total_browsable, error_message);
         }
       }
     }

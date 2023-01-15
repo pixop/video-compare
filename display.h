@@ -109,7 +109,9 @@ class Display {
                std::array<uint8_t*, 3> planes_right,
                std::array<size_t, 3> pitches_right,
                float left_position,
+               const std::string& left_picture_type,
                float right_position,
+               const std::string& right_picture_type,
                const std::string& current_total_browsable,
                const std::string& error_message);
 

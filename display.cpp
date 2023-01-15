@@ -304,7 +304,9 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
                       std::array<uint8_t*, 3> planes_right,
                       std::array<size_t, 3> pitches_right,
                       const float left_position,
+                      const std::string& left_picture_type,
                       const float right_position,
+                      const std::string& right_picture_type,
                       const std::string& current_total_browsable,
                       const std::string& error_message) {
   if (save_image_frames_) {
@@ -384,7 +386,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
     if (show_left_) {
       // file name and current position of left video
-      const std::string left_pos_str = format_position(left_position);
+      const std::string left_pos_str = format_position(left_position) + " " + left_picture_type;
       text_surface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), TEXT_COLOR);
       SDL_Texture* left_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
       int left_position_text_width = text_surface->w;
@@ -398,7 +400,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     }
     if (show_right_) {
       // file name and current position of right video
-      const std::string right_pos_str = format_position(right_position);
+      const std::string right_pos_str = format_position(right_position) + " " + right_picture_type;
       text_surface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), TEXT_COLOR);
       SDL_Texture* right_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
       int right_position_text_width = text_surface->w;
