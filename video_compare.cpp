@@ -32,9 +32,10 @@ VideoCompare::VideoCompare(const Display::Mode display_mode, const bool high_dpi
       video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get()), std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get())},
       max_width_{std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width())},
       max_height_{std::max(video_filterer_[0]->dest_height(), video_filterer_[1]->dest_height())},
+      shortest_duration_{std::min(demuxer_[0]->duration(), demuxer_[1]->duration()) * AV_TIME_TO_SEC},
       format_converter_{std::make_unique<FormatConverter>(video_filterer_[0]->dest_width(), video_filterer_[0]->dest_height(), max_width_, max_height_, video_filterer_[0]->dest_pixel_format(), AV_PIX_FMT_RGB24),
                         std::make_unique<FormatConverter>(video_filterer_[1]->dest_width(), video_filterer_[1]->dest_height(), max_width_, max_height_, video_filterer_[1]->dest_pixel_format(), AV_PIX_FMT_RGB24)},
-      display_{std::make_unique<Display>(display_mode, high_dpi_allowed, window_size, max_width_, max_height_, left_file_name, right_file_name)},
+      display_{std::make_unique<Display>(display_mode, high_dpi_allowed, window_size, max_width_, max_height_, shortest_duration_, left_file_name, right_file_name)},
       timer_{std::make_unique<Timer>()},
       packet_queue_{std::make_unique<PacketQueue>(QUEUE_SIZE), std::make_unique<PacketQueue>(QUEUE_SIZE)},
       frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {}
@@ -268,8 +269,8 @@ void VideoCompare::video() {
           float next_position;
 
           if (display_->get_seek_from_start()) {
-            // seek from start based on first stream duration in seconds
-            next_position = (demuxer_[0]->duration() * AV_TIME_TO_SEC * display_->get_seek_relative());
+            // seek from start based on the shortest stream duration in seconds
+            next_position = shortest_duration_ * display_->get_seek_relative();
           } else {
             next_position = current_position + display_->get_seek_relative();
           }

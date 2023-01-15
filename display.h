@@ -21,6 +21,7 @@ class Display {
   const bool high_dpi_allowed_;
   const int video_width_;
   const int video_height_;
+  const double duration_;
 
   int drawable_width_;
   int drawable_height_;
@@ -100,7 +101,7 @@ class Display {
   void render_text(int x, int y, SDL_Texture* texture, int texture_width, int texture_height, int border_extension, bool left_adjust);
 
  public:
-  Display(Mode mode, bool high_dpi_allowed, std::tuple<int, int> window_size, unsigned width, unsigned height, const std::string& left_file_name, const std::string& right_file_name);
+  Display(Mode mode, bool high_dpi_allowed, std::tuple<int, int> window_size, unsigned width, unsigned height, double duration, const std::string& left_file_name, const std::string& right_file_name);
   ~Display();
 
   // Copy frame to display

@@ -45,6 +45,9 @@ std::string get_file_stem(const std::string& filePath) {
 }
 
 static const SDL_Color TEXT_COLOR = {255, 255, 255, 0};
+static const SDL_Color POSITION_COLOR = {255, 255, 192, 0};
+static const SDL_Color BUFFER_COLOR = {160, 225, 192, 0};
+static const SDL_Color TARGET_COLOR = {192, 192, 128, 0};
 
 static std::string format_position(const float position) {
   const float rounded_position = std::round(position * 1000.0F) / 1000.0F;
@@ -73,8 +76,8 @@ SDL::~SDL() {
   SDL_Quit();
 }
 
-Display::Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<int, int> window_size, const unsigned width, const unsigned height, const std::string& left_file_name, const std::string& right_file_name)
-    : mode_{mode}, high_dpi_allowed_{high_dpi_allowed}, video_width_{static_cast<int>(width)}, video_height_{static_cast<int>(height)}, left_file_stem_{get_file_stem(left_file_name)}, right_file_stem_{get_file_stem(right_file_name)} {
+Display::Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<int, int> window_size, const unsigned width, const unsigned height, const double duration, const std::string& left_file_name, const std::string& right_file_name)
+    : mode_{mode}, high_dpi_allowed_{high_dpi_allowed}, video_width_{static_cast<int>(width)}, video_height_{static_cast<int>(height)}, duration_{duration}, left_file_stem_{get_file_stem(left_file_name)}, right_file_stem_{get_file_stem(right_file_name)} {
   const int auto_width = mode == Mode::hstack ? width * 2 : width;
   const int auto_height = mode == Mode::vstack ? height * 2 : height;
 
@@ -387,7 +390,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     if (show_left_) {
       // file name and current position of left video
       const std::string left_pos_str = format_position(left_position) + " " + left_picture_type;
-      text_surface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), TEXT_COLOR);
+      text_surface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), POSITION_COLOR);
       SDL_Texture* left_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
       int left_position_text_width = text_surface->w;
       int left_position_text_height = text_surface->h;
@@ -401,7 +404,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     if (show_right_) {
       // file name and current position of right video
       const std::string right_pos_str = format_position(right_position) + " " + right_picture_type;
-      text_surface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), TEXT_COLOR);
+      text_surface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), POSITION_COLOR);
       SDL_Texture* right_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
       int right_position_text_width = text_surface->w;
       int right_position_text_height = text_surface->h;
@@ -430,8 +433,22 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       SDL_DestroyTexture(right_position_text_texture);
     }
 
+    // target seek position
+    double target_position = static_cast<float>(mouse_x_) / static_cast<float>(window_width_) * duration_;
+
+    const std::string target_pos_str = format_position(target_position);
+    text_surface = TTF_RenderText_Blended(small_font_, target_pos_str.c_str(), TARGET_COLOR);
+    SDL_Texture* target_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+    int target_position_text_width = text_surface->w;
+    int target_position_text_height = text_surface->h;
+    SDL_FreeSurface(text_surface);
+
+    render_text(drawable_width_ - line1_y_ - target_position_text_width, drawable_height_ - line1_y_ - target_position_text_height, target_position_text_texture, target_position_text_width, target_position_text_height, border_extension_, false);
+
+    SDL_DestroyTexture(target_position_text_texture);
+
     // current frame / number of frames in history buffer
-    text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), TEXT_COLOR);
+    text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), BUFFER_COLOR);
     SDL_Texture* current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
     int current_total_browsable_text_width = text_surface->w;
     int current_total_browsable_text_height = text_surface->h;

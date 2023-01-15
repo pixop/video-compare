@@ -37,6 +37,7 @@ class VideoCompare {
   std::unique_ptr<VideoFilterer> video_filterer_[2];
   size_t max_width_;
   size_t max_height_;
+  double shortest_duration_;
   std::unique_ptr<FormatConverter> format_converter_[2];
   std::unique_ptr<Display> display_;
   std::unique_ptr<Timer> timer_;
