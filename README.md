@@ -102,11 +102,13 @@ The above arguments can be combined in any order, of course.
 - 2: Toggle hide/show right video
 - 3: Toggle hide/show HUD
 - 0: Toggle video/subtraction mode
-- +: Time-shift right video 1 frame forward (hold CTRL/ALT for +10/+100 frames)
-- -: Time-shift right video 1 frame backward (hold CTRL/ALT for -10/-100 frames)
+- +: Time-shift right video 1 frame forward
+- -: Time-shift right video 1 frame backward
 
 Move the mouse horizontally to adjust the movable slider position. Click the mouse to perform a time
 seek based on the horizontal position of the slider relative to the window width.
+
+Hold CTRL while time-shifting for 10 frame increments/decrements. Hold ALT while time-shifting for 100 frame increments/decrements. 
 
 ## Requirements
 
@@ -133,7 +135,9 @@ Note that root privileges are required to perform this operation in most environ
 
 ## Notes
 
-Audio playback is not supported.
+1. Audio playback is not supported.
+
+2. Is not designed to cope with longer time-shifts. A few seconds at most is recommended.
 
 ## Practical tips
 
