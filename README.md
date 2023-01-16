@@ -107,8 +107,10 @@ The above arguments can be combined in any order, of course.
 - +: Time-shift right video 1 frame forward
 - -: Time-shift right video 1 frame backward
 
-Move the mouse horizontally to adjust the movable slider position. Click the mouse to perform 
-a time seek based on the horizontal position of the slider relative to the window width.
+Move the mouse horizontally to adjust the movable slider position. 
+
+Click the mouse to perform a time seek based on the horizontal position of the mouse cursor
+relative to the window width (the target position is shown in the lower right corner).
 
 Hold CTRL while time-shifting with +/- for faster increments/decrements of 10 frames per 
 keystroke. Similarly, hold down the ALT key for even bigger time-shifts of 100 frames.
