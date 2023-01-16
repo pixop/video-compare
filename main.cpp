@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
                               {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
                               {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
                               {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
-                              {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of milliseconds", 1}}};
+                              {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1}}};
 
     argagg::parser_results args;
     args = argparser.parse(argc, argv_decoded);
@@ -109,7 +109,7 @@ int main(int argc, char** argv) {
           throw std::logic_error{"Cannot parse time shift argument; must be a valid floating point number"};
         }
 
-        time_shift_ms = std::stod(time_shift_arg);
+        time_shift_ms = std::stod(time_shift_arg) * 1000.0;
       }
 
       VideoCompare compare{display_mode, args["high-dpi"], window_size, time_shift_ms, args.pos[0], args.pos[1]};
