@@ -62,7 +62,7 @@ Shift the presentation time stamps of the right video instead of assuming the vi
 positive amount has the effect of delaying the left video while negative values conversely delays the
 right video. Useful when videos are slightly out of sync:
 
-    ./video-compare -t 80 video1.mp4 video2.mp4
+    ./video-compare -t 0.080 video1.mp4 video2.mp4
 
 Display videos stacked vertically at full size without a slider (`hstack` for horizontal stacking is
 also supported):
@@ -91,8 +91,8 @@ The above arguments can be combined in any order, of course.
 - 2: Toggle hide/show right video
 - 3: Toggle hide/show HUD
 - 0: Toggle video/subtraction mode
-- +: Time-shift right video 1 frame forward
-- -: Time-shift right video 1 frame backward
+- +: Time-shift right video 1 frame forward (hold CTRL/ALT for +10/+100 frames)
+- -: Time-shift right video 1 frame backward (hold CTRL/ALT for -10/-100 frames)
 
 Move the mouse horizontally to adjust the movable slider position. Click the mouse to perform a time
 seek based on the horizontal position of the slider relative to the window width.
