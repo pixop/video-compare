@@ -16,13 +16,21 @@ two images. The common PNG and JPEG formats have been successfully tested to wor
 
 ## Installation
 
+### Homebrew
+
 Install [via Homebrew](https://formulae.brew.sh/formula/video-compare):
 
 ```
 brew install video-compare
 ```
 
-Or [build it yourself](#build).
+### Pre-compiled (Windows 10)
+
+Pre-built Windows 10 x86 64-bit releases are available from [this page](https://github.com/pixop/video-compare/releases). Download and extract the .zip-archive on your system, then run `video-compare.exe` from a command prompt.
+
+### Compile from source
+
+[Build it yourself from source code](#build).
 
 ## Screenshots
 
@@ -122,10 +130,7 @@ Note that root privileges are required to perform this operation in most environ
 
 ## Notes
 
-1. Audio playback is not supported.
-
-2. Pre-built Windows 10 64-bit releases are available from this page (simply extract the
-   .zip-archive and run `video-compare.exe` from a command prompt).
+Audio playback is not supported.
 
 ## Practical tips
 
