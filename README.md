@@ -37,7 +37,7 @@ Pre-built Windows 10 x86 64-bit releases are available from [this page](https://
 Visual compare mode:
 ![Visual compare mode](screenshot_1.jpg?raw=true)
 
-Subtraction mode (and zoom activated):
+Subtraction mode (time-shifting + zoom activated):
 ![Subtraction mode"](screenshot_2.jpg?raw=true)
 
 ## Credits

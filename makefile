@@ -42,7 +42,7 @@ $(target): $(obj)
 	@$(CXX) $(CXXFLAGS) $< -MM -MT $(@:.d=.o) >$@
 
 test: $(target)
-	./$(target) -w 1280x720 screenshot_1.jpg screenshot_2.jpg
+	./$(target) -w 800x screenshot_1.jpg screenshot_2.jpg
 
 .PHONY: clean
 clean:
