@@ -111,7 +111,7 @@ Move the mouse horizontally to adjust the movable slider position. Click the mou
 a time seek based on the horizontal position of the slider relative to the window width.
 
 Hold CTRL while time-shifting with +/- for faster increments/decrements of 10 frames per 
-keystroke. Similarly you can hold down the ALT key for even bigger time-shifts of 100 frames.
+keystroke. Similarly, hold down the ALT key for even bigger time-shifts of 100 frames.
 
 ## Build
 
