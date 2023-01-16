@@ -137,7 +137,9 @@ Note that root privileges are required to perform this operation in most environ
 
 1. Audio playback is not supported.
 
-2. Is not designed to cope with longer time-shifts. A few seconds at most is recommended.
+2. Not designed to cope with longer time-shifts. Keep shifts below a few seconds for the best experience.
+
+3. Seeking requires synchronization on keyframes (I-frames). 
 
 ## Practical tips
 
