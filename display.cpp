@@ -46,25 +46,36 @@ std::string get_file_stem(const std::string& filePath) {
 
 static const SDL_Color TEXT_COLOR = {255, 255, 255, 0};
 static const SDL_Color POSITION_COLOR = {255, 255, 192, 0};
+static const SDL_Color TARGET_COLOR = {200, 200, 140, 0};
 static const SDL_Color BUFFER_COLOR = {160, 225, 192, 0};
-static const SDL_Color TARGET_COLOR = {192, 192, 128, 0};
+static const int BACKGROUND_ALPHA = 64;
 
 static std::string format_position(const float position) {
-  const float rounded_position = std::round(position * 1000.0F) / 1000.0F;
+  const float rounded_millis = std::round(position * 1000.0F);
 
-  const int seconds = rounded_position;
-  const int milliseconds = (rounded_position - static_cast<float>(seconds)) * 1000.0F;
+  const int milliseconds = rounded_millis;
+  const int seconds = milliseconds / 1000;
   const int minutes = seconds / 60;
   const int hours = minutes / 60;
 
   if (minutes >= 60) {
-    return string_sprintf("%02d:%02d:%02d.%03d", hours, minutes % 60, seconds % 60, milliseconds);
+    return string_sprintf("%02d:%02d:%02d.%03d", hours, minutes % 60, seconds % 60, milliseconds % 1000);
   }
   if (seconds >= 60) {
-    return string_sprintf("%02d:%02d.%03d", minutes, seconds % 60, milliseconds);
+    return string_sprintf("%02d:%02d.%03d", minutes, seconds % 60, milliseconds % 1000);
   }
 
-  return string_sprintf("%d.%03d", seconds, milliseconds);
+  return string_sprintf("%d.%03d", seconds, milliseconds % 1000);
+}
+
+static std::string format_position_difference(const float position1, const float position2) {
+  if (std::abs(position1 - position2) <= 1e-4) {
+    return "";
+  } else if (position1 < position2) {
+    return " (-" + format_position(position2 - position1) + ")";
+  }
+
+  return " (+" + format_position(position1 - position2) + ")";
 }
 
 SDL::SDL() {
@@ -378,18 +389,18 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     }
   }
 
-  SDL_Rect fill1_rect;
-  SDL_Rect text1_rect;
+  SDL_Rect fill_rect;
+  SDL_Rect text_rect;
   SDL_Surface* text_surface;
 
   if (show_hud_) {
     // render background rectangles and text on top
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 64);
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
 
     if (show_left_) {
       // file name and current position of left video
-      const std::string left_pos_str = format_position(left_position) + " " + left_picture_type;
+      const std::string left_pos_str = format_position(left_position) + " " + left_picture_type + format_position_difference(left_position, right_position);
       text_surface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), POSITION_COLOR);
       SDL_Texture* left_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
       int left_position_text_width = text_surface->w;
@@ -403,7 +414,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     }
     if (show_right_) {
       // file name and current position of right video
-      const std::string right_pos_str = format_position(right_position) + " " + right_picture_type;
+      const std::string right_pos_str = format_position(right_position) + " " + right_picture_type + format_position_difference(right_position, left_position);
       text_surface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), POSITION_COLOR);
       SDL_Texture* right_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
       int right_position_text_width = text_surface->w;
@@ -443,6 +454,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     int target_position_text_height = text_surface->h;
     SDL_FreeSurface(text_surface);
 
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 1.5);
     render_text(drawable_width_ - line1_y_ - target_position_text_width, drawable_height_ - line1_y_ - target_position_text_height, target_position_text_texture, target_position_text_width, target_position_text_height, border_extension_, false);
 
     SDL_DestroyTexture(target_position_text_texture);
@@ -456,11 +468,12 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
     int text_y = (mode_ == Mode::vstack) ? middle_y_ : line2_y_;
 
-    fill1_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
+    fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
                   current_total_browsable_text_height + double_border_extension_};
-    SDL_RenderFillRect(renderer_, &fill1_rect);
-    text1_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, text_y, current_total_browsable_text_width, current_total_browsable_text_height};
-    SDL_RenderCopy(renderer_, current_total_browsable_text_texture, nullptr, &text1_rect);
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
+    SDL_RenderFillRect(renderer_, &fill_rect);
+    text_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, text_y, current_total_browsable_text_width, current_total_browsable_text_height};
+    SDL_RenderCopy(renderer_, current_total_browsable_text_texture, nullptr, &text_rect);
     SDL_DestroyTexture(current_total_browsable_text_texture);
   }
 
@@ -477,13 +490,13 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     std::chrono::milliseconds now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
     float keep_alpha = std::max(sqrtf(1.0F - (now - error_message_shown_at_).count() / 1000.0F / 4.0F), 0.0F);
 
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 64 * keep_alpha);
-    fill1_rect = {drawable_width_ / 2 - error_message_width_ / 2 - 2, drawable_height_ / 2 - error_message_height_ / 2 - 2, error_message_width_ + 4, error_message_height_ + 4};
-    SDL_RenderFillRect(renderer_, &fill1_rect);
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * keep_alpha);
+    fill_rect = {drawable_width_ / 2 - error_message_width_ / 2 - 2, drawable_height_ / 2 - error_message_height_ / 2 - 2, error_message_width_ + 4, error_message_height_ + 4};
+    SDL_RenderFillRect(renderer_, &fill_rect);
 
     SDL_SetTextureAlphaMod(error_message_texture_, 255 * keep_alpha);
-    text1_rect = {drawable_width_ / 2 - error_message_width_ / 2, drawable_height_ / 2 - error_message_height_ / 2, error_message_width_, error_message_height_};
-    SDL_RenderCopy(renderer_, error_message_texture_, nullptr, &text1_rect);
+    text_rect = {drawable_width_ / 2 - error_message_width_ / 2, drawable_height_ / 2 - error_message_height_ / 2, error_message_width_, error_message_height_};
+    SDL_RenderCopy(renderer_, error_message_texture_, nullptr, &text_rect);
   }
 
   if (mode_ == Mode::split && show_hud_ && compare_mode) {
@@ -593,11 +606,23 @@ void Display::input() {
             break;
           case SDLK_PLUS:
           case SDLK_KP_PLUS:
-            shift_right_frames_++;
+            if (event_.key.keysym.mod & KMOD_ALT) {
+              shift_right_frames_ += 100;
+            } else if (event_.key.keysym.mod & KMOD_CTRL) {
+              shift_right_frames_ += 10;
+            } else {
+              shift_right_frames_++;
+            }
             break;
           case SDLK_MINUS:
           case SDLK_KP_MINUS:
-            shift_right_frames_--;
+            if (event_.key.keysym.mod & KMOD_ALT) {
+              shift_right_frames_ -= 100;
+            } else if (event_.key.keysym.mod & KMOD_CTRL) {
+              shift_right_frames_ -= 10;
+            } else {
+              shift_right_frames_--;
+            }
             break;
           default:
             break;
