@@ -130,7 +130,7 @@ apt install libavformat-dev libswscale-dev libsdl2-dev libsdl2-ttf-dev
 
 ### Instructions
 
-Compile the source code:
+Compile the source code via GNU Make:
 
 ```sh
 make
