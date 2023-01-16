@@ -30,7 +30,7 @@ Pre-built Windows 10 x86 64-bit releases are available from [this page](https://
 
 ### Compile from source
 
-[Build it yourself from source code](#build).
+[Build it yourself](#build).
 
 ## Screenshots
 
