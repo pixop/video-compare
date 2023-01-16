@@ -47,6 +47,7 @@ class Display {
   int shift_right_frames_{0};
   bool seek_from_start_{false};
   bool save_image_frames_{false};
+  bool mouse_is_inside_window_{false};
 
   SDL sdl_;
   TTF_Font* small_font_;
