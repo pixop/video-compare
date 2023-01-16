@@ -236,9 +236,15 @@ void VideoCompare::video() {
         if (packet_queue_[0]->is_finished() || packet_queue_[1]->is_finished()) {
           error_message = "Unable to perform seek (end of file reached)";
         } else {
-          // compute effective time shift and round down to nearest 2 ms
+          // compute effective time shift 
           right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
-          right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
+
+          // round away from zero to nearest 2 ms
+          if (right_time_shift > 0) {
+            right_time_shift = ((right_time_shift / 1000) + 2) * 1000;
+          } else if (right_time_shift < 0) {
+            right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
+          }
 
           seeking_ = true;
           readyToSeek_[0][0] = false;
