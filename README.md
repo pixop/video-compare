@@ -24,7 +24,7 @@ Install [via Homebrew](https://formulae.brew.sh/formula/video-compare):
 brew install video-compare
 ```
 
-### Pre-compiled (Windows 10)
+### Pre-compiled Windows 10 binaries
 
 Pre-built Windows 10 x86 64-bit releases are available from [this page](https://github.com/pixop/video-compare/releases). 
 Download and extract the .zip-archive on your system, then run `video-compare.exe` from a command prompt.
