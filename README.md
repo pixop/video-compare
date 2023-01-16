@@ -40,6 +40,9 @@ Visual compare mode:
 Subtraction mode (plus time-shift and zoom):
 ![Subtraction mode"](screenshot_2.jpg?raw=true)
 
+Vertically stacked mode:
+![Stacked mode"](screenshot_3.jpg?raw=true)
+
 ## Credits
 
 `video-compare` was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on
