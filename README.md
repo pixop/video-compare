@@ -20,13 +20,14 @@ two images. The common PNG and JPEG formats have been successfully tested to wor
 
 Install [via Homebrew](https://formulae.brew.sh/formula/video-compare):
 
-```
+```sh
 brew install video-compare
 ```
 
 ### Pre-compiled (Windows 10)
 
-Pre-built Windows 10 x86 64-bit releases are available from [this page](https://github.com/pixop/video-compare/releases). Download and extract the .zip-archive on your system, then run `video-compare.exe` from a command prompt.
+Pre-built Windows 10 x86 64-bit releases are available from [this page](https://github.com/pixop/video-compare/releases). 
+Download and extract the .zip-archive on your system, then run `video-compare.exe` from a command prompt.
 
 ### Compile from source
 
@@ -48,7 +49,8 @@ Vertically stacked mode:
 `video-compare` was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on
 the excellent video player GitHub project: https://github.com/pockethook/player
 
-Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://github.com/libsdl-org/SDL) and [stb](https://github.com/nothings/stb) authors.
+Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://github.com/libsdl-org/SDL) and 
+[stb](https://github.com/nothings/stb) authors.
 
 ## Usage
 
@@ -105,15 +107,18 @@ The above arguments can be combined in any order, of course.
 - +: Time-shift right video 1 frame forward
 - -: Time-shift right video 1 frame backward
 
-Move the mouse horizontally to adjust the movable slider position. Click the mouse to perform a time
-seek based on the horizontal position of the slider relative to the window width.
+Move the mouse horizontally to adjust the movable slider position. Click the mouse to perform 
+a time seek based on the horizontal position of the slider relative to the window width.
 
-Hold CTRL while time-shifting for 10 frame increments/decrements. Hold ALT while time-shifting for 100 frame increments/decrements. 
+Hold CTRL while time-shifting with +/- for faster increments/decrements of 10 frames per 
+keystroke. Similarly you can hold down the ALT key for even bigger time-shifts of 100 frames.
 
-## Requirements
+## Build
 
-Requires FFmpeg headers and development libraries to be installed, along with SDL2
-and its TrueType font rendering add on (libsdl2_ttf).
+### Requirements
+
+Requires FFmpeg headers and development libraries to be installed, along with SDL2 and its 
+TrueType font rendering add on (libsdl2_ttf).
 
 On Debian GNU/Linux the required development packages can be installed via `apt`:
 
@@ -121,15 +126,19 @@ On Debian GNU/Linux the required development packages can be installed via `apt`
 apt install libavformat-dev libswscale-dev libsdl2-dev libsdl2-ttf-dev
 ```
 
-## Build
+### Instructions
 
 Compile the source code:
 
-    make
+```sh
+make
+```
 
 The linked `video-compare` executable will be created in the soure code directory. To perform a system wide installation:
 
-    make install
+```sh
+make install
+```
 
 Note that root privileges are required to perform this operation in most environments (hint: use e.g. `sudo`).
 
