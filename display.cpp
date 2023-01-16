@@ -48,7 +48,7 @@ static const SDL_Color TEXT_COLOR = {255, 255, 255, 0};
 static const SDL_Color POSITION_COLOR = {255, 255, 192, 0};
 static const SDL_Color TARGET_COLOR = {200, 200, 140, 0};
 static const SDL_Color BUFFER_COLOR = {160, 225, 192, 0};
-static const int BACKGROUND_ALPHA = 64;
+static const int BACKGROUND_ALPHA = 100;
 
 static std::string format_position(const float position) {
   const float rounded_millis = std::round(position * 1000.0F);
@@ -139,7 +139,7 @@ Display::Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<
   double_border_extension_ = border_extension_ * 2;
   line1_y_ = 20;
   line2_y_ = line1_y_ + 30 * font_scale_;
-  middle_y_ = drawable_height_ / 2 - (30 * font_scale_ / 2);
+  middle_y_ = drawable_height_ / 2 - (30 * font_scale_ - double_border_extension_) / 2;
 
   if (mode_ != Mode::vstack) {
     max_text_width_ = drawable_width_ / 2 - double_border_extension_ - line1_y_;
@@ -443,21 +443,22 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
       SDL_DestroyTexture(right_position_text_texture);
     }
+    if (mouse_is_inside_window_) {
+      // target seek position
+      double target_position = static_cast<float>(mouse_x_) / static_cast<float>(window_width_) * duration_;
 
-    // target seek position
-    double target_position = static_cast<float>(mouse_x_) / static_cast<float>(window_width_) * duration_;
+      const std::string target_pos_str = format_position(target_position);
+      text_surface = TTF_RenderText_Blended(small_font_, target_pos_str.c_str(), TARGET_COLOR);
+      SDL_Texture* target_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+      int target_position_text_width = text_surface->w;
+      int target_position_text_height = text_surface->h;
+      SDL_FreeSurface(text_surface);
 
-    const std::string target_pos_str = format_position(target_position);
-    text_surface = TTF_RenderText_Blended(small_font_, target_pos_str.c_str(), TARGET_COLOR);
-    SDL_Texture* target_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-    int target_position_text_width = text_surface->w;
-    int target_position_text_height = text_surface->h;
-    SDL_FreeSurface(text_surface);
+      SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 2);
+      render_text(drawable_width_ - line1_y_ - target_position_text_width, drawable_height_ - line1_y_ - target_position_text_height, target_position_text_texture, target_position_text_width, target_position_text_height, border_extension_, false);
 
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 1.5);
-    render_text(drawable_width_ - line1_y_ - target_position_text_width, drawable_height_ - line1_y_ - target_position_text_height, target_position_text_texture, target_position_text_width, target_position_text_height, border_extension_, false);
-
-    SDL_DestroyTexture(target_position_text_texture);
+      SDL_DestroyTexture(target_position_text_texture);
+    }
 
     // current frame / number of frames in history buffer
     text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), BUFFER_COLOR);
@@ -527,6 +528,16 @@ void Display::input() {
 
   while (SDL_PollEvent(&event_) != 0) {
     switch (event_.type) {
+      case SDL_WINDOWEVENT:
+        switch (event_.window.event) {
+          case SDL_WINDOWEVENT_LEAVE:
+            mouse_is_inside_window_ = false;
+            break;
+          case SDL_WINDOWEVENT_ENTER:
+            mouse_is_inside_window_ = true;
+            break;
+        }
+        break;
       case SDL_MOUSEBUTTONDOWN:
         seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
         seek_from_start_ = true;
