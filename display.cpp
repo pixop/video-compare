@@ -87,8 +87,21 @@ SDL::~SDL() {
   SDL_Quit();
 }
 
-Display::Display(const Mode mode, const bool high_dpi_allowed, const std::tuple<int, int> window_size, const unsigned width, const unsigned height, const double duration, const std::string& left_file_name, const std::string& right_file_name)
-    : mode_{mode}, high_dpi_allowed_{high_dpi_allowed}, video_width_{static_cast<int>(width)}, video_height_{static_cast<int>(height)}, duration_{duration}, left_file_stem_{get_file_stem(left_file_name)}, right_file_stem_{get_file_stem(right_file_name)} {
+Display::Display(const Mode mode,
+                 const bool high_dpi_allowed,
+                 const std::tuple<int, int> window_size,
+                 const unsigned width,
+                 const unsigned height,
+                 const double duration,
+                 const std::string& left_file_name,
+                 const std::string& right_file_name)
+    : mode_{mode},
+      high_dpi_allowed_{high_dpi_allowed},
+      video_width_{static_cast<int>(width)},
+      video_height_{static_cast<int>(height)},
+      duration_{duration},
+      left_file_stem_{get_file_stem(left_file_name)},
+      right_file_stem_{get_file_stem(right_file_name)} {
   const int auto_width = mode == Mode::hstack ? width * 2 : width;
   const int auto_height = mode == Mode::vstack ? height * 2 : height;
 
@@ -455,7 +468,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       SDL_FreeSurface(text_surface);
 
       SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 2);
-      render_text(drawable_width_ - line1_y_ - target_position_text_width, drawable_height_ - line1_y_ - target_position_text_height, target_position_text_texture, target_position_text_width, target_position_text_height, border_extension_, false);
+      render_text(drawable_width_ - line1_y_ - target_position_text_width, drawable_height_ - line1_y_ - target_position_text_height, target_position_text_texture, target_position_text_width, target_position_text_height, border_extension_,
+                  false);
 
       SDL_DestroyTexture(target_position_text_texture);
     }
@@ -470,7 +484,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     int text_y = (mode_ == Mode::vstack) ? middle_y_ : line2_y_;
 
     fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
-                  current_total_browsable_text_height + double_border_extension_};
+                 current_total_browsable_text_height + double_border_extension_};
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
     SDL_RenderFillRect(renderer_, &fill_rect);
     text_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, text_y, current_total_browsable_text_width, current_total_browsable_text_height};
