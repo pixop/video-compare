@@ -372,7 +372,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   // zoomed area
   int src_zoomed_size = 64;
   int src_half_zoomed_size = src_zoomed_size / 2;
-  int dst_zoomed_size = drawable_height_ * 0.5F;
+  int dst_zoomed_size = std::min(drawable_width_, drawable_height_) * 0.5F;
   int dst_half_zoomed_size = dst_zoomed_size / 2;
 
   if (zoom_left_ || zoom_right_) {
