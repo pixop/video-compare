@@ -106,7 +106,7 @@ int main(int argc, char** argv) {
         const std::regex time_shift_re("^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$");
 
         if (!std::regex_match(time_shift_arg, time_shift_re)) {
-          throw std::logic_error{"Cannot parse time shift argument; must be a valid floating point number"};
+          throw std::logic_error{"Cannot parse time shift argument; must be a valid number in seconds, e.g. 1 or -0.333"};
         }
 
         time_shift_ms = std::stod(time_shift_arg) * 1000.0;
