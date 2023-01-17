@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
 
     if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
-      usage << argv[0] << " 20230103-github" << std::endl << std::endl << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl << std::endl;
+      usage << argv[0] << " 20230117-github" << std::endl << std::endl << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl << std::endl;
       argagg::fmt_ostream fmt(std::cerr);
       fmt << usage.str() << argparser;
     } else {
