@@ -25,11 +25,18 @@ static inline bool is_behind(int64_t frame1_pts, int64_t frame2_pts, int64_t del
   return diff < -tolerance;
 }
 
-VideoCompare::VideoCompare(const Display::Mode display_mode, const bool high_dpi_allowed, const std::tuple<int, int> window_size, const double time_shift_ms, const std::string& left_file_name, const std::string& right_file_name)
+VideoCompare::VideoCompare(const Display::Mode display_mode,
+                           const bool high_dpi_allowed,
+                           const std::tuple<int, int> window_size,
+                           const double time_shift_ms,
+                           const std::string& left_file_name,
+                           const std::string& left_video_filters,
+                           const std::string& right_file_name,
+                           const std::string& right_video_filters)
     : time_shift_ms_(time_shift_ms),
       demuxer_{std::make_unique<Demuxer>(left_file_name), std::make_unique<Demuxer>(right_file_name)},
       video_decoder_{std::make_unique<VideoDecoder>(demuxer_[0]->video_codec_parameters()), std::make_unique<VideoDecoder>(demuxer_[1]->video_codec_parameters())},
-      video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get()), std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get())},
+      video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get(), left_video_filters), std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get(), right_video_filters)},
       max_width_{std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width())},
       max_height_{std::max(video_filterer_[0]->dest_height(), video_filterer_[1]->dest_height())},
       shortest_duration_{std::min(demuxer_[0]->duration(), demuxer_[1]->duration()) * AV_TIME_TO_SEC},

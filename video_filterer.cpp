@@ -4,23 +4,22 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
-VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder) : filter_graph_(avfilter_graph_alloc()) {
+VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters) : filter_graph_(avfilter_graph_alloc()) {
   std::vector<std::string> filters;
 
-  // see FFmpeg documentation for more info on video filters
-  //
-  // filters.push_back("format=gray");
-  // filters.push_back("yadif");
-
-  if (demuxer->rotation() == 90) {
-    filters.push_back("transpose=clock");
-  } else if (demuxer->rotation() == 270) {
-    filters.push_back("transpose=cclock");
-  } else if (demuxer->rotation() == 180) {
-    filters.push_back("hflip");
-    filters.push_back("vflip");
+  if (!custom_video_filters.empty()) {
+    filters.push_back(custom_video_filters);
   } else {
-    filters.push_back("copy");
+    if (demuxer->rotation() == 90) {
+      filters.push_back("transpose=clock");
+    } else if (demuxer->rotation() == 270) {
+      filters.push_back("transpose=cclock");
+    } else if (demuxer->rotation() == 180) {
+      filters.push_back("hflip");
+      filters.push_back("vflip");
+    } else {
+      filters.push_back("copy");
+    }
   }
 
   ffmpeg::check(init_filters(video_decoder->codec_context(), demuxer->time_base(), string_join(filters, ",")));

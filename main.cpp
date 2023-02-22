@@ -56,7 +56,9 @@ int main(int argc, char** argv) {
                               {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
                               {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
                               {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
-                              {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1}}};
+                              {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
+                              {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters for the left video (e.g. format=gray,crop=iw:ih-240)", 1},
+                              {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters for the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1}}};
 
     argagg::parser_results args;
     args = argparser.parse(argc, argv_decoded);
@@ -64,6 +66,7 @@ int main(int argc, char** argv) {
     std::tuple<int, int> window_size(-1, -1);
     double time_shift_ms = 0;
     Display::Mode display_mode = Display::Mode::split;
+    std::string left_video_filters, right_video_filters;
 
     if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
@@ -111,8 +114,14 @@ int main(int argc, char** argv) {
 
         time_shift_ms = std::stod(time_shift_arg) * 1000.0;
       }
+      if (args["left-filters"]) {
+        left_video_filters = static_cast<const std::string&>(args["left-filters"]);
+      }
+      if (args["right-filters"]) {
+        right_video_filters = static_cast<const std::string&>(args["right-filters"]);
+      }
 
-      VideoCompare compare{display_mode, args["high-dpi"], window_size, time_shift_ms, args.pos[0], args.pos[1]};
+      VideoCompare compare{display_mode, args["high-dpi"], window_size, time_shift_ms, args.pos[0], left_video_filters, args.pos[1], right_video_filters};
       compare();
     }
   } catch (const std::exception& e) {
