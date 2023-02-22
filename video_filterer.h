@@ -9,7 +9,7 @@ extern "C" {
 
 class VideoFilterer {
  public:
-  VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder);
+  VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters);
   ~VideoFilterer();
 
   bool send(AVFrame* decoded_frame);

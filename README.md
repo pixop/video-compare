@@ -26,7 +26,7 @@ brew install video-compare
 
 ### Pre-compiled Windows 10 binaries
 
-Pre-built Windows 10 x86 64-bit releases are available from [this page](https://github.com/pixop/video-compare/releases). 
+Pre-built Windows 10 x86 64-bit releases are available from [this page](https://github.com/pixop/video-compare/releases).
 Download and extract the .zip-archive on your system, then run `video-compare.exe` from a command prompt.
 
 ### Compile from source
@@ -49,7 +49,7 @@ Vertically stacked mode:
 `video-compare` was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on
 the excellent video player GitHub project: https://github.com/pockethook/player
 
-Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://github.com/libsdl-org/SDL) and 
+Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://github.com/libsdl-org/SDL) and
 [stb](https://github.com/nothings/stb) authors.
 
 ## Usage
@@ -82,6 +82,12 @@ also supported):
 
     ./video-compare -m vstack video1.mp4 video2.mp4
 
+Preprocess both inputs using FFmpeg video filters (see [FFmpeg's video filters documentation](https://ffmpeg.org/ffmpeg-filters.html#Video-Filters)).
+Please note that specifying custom filters disables auto-rotation of videos shot on mobile devices.
+Useful for comparing videos with different aspect ratios among other things:
+
+    ./video-compare -l crop=iw:ih-240 -r format=gray,pad=iw+320:ih:160:0 video1.mp4 video2.mp4
+
 The above arguments can be combined in any order, of course.
 
 ## Controls
@@ -107,19 +113,19 @@ The above arguments can be combined in any order, of course.
 - +: Time-shift right video 1 frame forward
 - -: Time-shift right video 1 frame backward
 
-Move the mouse horizontally to adjust the movable slider position. 
+Move the mouse horizontally to adjust the movable slider position.
 
 Click the mouse to perform a time seek based on the horizontal position of the mouse cursor
 relative to the window width (the target position is shown in the lower right corner).
 
-Hold CTRL while time-shifting with +/- for faster increments/decrements of 10 frames per 
+Hold CTRL while time-shifting with +/- for faster increments/decrements of 10 frames per
 keystroke. Similarly, hold down the ALT key for even bigger time-shifts of 100 frames.
 
 ## Build
 
 ### Requirements
 
-Requires FFmpeg headers and development libraries to be installed, along with SDL2 and its 
+Requires FFmpeg headers and development libraries to be installed, along with SDL2 and its
 TrueType font rendering add on (libsdl2_ttf).
 
 On Debian GNU/Linux the required development packages can be installed via `apt`:
