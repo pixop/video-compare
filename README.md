@@ -83,7 +83,7 @@ also supported):
     ./video-compare -m vstack video1.mp4 video2.mp4
 
 Preprocess both inputs using FFmpeg video filters (see [FFmpeg's video filters documentation](https://ffmpeg.org/ffmpeg-filters.html#Video-Filters)).
-Please note that specifying custom filters disables auto-rotation of videos shot on mobile devices.
+Do note that specifying custom filters disables auto-rotation of videos shot on mobile devices.
 Among other things useful for comparing videos with different aspect ratios:
 
     ./video-compare -l crop=iw:ih-240 -r format=gray,pad=iw+320:ih:160:0 video1.mp4 video2.mp4
