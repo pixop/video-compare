@@ -246,13 +246,6 @@ void VideoCompare::video() {
           // compute effective time shift
           right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
 
-          // round away from zero to nearest 2 ms
-          if (right_time_shift > 0) {
-            right_time_shift = ((right_time_shift / 1000) + 2) * 1000;
-          } else if (right_time_shift < 0) {
-            right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
-          }
-
           seeking_ = true;
           readyToSeek_[0][0] = false;
           readyToSeek_[0][1] = false;
@@ -303,6 +296,13 @@ void VideoCompare::video() {
           left_pts = frame_left->pts;
           left_previous_decoded_picture_number = -1;
           left_decoded_picture_number = 1;
+
+          // round away from zero to nearest 2 ms (except when the left PTS is 0 then round towards zero)
+          if (right_time_shift > 0) {
+            right_time_shift = ((right_time_shift / 1000) + (left_pts > 0 ? 2 : - 2)) * 1000;
+          } else if (right_time_shift < 0) {
+            right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
+          }
 
           frame_queue_[1]->pop(frame_right);
           right_pts = frame_right->pts - right_time_shift;
