@@ -4,7 +4,7 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
-VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters) : filter_graph_(avfilter_graph_alloc()) {
+VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters) : demuxer_(demuxer), video_decoder_(video_decoder) {
   std::vector<std::string> filters;
 
   if (!custom_video_filters.empty()) {
@@ -22,14 +22,31 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_d
     }
   }
 
-  ffmpeg::check(init_filters(video_decoder->codec_context(), demuxer->time_base(), string_join(filters, ",")));
+  filter_description_ = string_join(filters, ",");
+
+  init();
 }
 
 VideoFilterer::~VideoFilterer() {
+  free();
+}
+
+void VideoFilterer::init() {
+  filter_graph_ = avfilter_graph_alloc();
+
+  ffmpeg::check(init_filters(video_decoder_->codec_context(), demuxer_->time_base()));
+}
+
+void VideoFilterer::free() {
   avfilter_graph_free(&filter_graph_);
 }
 
-int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational time_base, const std::string& filter_description) {
+void VideoFilterer::reinit() {
+  free();
+  init();
+}
+
+int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational time_base) {
   AVFilterInOut* outputs = avfilter_inout_alloc();
   AVFilterInOut* inputs = avfilter_inout_alloc();
 
@@ -66,7 +83,7 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
     inputs->pad_idx = 0;
     inputs->next = nullptr;
 
-    if ((ret = avfilter_graph_parse_ptr(filter_graph_, filter_description.c_str(), &inputs, &outputs, nullptr)) >= 0) {
+    if ((ret = avfilter_graph_parse_ptr(filter_graph_, filter_description_.c_str(), &inputs, &outputs, nullptr)) >= 0) {
       ret = avfilter_graph_config(filter_graph_, nullptr);
     }
   }
@@ -82,12 +99,17 @@ bool VideoFilterer::send(AVFrame* decoded_frame) {
 }
 
 bool VideoFilterer::receive(AVFrame* filtered_frame) {
-  auto ret = av_buffersink_get_frame(buffersink_ctx_, filtered_frame);
+  auto ret = av_buffersink_get_frame_flags(buffersink_ctx_, filtered_frame, 0);
 
   if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
     return false;
   }
   ffmpeg::check(ret);
+
+  // update PTS
+  const AVRational microseconds = {1, AV_TIME_BASE};
+  filtered_frame->pts = av_rescale_q(filtered_frame->pts, av_buffersink_get_time_base(buffersink_ctx_), microseconds);
+
   return true;
 }
 
@@ -96,7 +118,7 @@ size_t VideoFilterer::src_width() const {
 }
 
 size_t VideoFilterer::src_height() const {
-  return buffersrc_ctx_->outputs[0]->w;
+  return buffersrc_ctx_->outputs[0]->h;
 }
 
 AVPixelFormat VideoFilterer::src_pixel_format() const {

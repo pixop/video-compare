@@ -119,15 +119,11 @@ void VideoCompare::thread_decode_video_right() {
 }
 
 bool VideoCompare::process_packet(const int video_idx, AVPacket* packet, AVFrame* frame_decoded) {
-  const AVRational microseconds = {1, AV_TIME_BASE};
-
   bool sent = video_decoder_[video_idx]->send(packet);
 
   // If a whole frame has been decoded,
   // adjust time stamps and add to queue
   while (video_decoder_[video_idx]->receive(frame_decoded)) {
-    frame_decoded->pts = av_rescale_q(frame_decoded->pts, demuxer_[video_idx]->time_base(), microseconds);
-
     // send decodes frame to filterer
     if (!video_filterer_[video_idx]->send(frame_decoded)) {
       throw std::runtime_error("Error while feeding the filtergraph");
@@ -271,6 +267,8 @@ void VideoCompare::video() {
           packet_queue_[1]->empty();
           frame_queue_[0]->empty();
           frame_queue_[1]->empty();
+          video_filterer_[0]->reinit();
+          video_filterer_[1]->reinit();
 
           float next_position;
 
@@ -389,7 +387,6 @@ void VideoCompare::video() {
       }
 
       if (store_frames) {
-        // TODO(jon): use pair
         if (left_frames.size() >= 50) {
           left_frames.pop_back();
         }

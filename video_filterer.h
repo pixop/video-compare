@@ -12,6 +12,10 @@ class VideoFilterer {
   VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters);
   ~VideoFilterer();
 
+  void init();
+  void free();
+  void reinit();
+
   bool send(AVFrame* decoded_frame);
   bool receive(AVFrame* filtered_frame);
 
@@ -23,7 +27,11 @@ class VideoFilterer {
   AVPixelFormat dest_pixel_format() const;
 
  private:
-  int init_filters(const AVCodecContext* dec_ctx, AVRational time_base, const std::string& filter_description);
+  int init_filters(const AVCodecContext* dec_ctx, AVRational time_base);
+
+  const Demuxer* demuxer_;
+  const VideoDecoder* video_decoder_;
+  std::string filter_description_;
 
   AVFilterContext* buffersrc_ctx_;
   AVFilterContext* buffersink_ctx_;
