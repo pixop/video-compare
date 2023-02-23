@@ -82,9 +82,10 @@ also supported):
 
     ./video-compare -m vstack video1.mp4 video2.mp4
 
-Preprocess both inputs using a list of FFmpeg video filters (see [FFmpeg's video filters documentation]
-(https://ffmpeg.org/ffmpeg-filters.html#Video-Filters)). Among other things useful for comparing videos with 
-different aspect ratios:
+Preprocess both inputs using a user-defined list of FFmpeg video filters (see [FFmpeg's video filters 
+documentation](https://ffmpeg.org/ffmpeg-filters.html#Video-Filters)). 
+Among other things useful for cropping/padding (comparing videos with different aspect ratios),  
+color transformations and deinterlacing:
 
     ./video-compare -l crop=iw:ih-240 -r format=gray,pad=iw+320:ih:160:0 video1.mp4 video2.mp4
 
