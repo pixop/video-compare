@@ -57,8 +57,8 @@ int main(int argc, char** argv) {
                               {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
                               {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
-                              {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters for the left video (e.g. format=gray,crop=iw:ih-240)", 1},
-                              {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters for the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1}}};
+                              {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
+                              {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1}}};
 
     argagg::parser_results args;
     args = argparser.parse(argc, argv_decoded);
@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
 
     if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
-      usage << argv[0] << " 20230117-github" << std::endl << std::endl << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl << std::endl;
+      usage << argv[0] << " 20230223-github" << std::endl << std::endl << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl << std::endl;
       argagg::fmt_ostream fmt(std::cerr);
       fmt << usage.str() << argparser;
     } else {
