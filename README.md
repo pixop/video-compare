@@ -85,7 +85,7 @@ also supported):
 Preprocess one or both inputs via a list of FFmpeg video filters specified on the command line 
 (see [FFmpeg's video filters documentation](https://ffmpeg.org/ffmpeg-filters.html#Video-Filters)). 
 The Swiss Army knife for cropping/padding (comparing videos with different aspect ratios),
-color transformation, deinterlacing, denoising, etc.:
+color transformation, deinterlacing, denoising, speeding up/slowing down video, etc.:
 
     ./video-compare -l crop=iw:ih-240 -r format=gray,pad=iw+320:ih:160:0 video1.mp4 video2.mp4
 
