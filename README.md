@@ -132,7 +132,7 @@ TrueType font rendering add on (libsdl2_ttf).
 On Debian GNU/Linux the required development packages can be installed via `apt`:
 
 ```sh
-apt install libavformat-dev libswscale-dev libsdl2-dev libsdl2-ttf-dev
+apt install libavformat-dev libavcodec-dev libavfilter-dev libavutil-dev libswscale-dev libsdl2-dev libsdl2-ttf-dev
 ```
 
 ### Instructions
