@@ -3,6 +3,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
 
@@ -256,19 +257,22 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 }
 
 void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right) {
+  auto write_png = [this](std::array<uint8_t*, 3> planes, std::array<size_t, 3> pitches, const std::string& filename)
+  {
+    if (stbi_write_png(filename.c_str(), video_width_, video_height_, 3, planes[0], pitches[0]) == 0) {
+      std::cerr << "Error saving video PNG image to file: " << filename << std::endl;
+      return;
+    }
+  };
+
   const std::string left_filename = string_sprintf("%s_%04d.png", left_file_stem_.c_str(), saved_image_number_);
-
-  if (stbi_write_png(left_filename.c_str(), video_width_, video_height_, 3, planes_left[0], pitches_left[0]) == 0) {
-    std::cout << "Error saving left video PNG image to file: " << left_filename << std::endl;
-    return;
-  }
-
   const std::string right_filename = string_sprintf("%s_%04d.png", right_file_stem_.c_str(), saved_image_number_);
 
-  if (stbi_write_png(right_filename.c_str(), video_width_, video_height_, 3, planes_right[0], pitches_right[0]) == 0) {
-    std::cout << "Error saving right video PNG image to file: " << right_filename << std::endl;
-    return;
-  }
+  std::thread save_left_frame_thread(write_png, planes_left, pitches_left, left_filename);
+  std::thread save_right_frame_thread(write_png, planes_right, pitches_right, right_filename);
+
+  save_left_frame_thread.join();
+  save_right_frame_thread.join();
 
   std::cout << "Saved " << left_filename << " and " << right_filename << std::endl;
 
