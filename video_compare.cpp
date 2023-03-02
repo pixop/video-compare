@@ -297,7 +297,7 @@ void VideoCompare::video() {
 
           // round away from zero to nearest 2 ms (except when the left PTS is 0 then round towards zero)
           if (right_time_shift > 0) {
-            right_time_shift = ((right_time_shift / 1000) + (left_pts > 0 ? 2 : - 2)) * 1000;
+            right_time_shift = ((right_time_shift / 1000) + (left_pts > 0 ? 2 : -2)) * 1000;
           } else if (right_time_shift < 0) {
             right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
           }
