@@ -53,7 +53,12 @@ class Display {
   TTF_Font* small_font_;
   TTF_Font* big_font_;
   uint8_t* diff_buffer_;
+  uint32_t* left_buffer_;
+  uint32_t* right_buffer_;
   std::array<uint8_t*, 3> diff_planes_;
+  std::array<uint32_t*, 3> left_planes_;
+  std::array<uint32_t*, 3> right_planes_;
+  std::array<size_t, 3> diff_pitches_;
 
   SDL_Texture* left_text_texture_;
   SDL_Texture* right_text_texture_;
@@ -86,7 +91,10 @@ class Display {
   const std::string right_file_stem_;
   int saved_image_number_{1};
 
+  void convert_to_packed_10bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi);
+
   void update_difference(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x);
+  void update_difference_10bpc(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x);
 
   void save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right);
 
