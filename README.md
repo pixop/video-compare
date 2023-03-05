@@ -159,7 +159,7 @@ Note that root privileges are required to perform this operation in most environ
 
 3. Seeks require re-synchronization on the closest keyframe (i.e., I-frame).
 
-4. Noticeable banding in darker scenes is expected for higher bit depth sources (only 8 bits per RGB channel is used internally).
+4. Noticeable banding is expected for higher bit depth sources (only 8 bits per RGB channel is used internally).
 
 ## Practical tips
 
