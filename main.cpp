@@ -54,6 +54,7 @@ int main(int argc, char** argv) {
   try {
     argagg::parser argparser{{{"help", {"-h", "--help"}, "show help", 0},
                               {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
+                              {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
                               {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
                               {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
@@ -122,7 +123,7 @@ int main(int argc, char** argv) {
         right_video_filters = static_cast<const std::string&>(args["right-filters"]);
       }
 
-      VideoCompare compare{display_mode, args["high-dpi"], window_size, time_shift_ms, args.pos[0], left_video_filters, args.pos[1], right_video_filters};
+      VideoCompare compare{display_mode, args["high-dpi"], args["10-bpc"], window_size, time_shift_ms, args.pos[0], left_video_filters, args.pos[1], right_video_filters};
       compare();
     }
   } catch (const std::exception& e) {

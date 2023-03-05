@@ -98,6 +98,7 @@ SDL::~SDL() {
 
 Display::Display(const Mode mode,
                  const bool high_dpi_allowed,
+                 const bool use_10_bpc,
                  const std::tuple<int, int> window_size,
                  const unsigned width,
                  const unsigned height,
@@ -106,6 +107,7 @@ Display::Display(const Mode mode,
                  const std::string& right_file_name)
     : mode_{mode},
       high_dpi_allowed_{high_dpi_allowed},
+      use_10_bpc_{use_10_bpc},
       video_width_{static_cast<int>(width)},
       video_height_{static_cast<int>(height)},
       duration_{duration},
@@ -174,7 +176,8 @@ Display::Display(const Mode mode,
   big_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 24 * font_scale_), "font open");
 
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
-  texture_ = check_sdl(SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB2101010, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height), "renderer");
+  texture_ =
+      check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height), "renderer");
 
   SDL_Surface* text_surface = TTF_RenderUTF8_Blended(small_font_, left_file_name.c_str(), TEXT_COLOR);
   left_text_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
@@ -192,7 +195,7 @@ Display::Display(const Mode mode,
   uint8_t* diff_plane_0 = diff_buffer_;
 
   diff_planes_ = {diff_plane_0, nullptr, nullptr};
-  diff_pitches_ = {video_width_ * 3 * sizeof(uint16_t), 0, 0};
+  diff_pitches_ = {video_width_ * 3 * (use_10_bpc ? sizeof(uint16_t) : sizeof(uint8_t)), 0, 0};
 }
 
 Display::~Display() {
@@ -438,6 +441,17 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     save_image_frames_ = false;
   }
 
+  if (use_10_bpc_) {
+    if (left_buffer_ == nullptr) {
+      left_buffer_ = reinterpret_cast<uint32_t*>(aligned_alloc(16, pitches_left[0] * video_height_));
+      left_planes_ = {left_buffer_, nullptr, nullptr};
+    }
+    if (right_buffer_ == nullptr) {
+      right_buffer_ = reinterpret_cast<uint32_t*>(aligned_alloc(16, pitches_right[0] * video_height_));
+      right_planes_ = {right_buffer_, nullptr, nullptr};
+    }
+  }
+
   bool compare_mode = show_left_ && show_right_;
 
   int mouse_video_x = std::round(static_cast<float>(mouse_x_) * screen_to_video_width_factor_);
@@ -447,17 +461,6 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
   SDL_RenderClear(renderer_);
 
-  if (left_buffer_ == nullptr) {
-    left_buffer_ = reinterpret_cast<uint32_t*>(aligned_alloc(16, pitches_left[0] * video_height_));
-
-    left_planes_ = {left_buffer_, nullptr, nullptr};
-  }
-  if (right_buffer_ == nullptr) {
-    right_buffer_ = reinterpret_cast<uint32_t*>(aligned_alloc(16, pitches_right[0] * video_height_));
-
-    right_planes_ = {right_buffer_, nullptr, nullptr};
-  }
-
   if (show_left_ || show_right_) {
     int split_x = (compare_mode && mode_ == Mode::split) ? mouse_video_x : show_left_ ? video_width_ : 0;
 
@@ -466,9 +469,13 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
       SDL_Rect screen_render_quad_left = video_to_screen_space(tex_render_quad_left);
 
-      convert_to_packed_10bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
+      if (use_10_bpc_) {
+        convert_to_packed_10bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
 
-      check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_left, left_planes_[0], pitches_left[0]) == 0, "left texture update (video mode)");
+        check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_left, left_planes_[0], pitches_left[0]) == 0, "left texture update (video mode)");
+      } else {
+        check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_left, planes_left[0], pitches_left[0]) == 0, "left texture update (video mode)");
+      }
 
       SDL_RenderCopy(renderer_, texture_, &tex_render_quad_left, &screen_render_quad_left);
     }
@@ -482,15 +489,24 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       SDL_Rect screen_render_quad_right = video_to_screen_space(tex_render_quad_right);
 
       if (subtraction_mode_) {
-        //update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
-        update_difference_10bpc(planes_left, pitches_left, planes_right, pitches_right, start_right);
-        convert_to_packed_10bpc(diff_planes_, diff_pitches_, right_planes_, pitches_right, roi);
+        if (use_10_bpc_) {
+          update_difference_10bpc(planes_left, pitches_left, planes_right, pitches_right, start_right);
+          convert_to_packed_10bpc(diff_planes_, diff_pitches_, right_planes_, pitches_right, roi);
 
-        check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0]) == 0, "right texture update (subtraction mode)");
+          check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0]) == 0, "right texture update (subtraction mode)");
+        } else {
+          update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
+
+          check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, diff_planes_[0] + start_right * 3, video_width_ * 3) == 0, "right texture update (subtraction mode)");
+        }
       } else {
-        convert_to_packed_10bpc(planes_right, pitches_right, right_planes_, pitches_right, roi);
+        if (use_10_bpc_) {
+          convert_to_packed_10bpc(planes_right, pitches_right, right_planes_, pitches_right, roi);
 
-        check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0]) == 0, "right texture update (video mode)");
+          check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0]) == 0, "right texture update (video mode)");
+        } else {
+          check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0]) == 0, "right texture update (video mode)");
+        }
       }
 
       SDL_RenderCopy(renderer_, texture_, &tex_render_quad_right, &screen_render_quad_right);
