@@ -159,6 +159,8 @@ Note that root privileges are required to perform this operation in most environ
 
 3. Seeks require re-synchronization on the closest keyframe (i.e., I-frame).
 
+4. Banding on high-def displays might occur since only 8 bits per RGB channel decoding and processing is used internally for now.
+
 ## Practical tips
 
 ### Send To integration in Windows File Explorer
