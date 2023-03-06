@@ -192,7 +192,7 @@ Display::Display(const Mode mode,
   right_text_height_ = text_surface->h;
   SDL_FreeSurface(text_surface);
 
-  diff_buffer_ = reinterpret_cast<uint8_t*>(aligned_alloc(16, video_width_ * video_height_ * 3 * sizeof(uint16_t)));
+  diff_buffer_ = reinterpret_cast<uint8_t*>(aligned_alloc(16, video_width_ * video_height_ * 3 * (use_10_bpc ? sizeof(uint16_t) : sizeof(uint8_t))));
   uint8_t* diff_plane_0 = diff_buffer_;
 
   diff_planes_ = {diff_plane_0, nullptr, nullptr};
@@ -306,9 +306,28 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 
 void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right) {
   auto write_png = [this](std::array<uint8_t*, 3> planes, std::array<size_t, 3> pitches, const std::string& filename) {
-    if (stbi_write_png(filename.c_str(), video_width_, video_height_, 3, planes[0], pitches[0]) == 0) {
-      std::cerr << "Error saving video PNG image to file: " << filename << std::endl;
-      return;
+    if (use_10_bpc_) {
+      // for 10 bpc: create truncated 8 bpc version of 16 bpc input until stb supports 16-bit PNGs
+      uint8_t* temp_image = reinterpret_cast<uint8_t*>(aligned_alloc(16, video_width_ * video_height_ * 3));
+      uint8_t* p_out = temp_image;
+
+      for (int y = 0; y < video_height_; y++) {
+        uint8_t* p_in = planes[0] + y * pitches[0] + 1;
+
+        for (int x = 0; x < (video_width_ * 3); x++, p_out++, p_in += 2) {
+          *p_out = *p_in;
+        }
+      }
+
+      if (stbi_write_png(filename.c_str(), video_width_, video_height_, 3, temp_image, video_width_ * 3) == 0) {
+        std::cerr << "Error saving video PNG image to file: " << filename << std::endl;
+      }
+
+      delete[] temp_image;
+    } else {
+      if (stbi_write_png(filename.c_str(), video_width_, video_height_, 3, planes[0], pitches[0]) == 0) {
+        std::cerr << "Error saving video PNG image to file: " << filename << std::endl;
+      }
     }
   };
 
@@ -322,6 +341,11 @@ void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<
   save_right_frame_thread.join();
 
   std::cout << "Saved " << left_filename << " and " << right_filename << std::endl;
+
+  if (use_10_bpc_) {
+    // for 10 bpc: create 8 bpc version of 16 bpc input
+    std::cout << "Warning: input was down-converted and saved as an 8-bit PNG due to lack of 16-bit PNG support in stb (noticable banding is expected due to loss of precision)" << std::endl;
+  }
 
   saved_image_number_++;
 }
