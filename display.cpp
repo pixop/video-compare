@@ -344,7 +344,7 @@ void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<
 
   if (use_10_bpc_) {
     // for 10 bpc: create 8 bpc version of 16 bpc input
-    std::cout << "Warning: input was down-converted and saved as an 8-bit PNG due to lack of 16-bit PNG support in stb (noticable banding is expected due to loss of precision)" << std::endl;
+    std::cout << "Warning: 8-bit PNG format used due to lack of 16-bit PNG support in stb (noticable banding is expected due to loss of precision)" << std::endl;
   }
 
   saved_image_number_++;
