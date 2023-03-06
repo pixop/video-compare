@@ -192,7 +192,7 @@ Display::Display(const Mode mode,
   right_text_height_ = text_surface->h;
   SDL_FreeSurface(text_surface);
 
-  diff_buffer_ = reinterpret_cast<uint8_t*>(aligned_alloc(16, video_width_ * video_height_ * 3 * (use_10_bpc ? sizeof(uint16_t) : sizeof(uint8_t))));
+  diff_buffer_ = new uint8_t[video_width_ * video_height_ * 3 * (use_10_bpc ? sizeof(uint16_t) : sizeof(uint8_t))];
   uint8_t* diff_plane_0 = diff_buffer_;
 
   diff_planes_ = {diff_plane_0, nullptr, nullptr};
@@ -308,7 +308,7 @@ void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<
   auto write_png = [this](std::array<uint8_t*, 3> planes, std::array<size_t, 3> pitches, const std::string& filename) {
     if (use_10_bpc_) {
       // for 10 bpc: create truncated 8 bpc version of 16 bpc input until stb supports 16-bit PNGs
-      uint8_t* temp_image = reinterpret_cast<uint8_t*>(aligned_alloc(16, video_width_ * video_height_ * 3));
+      uint8_t* temp_image = new uint8_t[video_width_ * video_height_ * 3];
       uint8_t* p_out = temp_image;
 
       for (int y = 0; y < video_height_; y++) {
@@ -418,11 +418,11 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   // init 10 bpc temp buffers
   if (use_10_bpc_) {
     if (left_buffer_ == nullptr) {
-      left_buffer_ = reinterpret_cast<uint32_t*>(aligned_alloc(16, pitches_left[0] * video_height_));
+      left_buffer_ = new uint32_t[pitches_left[0] * video_height_ / 4];
       left_planes_ = {left_buffer_, nullptr, nullptr};
     }
     if (right_buffer_ == nullptr) {
-      right_buffer_ = reinterpret_cast<uint32_t*>(aligned_alloc(16, pitches_right[0] * video_height_));
+      right_buffer_ = new uint32_t[pitches_right[0] * video_height_ / 4];
       right_planes_ = {right_buffer_, nullptr, nullptr};
     }
   }
