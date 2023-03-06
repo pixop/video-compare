@@ -54,8 +54,8 @@ class Display {
   TTF_Font* small_font_;
   TTF_Font* big_font_;
   uint8_t* diff_buffer_;
-  uint32_t* left_buffer_;
-  uint32_t* right_buffer_;
+  uint32_t* left_buffer_{nullptr};
+  uint32_t* right_buffer_{nullptr};
   std::array<uint8_t*, 3> diff_planes_;
   std::array<uint32_t*, 3> left_planes_;
   std::array<uint32_t*, 3> right_planes_;
