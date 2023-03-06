@@ -64,6 +64,11 @@ for e.g. displaying UHD 4K video on a Retina 5K display:
 
     ./video-compare -d video1.mp4 video2.mp4
 
+Increase bit depth to 10 bits per color component (8 bits is the default). Fidelity is increased while
+performance takes a hit. Significantly reduces visible banding on higher grade displays:
+
+    ./video-compare -b video1.mp4 video2.mp4
+
 Use a specific window size instead of deriving the window size from the video dimensions. The video
 frame will be scaled to fit. If either width or height is left out, the missing value will be calculated
 from the other specified dimension so that aspect ratio is maintained. Useful for downscaling high resolution
@@ -82,8 +87,8 @@ also supported):
 
     ./video-compare -m vstack video1.mp4 video2.mp4
 
-Preprocess one or both inputs via a list of FFmpeg video filters specified on the command line 
-(see [FFmpeg's video filters documentation](https://ffmpeg.org/ffmpeg-filters.html#Video-Filters)). 
+Preprocess one or both inputs via a list of FFmpeg video filters specified on the command line
+(see [FFmpeg's video filters documentation](https://ffmpeg.org/ffmpeg-filters.html#Video-Filters)).
 The Swiss Army knife for cropping/padding (comparing videos with different aspect ratios),
 adjusting colors, deinterlacing, denoising, speeding up/slowing down, etc.:
 
@@ -158,8 +163,6 @@ Note that root privileges are required to perform this operation in most environ
 2. Keep time-shifts below a few seconds for the best experience.
 
 3. Seeks require re-synchronization on the closest keyframe (i.e., I-frame).
-
-4. Noticeable banding is expected for higher bit depth sources (only 8 bits per RGB channel is used internally).
 
 ## Practical tips
 
