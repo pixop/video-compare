@@ -1,10 +1,10 @@
 #include "display.h"
 #include <libgen.h>
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <thread>
-#include <algorithm>
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
 
@@ -23,7 +23,7 @@ inline int clamp_int_to_byte_range(int value) {
   return value > 255 ? 255 : value < 0 ? 0 : value;
 }
 
-inline int clamp_int_to_10bpc_range(int value) {
+inline int clamp_int_to_10_bpc_range(int value) {
   return value > 1023 ? 1023 : value < 0 ? 0 : value;
 }
 
@@ -31,8 +31,8 @@ inline uint8_t clamp_int_to_byte(int value) {
   return static_cast<uint8_t>(clamp_int_to_byte_range(value));
 }
 
-inline uint16_t clamp_int_to_10bpc(int value) {
-  return static_cast<uint16_t>(clamp_int_to_10bpc_range(value));
+inline uint16_t clamp_int_to_10_bpc(int value) {
+  return static_cast<uint16_t>(clamp_int_to_10_bpc_range(value));
 }
 
 // Credits to Kemin Zhou for this approach which does not require Boost or C++17
@@ -224,7 +224,7 @@ Display::~Display() {
   SDL_DestroyWindow(window_);
 }
 
-void Display::convert_to_packed_10bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi) {
+void Display::convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi) {
   uint16_t* p_in = reinterpret_cast<uint16_t*>(in_planes[0] + roi.x * 6 + in_pitches[0] * roi.y);
   uint32_t* p_out = out_planes[0] + roi.x + out_pitches[0] * roi.y / 4;
 
@@ -264,9 +264,9 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
         int g_diff = abs(gl - gr) * amplification;
         int b_diff = abs(bl - br) * amplification;
 
-        p_diff[out_x] = clamp_int_to_10bpc(r_diff) << 6;
-        p_diff[out_x + 1] = clamp_int_to_10bpc(g_diff) << 6;
-        p_diff[out_x + 2] = clamp_int_to_10bpc(b_diff) << 6;
+        p_diff[out_x] = clamp_int_to_10_bpc(r_diff) << 6;
+        p_diff[out_x + 1] = clamp_int_to_10_bpc(g_diff) << 6;
+        p_diff[out_x + 2] = clamp_int_to_10_bpc(b_diff) << 6;
       }
 
       p_left += pitches_left[0] / 2;
@@ -445,7 +445,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       SDL_Rect screen_render_quad_left = video_to_screen_space(tex_render_quad_left);
 
       if (use_10_bpc_) {
-        convert_to_packed_10bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
+        convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
 
         check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_left, left_planes_[0], pitches_left[0]) == 0, "left texture update (10 bpc, video mode)");
       } else {
@@ -467,7 +467,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
         update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
 
         if (use_10_bpc_) {
-          convert_to_packed_10bpc(diff_planes_, diff_pitches_, right_planes_, pitches_right, roi);
+          convert_to_packed_10_bpc(diff_planes_, diff_pitches_, right_planes_, pitches_right, roi);
 
           check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0]) == 0, "right texture update (10 bpc, subtraction mode)");
         } else {
@@ -475,7 +475,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
         }
       } else {
         if (use_10_bpc_) {
-          convert_to_packed_10bpc(planes_right, pitches_right, right_planes_, pitches_right, roi);
+          convert_to_packed_10_bpc(planes_right, pitches_right, right_planes_, pitches_right, roi);
 
           check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0]) == 0, "right texture update (10 bpc, video mode)");
         } else {
