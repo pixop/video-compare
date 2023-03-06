@@ -19,6 +19,7 @@ class Display {
  private:
   const Mode mode_;
   const bool high_dpi_allowed_;
+  const bool use_10_bpc_;
   const int video_width_;
   const int video_height_;
   const double duration_;
@@ -53,7 +54,12 @@ class Display {
   TTF_Font* small_font_;
   TTF_Font* big_font_;
   uint8_t* diff_buffer_;
+  uint32_t* left_buffer_;
+  uint32_t* right_buffer_;
   std::array<uint8_t*, 3> diff_planes_;
+  std::array<uint32_t*, 3> left_planes_;
+  std::array<uint32_t*, 3> right_planes_;
+  std::array<size_t, 3> diff_pitches_;
 
   SDL_Texture* left_text_texture_;
   SDL_Texture* right_text_texture_;
@@ -86,6 +92,8 @@ class Display {
   const std::string right_file_stem_;
   int saved_image_number_{1};
 
+  void convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi);
+
   void update_difference(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x);
 
   void save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right);
@@ -102,7 +110,7 @@ class Display {
   void render_text(int x, int y, SDL_Texture* texture, int texture_width, int texture_height, int border_extension, bool left_adjust);
 
  public:
-  Display(Mode mode, bool high_dpi_allowed, std::tuple<int, int> window_size, unsigned width, unsigned height, double duration, const std::string& left_file_name, const std::string& right_file_name);
+  Display(Mode mode, bool high_dpi_allowed, bool use_10_bpc, std::tuple<int, int> window_size, unsigned width, unsigned height, double duration, const std::string& left_file_name, const std::string& right_file_name);
   ~Display();
 
   // Copy frame to display

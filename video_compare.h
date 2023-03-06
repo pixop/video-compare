@@ -17,10 +17,11 @@ extern "C" {
 
 class VideoCompare {
  public:
-  VideoCompare(Display::Mode display_mode,
-               bool high_dpi_allowed,
-               std::tuple<int, int> window_size,
-               double time_shift_ms,
+  VideoCompare(const Display::Mode display_mode,
+               const bool high_dpi_allowed,
+               const bool use_10_bpc,
+               const std::tuple<int, int> window_size,
+               const double time_shift_ms,
                const std::string& left_file_name,
                const std::string& left_video_filters,
                const std::string& right_file_name,
