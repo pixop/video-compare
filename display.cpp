@@ -343,7 +343,6 @@ void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<
   std::cout << "Saved " << left_filename << " and " << right_filename << std::endl;
 
   if (use_10_bpc_) {
-    // for 10 bpc: create 8 bpc version of 16 bpc input
     std::cout << "Warning: 8-bit PNG format used due to lack of 16-bit PNG support in stb (noticable banding is expected due to loss of precision)" << std::endl;
   }
 
