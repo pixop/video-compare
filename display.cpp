@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <algorithm>
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
 
@@ -224,132 +225,82 @@ Display::~Display() {
 }
 
 void Display::convert_to_packed_10bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi) {
-  uint16_t* p_in_r = reinterpret_cast<uint16_t*>(in_planes[0] + roi.x * 6);
-  uint16_t* p_in_g = p_in_r + 1;
-  uint16_t* p_in_b = p_in_g + 1;
-
-  uint32_t* p_out_r = out_planes[0] + roi.x;
+  uint16_t* p_in = reinterpret_cast<uint16_t*>(in_planes[0] + roi.x * 6 + in_pitches[0] * roi.y);
+  uint32_t* p_out = out_planes[0] + roi.x + out_pitches[0] * roi.y / 4;
 
   for (int y = 0; y < roi.h; y++) {
-    for (int x = 0; x < roi.w; x++) {
-      uint32_t rgb1[3];
+    for (int in_x = 0, out_x = 0; out_x < roi.w; in_x += 3, out_x++) {
+      uint32_t r = p_in[in_x] >> 6;
+      uint32_t g = p_in[in_x + 1] >> 6;
+      uint32_t b = p_in[in_x + 2] >> 6;
 
-      rgb1[0] = p_in_r[x * 3] >> 6;
-      rgb1[1] = p_in_g[x * 3] >> 6;
-      rgb1[2] = p_in_b[x * 3] >> 6;
-
-      p_out_r[x] = (rgb1[0] << 20) | (rgb1[1] << 10) | (rgb1[2]);
+      p_out[out_x] = (r << 20) | (g << 10) | (b);
     }
 
-    p_in_r += in_pitches[0] / 2;
-    p_in_g += in_pitches[0] / 2;
-    p_in_b += in_pitches[0] / 2;
-
-    p_out_r += out_pitches[0] / 4;
+    p_in += in_pitches[0] / 2;
+    p_out += out_pitches[0] / 4;
   }
 }
 
 void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x) {
-  uint8_t* p_left_r = planes_left[0] + split_x * 3;
-  uint8_t* p_left_g = planes_left[0] + split_x * 3 + 1;
-  uint8_t* p_left_b = planes_left[0] + split_x * 3 + 2;
-
-  uint8_t* p_right_r = planes_right[0] + split_x * 3;
-  uint8_t* p_right_g = planes_right[0] + split_x * 3 + 1;
-  uint8_t* p_right_b = planes_right[0] + split_x * 3 + 2;
-
-  uint8_t* p_diff_r = diff_planes_[0] + split_x * 3;
-  uint8_t* p_diff_g = diff_planes_[0] + split_x * 3 + 1;
-  uint8_t* p_diff_b = diff_planes_[0] + split_x * 3 + 2;
-
   const int amplification = 2;
 
-  for (int y = 0; y < video_height_; y++) {
-    for (int x = 0; x < (video_width_ - split_x); x++) {
-      int rgb1[3];
-      int rgb2[3];
-      int diff[3];
+  if (use_10_bpc_) {
+    uint16_t* p_left = reinterpret_cast<uint16_t*>(planes_left[0] + split_x * 6);
+    uint16_t* p_right = reinterpret_cast<uint16_t*>(planes_right[0] + split_x * 6);
+    uint16_t* p_diff = reinterpret_cast<uint16_t*>(diff_planes_[0] + split_x * 6);
 
-      rgb1[0] = p_left_r[x * 3];
-      rgb1[1] = p_left_g[x * 3];
-      rgb1[2] = p_left_b[x * 3];
+    for (int y = 0; y < video_height_; y++) {
+      for (int in_x = 0, out_x = 0; out_x < (video_width_ - split_x) * 3; in_x += 3, out_x += 3) {
+        int rl = p_left[in_x] >> 6;
+        int gl = p_left[in_x + 1] >> 6;
+        int bl = p_left[in_x + 2] >> 6;
 
-      rgb2[0] = p_right_r[x * 3];
-      rgb2[1] = p_right_g[x * 3];
-      rgb2[2] = p_right_b[x * 3];
+        int rr = p_right[in_x] >> 6;
+        int gr = p_right[in_x + 1] >> 6;
+        int br = p_right[in_x + 2] >> 6;
 
-      diff[0] = abs(rgb1[0] - rgb2[0]) * amplification;
-      diff[1] = abs(rgb1[1] - rgb2[1]) * amplification;
-      diff[2] = abs(rgb1[2] - rgb2[2]) * amplification;
+        int r_diff = abs(rl - rr) * amplification;
+        int g_diff = abs(gl - gr) * amplification;
+        int b_diff = abs(bl - br) * amplification;
 
-      p_diff_r[x * 3] = clamp_int_to_byte(diff[0]);
-      p_diff_g[x * 3] = clamp_int_to_byte(diff[1]);
-      p_diff_b[x * 3] = clamp_int_to_byte(diff[2]);
+        p_diff[out_x] = clamp_int_to_10bpc(r_diff) << 6;
+        p_diff[out_x + 1] = clamp_int_to_10bpc(g_diff) << 6;
+        p_diff[out_x + 2] = clamp_int_to_10bpc(b_diff) << 6;
+      }
+
+      p_left += pitches_left[0] / 2;
+      p_right += pitches_right[0] / 2;
+      p_diff += video_width_ * 3;
     }
+  } else {
+    uint8_t* p_left = planes_left[0] + split_x * 3;
+    uint8_t* p_right = planes_right[0] + split_x * 3;
+    uint8_t* p_diff = diff_planes_[0] + split_x * 3;
 
-    p_left_r += pitches_left[0];
-    p_left_g += pitches_left[0];
-    p_left_b += pitches_left[0];
+    for (int y = 0; y < video_height_; y++) {
+      for (int in_x = 0, out_x = 0; out_x < (video_width_ - split_x) * 3; in_x += 3, out_x += 3) {
+        int rl = p_left[in_x];
+        int gl = p_left[in_x + 1];
+        int bl = p_left[in_x + 2];
 
-    p_right_r += pitches_right[0];
-    p_right_g += pitches_right[0];
-    p_right_b += pitches_right[0];
+        int rr = p_right[in_x];
+        int gr = p_right[in_x + 1];
+        int br = p_right[in_x + 2];
 
-    p_diff_r += video_width_ * 3;
-    p_diff_g += video_width_ * 3;
-    p_diff_b += video_width_ * 3;
-  }
-}
+        int r_diff = abs(rl - rr) * amplification;
+        int g_diff = abs(gl - gr) * amplification;
+        int b_diff = abs(bl - br) * amplification;
 
-void Display::update_difference_10bpc(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x) {
-  uint16_t* p_left_r = reinterpret_cast<uint16_t*>(planes_left[0] + split_x * 6);
-  uint16_t* p_left_g = p_left_r + 1;
-  uint16_t* p_left_b = p_left_g + 1;
+        p_diff[out_x] = clamp_int_to_byte(r_diff);
+        p_diff[out_x + 1] = clamp_int_to_byte(g_diff);
+        p_diff[out_x + 2] = clamp_int_to_byte(b_diff);
+      }
 
-  uint16_t* p_right_r = reinterpret_cast<uint16_t*>(planes_right[0] + split_x * 6);
-  uint16_t* p_right_g = p_right_r + 1;
-  uint16_t* p_right_b = p_right_g + 1;
-
-  uint16_t* p_diff_r = reinterpret_cast<uint16_t*>(diff_planes_[0] + split_x * 6);
-  uint16_t* p_diff_g = p_diff_r + 1;
-  uint16_t* p_diff_b = p_diff_g + 1;
-
-  const int amplification = 2;
-
-  for (int y = 0; y < video_height_; y++) {
-    for (int x = 0; x < (video_width_ - split_x); x++) {
-      int rgb1[3];
-      int rgb2[3];
-      int diff[3];
-
-      rgb1[0] = p_left_r[x * 3] >> 6;
-      rgb1[1] = p_left_g[x * 3] >> 6;
-      rgb1[2] = p_left_b[x * 3] >> 6;
-
-      rgb2[0] = p_right_r[x * 3] >> 6;
-      rgb2[1] = p_right_g[x * 3] >> 6;
-      rgb2[2] = p_right_b[x * 3] >> 6;
-
-      diff[0] = abs(rgb1[0] - rgb2[0]) * amplification;
-      diff[1] = abs(rgb1[1] - rgb2[1]) * amplification;
-      diff[2] = abs(rgb1[2] - rgb2[2]) * amplification;
-
-      p_diff_r[x * 3] = clamp_int_to_10bpc(diff[0]) << 6;
-      p_diff_g[x * 3] = clamp_int_to_10bpc(diff[1]) << 6;
-      p_diff_b[x * 3] = clamp_int_to_10bpc(diff[2]) << 6;
+      p_left += pitches_left[0];
+      p_right += pitches_right[0];
+      p_diff += video_width_ * 3;
     }
-
-    p_left_r += pitches_left[0] / 2;
-    p_left_g += pitches_left[0] / 2;
-    p_left_b += pitches_left[0] / 2;
-
-    p_right_r += pitches_right[0] / 2;
-    p_right_g += pitches_right[0] / 2;
-    p_right_b += pitches_right[0] / 2;
-
-    p_diff_r += video_width_ * 3;
-    p_diff_g += video_width_ * 3;
-    p_diff_b += video_width_ * 3;
   }
 }
 
@@ -441,6 +392,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     save_image_frames_ = false;
   }
 
+  // init 10 bpc temp buffers
   if (use_10_bpc_) {
     if (left_buffer_ == nullptr) {
       left_buffer_ = reinterpret_cast<uint32_t*>(aligned_alloc(16, pitches_left[0] * video_height_));
@@ -472,7 +424,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       if (use_10_bpc_) {
         convert_to_packed_10bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
 
-        check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_left, left_planes_[0], pitches_left[0]) == 0, "left texture update (video mode)");
+        check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_left, left_planes_[0], pitches_left[0]) == 0, "left texture update (10 bpc, video mode)");
       } else {
         check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_left, planes_left[0], pitches_left[0]) == 0, "left texture update (video mode)");
       }
@@ -489,21 +441,20 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       SDL_Rect screen_render_quad_right = video_to_screen_space(tex_render_quad_right);
 
       if (subtraction_mode_) {
+        update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
+
         if (use_10_bpc_) {
-          update_difference_10bpc(planes_left, pitches_left, planes_right, pitches_right, start_right);
           convert_to_packed_10bpc(diff_planes_, diff_pitches_, right_planes_, pitches_right, roi);
 
-          check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0]) == 0, "right texture update (subtraction mode)");
+          check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0]) == 0, "right texture update (10 bpc, subtraction mode)");
         } else {
-          update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
-
           check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, diff_planes_[0] + start_right * 3, video_width_ * 3) == 0, "right texture update (subtraction mode)");
         }
       } else {
         if (use_10_bpc_) {
           convert_to_packed_10bpc(planes_right, pitches_right, right_planes_, pitches_right, roi);
 
-          check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0]) == 0, "right texture update (video mode)");
+          check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0]) == 0, "right texture update (10 bpc, video mode)");
         } else {
           check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0]) == 0, "right texture update (video mode)");
         }
