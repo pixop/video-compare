@@ -65,7 +65,8 @@ for e.g. displaying UHD 4K video on a Retina 5K display:
     ./video-compare -d video1.mp4 video2.mp4
 
 Increase bit depth to 10 bits per color component (8 bits is the default). Fidelity is increased while
-performance takes a hit. Significantly reduces visible banding on higher grade displays:
+performance takes a hit. Significantly reduces visible banding on systems with a higher grade display 
+and driver support for 30-bit color:
 
     ./video-compare -b video1.mp4 video2.mp4
 
