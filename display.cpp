@@ -144,6 +144,10 @@ Display::Display(const Mode mode,
 
   renderer_ = check_sdl(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "renderer");
 
+  SDL_RendererInfo info;
+  SDL_GetRendererInfo(renderer_, &info);
+  std::cout << "Renderer: " << info.name << std::endl;
+
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
