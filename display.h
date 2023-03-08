@@ -82,7 +82,8 @@ class Display {
 
   SDL_Window* window_;
   SDL_Renderer* renderer_;
-  SDL_Texture* texture_;
+  SDL_Texture* video_texture_;
+  SDL_Texture* zoom_texture_;
 
   SDL_Event event_;
   int mouse_x_;
@@ -108,6 +109,8 @@ class Display {
   }
 
   void render_text(int x, int y, SDL_Texture* texture, int texture_width, int texture_height, int border_extension, bool left_adjust);
+
+  void update_textures(const SDL_Rect * rect, const void *pixels, int pitch, const std::string& error_message);
 
  public:
   Display(Mode mode, bool high_dpi_allowed, bool use_10_bpc, std::tuple<int, int> window_size, unsigned width, unsigned height, double duration, const std::string& left_file_name, const std::string& right_file_name);
