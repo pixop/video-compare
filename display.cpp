@@ -148,8 +148,6 @@ Display::Display(const Mode mode,
   SDL_GetRendererInfo(renderer_, &info);
   std::cout << "SDL renderer: " << info.name << std::endl;
 
-  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
   SDL_RenderClear(renderer_);
   SDL_RenderPresent(renderer_);
@@ -180,9 +178,14 @@ Display::Display(const Mode mode,
   small_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 16 * font_scale_), "font open");
   big_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 24 * font_scale_), "font open");
 
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
-  texture_ =
-      check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height), "renderer");
+  video_texture_ =
+      check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height), "video texture");
+
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+  zoom_texture_ =
+      check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height), "zoom texture");
 
   SDL_Surface* text_surface = TTF_RenderUTF8_Blended(small_font_, left_file_name.c_str(), TEXT_COLOR);
   left_text_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
@@ -204,7 +207,8 @@ Display::Display(const Mode mode,
 }
 
 Display::~Display() {
-  SDL_DestroyTexture(texture_);
+  SDL_DestroyTexture(video_texture_);
+  SDL_DestroyTexture(zoom_texture_);
   SDL_DestroyTexture(left_text_texture_);
   SDL_DestroyTexture(right_text_texture_);
 
@@ -404,6 +408,15 @@ void Display::render_text(const int x, const int y, SDL_Texture* texture, const 
   }
 }
 
+void Display::update_textures(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& error_message) {
+    check_sdl(SDL_UpdateTexture(video_texture_, rect, pixels, pitch) == 0, "video texture - " + error_message);
+
+    if (zoom_left_ || zoom_right_) {
+      // perform a full update - optimize later...
+      check_sdl(SDL_UpdateTexture(zoom_texture_, rect, pixels, pitch) == 0, "zoom texture - " + error_message);
+    }
+}
+
 void Display::refresh(std::array<uint8_t*, 3> planes_left,
                       std::array<size_t, 3> pitches_left,
                       std::array<uint8_t*, 3> planes_right,
@@ -451,12 +464,12 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       if (use_10_bpc_) {
         convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
 
-        check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_left, left_planes_[0], pitches_left[0]) == 0, "left texture update (10 bpc, video mode)");
+        update_textures(&tex_render_quad_left, left_planes_[0], pitches_left[0], "left update (10 bpc, video mode)");
       } else {
-        check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_left, planes_left[0], pitches_left[0]) == 0, "left texture update (video mode)");
+        update_textures(&tex_render_quad_left, planes_left[0], pitches_left[0], "left update (video mode)");
       }
 
-      SDL_RenderCopy(renderer_, texture_, &tex_render_quad_left, &screen_render_quad_left);
+      SDL_RenderCopy(renderer_, video_texture_, &tex_render_quad_left, &screen_render_quad_left);
     }
     if (show_right_ && ((split_x < (video_width_ - 1)) || mode_ != Mode::split)) {
       int start_right = (mode_ == Mode::split) ? split_x : 0;
@@ -473,21 +486,21 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
         if (use_10_bpc_) {
           convert_to_packed_10_bpc(diff_planes_, diff_pitches_, right_planes_, pitches_right, roi);
 
-          check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0]) == 0, "right texture update (10 bpc, subtraction mode)");
+          update_textures(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, subtraction mode)");
         } else {
-          check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, diff_planes_[0] + start_right * 3, video_width_ * 3) == 0, "right texture update (subtraction mode)");
+          update_textures(&tex_render_quad_right, diff_planes_[0] + start_right * 3, video_width_ * 3, "right update (subtraction mode)");
         }
       } else {
         if (use_10_bpc_) {
           convert_to_packed_10_bpc(planes_right, pitches_right, right_planes_, pitches_right, roi);
 
-          check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0]) == 0, "right texture update (10 bpc, video mode)");
+          update_textures(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, video mode)");
         } else {
-          check_sdl(SDL_UpdateTexture(texture_, &tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0]) == 0, "right texture update (video mode)");
+          update_textures(&tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0], "right update (video mode)");
         }
       }
 
-      SDL_RenderCopy(renderer_, texture_, &tex_render_quad_right, &screen_render_quad_right);
+      SDL_RenderCopy(renderer_, video_texture_, &tex_render_quad_right, &screen_render_quad_right);
     }
   }
 
@@ -503,11 +516,11 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
     if (zoom_left_) {
       SDL_Rect dst_zoomed_area = {0, drawable_height_ - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size};
-      SDL_RenderCopy(renderer_, texture_, &src_zoomed_area, &dst_zoomed_area);
+      SDL_RenderCopy(renderer_, zoom_texture_, &src_zoomed_area, &dst_zoomed_area);
     }
     if (zoom_right_) {
       SDL_Rect dst_zoomed_area = {drawable_width_ - dst_zoomed_size, drawable_height_ - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size};
-      SDL_RenderCopy(renderer_, texture_, &src_zoomed_area, &dst_zoomed_area);
+      SDL_RenderCopy(renderer_, zoom_texture_, &src_zoomed_area, &dst_zoomed_area);
     }
   }
 
