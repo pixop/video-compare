@@ -94,7 +94,7 @@ SDL::SDL() {
 
   SDL_version linked;
   SDL_GetVersion(&linked);
-  std::cout << "SDL version: " << +linked.major << "." << +linked.minor << "." << +linked.patch << std::endl;
+  std::cout << "SDL version: " << string_sprintf("%u.%u.%u", linked.major, linked.minor, linked.patch) << std::endl;
 }
 
 SDL::~SDL() {
