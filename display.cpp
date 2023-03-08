@@ -14,7 +14,7 @@
 template <typename T>
 inline T check_sdl(T value, const std::string& message) {
   if (!value) {
-    throw std::runtime_error{"SDL " + message};
+    throw std::runtime_error{"SDL " + message + " - " + SDL_GetError()};
   }
   return value;
 }
