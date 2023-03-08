@@ -91,6 +91,10 @@ static std::string format_position_difference(const float position1, const float
 SDL::SDL() {
   check_sdl(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) == 0, "SDL init");
   check_sdl(TTF_Init() == 0, "TTF init");
+
+  SDL_version linked;
+  SDL_GetVersion(&linked);
+  std::cout << "SDL version: " << +linked.major << "." << +linked.minor << "." << +linked.patch << std::endl;
 }
 
 SDL::~SDL() {
