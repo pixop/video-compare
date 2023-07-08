@@ -50,7 +50,10 @@ VideoCompare::VideoCompare(const int display_number,
       display_{std::make_unique<Display>(display_number, display_mode, high_dpi_allowed, use_10_bpc, window_size, max_width_, max_height_, shortest_duration_, left_file_name, right_file_name)},
       timer_{std::make_unique<Timer>()},
       packet_queue_{std::make_unique<PacketQueue>(QUEUE_SIZE), std::make_unique<PacketQueue>(QUEUE_SIZE)},
-      frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {}
+      frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
+  std::cout << "Left video decoder: " << video_decoder_[0]->codec()->name << std::endl;
+  std::cout << "Right video decoder: " << video_decoder_[1]->codec()->name << std::endl;
+}
 
 void VideoCompare::operator()() {
   stages_.emplace_back(&VideoCompare::thread_demultiplex_left, this);

@@ -17,8 +17,10 @@ class VideoDecoder {
   unsigned height() const;
   AVPixelFormat pixel_format() const;
   AVRational time_base() const;
+  const AVCodec* codec() const;
   AVCodecContext* codec_context() const;
 
  private:
+  const AVCodec* codec_{};
   AVCodecContext* codec_context_{};
 };

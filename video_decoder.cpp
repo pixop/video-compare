@@ -7,23 +7,21 @@ VideoDecoder::VideoDecoder(const std::string& decoder_name, AVCodecParameters* c
 #if (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 6, 102))
   avcodec_register_all();
 #endif
-  const AVCodec* codec;
-
   if (decoder_name.empty()) {
-    codec = avcodec_find_decoder(codec_parameters->codec_id);
+    codec_ = avcodec_find_decoder(codec_parameters->codec_id);
   } else {
-    codec = avcodec_find_decoder_by_name(decoder_name.c_str());
+    codec_ = avcodec_find_decoder_by_name(decoder_name.c_str());
   }
 
-  if (codec == nullptr) {
+  if (codec_ == nullptr) {
     throw ffmpeg::Error{"Unsupported video codec"};
   }
-  codec_context_ = avcodec_alloc_context3(codec);
+  codec_context_ = avcodec_alloc_context3(codec_);
   if (codec_context_ == nullptr) {
     throw ffmpeg::Error{"Couldn't allocate video codec context"};
   }
   ffmpeg::check(avcodec_parameters_to_context(codec_context_, codec_parameters));
-  ffmpeg::check(avcodec_open2(codec_context_, codec, nullptr));
+  ffmpeg::check(avcodec_open2(codec_context_, codec_, nullptr));
 }
 
 VideoDecoder::~VideoDecoder() {
@@ -66,6 +64,10 @@ AVPixelFormat VideoDecoder::pixel_format() const {
 
 AVRational VideoDecoder::time_base() const {
   return codec_context_->time_base;
+}
+
+const AVCodec* VideoDecoder::codec() const {
+  return codec_;
 }
 
 AVCodecContext* VideoDecoder::codec_context() const {
