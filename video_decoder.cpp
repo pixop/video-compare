@@ -3,11 +3,18 @@
 #include <string>
 #include "ffmpeg.h"
 
-VideoDecoder::VideoDecoder(AVCodecParameters* codec_parameters) {
+VideoDecoder::VideoDecoder(const std::string& decoder_name, AVCodecParameters* codec_parameters) {
 #if (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 6, 102))
   avcodec_register_all();
 #endif
-  const auto* const codec = avcodec_find_decoder(codec_parameters->codec_id);
+  const AVCodec* codec;
+
+  if (decoder_name.empty()) {
+    codec = avcodec_find_decoder(codec_parameters->codec_id);
+  } else {
+    codec = avcodec_find_decoder_by_name(decoder_name.c_str());
+  }
+
   if (codec == nullptr) {
     throw ffmpeg::Error{"Unsupported video codec"};
   }
