@@ -48,6 +48,7 @@ class Display {
   int shift_right_frames_{0};
   bool seek_from_start_{false};
   bool save_image_frames_{false};
+  bool print_mouse_position_and_color_{false};
   bool mouse_is_inside_window_{false};
 
   SDL sdl_;
@@ -111,6 +112,14 @@ class Display {
   void render_text(int x, int y, SDL_Texture* texture, int texture_width, int texture_height, int border_extension, bool left_adjust);
 
   void update_textures(const SDL_Rect * rect, const void *pixels, int pitch, const std::string& error_message);
+
+  int round_and_clamp(float value);
+
+  const std::array<int, 3> get_rgb_pixel(uint8_t *rgb_plane, size_t pitch, int x, int y);
+  const std::array<int, 3> convert_rgb_to_yuv(const std::array<int, 3> rgb);
+
+  std::string format_pixel(const std::array<int, 3> &rgb);
+  std::string get_and_format_rgb_yuv_pixel(uint8_t *rgb_plane, size_t pitch, int x, int y);
 
  public:
   Display(Mode mode, bool high_dpi_allowed, bool use_10_bpc, std::tuple<int, int> window_size, unsigned width, unsigned height, double duration, const std::string& left_file_name, const std::string& right_file_name);
