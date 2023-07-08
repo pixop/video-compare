@@ -98,6 +98,7 @@ int main(int argc, char** argv) {
                               {"show-controls", {"-c", "--show-controls"}, "show controls", 0},
                               {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
                               {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
+                              {"display-number", {"-n", "--display-number"}, "open main window on specific display (e.g. 0, 1 or 2), default is 0", 1},
                               {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
                               {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
@@ -107,9 +108,10 @@ int main(int argc, char** argv) {
     argagg::parser_results args;
     args = argparser.parse(argc, argv_decoded);
 
+    int display_number = 0;
+    Display::Mode display_mode = Display::Mode::split;
     std::tuple<int, int> window_size(-1, -1);
     double time_shift_ms = 0;
-    Display::Mode display_mode = Display::Mode::split;
     std::string left_video_filters, right_video_filters;
 
     if (args["show-controls"]) {
@@ -123,6 +125,16 @@ int main(int argc, char** argv) {
     } else {
       if (args.pos.size() != 2) {
         throw std::logic_error{"Two FFmpeg compatible video files must be supplied"};
+      }
+      if (args["display-number"]) {
+        const std::string display_number_arg = args["display-number"];
+        const std::regex display_number_re("(\\d*)");
+
+        if (!std::regex_match(display_number_arg, display_number_re)) {
+          throw std::logic_error{"Cannot parse display number argument (required format: [number], e.g. 0, 1 or 2)"};
+        }
+
+        display_number = std::stoi(display_number_arg);
       }
       if (args["display-mode"]) {
         const std::string display_mode_arg = args["display-mode"];
@@ -168,7 +180,7 @@ int main(int argc, char** argv) {
         right_video_filters = static_cast<const std::string&>(args["right-filters"]);
       }
 
-      VideoCompare compare{display_mode, args["high-dpi"], args["10-bpc"], window_size, time_shift_ms, args.pos[0], left_video_filters, args.pos[1], right_video_filters};
+      VideoCompare compare{display_number, display_mode, args["high-dpi"], args["10-bpc"], window_size, time_shift_ms, args.pos[0], left_video_filters, args.pos[1], right_video_filters};
       compare();
     }
   } catch (const std::exception& e) {

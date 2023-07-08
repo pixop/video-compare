@@ -103,7 +103,8 @@ SDL::~SDL() {
   SDL_Quit();
 }
 
-Display::Display(const Mode mode,
+Display::Display(const int display_number,
+                 const Mode mode,
                  const bool high_dpi_allowed,
                  const bool use_10_bpc,
                  const std::tuple<int, int> window_size,
@@ -144,7 +145,7 @@ Display::Display(const Mode mode,
 
   const int create_window_flags = SDL_WINDOW_SHOWN;
 
-  window_ = check_sdl(SDL_CreateWindow("video-compare", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, high_dpi_allowed_ ? window_width / 2 : window_width, high_dpi_allowed_ ? window_height / 2 : window_height,
+  window_ = check_sdl(SDL_CreateWindow("video-compare", SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number), SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number), high_dpi_allowed_ ? window_width / 2 : window_width, high_dpi_allowed_ ? window_height / 2 : window_height,
                                        high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
                       "window");
 

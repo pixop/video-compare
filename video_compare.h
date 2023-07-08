@@ -17,7 +17,8 @@ extern "C" {
 
 class VideoCompare {
  public:
-  VideoCompare(const Display::Mode display_mode,
+  VideoCompare(const int display_number,
+               const Display::Mode display_mode,
                const bool high_dpi_allowed,
                const bool use_10_bpc,
                const std::tuple<int, int> window_size,
