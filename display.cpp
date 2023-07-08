@@ -2,6 +2,8 @@
 #include <libgen.h>
 #include <algorithm>
 #include <iostream>
+#include <sstream>
+#include <iomanip>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -413,12 +415,74 @@ void Display::render_text(const int x, const int y, SDL_Texture* texture, const 
 }
 
 void Display::update_textures(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& error_message) {
-    check_sdl(SDL_UpdateTexture(video_texture_, rect, pixels, pitch) == 0, "video texture - " + error_message);
+  check_sdl(SDL_UpdateTexture(video_texture_, rect, pixels, pitch) == 0, "video texture - " + error_message);
 
-    if (zoom_left_ || zoom_right_) {
-      // perform a full update - optimize later...
-      check_sdl(SDL_UpdateTexture(zoom_texture_, rect, pixels, pitch) == 0, "zoom texture - " + error_message);
-    }
+  if (zoom_left_ || zoom_right_) {
+    // perform a full update - optimize later...
+    check_sdl(SDL_UpdateTexture(zoom_texture_, rect, pixels, pitch) == 0, "zoom texture - " + error_message);
+  }
+}
+
+int Display::round_and_clamp(float value) {
+  int result = static_cast<int>(std::roundf(value));
+
+  return use_10_bpc_ ? clamp_int_to_10_bpc_range(result) : clamp_int_to_byte_range(result);
+}
+
+const std::array<int, 3> Display::get_rgb_pixel(uint8_t *rgb_plane, size_t pitch, int x, int y) {
+  int r, g, b;
+
+  if (use_10_bpc_) {
+    uint16_t *rgb_pixel = reinterpret_cast<uint16_t*>(rgb_plane + x * 6 + y * pitch);
+
+    r = *(rgb_pixel) >> 6;
+    g = *(rgb_pixel + 1) >> 6;
+    b = *(rgb_pixel + 2) >> 6;
+
+  } else {
+    uint8_t *rgb_pixel = rgb_plane + x * 3 + y * pitch;
+
+    r = *(rgb_pixel);
+    g = *(rgb_pixel + 1);
+    b = *(rgb_pixel + 2);
+  }
+
+  return {r, g, b};
+}
+
+const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rgb) {
+  float scale = use_10_bpc_ ? 4.f : 1.f;
+
+  float r = rgb[0] / (256.f * scale);
+  float g = rgb[1] / (256.f * scale);
+  float b = rgb[2] / (256.f * scale);
+
+  // https://en.wikipedia.org/wiki/YCbCr#ITU-R_BT.601_conversion
+  float y = scale * (16.f + 65.738f * r + 129.057f * g + 25.064f * b);
+  float cr = scale * (128.f - 37.945f * r - 74.494f * g + 112.439f * b);
+  float cb = scale * (128.f + 112.439f * r - 94.154f * g - 18.285f * b);
+
+  return {round_and_clamp(y), round_and_clamp(cr), round_and_clamp(cb)};
+}
+
+std::string to_hex(uint32_t value, int width) {
+  std::stringstream sstream;
+  sstream << std::setfill ('0') << std::setw(width) << std::hex << value;
+
+  return sstream.str();
+}
+
+std::string Display::format_pixel(const std::array<int, 3> &pixel) {
+  std::string hex_pixel = use_10_bpc_ ? to_hex((pixel[0] << 20) | (pixel[1] << 10) | pixel[2], 8) : to_hex((pixel[0] << 16) | (pixel[1] << 8) | pixel[2], 6);
+
+  return use_10_bpc_ ? string_sprintf("(%4d,%4d,%4d#%s)", pixel[0], pixel[1], pixel[2], hex_pixel.c_str()) : string_sprintf("(%3d,%3d,%3d#%s)", pixel[0], pixel[1], pixel[2], hex_pixel.c_str());
+}
+
+std::string Display::get_and_format_rgb_yuv_pixel(uint8_t *rgb_plane, size_t pitch, int x, int y) {
+  const std::array<int, 3> rgb = get_rgb_pixel(rgb_plane, pitch, x, y);
+  const std::array<int, 3> yuv = convert_rgb_to_yuv(rgb);
+
+  return "RGB" + format_pixel(rgb) + ", YUV" + format_pixel(yuv);
 }
 
 void Display::refresh(std::array<uint8_t*, 3> planes_left,
@@ -452,6 +516,16 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
   int mouse_video_x = std::round(static_cast<float>(mouse_x_) * screen_to_video_width_factor_);
   int mouse_video_y = std::round(static_cast<float>(mouse_y_) * screen_to_video_height_factor_);
+
+  // print pixel position and RGB color value
+  if (print_mouse_position_and_color_ && mouse_is_inside_window_) {
+    std::cout << string_sprintf("[%4d,%4d]", mouse_video_x, mouse_video_y);
+    std::cout << " - Left: " << get_and_format_rgb_yuv_pixel(planes_left[0], pitches_left[0], mouse_video_x, mouse_video_y);
+    std::cout << " - Right: " << get_and_format_rgb_yuv_pixel(planes_right[0], pitches_right[0], mouse_video_x, mouse_video_y);
+    std::cout << std::endl;
+
+    print_mouse_position_and_color_ = false;
+  }
 
   // clear everything
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
@@ -736,6 +810,9 @@ void Display::input() {
           }
           case SDLK_f:
             save_image_frames_ = true;
+            break;
+          case SDLK_p:
+            print_mouse_position_and_color_ = true;
             break;
           case SDLK_LEFT:
             seek_relative_ -= 1.0F;
