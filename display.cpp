@@ -1,9 +1,9 @@
 #include "display.h"
 #include <libgen.h>
 #include <algorithm>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <iomanip>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -145,8 +145,8 @@ Display::Display(const int display_number,
 
   const int create_window_flags = SDL_WINDOW_SHOWN;
 
-  window_ = check_sdl(SDL_CreateWindow("video-compare", SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number), SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number), high_dpi_allowed_ ? window_width / 2 : window_width, high_dpi_allowed_ ? window_height / 2 : window_height,
-                                       high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
+  window_ = check_sdl(SDL_CreateWindow("video-compare", SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number), SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number), high_dpi_allowed_ ? window_width / 2 : window_width,
+                                       high_dpi_allowed_ ? window_height / 2 : window_height, high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
                       "window");
 
   renderer_ = check_sdl(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "renderer");
@@ -187,12 +187,12 @@ Display::Display(const int display_number,
 
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
-  video_texture_ =
-      check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height), "video texture");
+  video_texture_ = check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height),
+                             "video texture");
 
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-  zoom_texture_ =
-      check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height), "zoom texture");
+  zoom_texture_ = check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height),
+                            "zoom texture");
 
   SDL_Surface* text_surface = TTF_RenderUTF8_Blended(small_font_, left_file_name.c_str(), TEXT_COLOR);
   left_text_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
@@ -430,18 +430,18 @@ int Display::round_and_clamp(float value) {
   return use_10_bpc_ ? clamp_int_to_10_bpc_range(result) : clamp_int_to_byte_range(result);
 }
 
-const std::array<int, 3> Display::get_rgb_pixel(uint8_t *rgb_plane, size_t pitch, int x, int y) {
+const std::array<int, 3> Display::get_rgb_pixel(uint8_t* rgb_plane, size_t pitch, int x, int y) {
   int r, g, b;
 
   if (use_10_bpc_) {
-    uint16_t *rgb_pixel = reinterpret_cast<uint16_t*>(rgb_plane + x * 6 + y * pitch);
+    uint16_t* rgb_pixel = reinterpret_cast<uint16_t*>(rgb_plane + x * 6 + y * pitch);
 
     r = *(rgb_pixel) >> 6;
     g = *(rgb_pixel + 1) >> 6;
     b = *(rgb_pixel + 2) >> 6;
 
   } else {
-    uint8_t *rgb_pixel = rgb_plane + x * 3 + y * pitch;
+    uint8_t* rgb_pixel = rgb_plane + x * 3 + y * pitch;
 
     r = *(rgb_pixel);
     g = *(rgb_pixel + 1);
@@ -468,18 +468,18 @@ const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rg
 
 std::string to_hex(uint32_t value, int width) {
   std::stringstream sstream;
-  sstream << std::setfill ('0') << std::setw(width) << std::hex << value;
+  sstream << std::setfill('0') << std::setw(width) << std::hex << value;
 
   return sstream.str();
 }
 
-std::string Display::format_pixel(const std::array<int, 3> &pixel) {
+std::string Display::format_pixel(const std::array<int, 3>& pixel) {
   std::string hex_pixel = use_10_bpc_ ? to_hex((pixel[0] << 20) | (pixel[1] << 10) | pixel[2], 8) : to_hex((pixel[0] << 16) | (pixel[1] << 8) | pixel[2], 6);
 
   return use_10_bpc_ ? string_sprintf("(%4d,%4d,%4d#%s)", pixel[0], pixel[1], pixel[2], hex_pixel.c_str()) : string_sprintf("(%3d,%3d,%3d#%s)", pixel[0], pixel[1], pixel[2], hex_pixel.c_str());
 }
 
-std::string Display::get_and_format_rgb_yuv_pixel(uint8_t *rgb_plane, size_t pitch, int x, int y) {
+std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, size_t pitch, int x, int y) {
   const std::array<int, 3> rgb = get_rgb_pixel(rgb_plane, pitch, x, y);
   const std::array<int, 3> yuv = convert_rgb_to_yuv(rgb);
 
