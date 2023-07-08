@@ -103,7 +103,9 @@ int main(int argc, char** argv) {
                               {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
                               {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
-                              {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1}}};
+                              {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
+                              {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name, see list of valid values via 'ffmpeg -decoders' (e.g. h264 or h264_cuvid)", 1},
+                              {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name, see list of valid values via 'ffmpeg -decoders' (e.g. h264 or h264_cuvid)", 1}}};
 
     argagg::parser_results args;
     args = argparser.parse(argc, argv_decoded);
@@ -113,6 +115,7 @@ int main(int argc, char** argv) {
     std::tuple<int, int> window_size(-1, -1);
     double time_shift_ms = 0;
     std::string left_video_filters, right_video_filters;
+    std::string left_decoder, right_decoder;
 
     if (args["show-controls"]) {
       print_controls();
@@ -179,8 +182,14 @@ int main(int argc, char** argv) {
       if (args["right-filters"]) {
         right_video_filters = static_cast<const std::string&>(args["right-filters"]);
       }
+      if (args["left-decoder"]) {
+        left_decoder = static_cast<const std::string&>(args["left-decoder"]);
+      }
+      if (args["right-decoder"]) {
+        right_decoder = static_cast<const std::string&>(args["right-decoder"]);
+      }
 
-      VideoCompare compare{display_number, display_mode, args["high-dpi"], args["10-bpc"], window_size, time_shift_ms, args.pos[0], left_video_filters, args.pos[1], right_video_filters};
+      VideoCompare compare{display_number, display_mode, args["high-dpi"], args["10-bpc"], window_size, time_shift_ms, args.pos[0], left_video_filters, left_decoder, args.pos[1], right_video_filters, right_decoder};
       compare();
     }
   } catch (const std::exception& e) {

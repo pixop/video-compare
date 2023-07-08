@@ -1,11 +1,13 @@
 #pragma once
+#include <string>
+
 extern "C" {
 #include "libavcodec/avcodec.h"
 }
 
 class VideoDecoder {
  public:
-  explicit VideoDecoder(AVCodecParameters* codec_parameters);
+  explicit VideoDecoder(const std::string& decoder_name, AVCodecParameters* codec_parameters);
   ~VideoDecoder();
   bool send(AVPacket* packet);
   bool receive(AVFrame* frame);
