@@ -48,34 +48,32 @@ void free_argv(int argc, char** argv) {
 #endif
 
 void print_controls() {
-  const std::vector<std::pair<std::string, std::string>> controls {
-    {"Space", "Toggle play/pause"},
-    {"Escape", "Quit"},
-    {"Down arrow", "Seek 15 seconds backward"},
-    {"Left arrow", "Seek 1 second backward"},
-    {"Page down", "Seek 600 seconds backward"},
-    {"Up arrow", "Seek 15 seconds forward"},
-    {"Right arrow", "Seek 1 second forward"},
-    {"Page up", "Seek 600 seconds forward"},
-    {"S", "Swap left and right video"},
-    {"A", "Previous frame"},
-    {"D", "Next frame"},
-    {"F", "Save both frames as PNG images in the current directory"},
-    {"P", "Print mouse position and pixel value under cursor to console"},
-    {"Z", "Zoom area around cursor (result shown in lower left corner)"},
-    {"C", "Zoom area around cursor (result shown in lower right corner)"},
-    {"1", "Toggle hide/show left video"},
-    {"2", "Toggle hide/show right video"},
-    {"3", "Toggle hide/show HUD"},
-    {"0", "Toggle video/subtraction mode"},
-    {"+", "Time-shift right video 1 frame forward"},
-    {"-", "Time-shift right video 1 frame backward"}
-  };
+  const std::vector<std::pair<std::string, std::string>> controls{{"Space", "Toggle play/pause"},
+                                                                  {"Escape", "Quit"},
+                                                                  {"Down arrow", "Seek 15 seconds backward"},
+                                                                  {"Left arrow", "Seek 1 second backward"},
+                                                                  {"Page down", "Seek 600 seconds backward"},
+                                                                  {"Up arrow", "Seek 15 seconds forward"},
+                                                                  {"Right arrow", "Seek 1 second forward"},
+                                                                  {"Page up", "Seek 600 seconds forward"},
+                                                                  {"S", "Swap left and right video"},
+                                                                  {"A", "Previous frame"},
+                                                                  {"D", "Next frame"},
+                                                                  {"F", "Save both frames as PNG images in the current directory"},
+                                                                  {"P", "Print mouse position and pixel value under cursor to console"},
+                                                                  {"Z", "Zoom area around cursor (result shown in lower left corner)"},
+                                                                  {"C", "Zoom area around cursor (result shown in lower right corner)"},
+                                                                  {"1", "Toggle hide/show left video"},
+                                                                  {"2", "Toggle hide/show right video"},
+                                                                  {"3", "Toggle hide/show HUD"},
+                                                                  {"0", "Toggle video/subtraction mode"},
+                                                                  {"+", "Time-shift right video 1 frame forward"},
+                                                                  {"-", "Time-shift right video 1 frame backward"}};
 
   std::cout << "Controls: " << std::endl << std::endl;
 
-  for (auto &key_description_pair : controls) {
-      std::cout << "- " << key_description_pair.first << ": " << key_description_pair.second << std::endl;
+  for (auto& key_description_pair : controls) {
+    std::cout << "- " << key_description_pair.first << ": " << key_description_pair.second << std::endl;
   }
 
   std::cout << std::endl << "Move the mouse horizontally to adjust the movable slider position." << std::endl << std::endl;
