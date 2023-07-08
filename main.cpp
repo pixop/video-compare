@@ -47,12 +47,54 @@ void free_argv(int argc, char** argv) {
 }
 #endif
 
+void print_controls() {
+  const std::vector<std::pair<std::string, std::string>> controls {
+    {"Space", "Toggle play/pause"},
+    {"Escape", "Quit"},
+    {"Down arrow", "Seek 15 seconds backward"},
+    {"Left arrow", "Seek 1 second backward"},
+    {"Page down", "Seek 600 seconds backward"},
+    {"Up arrow", "Seek 15 seconds forward"},
+    {"Right arrow", "Seek 1 second forward"},
+    {"Page up", "Seek 600 seconds forward"},
+    {"S", "Swap left and right video"},
+    {"A", "Previous frame"},
+    {"D", "Next frame"},
+    {"F", "Save both frames as PNG images in the current directory"},
+    {"Z", "Zoom area around cursor (result shown in lower left corner)"},
+    {"C", "Zoom area around cursor (result shown in lower right corner)"},
+    {"1", "Toggle hide/show left video"},
+    {"2", "Toggle hide/show right video"},
+    {"3", "Toggle hide/show HUD"},
+    {"0", "Toggle video/subtraction mode"},
+    {"+", "Time-shift right video 1 frame forward"},
+    {"-", "Time-shift right video 1 frame backward"}
+  };
+
+  std::cout << "Controls: " << std::endl << std::endl;
+
+  for (auto &key_description_pair : controls) {
+      std::cout << "- " << key_description_pair.first << ": " << key_description_pair.second << std::endl;
+  }
+
+  std::cout << std::endl << "Move the mouse horizontally to adjust the movable slider position." << std::endl << std::endl;
+
+  std::cout << "Click the mouse to perform a time seek based on the horizontal position" << std::endl;
+  std::cout << "of the mouse cursor relative to the window width (the target position is" << std::endl;
+  std::cout << "shown in the lower right corner)." << std::endl << std::endl;
+
+  std::cout << "Hold CTRL while time-shifting with +/- for faster increments/decrements" << std::endl;
+  std::cout << "of 10 frames per keystroke. Similarly, hold down the ALT key for even" << std::endl;
+  std::cout << "bigger time-shifts of 100 frames." << std::endl;
+}
+
 int main(int argc, char** argv) {
   char** argv_decoded = get_argv(&argc, argv);
   int exit_code = 0;
 
   try {
     argagg::parser argparser{{{"help", {"-h", "--help"}, "show help", 0},
+                              {"show-controls", {"-c", "--show-controls"}, "show controls", 0},
                               {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
                               {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
                               {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
@@ -69,7 +111,9 @@ int main(int argc, char** argv) {
     Display::Mode display_mode = Display::Mode::split;
     std::string left_video_filters, right_video_filters;
 
-    if (args["help"] || args.count() == 0) {
+    if (args["show-controls"]) {
+      print_controls();
+    } else if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
       usage << "video-compare 20230311-github Copyright (c) 2018-2023 Jon Frydensbjerg, the video-compare community" << std::endl << std::endl;
       usage << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl << std::endl;
