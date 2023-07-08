@@ -61,7 +61,7 @@ void print_controls() {
     {"A", "Previous frame"},
     {"D", "Next frame"},
     {"F", "Save both frames as PNG images in the current directory"},
-    {"P", "Print mouse position and pixel value to console"},
+    {"P", "Print mouse position and pixel value under cursor to console"},
     {"Z", "Zoom area around cursor (result shown in lower left corner)"},
     {"C", "Zoom area around cursor (result shown in lower right corner)"},
     {"1", "Toggle hide/show left video"},
