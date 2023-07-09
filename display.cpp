@@ -62,32 +62,21 @@ static const SDL_Color TARGET_COLOR = {200, 200, 140, 0};
 static const SDL_Color BUFFER_COLOR = {160, 225, 192, 0};
 static const int BACKGROUND_ALPHA = 100;
 
-static std::string format_position(const float position) {
-  const float rounded_millis = std::round(position * 1000.0F);
-
-  const int milliseconds = rounded_millis;
-  const int seconds = milliseconds / 1000;
-  const int minutes = seconds / 60;
-  const int hours = minutes / 60;
-
-  if (minutes >= 60) {
-    return string_sprintf("%02d:%02d:%02d.%03d", hours, minutes % 60, seconds % 60, milliseconds % 1000);
-  }
-  if (seconds >= 60) {
-    return string_sprintf("%02d:%02d.%03d", minutes, seconds % 60, milliseconds % 1000);
-  }
-
-  return string_sprintf("%d.%03d", seconds, milliseconds % 1000);
-}
-
 static std::string format_position_difference(const float position1, const float position2) {
   if (std::abs(position1 - position2) <= 1e-4) {
     return "";
   } else if (position1 < position2) {
-    return " (-" + format_position(position2 - position1) + ")";
+    return " (-" + format_position(position2 - position1, true) + ")";
   }
 
-  return " (+" + format_position(position1 - position2) + ")";
+  return " (+" + format_position(position1 - position2, true) + ")";
+}
+
+static std::string to_hex(const uint32_t value, const int width) {
+  std::stringstream sstream;
+  sstream << std::setfill('0') << std::setw(width) << std::hex << value;
+
+  return sstream.str();
 }
 
 SDL::SDL() {
@@ -424,13 +413,13 @@ void Display::update_textures(const SDL_Rect* rect, const void* pixels, int pitc
   }
 }
 
-int Display::round_and_clamp(float value) {
+int Display::round_and_clamp(const float value) {
   int result = static_cast<int>(std::roundf(value));
 
   return use_10_bpc_ ? clamp_int_to_10_bpc_range(result) : clamp_int_to_byte_range(result);
 }
 
-const std::array<int, 3> Display::get_rgb_pixel(uint8_t* rgb_plane, size_t pitch, int x, int y) {
+const std::array<int, 3> Display::get_rgb_pixel(uint8_t* rgb_plane, const size_t pitch, const int x, const int y) {
   int r, g, b;
 
   if (use_10_bpc_) {
@@ -466,20 +455,13 @@ const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rg
   return {round_and_clamp(y), round_and_clamp(cr), round_and_clamp(cb)};
 }
 
-std::string to_hex(uint32_t value, int width) {
-  std::stringstream sstream;
-  sstream << std::setfill('0') << std::setw(width) << std::hex << value;
-
-  return sstream.str();
-}
-
 std::string Display::format_pixel(const std::array<int, 3>& pixel) {
   std::string hex_pixel = use_10_bpc_ ? to_hex((pixel[0] << 20) | (pixel[1] << 10) | pixel[2], 8) : to_hex((pixel[0] << 16) | (pixel[1] << 8) | pixel[2], 6);
 
   return use_10_bpc_ ? string_sprintf("(%4d,%4d,%4d#%s)", pixel[0], pixel[1], pixel[2], hex_pixel.c_str()) : string_sprintf("(%3d,%3d,%3d#%s)", pixel[0], pixel[1], pixel[2], hex_pixel.c_str());
 }
 
-std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, size_t pitch, int x, int y) {
+std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const int x, const int y) {
   const std::array<int, 3> rgb = get_rgb_pixel(rgb_plane, pitch, x, y);
   const std::array<int, 3> yuv = convert_rgb_to_yuv(rgb);
 
@@ -614,7 +596,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
     if (show_left_) {
       // file name and current position of left video
-      const std::string left_pos_str = format_position(left_position) + " " + left_picture_type + format_position_difference(left_position, right_position);
+      const std::string left_pos_str = format_position(left_position, true) + " " + left_picture_type + format_position_difference(left_position, right_position);
       text_surface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), POSITION_COLOR);
       SDL_Texture* left_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
       int left_position_text_width = text_surface->w;
@@ -628,7 +610,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     }
     if (show_right_) {
       // file name and current position of right video
-      const std::string right_pos_str = format_position(right_position) + " " + right_picture_type + format_position_difference(right_position, left_position);
+      const std::string right_pos_str = format_position(right_position, true) + " " + right_picture_type + format_position_difference(right_position, left_position);
       text_surface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), POSITION_COLOR);
       SDL_Texture* right_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
       int right_position_text_width = text_surface->w;
@@ -661,7 +643,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       // target seek position
       double target_position = static_cast<float>(mouse_x_) / static_cast<float>(window_width_) * duration_;
 
-      const std::string target_pos_str = format_position(target_position);
+      const std::string target_pos_str = format_position(target_position, true);
       text_surface = TTF_RenderText_Blended(small_font_, target_pos_str.c_str(), TARGET_COLOR);
       SDL_Texture* target_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
       int target_position_text_width = text_surface->w;
