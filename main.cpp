@@ -3,7 +3,6 @@
 #include <iostream>
 #include <regex>
 #include <stdexcept>
-#include <string>
 #include <vector>
 #include "argagg.h"
 #include "video_compare.h"
@@ -99,10 +98,13 @@ void find_matching_video_decoders(const std::string &search_string) {
   while ((codec = av_codec_iterate(&i)))
   {
     if (codec->type == AVMEDIA_TYPE_VIDEO && av_codec_is_decoder(codec)) {
-      auto name_pos = strcasestr(codec->name, search_string.c_str());
-      auto long_name_pos = strcasestr(codec->long_name, search_string.c_str());
+      std::string codec_name(codec->name);
+      std::string codec_long_name(codec->long_name);
 
-      if (name_pos != nullptr || long_name_pos != nullptr) {
+      auto name_it = string_ci_find(codec_name, search_string);
+      auto long_name_it = string_ci_find(codec_long_name, search_string);
+
+      if (name_it != codec_name.end() || long_name_it != codec_long_name.end()) {
         std::string capability = (codec->capabilities & AV_CODEC_CAP_HARDWARE) ? "A" : ".";
         capability += (codec->capabilities & AV_CODEC_CAP_HYBRID) ? "Y" : ".";
 
