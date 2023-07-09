@@ -51,8 +51,8 @@ VideoCompare::VideoCompare(const int display_number,
       timer_{std::make_unique<Timer>()},
       packet_queue_{std::make_unique<PacketQueue>(QUEUE_SIZE), std::make_unique<PacketQueue>(QUEUE_SIZE)},
       frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
-  std::cout << string_sprintf("Left video:  %s, %s, %s, %dx%d, %s, %s", left_file_name.c_str(), video_decoder_[0]->codec()->name, av_get_pix_fmt_name(video_decoder_[0]->pixel_format()), video_decoder_[0]->width(), video_decoder_[0]->height(), format_position(demuxer_[0]->duration() * AV_TIME_TO_SEC, false).c_str(), demuxer_[0]->format_name().c_str()) << std::endl;
-  std::cout << string_sprintf("Right video: %s, %s, %s, %dx%d, %s, %s", right_file_name.c_str(), video_decoder_[1]->codec()->name, av_get_pix_fmt_name(video_decoder_[1]->pixel_format()), video_decoder_[0]->width(), video_decoder_[0]->height(), format_position(demuxer_[1]->duration() * AV_TIME_TO_SEC, false).c_str(), demuxer_[1]->format_name().c_str()) << std::endl;
+  std::cout << string_sprintf("Left video:  %dx%d, %s, %s, %s, %s, %s", video_decoder_[0]->width(), video_decoder_[0]->height(), format_position(demuxer_[0]->duration() * AV_TIME_TO_SEC, false).c_str(), video_decoder_[0]->codec()->name, av_get_pix_fmt_name(video_decoder_[0]->pixel_format()), demuxer_[0]->format_name().c_str(), left_file_name.c_str()) << std::endl;
+  std::cout << string_sprintf("Right video: %dx%d, %s, %s, %s, %s, %s", video_decoder_[0]->width(), video_decoder_[0]->height(), format_position(demuxer_[1]->duration() * AV_TIME_TO_SEC, false).c_str(), video_decoder_[1]->codec()->name, av_get_pix_fmt_name(video_decoder_[1]->pixel_format()), demuxer_[1]->format_name().c_str(), right_file_name.c_str()) << std::endl;
 }
 
 void VideoCompare::operator()() {
