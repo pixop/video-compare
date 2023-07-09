@@ -89,13 +89,14 @@ void print_controls() {
 }
 
 void find_matching_video_decoders(const std::string &search_string) {
-  AVCodec *codec = av_codec_next(nullptr);
+  const AVCodec *codec = nullptr;
+  void *i = 0;
 
   std::cout << "Decoders:" << std::endl;
   std::cout << " A. = Backed by hardware implementation" << std::endl;
   std::cout << " .Y = Potentially backed by a hardware implementation, but not necessarily" << std::endl << std::endl;
 
-  while (codec != nullptr)
+  while ((codec = av_codec_iterate(&i)))
   {
     if (codec->type == AVMEDIA_TYPE_VIDEO && av_codec_is_decoder(codec)) {
       auto name_pos = strcasestr(codec->name, search_string.c_str());
@@ -108,8 +109,6 @@ void find_matching_video_decoders(const std::string &search_string) {
         std::cout << string_sprintf(" %s %-18s %s", capability.c_str(), codec->name, codec->long_name) << std::endl;
       }
     }
-
-    codec = av_codec_next(codec);
   }
 }
 
