@@ -19,3 +19,5 @@ static std::string string_sprintf(const std::string& format, Args... args) {
 }
 
 std::string string_join(std::vector<std::string>& strings, const std::string& delim);
+
+std::string format_position(const float position, const bool use_compact);
