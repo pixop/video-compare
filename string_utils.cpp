@@ -1,6 +1,6 @@
 #include "string_utils.h"
 #include <numeric>
-#include <algorithm>
+#include <cmath>
 
 // Borrowed from https://www.techiedelight.com/implode-a-vector-of-strings-into-a-comma-separated-string-in-cpp/
 std::string string_join(std::vector<std::string>& strings, const std::string& delim) {
