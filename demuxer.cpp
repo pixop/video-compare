@@ -3,9 +3,6 @@
 #include "ffmpeg.h"
 
 Demuxer::Demuxer(const std::string& file_name) {
-#if (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 6, 102))
-  av_register_all();
-#endif
   ffmpeg::check(file_name, avformat_open_input(&format_context_, file_name.c_str(), nullptr, nullptr));
 
   format_context_->probesize = 100000000;
@@ -57,4 +54,8 @@ bool Demuxer::seek(const float position, const bool backward) {
   int64_t seek_target = static_cast<int64_t>(position * AV_TIME_BASE);
 
   return av_seek_frame(format_context_, -1, seek_target, backward ? AVSEEK_FLAG_BACKWARD : 0) >= 0;
+}
+
+std::string Demuxer::format_name() {
+  return format_context_->iformat->name;
 }

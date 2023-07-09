@@ -16,6 +16,7 @@ class Demuxer {
   int rotation() const;
   bool operator()(AVPacket& packet);
   bool seek(float position, bool backward);
+  std::string format_name();
 
  private:
   AVFormatContext* format_context_{};
