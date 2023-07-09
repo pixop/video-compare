@@ -4,9 +4,6 @@
 #include "ffmpeg.h"
 
 VideoDecoder::VideoDecoder(const std::string& decoder_name, AVCodecParameters* codec_parameters) {
-#if (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 6, 102))
-  avcodec_register_all();
-#endif
   if (decoder_name.empty()) {
     codec_ = avcodec_find_decoder(codec_parameters->codec_id);
   } else {
