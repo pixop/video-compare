@@ -7,6 +7,7 @@
 #include <vector>
 #include "argagg.h"
 #include "video_compare.h"
+#include "string_utils.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -87,9 +88,39 @@ void print_controls() {
   std::cout << "bigger time-shifts of 100 frames." << std::endl;
 }
 
+void find_matching_video_decoders(const std::string &search_string) {
+  AVCodec *codec = av_codec_next(nullptr);
+
+  std::cout << "Decoders:" << std::endl;
+  std::cout << " A. = Backed by hardware implementation" << std::endl;
+  std::cout << " .Y = Potentially backed by a hardware implementation, but not necessarily" << std::endl << std::endl;
+
+  while (codec != nullptr)
+  {
+    if (codec->type == AVMEDIA_TYPE_VIDEO && av_codec_is_decoder(codec)) {
+      auto name_pos = strcasestr(codec->name, search_string.c_str());
+      auto long_name_pos = strcasestr(codec->long_name, search_string.c_str());
+
+      if (name_pos != nullptr || long_name_pos != nullptr) {
+        std::string capability = (codec->capabilities & AV_CODEC_CAP_HARDWARE) ? "A" : ".";
+        capability += (codec->capabilities & AV_CODEC_CAP_HYBRID) ? "Y" : ".";
+
+        std::cout << string_sprintf(" %s %-18s %s", capability.c_str(), codec->name, codec->long_name) << std::endl;
+      }
+    }
+
+    codec = av_codec_next(codec);
+  }
+}
+
 int main(int argc, char** argv) {
   char** argv_decoded = get_argv(&argc, argv);
   int exit_code = 0;
+
+#if (LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 6, 102))
+  av_register_all();
+  avcodec_register_all();
+#endif
 
   try {
     argagg::parser argparser{{{"help", {"-h", "--help"}, "show help", 0},
@@ -102,8 +133,9 @@ int main(int argc, char** argv) {
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
                               {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
-                              {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name, see list of valid values via 'ffmpeg -decoders' (e.g. h264 or h264_cuvid)", 1},
-                              {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name, see list of valid values via 'ffmpeg -decoders' (e.g. h264 or h264_cuvid)", 1}}};
+                              {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name (e.g. h264 or h264_cuvid)", 1},
+                              {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name (e.g. h264 or h264_cuvid)", 1},
+                              {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc' or 'av1'; use \"\" to list all)", 1}}};
 
     argagg::parser_results args;
     args = argparser.parse(argc, argv_decoded);
@@ -117,6 +149,8 @@ int main(int argc, char** argv) {
 
     if (args["show-controls"]) {
       print_controls();
+    } else if (args["find-decoders"]) {
+      find_matching_video_decoders(args["find-decoders"]);
     } else if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
       usage << "video-compare 20230311-github Copyright (c) 2018-2023 Jon Frydensbjerg, the video-compare community" << std::endl << std::endl;
