@@ -30,15 +30,10 @@ inline bool ci_compare_char(char a, char b) {
    return (::toupper(a) == b);
 }
 
-std::string::const_iterator string_ci_find(std::string& s, const std::string& p) {
+std::string::const_iterator string_ci_find(std::string& str, const std::string& query) {
    std::string tmp;
 
-   std::transform(p.cbegin(), p.cend(),
-             std::back_inserter(tmp),
-             ::toupper);
+   std::transform(query.cbegin(), query.cend(), std::back_inserter(tmp), ::toupper);
 
-   return (search(s.cbegin(), s.cend(),
-                  tmp.cbegin(), tmp.cend(),
-                  ci_compare_char));
+   return (search(str.cbegin(), str.cend(), tmp.cbegin(), tmp.cend(), ci_compare_char));
 }
-
