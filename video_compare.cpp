@@ -324,7 +324,7 @@ void VideoCompare::video() {
 
       bool store_frames = false;
 
-      if (display_->get_quit()) {
+      if (display_->get_quit() || (exception_ != nullptr)) {
         break;
       } else {
         bool adjusting = false;
