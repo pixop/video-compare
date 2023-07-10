@@ -1,7 +1,7 @@
 #include "string_utils.h"
-#include <numeric>
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <numeric>
 
 // Borrowed from https://www.techiedelight.com/implode-a-vector-of-strings-into-a-comma-separated-string-in-cpp/
 std::string string_join(std::vector<std::string>& strings, const std::string& delim) {
@@ -27,13 +27,13 @@ std::string format_position(const float position, const bool use_compact) {
 }
 
 inline bool ci_compare_char(char a, char b) {
-   return (::toupper(a) == b);
+  return (::toupper(a) == b);
 }
 
 std::string::const_iterator string_ci_find(std::string& str, const std::string& query) {
-   std::string tmp;
+  std::string tmp;
 
-   std::transform(query.cbegin(), query.cend(), std::back_inserter(tmp), ::toupper);
+  std::transform(query.cbegin(), query.cend(), std::back_inserter(tmp), ::toupper);
 
-   return (search(str.cbegin(), str.cend(), tmp.cbegin(), tmp.cend(), ci_compare_char));
+  return (search(str.cbegin(), str.cend(), tmp.cbegin(), tmp.cend(), ci_compare_char));
 }
