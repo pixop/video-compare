@@ -22,4 +22,4 @@ std::string string_join(std::vector<std::string>& strings, const std::string& de
 
 std::string format_position(const float position, const bool use_compact);
 
-std::string::const_iterator string_ci_find(std::string& s, const std::string& p);
+std::string::const_iterator string_ci_find(std::string& str, const std::string& query);
