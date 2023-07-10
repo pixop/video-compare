@@ -5,8 +5,8 @@
 #include <stdexcept>
 #include <vector>
 #include "argagg.h"
-#include "video_compare.h"
 #include "string_utils.h"
+#include "video_compare.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -87,16 +87,15 @@ void print_controls() {
   std::cout << "bigger time-shifts of 100 frames." << std::endl;
 }
 
-void find_matching_video_decoders(const std::string &search_string) {
-  const AVCodec *codec = nullptr;
-  void *i = 0;
+void find_matching_video_decoders(const std::string& search_string) {
+  const AVCodec* codec = nullptr;
+  void* i = 0;
 
   std::cout << "Decoders:" << std::endl;
   std::cout << " A. = Backed by hardware implementation" << std::endl;
   std::cout << " .Y = Potentially backed by a hardware implementation, but not necessarily" << std::endl << std::endl;
 
-  while ((codec = av_codec_iterate(&i)))
-  {
+  while ((codec = av_codec_iterate(&i))) {
     if (codec->type == AVMEDIA_TYPE_VIDEO && av_codec_is_decoder(codec)) {
       std::string codec_name(codec->name);
       std::string codec_long_name(codec->long_name);
