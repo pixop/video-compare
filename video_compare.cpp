@@ -425,7 +425,7 @@ void VideoCompare::video() {
 
       const std::string current_total_browsable = string_sprintf("%d/%d", frame_offset + 1, static_cast<int>(left_frames.size()));
 
-      if (frame_offset >= 0) {
+      if (frame_offset >= 0 && !left_frames.empty() && !right_frames.empty()) {
         const std::string left_picture_type(1, av_get_picture_type_char(left_frames[frame_offset]->pict_type));
         const std::string right_picture_type(1, av_get_picture_type_char(right_frames[frame_offset]->pict_type));
 
