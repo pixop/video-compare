@@ -133,12 +133,11 @@ void VideoCompare::thread_decode_video_right() {
 bool VideoCompare::process_packet(const int video_idx, AVPacket* packet, AVFrame* frame_decoded) {
   bool sent = video_decoder_[video_idx]->send(packet);
 
-  // If a whole frame has been decoded,
-  // adjust time stamps and add to queue
+  // If a whole frame has been decoded, adjust time stamps and add to queue
   while (video_decoder_[video_idx]->receive(frame_decoded)) {
-    // send decodes frame to filterer
+    // send decoded frame to filterer
     if (!video_filterer_[video_idx]->send(frame_decoded)) {
-      throw std::runtime_error("Error while feeding the filtergraph");
+      throw std::runtime_error("Error while feeding the filter graph");
     }
 
     std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_filtered{av_frame_alloc(), [](AVFrame* f) { av_free(f->data[0]); }};
