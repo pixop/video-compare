@@ -502,9 +502,32 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
   // print pixel position and RGB color value
   if (print_mouse_position_and_color_ && mouse_is_inside_window_) {
-    std::cout << string_sprintf("[%4d,%4d]", mouse_video_x, mouse_video_y);
-    std::cout << " - Left: " << get_and_format_rgb_yuv_pixel(planes_left[0], pitches_left[0], mouse_video_x, mouse_video_y);
-    std::cout << " - Right: " << get_and_format_rgb_yuv_pixel(planes_right[0], pitches_right[0], mouse_video_x, mouse_video_y);
+    bool print_left_pixel, print_right_pixel;
+
+    switch (mode_) {
+      case Mode::hstack:
+        print_left_pixel = mouse_video_x < video_width_;
+        print_right_pixel = !print_left_pixel;
+        break;
+      case Mode::vstack:
+        print_left_pixel = mouse_video_y < video_height_;
+        print_right_pixel = !print_left_pixel;
+        break;
+      default:
+        print_left_pixel = true;
+        print_right_pixel = true;
+    }
+
+    int pixel_video_x = mouse_video_x % video_width_;
+    int pixel_video_y = mouse_video_y % video_height_;
+
+    std::cout << string_sprintf("[%4d,%4d]", pixel_video_x, pixel_video_y);
+    if (print_left_pixel) {
+      std::cout << " - Left: " << get_and_format_rgb_yuv_pixel(planes_left[0], pitches_left[0], pixel_video_x, pixel_video_y);
+    }
+    if (print_right_pixel) {
+      std::cout << " - Right: " << get_and_format_rgb_yuv_pixel(planes_right[0], pitches_right[0], pixel_video_x, pixel_video_y);
+    }
     std::cout << std::endl;
 
     print_mouse_position_and_color_ = false;
