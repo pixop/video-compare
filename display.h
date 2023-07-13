@@ -128,8 +128,10 @@ class Display {
   // Copy frame to display
   void refresh(std::array<uint8_t*, 3> planes_left,
                std::array<size_t, 3> pitches_left,
+               std::array<size_t, 2> original_dims_left,
                std::array<uint8_t*, 3> planes_right,
                std::array<size_t, 3> pitches_right,
+               std::array<size_t, 2> original_dims_right,
                float left_position,
                const std::string& left_picture_type,
                float right_position,
