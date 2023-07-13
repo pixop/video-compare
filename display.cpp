@@ -524,14 +524,14 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     int pixel_video_y = mouse_video_y % video_height_;
 
     if (print_left_pixel) {
-      std::cout << "Left:  " << string_sprintf("[%4d,%4d]", pixel_video_x  * original_dims_left[0] / video_width_, pixel_video_y * original_dims_left[1] / video_height_);
+      std::cout << "Left:  " << string_sprintf("[%4d,%4d]", pixel_video_x * original_dims_left[0] / video_width_, pixel_video_y * original_dims_left[1] / video_height_);
       std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_left[0], pitches_left[0], pixel_video_x, pixel_video_y);
     }
     if (print_right_pixel) {
       if (print_left_pixel) {
         std::cout << " - ";
       }
-      std::cout << "Right: " << string_sprintf("[%4d,%4d]", pixel_video_x  * original_dims_right[0] / video_width_, pixel_video_y * original_dims_right[1] / video_height_);
+      std::cout << "Right: " << string_sprintf("[%4d,%4d]", pixel_video_x * original_dims_right[0] / video_width_, pixel_video_y * original_dims_right[1] / video_height_);
       std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_right[0], pitches_right[0], pixel_video_x, pixel_video_y);
     }
     std::cout << std::endl;
