@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
                               {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name (e.g. h264 or h264_cuvid)", 1},
                               {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name (e.g. h264 or h264_cuvid)", 1},
-                              {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc' or 'av1'; use \"\" to list all)", 1}}};
+                              {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1}}};
 
     argagg::parser_results args;
     args = argparser.parse(argc, argv_decoded);
@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
       find_matching_video_decoders(args["find-decoders"]);
     } else if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
-      usage << "video-compare 20230709-github Copyright (c) 2018-2023 Jon Frydensbjerg, the video-compare community" << std::endl << std::endl;
+      usage << "video-compare 20230713-github Copyright (c) 2018-2023 Jon Frydensbjerg, the video-compare community" << std::endl << std::endl;
       usage << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl << std::endl;
       argagg::fmt_ostream fmt(std::cerr);
       fmt << usage.str() << argparser;
