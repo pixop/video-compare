@@ -138,6 +138,12 @@ Display::Display(const int display_number,
                                        high_dpi_allowed_ ? window_height / 2 : window_height, high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
                       "window");
 
+  SDL_GetWindowSize(window_, &window_width_, &window_height_);
+  SDL_GL_GetDrawableSize(window_, &drawable_width_, &drawable_height_);
+
+  std::cout << "SDL GL drawable size: " <<  drawable_width_ << "x" << drawable_height_<< std::endl;
+  std::cout << "SDL window size: " <<  window_width_ << "x" << window_height_<< std::endl;
+
   renderer_ = check_sdl(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "renderer");
 
   SDL_RendererInfo info;
