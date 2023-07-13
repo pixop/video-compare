@@ -29,7 +29,7 @@ AVRational Demuxer::time_base() const {
 }
 
 int64_t Demuxer::duration() const {
-  return format_context_->duration;
+  return format_context_->duration != AV_NOPTS_VALUE ? format_context_->duration : 0;
 }
 
 int Demuxer::rotation() const {
