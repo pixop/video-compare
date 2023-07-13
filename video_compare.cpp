@@ -54,7 +54,7 @@ VideoCompare::VideoCompare(const int display_number,
   std::cout << string_sprintf("Left video:  %dx%d, %s, %s, %s, %s, %s", video_decoder_[0]->width(), video_decoder_[0]->height(), format_position(demuxer_[0]->duration() * AV_TIME_TO_SEC, false).c_str(), video_decoder_[0]->codec()->name,
                               av_get_pix_fmt_name(video_decoder_[0]->pixel_format()), demuxer_[0]->format_name().c_str(), left_file_name.c_str())
             << std::endl;
-  std::cout << string_sprintf("Right video: %dx%d, %s, %s, %s, %s, %s", video_decoder_[0]->width(), video_decoder_[0]->height(), format_position(demuxer_[1]->duration() * AV_TIME_TO_SEC, false).c_str(), video_decoder_[1]->codec()->name,
+  std::cout << string_sprintf("Right video: %dx%d, %s, %s, %s, %s, %s", video_decoder_[1]->width(), video_decoder_[1]->height(), format_position(demuxer_[1]->duration() * AV_TIME_TO_SEC, false).c_str(), video_decoder_[1]->codec()->name,
                               av_get_pix_fmt_name(video_decoder_[1]->pixel_format()), demuxer_[1]->format_name().c_str(), right_file_name.c_str())
             << std::endl;
 }
