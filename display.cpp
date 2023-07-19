@@ -151,8 +151,8 @@ Display::Display(const int display_number,
   SDL_GL_GetDrawableSize(window_, &drawable_width_, &drawable_height_);
   SDL_GetWindowSize(window_, &window_width_, &window_height_);
 
-  std::cout << "SDL GL drawable size: " <<  drawable_width_ << "x" << drawable_height_<< std::endl;
-  std::cout << "SDL window size: " <<  window_width_ << "x" << window_height_<< std::endl;
+  std::cout << "SDL GL drawable size: " << drawable_width_ << "x" << drawable_height_ << std::endl;
+  std::cout << "SDL window size: " << window_width_ << "x" << window_height_ << std::endl;
 
   window_to_drawable_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
   window_to_drawable_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);
