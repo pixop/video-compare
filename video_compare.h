@@ -25,9 +25,11 @@ class VideoCompare {
                const double time_shift_ms,
                const std::string& left_file_name,
                const std::string& left_video_filters,
+               const std::string& left_demuxer,
                const std::string& left_decoder,
                const std::string& right_file_name,
                const std::string& right_video_filters,
+               const std::string& right_demuxer,
                const std::string& right_decoder);
   void operator()();
 

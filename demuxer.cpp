@@ -2,8 +2,18 @@
 #include <iostream>
 #include "ffmpeg.h"
 
-Demuxer::Demuxer(const std::string& file_name) {
-  ffmpeg::check(file_name, avformat_open_input(&format_context_, file_name.c_str(), nullptr, nullptr));
+Demuxer::Demuxer(const std::string& demuxer_name, const std::string& file_name) {
+  const AVInputFormat* input_format = nullptr;
+
+  if (!demuxer_name.empty()) {
+    input_format = av_find_input_format(demuxer_name.c_str());
+
+    if (input_format == nullptr) {
+      throw std::runtime_error(file_name + ": Demuxer '" + demuxer_name + "' not found");
+    }
+  }
+
+  ffmpeg::check(file_name, avformat_open_input(&format_context_, file_name.c_str(), input_format, nullptr));
 
   format_context_->probesize = 100000000;
   format_context_->max_analyze_duration = 100000000;

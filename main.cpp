@@ -87,6 +87,25 @@ void print_controls() {
   std::cout << "bigger time-shifts of 100 frames." << std::endl;
 }
 
+void find_matching_video_demuxers(const std::string& search_string) {
+  const AVInputFormat* demuxer = nullptr;
+  void* i = 0;
+
+  std::cout << "Demuxers:" << std::endl << std::endl;
+
+  while ((demuxer = av_demuxer_iterate(&i))) {
+    std::string demuxer_name(demuxer->name);
+    std::string demuxer_long_name(demuxer->long_name);
+
+    auto name_it = string_ci_find(demuxer_name, search_string);
+    auto long_name_it = string_ci_find(demuxer_long_name, search_string);
+
+    if (name_it != demuxer_name.end() || long_name_it != demuxer_long_name.end()) {
+      std::cout << string_sprintf(" %-24s %s", demuxer_name.c_str(), demuxer_long_name.c_str()) << std::endl;
+    }
+  }
+}
+
 void find_matching_video_decoders(const std::string& search_string) {
   const AVCodec* codec = nullptr;
   void* i = 0;
@@ -107,7 +126,7 @@ void find_matching_video_decoders(const std::string& search_string) {
         std::string capability = (codec->capabilities & AV_CODEC_CAP_HARDWARE) ? "A" : ".";
         capability += (codec->capabilities & AV_CODEC_CAP_HYBRID) ? "Y" : ".";
 
-        std::cout << string_sprintf(" %s %-18s %s", capability.c_str(), codec->name, codec->long_name) << std::endl;
+        std::cout << string_sprintf(" %s %-18s %s", capability.c_str(), codec_name.c_str(), codec_long_name.c_str()) << std::endl;
       }
     }
   }
@@ -133,6 +152,9 @@ int main(int argc, char** argv) {
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
                               {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
+                              {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name (e.g. matroska,webm or vapoursynth)", 1},
+                              {"right-demuxer", {"--right-demuxer"}, "right FFmpeg video demuxer name (e.g. matroska,webm or vapoursynth)", 1},
+                              {"find-demuxers", {"--find-demuxers"}, "find FFmpeg video demuxer matching the provided search term (e.g. 'matroska', 'mp4' or 'vapoursynth'; use \"\" to list all)", 1},
                               {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name (e.g. h264 or h264_cuvid)", 1},
                               {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name (e.g. h264 or h264_cuvid)", 1},
                               {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1}}};
@@ -145,10 +167,13 @@ int main(int argc, char** argv) {
     std::tuple<int, int> window_size(-1, -1);
     double time_shift_ms = 0;
     std::string left_video_filters, right_video_filters;
+    std::string left_demuxer, right_demuxer;
     std::string left_decoder, right_decoder;
 
     if (args["show-controls"]) {
       print_controls();
+    } else if (args["find-demuxers"]) {
+      find_matching_video_demuxers(args["find-demuxers"]);
     } else if (args["find-decoders"]) {
       find_matching_video_decoders(args["find-decoders"]);
     } else if (args["help"] || args.count() == 0) {
@@ -214,6 +239,12 @@ int main(int argc, char** argv) {
       if (args["right-filters"]) {
         right_video_filters = static_cast<const std::string&>(args["right-filters"]);
       }
+      if (args["left-demuxer"]) {
+        left_demuxer = static_cast<const std::string&>(args["left-demuxer"]);
+      }
+      if (args["right-demuxer"]) {
+        right_demuxer = static_cast<const std::string&>(args["right-demuxer"]);
+      }
       if (args["left-decoder"]) {
         left_decoder = static_cast<const std::string&>(args["left-decoder"]);
       }
@@ -221,7 +252,8 @@ int main(int argc, char** argv) {
         right_decoder = static_cast<const std::string&>(args["right-decoder"]);
       }
 
-      VideoCompare compare{display_number, display_mode, args["high-dpi"], args["10-bpc"], window_size, time_shift_ms, args.pos[0], left_video_filters, left_decoder, args.pos[1], right_video_filters, right_decoder};
+      VideoCompare compare{display_number,     display_mode, args["high-dpi"], args["10-bpc"], window_size,         time_shift_ms, args.pos[0],
+                           left_video_filters, left_demuxer, left_decoder,     args.pos[1],    right_video_filters, right_demuxer, right_decoder};
       compare();
     }
   } catch (const std::exception& e) {

@@ -7,7 +7,7 @@ extern "C" {
 
 class Demuxer {
  public:
-  explicit Demuxer(const std::string& file_name);
+  explicit Demuxer(const std::string& demuxer_name, const std::string& file_name);
   ~Demuxer();
   AVCodecParameters* video_codec_parameters();
   int video_stream_index() const;
