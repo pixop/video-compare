@@ -314,23 +314,9 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right) {
   auto write_png = [this](std::array<uint8_t*, 3> planes, std::array<size_t, 3> pitches, const std::string& filename) {
     if (use_10_bpc_) {
-      // for 10 bpc: create truncated 8 bpc version of 16 bpc input until stb supports 16-bit PNGs
-      uint8_t* temp_image = new uint8_t[video_width_ * video_height_ * 3];
-      uint8_t* p_out = temp_image;
-
-      for (int y = 0; y < video_height_; y++) {
-        uint8_t* p_in = planes[0] + y * pitches[0] + 1;
-
-        for (int x = 0; x < (video_width_ * 3); x++, p_out++, p_in += 2) {
-          *p_out = *p_in;
-        }
-      }
-
-      if (stbi_write_png(filename.c_str(), video_width_, video_height_, 3, temp_image, video_width_ * 3) == 0) {
+      if (stbi_write_png_16(filename.c_str(), video_width_, video_height_, 3, planes[0], pitches[0]) == 0) {
         std::cerr << "Error saving video PNG image to file: " << filename << std::endl;
       }
-
-      delete[] temp_image;
     } else {
       if (stbi_write_png(filename.c_str(), video_width_, video_height_, 3, planes[0], pitches[0]) == 0) {
         std::cerr << "Error saving video PNG image to file: " << filename << std::endl;
@@ -348,10 +334,6 @@ void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<
   save_right_frame_thread.join();
 
   std::cout << "Saved " << left_filename << " and " << right_filename << std::endl;
-
-  if (use_10_bpc_) {
-    std::cout << "Warning: 8-bit PNG format used due to lack of 16-bit PNG support in stb (noticable banding is expected due to loss of precision)" << std::endl;
-  }
 
   saved_image_number_++;
 }
