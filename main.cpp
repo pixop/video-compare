@@ -152,11 +152,11 @@ int main(int argc, char** argv) {
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
                               {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
-                              {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name (e.g. matroska,webm or vapoursynth)", 1},
-                              {"right-demuxer", {"--right-demuxer"}, "right FFmpeg video demuxer name (e.g. matroska,webm or vapoursynth)", 1},
+                              {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name", 1},
+                              {"right-demuxer", {"--right-demuxer"}, "right FFmpeg video demuxer name", 1},
                               {"find-demuxers", {"--find-demuxers"}, "find FFmpeg video demuxer matching the provided search term (e.g. 'matroska', 'mp4' or 'vapoursynth'; use \"\" to list all)", 1},
-                              {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name (e.g. h264 or h264_cuvid)", 1},
-                              {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name (e.g. h264 or h264_cuvid)", 1},
+                              {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name", 1},
+                              {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name", 1},
                               {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1}}};
 
     argagg::parser_results args;
@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
       find_matching_video_decoders(args["find-decoders"]);
     } else if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
-      usage << "video-compare 20230713-github Copyright (c) 2018-2023 Jon Frydensbjerg, the video-compare community" << std::endl << std::endl;
+      usage << "video-compare 20230723-github Copyright (c) 2018-2023 Jon Frydensbjerg, the video-compare community" << std::endl << std::endl;
       usage << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl << std::endl;
       argagg::fmt_ostream fmt(std::cerr);
       fmt << usage.str() << argparser;
