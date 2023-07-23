@@ -398,7 +398,9 @@ void Display::render_position_dots(const float position, const bool is_top) {
 
     const int y_offset = is_top ? 1 : drawable_height_ - 1 - dot_height;
 
-    for (int x = 0; x < std::round(position * drawable_width_ / duration_); x++) {
+    const int x_end = std::round(position * drawable_width_ / duration_);
+
+    for (int x = 0; x < x_end; x++) {
       if (x % (2 * dot_width) < dot_width) {
         SDL_SetRenderDrawColor(renderer_, POSITION_COLOR.r, POSITION_COLOR.g, POSITION_COLOR.b, BACKGROUND_ALPHA * 2);
       } else {
