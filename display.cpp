@@ -389,6 +389,23 @@ void Display::render_text(const int x, const int y, SDL_Texture* texture, const 
   }
 }
 
+void Display::render_position_dots(int y, float position) {
+  if (duration_ > 0) {
+    for (int x = 0; x < std::round(position * drawable_width_ / duration_); x += 2) {
+      if (x % 4 == 0) {
+        SDL_SetRenderDrawColor(renderer_, POSITION_COLOR.r, POSITION_COLOR.g, POSITION_COLOR.b, BACKGROUND_ALPHA * 2);
+      } else {
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
+      }
+
+      SDL_RenderDrawPoint(renderer_, x, y);
+      SDL_RenderDrawPoint(renderer_, x, y + 1);
+      SDL_RenderDrawPoint(renderer_, x + 1, y);
+      SDL_RenderDrawPoint(renderer_, x + 1, y + 1);
+    }
+  }
+}
+
 void Display::update_textures(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& error_message) {
   check_sdl(SDL_UpdateTexture(video_texture_, rect, pixels, pitch) == 0, "video texture - " + error_message);
 
@@ -687,6 +704,10 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     text_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, text_y, current_total_browsable_text_width, current_total_browsable_text_height};
     SDL_RenderCopy(renderer_, current_total_browsable_text_texture, nullptr, &text_rect);
     SDL_DestroyTexture(current_total_browsable_text_texture);
+
+    // show current position of the videos
+    render_position_dots(1, left_position);
+    render_position_dots(drawable_height_ - 3, right_position);
   }
 
   // render (optional) error message
