@@ -13,7 +13,7 @@ Demuxer::Demuxer(const std::string& demuxer_name, const std::string& file_name) 
     }
   }
 
-  ffmpeg::check(file_name, avformat_open_input(&format_context_, file_name.c_str(), input_format, nullptr));
+  ffmpeg::check(file_name, avformat_open_input(&format_context_, file_name.c_str(), const_cast<AVInputFormat*>(input_format), nullptr));
 
   format_context_->probesize = 100000000;
   format_context_->max_analyze_duration = 100000000;
