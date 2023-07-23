@@ -389,19 +389,23 @@ void Display::render_text(const int x, const int y, SDL_Texture* texture, const 
   }
 }
 
-void Display::render_position_dots(int y, float position) {
+void Display::render_position_dots(const float position, const bool is_top) {
   if (duration_ > 0) {
-    for (int x = 0; x < std::round(position * drawable_width_ / duration_); x += 2) {
-      if (x % 4 == 0) {
+    const float dot_size = 2.f;
+
+    const int dot_width = std::round(window_to_drawable_width_factor_ * dot_size);
+    const int dot_height = std::round(window_to_drawable_height_factor_ * dot_size);
+
+    const int y_offset = is_top ? 1 : drawable_height_ - 1 - dot_height;
+
+    for (int x = 0; x < std::round(position * drawable_width_ / duration_); x++) {
+      if (x % (2 * dot_width) < dot_width) {
         SDL_SetRenderDrawColor(renderer_, POSITION_COLOR.r, POSITION_COLOR.g, POSITION_COLOR.b, BACKGROUND_ALPHA * 2);
       } else {
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
       }
 
-      SDL_RenderDrawPoint(renderer_, x, y);
-      SDL_RenderDrawPoint(renderer_, x, y + 1);
-      SDL_RenderDrawPoint(renderer_, x + 1, y);
-      SDL_RenderDrawPoint(renderer_, x + 1, y + 1);
+      SDL_RenderDrawLine(renderer_, x, y_offset, x, y_offset + dot_height - 1);
     }
   }
 }
@@ -706,8 +710,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     SDL_DestroyTexture(current_total_browsable_text_texture);
 
     // show current position of the videos
-    render_position_dots(1, left_position);
-    render_position_dots(drawable_height_ - 3, right_position);
+    render_position_dots(left_position, true);
+    render_position_dots(right_position, false);
   }
 
   // render (optional) error message
