@@ -73,7 +73,7 @@ void print_controls() {
   std::cout << "Controls: " << std::endl << std::endl;
 
   for (auto& key_description_pair : controls) {
-    std::cout << "- " << key_description_pair.first << ": " << key_description_pair.second << std::endl;
+    std::cout << string_sprintf(" %-12s %s", key_description_pair.first.c_str(), key_description_pair.second.c_str()) << std::endl;
   }
 
   std::cout << std::endl << "Move the mouse horizontally to adjust the movable slider position." << std::endl << std::endl;
