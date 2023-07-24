@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
                               {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name", 1},
                               {"right-demuxer", {"--right-demuxer"}, "right FFmpeg video demuxer name", 1},
-                              {"find-demuxers", {"--find-demuxers"}, "find FFmpeg video demuxer matching the provided search term (e.g. 'matroska', 'mp4' or 'vapoursynth'; use \"\" to list all)", 1},
+                              {"find-demuxers", {"--find-demuxers"}, "find FFmpeg video demuxers matching the provided search term (e.g. 'matroska', 'mp4', 'vapoursynth' or 'pipe'; use \"\" to list all)", 1},
                               {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name", 1},
                               {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name", 1},
                               {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1}}};
