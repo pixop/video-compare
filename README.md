@@ -72,7 +72,7 @@ and driver support for 30-bit color:
 
 Use a specific window size instead of deriving the window size from the video dimensions. The video
 frame will be scaled to fit. If either width or height is left out, the missing value will be calculated
-from the other specified dimension so that aspect ratio is maintained. Used for downscaling high resolution
+from the other specified dimension so that aspect ratio is maintained. Useful for downscaling high resolution
 video onto a low resolution display:
 
     video-compare -w 1280x720 video1.mp4 video2.mp4
@@ -95,7 +95,7 @@ adjusting colors, deinterlacing, denoising, speeding up/slowing down, etc.:
 
     video-compare -l crop=iw:ih-240 -r format=gray,pad=iw+320:ih:160:0 video1.mp4 video2.mp4
 
-Manually set the demuxer and decoder used for each video. Used for selecting a demuxer that cannot be
+Manually set the demuxer and decoder used for each video. Useful for selecting a demuxer that cannot be
 auto-detected (such as VapourSynth) or enabling hardware-accelerated decoding:
 
     video-compare --left-demuxer vapoursynth --right-decoder h264_cuvid script.vpy video.mp4
