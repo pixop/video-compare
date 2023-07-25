@@ -54,8 +54,8 @@ Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://gi
 
 ## Usage
 
-Launch in disallow high DPI mode. Video pixels become doubled on high DPI displays. Recommended
-for displaying HD 1080p video on e.g. a Retina 5K display:
+Launch using the operating system's DPI setting. Video pixels are doubled on devices like a Retina 5K display; 
+therefore, it is the preferred option for displaying HD 1080p videos on such screens:
 
     video-compare video1.mp4 video2.mp4
 
