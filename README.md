@@ -57,49 +57,49 @@ Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://gi
 Launch in disallow high DPI mode. Video pixels become doubled on high DPI displays. Recommended
 for displaying HD 1080p video on e.g. a Retina 5K display:
 
-    ./video-compare video1.mp4 video2.mp4
+    video-compare video1.mp4 video2.mp4
 
 Allow high DPI mode on systems which supports that. Video pixels are displayed "1-to-1". Useful
 for e.g. displaying UHD 4K video on a Retina 5K display:
 
-    ./video-compare -d video1.mp4 video2.mp4
+    video-compare -d video1.mp4 video2.mp4
 
 Increase bit depth to 10 bits per color component (8 bits is the default). Fidelity is increased while
 performance takes a hit. Significantly reduces visible banding on systems with a higher grade display 
 and driver support for 30-bit color:
 
-    ./video-compare -b video1.mp4 video2.mp4
+    video-compare -b video1.mp4 video2.mp4
 
 Use a specific window size instead of deriving the window size from the video dimensions. The video
 frame will be scaled to fit. If either width or height is left out, the missing value will be calculated
 from the other specified dimension so that aspect ratio is maintained. Useful for downscaling high resolution
 video onto a low resolution display:
 
-    ./video-compare -w 1280x720 video1.mp4 video2.mp4
+    video-compare -w 1280x720 video1.mp4 video2.mp4
 
 Shift the presentation time stamps of the right video instead of assuming the videos are aligned. A
 positive amount has the effect of delaying the left video while negative values conversely delays the
 right video. Useful when videos are slightly out of sync:
 
-    ./video-compare -t 0.080 video1.mp4 video2.mp4
+    video-compare -t 0.080 video1.mp4 video2.mp4
 
 Display videos stacked vertically at full size without a slider (`hstack` for horizontal stacking is
 also supported):
 
-    ./video-compare -m vstack video1.mp4 video2.mp4
+    video-compare -m vstack video1.mp4 video2.mp4
 
 Preprocess one or both inputs via a list of FFmpeg video filters specified on the command line
 (see [FFmpeg's video filters documentation](https://ffmpeg.org/ffmpeg-filters.html#Video-Filters)).
 The Swiss Army knife for cropping/padding (comparing videos with different aspect ratios),
 adjusting colors, deinterlacing, denoising, speeding up/slowing down, etc.:
 
-    ./video-compare -l crop=iw:ih-240 -r format=gray,pad=iw+320:ih:160:0 video1.mp4 video2.mp4
+    video-compare -l crop=iw:ih-240 -r format=gray,pad=iw+320:ih:160:0 video1.mp4 video2.mp4
 
 The repeat file name feature allows simpler comparison of a video with itself using double underscore (`__`)
 as a placeholder. This enables tasks such as comparing the video with a time-shifted version of itself or
 testing various sets of filters, without the need to enter the same, potentially long path twice:
 
-    ./video-compare some/very/long/and/complicated/video/path.mp4 __
+    video-compare some/very/long/and/complicated/video/path.mp4 __
 
 The above features can be combined in any order, of course.
 
