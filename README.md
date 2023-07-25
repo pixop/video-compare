@@ -95,7 +95,13 @@ adjusting colors, deinterlacing, denoising, speeding up/slowing down, etc.:
 
     ./video-compare -l crop=iw:ih-240 -r format=gray,pad=iw+320:ih:160:0 video1.mp4 video2.mp4
 
-The above arguments can be combined in any order, of course.
+The repeat file name feature allows simpler comparison of a video with itself using double underscore (`__`)
+as a placeholder. This enables tasks such as comparing the video with a time-shifted version of itself or
+testing various sets of filters, without the need to enter the same, potentially long path twice:
+
+    ./video-compare some/very/long/and/complicated/video/path.mp4 __
+
+The above features can be combined in any order, of course.
 
 ## Controls
 

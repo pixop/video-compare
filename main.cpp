@@ -47,6 +47,8 @@ void free_argv(int argc, char** argv) {
 }
 #endif
 
+static const std::string REPEAT_FILE_NAME("__");
+
 void print_controls() {
   const std::vector<std::pair<std::string, std::string>> controls{{"Space", "Toggle play/pause"},
                                                                   {"Escape", "Quit"},
@@ -252,8 +254,19 @@ int main(int argc, char** argv) {
         right_decoder = static_cast<const std::string&>(args["right-decoder"]);
       }
 
-      VideoCompare compare{display_number,     display_mode, args["high-dpi"], args["10-bpc"], window_size,         time_shift_ms, args.pos[0],
-                           left_video_filters, left_demuxer, left_decoder,     args.pos[1],    right_video_filters, right_demuxer, right_decoder};
+      std::string left_file_name = args.pos[0];
+      std::string right_file_name = args.pos[1];
+
+      if (left_file_name == REPEAT_FILE_NAME && right_file_name == REPEAT_FILE_NAME) {
+        throw std::logic_error{"At least one actual video file must be supplied"};
+      } else if (left_file_name == REPEAT_FILE_NAME) {
+        left_file_name = right_file_name;
+      } else if (right_file_name == REPEAT_FILE_NAME) {
+        right_file_name = left_file_name;
+      }
+
+      VideoCompare compare{display_number,     display_mode, args["high-dpi"], args["10-bpc"],  window_size,         time_shift_ms, left_file_name,
+                           left_video_filters, left_demuxer, left_decoder,     right_file_name, right_video_filters, right_demuxer, right_decoder};
       compare();
     }
   } catch (const std::exception& e) {
