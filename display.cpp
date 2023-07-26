@@ -676,7 +676,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
       SDL_DestroyTexture(right_position_text_texture);
     }
-    if (mouse_is_inside_window_) {
+    if (mouse_is_inside_window_ && duration_ > 0) {
       // target seek position
       double target_position = static_cast<float>(mouse_x_) / static_cast<float>(window_width_) * duration_;
 
