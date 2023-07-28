@@ -39,7 +39,11 @@ AVRational Demuxer::time_base() const {
 }
 
 int64_t Demuxer::duration() const {
-  return format_context_->duration != AV_NOPTS_VALUE ? format_context_->duration : 0;
+  // use stream duration if available, otherwise use container duration if available, else 0
+  const AVRational microseconds = {1, AV_TIME_BASE};
+  const int64_t stream_duration = format_context_->streams[video_stream_index_]->duration;
+
+  return stream_duration != AV_NOPTS_VALUE ? av_rescale_q(stream_duration, time_base(), microseconds) : (format_context_->duration != AV_NOPTS_VALUE ? format_context_->duration : 0);
 }
 
 int Demuxer::rotation() const {
