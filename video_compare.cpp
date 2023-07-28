@@ -25,6 +25,10 @@ static inline bool is_behind(int64_t frame1_pts, int64_t frame2_pts, int64_t del
   return diff < -tolerance;
 }
 
+static inline float to_position(const AVFrame* frame) {
+  return (frame->pts + frame->pkt_duration) * AV_TIME_TO_SEC;
+}
+
 VideoCompare::VideoCompare(const int display_number,
                            const Display::Mode display_mode,
                            const bool high_dpi_allowed,
@@ -439,14 +443,14 @@ void VideoCompare::video() {
                             {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
                             {video_decoder_[0]->width(), video_decoder_[0]->height()}, {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
                             {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                            {video_decoder_[1]->width(), video_decoder_[1]->height()}, left_frames[frame_offset]->pts * AV_TIME_TO_SEC, left_picture_type, right_frames[frame_offset]->pts * AV_TIME_TO_SEC, right_picture_type,
+                            {video_decoder_[1]->width(), video_decoder_[1]->height()}, to_position(left_frames[frame_offset].get()), left_picture_type, to_position(right_frames[frame_offset].get()), right_picture_type,
                             current_total_browsable, error_message);
         } else {
           display_->refresh({right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
                             {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
                             {video_decoder_[1]->width(), video_decoder_[1]->height()}, {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
                             {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                            {video_decoder_[0]->width(), video_decoder_[0]->height()}, right_frames[frame_offset]->pts * AV_TIME_TO_SEC, right_picture_type, left_frames[frame_offset]->pts * AV_TIME_TO_SEC, left_picture_type,
+                            {video_decoder_[0]->width(), video_decoder_[0]->height()}, to_position(right_frames[frame_offset].get()), right_picture_type, to_position(left_frames[frame_offset].get()), left_picture_type,
                             current_total_browsable, error_message);
         }
       }
