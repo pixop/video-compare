@@ -106,9 +106,10 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
   }
   ffmpeg::check(ret);
 
-  // update PTS
+  // update PTS and duration
   const AVRational microseconds = {1, AV_TIME_BASE};
   filtered_frame->pts = av_rescale_q(filtered_frame->pts != AV_NOPTS_VALUE ? filtered_frame->pts : filtered_frame->best_effort_timestamp, av_buffersink_get_time_base(buffersink_ctx_), microseconds);
+  filtered_frame->pkt_duration = av_rescale_q(filtered_frame->pkt_duration, av_buffersink_get_time_base(buffersink_ctx_), microseconds);
 
   return true;
 }
