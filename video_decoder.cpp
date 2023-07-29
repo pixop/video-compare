@@ -40,6 +40,10 @@ bool VideoDecoder::receive(AVFrame* frame) {
     return false;
   }
   ffmpeg::check(ret);
+
+  // use best effort timestamp when PTS is not available
+  frame->pts = frame->pts != AV_NOPTS_VALUE ? frame->pts : frame->best_effort_timestamp;
+
   return true;
 }
 
