@@ -1,8 +1,8 @@
 #pragma once
 #include <string>
 extern "C" {
-#include "libavformat/avformat.h"
-#include "libavutil/display.h"
+#include <libavformat/avformat.h>
+#include <libavutil/display.h>
 }
 
 class Demuxer {

@@ -4,7 +4,7 @@
 extern "C" {
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
-#include "libavcodec/avcodec.h"
+#include <libavcodec/avcodec.h>
 }
 
 class VideoFilterer {

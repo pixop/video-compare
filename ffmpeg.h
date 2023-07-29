@@ -2,8 +2,9 @@
 #include <array>
 #include <stdexcept>
 extern "C" {
-#include "libavcodec/version.h"
-#include "libavutil/avutil.h"
+#include <libavcodec/version.h>
+#include <libavutil/avutil.h>
+#include <libavutil/frame.h>
 }
 
 const static double AV_TIME_TO_SEC = av_q2d(AV_TIME_BASE_Q);
@@ -32,5 +33,13 @@ inline int check(const std::string& file_name, const int status) {
     throw ffmpeg::Error{file_name, status};
   }
   return status;
+}
+
+inline float pts_in_secs(const AVFrame* frame) {
+  return frame->pts * AV_TIME_TO_SEC;
+}
+
+inline float pkt_duration_in_secs(const AVFrame* frame) {
+  return frame->pkt_duration * AV_TIME_TO_SEC;
 }
 }  // namespace ffmpeg

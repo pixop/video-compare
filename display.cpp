@@ -477,14 +477,6 @@ std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size
   return "RGB" + format_pixel(rgb) + ", YUV" + format_pixel(yuv);
 }
 
-static inline float get_position_in_secs(const AVFrame* frame) {
-  return frame->pts * AV_TIME_TO_SEC;
-}
-
-static inline float get_frame_duration_in_secs(const AVFrame* frame) {
-  return frame->pkt_duration * AV_TIME_TO_SEC;
-}
-
 void Display::refresh(std::array<uint8_t*, 3> planes_left,
                       std::array<size_t, 3> pitches_left,
                       std::array<size_t, 2> original_dims_left,
@@ -634,10 +626,10 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   SDL_Surface* text_surface;
 
   if (show_hud_) {
-    const float left_position = get_position_in_secs(left_frame);
-    const float right_position = get_position_in_secs(right_frame);
-    const float left_progress = left_position + get_frame_duration_in_secs(left_frame);
-    const float right_progress = right_position + get_frame_duration_in_secs(right_frame);
+    const float left_position = ffmpeg::pts_in_secs(left_frame);
+    const float right_position = ffmpeg::pts_in_secs(right_frame);
+    const float left_progress = left_position + ffmpeg::pkt_duration_in_secs(left_frame);
+    const float right_progress = right_position + ffmpeg::pkt_duration_in_secs(right_frame);
 
     // render background rectangles and text on top
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);

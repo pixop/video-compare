@@ -7,7 +7,7 @@
 #include <string>
 #include "SDL2/SDL.h"
 extern "C" {
-#include <libavcodec/avcodec.h>
+#include <libavutil/frame.h>
 }
 
 struct SDL {
