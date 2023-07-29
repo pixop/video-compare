@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include "ffmpeg.h"
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
 
@@ -389,7 +390,7 @@ void Display::render_text(const int x, const int y, SDL_Texture* texture, const 
   }
 }
 
-void Display::render_position_dots(const float position, const bool is_top) {
+void Display::render_progress_dots(const float progress, const bool is_top) {
   if (duration_ > 0) {
     const float dot_size = 2.f;
 
@@ -398,7 +399,7 @@ void Display::render_position_dots(const float position, const bool is_top) {
 
     const int y_offset = is_top ? 1 : drawable_height_ - 1 - dot_height;
 
-    const int x_end = std::round(position * drawable_width_ / duration_);
+    const int x_end = std::round(progress * drawable_width_ / duration_);
 
     for (int x = 0; x < x_end; x++) {
       if (x % (2 * dot_width) < dot_width) {
@@ -476,16 +477,22 @@ std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size
   return "RGB" + format_pixel(rgb) + ", YUV" + format_pixel(yuv);
 }
 
+static inline float get_position_in_secs(const AVFrame* frame) {
+  return frame->pts * AV_TIME_TO_SEC;
+}
+
+static inline float get_frame_duration_in_secs(const AVFrame* frame) {
+  return frame->pkt_duration * AV_TIME_TO_SEC;
+}
+
 void Display::refresh(std::array<uint8_t*, 3> planes_left,
                       std::array<size_t, 3> pitches_left,
                       std::array<size_t, 2> original_dims_left,
                       std::array<uint8_t*, 3> planes_right,
                       std::array<size_t, 3> pitches_right,
                       std::array<size_t, 2> original_dims_right,
-                      const float left_position,
-                      const std::string& left_picture_type,
-                      const float right_position,
-                      const std::string& right_picture_type,
+                      const AVFrame* left_frame,
+                      const AVFrame* right_frame,
                       const std::string& current_total_browsable,
                       const std::string& error_message) {
   if (save_image_frames_) {
@@ -627,12 +634,18 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   SDL_Surface* text_surface;
 
   if (show_hud_) {
+    const float left_position = get_position_in_secs(left_frame);
+    const float right_position = get_position_in_secs(right_frame);
+    const float left_progress = left_position + get_frame_duration_in_secs(left_frame);
+    const float right_progress = right_position + get_frame_duration_in_secs(right_frame);
+
     // render background rectangles and text on top
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
 
     if (show_left_) {
       // file name and current position of left video
+      const std::string left_picture_type(1, av_get_picture_type_char(left_frame->pict_type));
       const std::string left_pos_str = format_position(left_position, true) + " " + left_picture_type + format_position_difference(left_position, right_position);
       text_surface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), POSITION_COLOR);
       SDL_Texture* left_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
@@ -647,6 +660,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     }
     if (show_right_) {
       // file name and current position of right video
+      const std::string right_picture_type(1, av_get_picture_type_char(right_frame->pict_type));
       const std::string right_pos_str = format_position(right_position, true) + " " + right_picture_type + format_position_difference(right_position, left_position);
       text_surface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), POSITION_COLOR);
       SDL_Texture* right_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
@@ -711,9 +725,9 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     SDL_RenderCopy(renderer_, current_total_browsable_text_texture, nullptr, &text_rect);
     SDL_DestroyTexture(current_total_browsable_text_texture);
 
-    // show current position of the videos
-    render_position_dots(left_position, true);
-    render_position_dots(right_position, false);
+    // display progress as dot lines
+    render_progress_dots(left_progress, true);
+    render_progress_dots(right_progress, false);
   }
 
   // render (optional) error message

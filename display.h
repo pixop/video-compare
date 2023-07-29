@@ -6,6 +6,9 @@
 #include <memory>
 #include <string>
 #include "SDL2/SDL.h"
+extern "C" {
+#include <libavcodec/avcodec.h>
+}
 
 struct SDL {
   SDL();
@@ -111,7 +114,7 @@ class Display {
 
   void render_text(int x, int y, SDL_Texture* texture, int texture_width, int texture_height, int border_extension, bool left_adjust);
 
-  void render_position_dots(const float position, const bool is_top);
+  void render_progress_dots(const float progress, const bool is_top);
 
   void update_textures(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& error_message);
 
@@ -134,10 +137,8 @@ class Display {
                std::array<uint8_t*, 3> planes_right,
                std::array<size_t, 3> pitches_right,
                std::array<size_t, 2> original_dims_right,
-               float left_position,
-               const std::string& left_picture_type,
-               float right_position,
-               const std::string& right_picture_type,
+               const AVFrame* left_frame,
+               const AVFrame* right_frame,
                const std::string& current_total_browsable,
                const std::string& error_message);
 
