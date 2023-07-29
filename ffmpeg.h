@@ -10,6 +10,7 @@ extern "C" {
 const static double AV_TIME_TO_SEC = av_q2d(AV_TIME_BASE_Q);
 const static double SEC_TO_AV_TIME = AV_TIME_BASE;
 const static double MILLISEC_TO_AV_TIME = SEC_TO_AV_TIME / 1000.0;
+const static AVRational AV_R_MICROSECONDS = {1, AV_TIME_BASE};
 
 namespace ffmpeg {
 class Error : public std::runtime_error {

@@ -228,10 +228,21 @@ void VideoCompare::video() {
     int64_t left_decoded_picture_number = 0;
     int64_t left_previous_decoded_picture_number = -1;
     int64_t delta_left_pts = 0;
+    float left_start_time = demuxer_[0]->start_time() * AV_TIME_TO_SEC;
+
+    if (left_start_time > 0) {
+      std::cout << "Left video has a start time of '" << format_position(left_start_time, false) << "', timestamps are shifted so they start at zero" << std::endl;
+    }
+
     int64_t right_pts = 0;
     int64_t right_decoded_picture_number = 0;
     int64_t right_previous_decoded_picture_number = -1;
     int64_t delta_right_pts = 0;
+    float right_start_time = demuxer_[1]->start_time() * AV_TIME_TO_SEC;
+
+    if (right_start_time > 0) {
+      std::cout << "Right video has a start time of '" << format_position(right_start_time, false) << "', timestamps are shifted so they start at zero" << std::endl;
+    }
 
     sorted_flat_deque<int32_t> left_deque(8);
     sorted_flat_deque<int32_t> right_deque(8);
@@ -294,11 +305,11 @@ void VideoCompare::video() {
 
           bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
 
-          if ((!demuxer_[0]->seek(std::max(0.0F, next_position), backward) && !backward) || (!demuxer_[1]->seek(std::max(0.0F, next_position), backward) && !backward)) {
+          if ((!demuxer_[0]->seek(std::max(0.0F, next_position + left_start_time), backward) && !backward) || (!demuxer_[1]->seek(std::max(0.0F, next_position + right_start_time), backward) && !backward)) {
             // restore position if unable to perform forward seek
             error_message = "Unable to seek past end of file";
-            demuxer_[0]->seek(std::max(0.0F, current_position), true);
-            demuxer_[1]->seek(std::max(0.0F, current_position), true);
+            demuxer_[0]->seek(std::max(0.0F, current_position + left_start_time), true);
+            demuxer_[1]->seek(std::max(0.0F, current_position + right_start_time), true);
           };
 
           seeking_ = false;

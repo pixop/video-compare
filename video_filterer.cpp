@@ -107,9 +107,8 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
   ffmpeg::check(ret);
 
   // convert PTS and duration to microseconds
-  const AVRational microseconds = {1, AV_TIME_BASE};
-  filtered_frame->pts = av_rescale_q(filtered_frame->pts, av_buffersink_get_time_base(buffersink_ctx_), microseconds);
-  filtered_frame->pkt_duration = av_rescale_q(filtered_frame->pkt_duration, av_buffersink_get_time_base(buffersink_ctx_), microseconds);
+  filtered_frame->pts = av_rescale_q(filtered_frame->pts, av_buffersink_get_time_base(buffersink_ctx_), AV_R_MICROSECONDS) - demuxer_->start_time();
+  filtered_frame->pkt_duration = av_rescale_q(filtered_frame->pkt_duration, av_buffersink_get_time_base(buffersink_ctx_), AV_R_MICROSECONDS);
 
   return true;
 }
