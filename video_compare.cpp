@@ -231,7 +231,7 @@ void VideoCompare::video() {
     float left_start_time = demuxer_[0]->start_time() * AV_TIME_TO_SEC;
 
     if (left_start_time > 0) {
-      std::cout << "Left video has a start time of '" << format_position(left_start_time, false) << "', timestamps are shifted so they start at zero" << std::endl;
+      std::cout << "Note: The left video has a start time of " << format_position(left_start_time, true) << " - timestamps will be shifted so they start at zero!" << std::endl;
     }
 
     int64_t right_pts = 0;
@@ -241,7 +241,7 @@ void VideoCompare::video() {
     float right_start_time = demuxer_[1]->start_time() * AV_TIME_TO_SEC;
 
     if (right_start_time > 0) {
-      std::cout << "Right video has a start time of '" << format_position(right_start_time, false) << "', timestamps are shifted so they start at zero" << std::endl;
+      std::cout << "Note: The right video has a start time of " << format_position(right_start_time, true) << " - timestamps will be shifted so they start at zero!" << std::endl;
     }
 
     sorted_flat_deque<int32_t> left_deque(8);
