@@ -390,7 +390,7 @@ void Display::render_text(const int x, const int y, SDL_Texture* texture, const 
   }
 }
 
-void Display::render_progress_dots(const float progress, const bool is_top) {
+void Display::render_progress_dots(const float position, const float progress, const bool is_top) {
   if (duration_ > 0) {
     const float dot_size = 2.f;
 
@@ -399,17 +399,24 @@ void Display::render_progress_dots(const float progress, const bool is_top) {
 
     const int y_offset = is_top ? 1 : drawable_height_ - 1 - dot_height;
 
-    const int x_end = std::round(progress * drawable_width_ / duration_);
+    const int x_position = std::round(position * drawable_width_ / duration_);
+    const int x_progress = std::round(progress * drawable_width_ / duration_);
 
-    for (int x = 0; x < x_end; x++) {
+    for (int x = 0; x < x_position; x++) {
       if (x % (2 * dot_width) < dot_width) {
-        SDL_SetRenderDrawColor(renderer_, POSITION_COLOR.r, POSITION_COLOR.g, POSITION_COLOR.b, BACKGROUND_ALPHA * 2);
+        SDL_SetRenderDrawColor(renderer_, POSITION_COLOR.r, POSITION_COLOR.g, POSITION_COLOR.b, BACKGROUND_ALPHA * 3 / 2);
       } else {
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
       }
 
       SDL_RenderDrawLine(renderer_, x, y_offset, x, y_offset + dot_height - 1);
     }
+
+    // draw current frame
+    SDL_SetRenderDrawColor(renderer_, POSITION_COLOR.r, POSITION_COLOR.g, POSITION_COLOR.b, BACKGROUND_ALPHA * 2);
+
+    const SDL_Rect current_frame = {x_position, is_top ? y_offset : y_offset - dot_height, x_progress - x_position, dot_height * 2};
+    SDL_RenderDrawRect(renderer_, &current_frame);
   }
 }
 
@@ -718,8 +725,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     SDL_DestroyTexture(current_total_browsable_text_texture);
 
     // display progress as dot lines
-    render_progress_dots(left_progress, true);
-    render_progress_dots(right_progress, false);
+    render_progress_dots(left_position, left_progress, true);
+    render_progress_dots(right_position, right_progress, false);
   }
 
   // render (optional) error message

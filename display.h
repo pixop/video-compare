@@ -114,7 +114,7 @@ class Display {
 
   void render_text(int x, int y, SDL_Texture* texture, int texture_width, int texture_height, int border_extension, bool left_adjust);
 
-  void render_progress_dots(const float progress, const bool is_top);
+  void render_progress_dots(const float position, const float progress, const bool is_top);
 
   void update_textures(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& error_message);
 
