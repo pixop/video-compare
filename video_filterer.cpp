@@ -108,7 +108,7 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
 
   // convert PTS and duration to microseconds
   filtered_frame->pts = av_rescale_q(filtered_frame->pts, av_buffersink_get_time_base(buffersink_ctx_), AV_R_MICROSECONDS) - demuxer_->start_time();
-  filtered_frame->pkt_duration = av_rescale_q(filtered_frame->pkt_duration, av_buffersink_get_time_base(buffersink_ctx_), AV_R_MICROSECONDS);
+  filtered_frame->pkt_duration = av_rescale_q(filtered_frame->pkt_duration, demuxer_->time_base(), AV_R_MICROSECONDS);
 
   return true;
 }

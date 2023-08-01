@@ -389,21 +389,36 @@ void VideoCompare::video() {
         }
       }
 
+      // 1. Update the duration of the last frame to its exact value once the next frame has been decoded
+      // 2. Compute the average PTS delta in a rolling-window fashion
+      // 3. Assume the duration of the current frame is approximately the value of the previous step
       if (frame_left != nullptr) {
         if ((left_decoded_picture_number - left_previous_decoded_picture_number) == 1) {
-          left_deque.push_back(frame_left->pts - left_pts);
+          const int64_t last_duration = frame_left->pts - left_pts;
+          left_frames[0]->pkt_duration = last_duration;
+
+          left_deque.push_back(last_duration);
           delta_left_pts = left_deque.average();
+        }
+        if (delta_left_pts > 0) {
+          frame_left->pkt_duration = delta_left_pts;
         }
 
         left_pts = frame_left->pts;
         left_previous_decoded_picture_number = left_decoded_picture_number;
       }
       if (frame_right != nullptr) {
-        float new_right_pts = frame_right->pts - right_time_shift;
+        const int64_t new_right_pts = frame_right->pts - right_time_shift;
 
         if ((right_decoded_picture_number - right_previous_decoded_picture_number) == 1) {
-          right_deque.push_back(new_right_pts - right_pts);
+          const int64_t last_duration = new_right_pts - right_pts;
+          right_frames[0]->pkt_duration = last_duration;
+
+          right_deque.push_back(last_duration);
           delta_right_pts = right_deque.average();
+        }
+        if (delta_right_pts > 0) {
+          frame_right->pkt_duration = delta_right_pts;
         }
 
         right_pts = new_right_pts;
