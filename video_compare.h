@@ -40,8 +40,9 @@ class VideoCompare {
 
   void thread_decode_video_left();
   void thread_decode_video_right();
-  bool process_packet(int video_idx, AVPacket* packet, AVFrame* frame_decoded);
   void decode_video(int video_idx);
+  bool process_packet(int video_idx, AVPacket* packet, AVFrame* frame_decoded);
+  bool filter_decoded_frame(int video_idx, AVFrame* frame_decoded);
   void video();
 
   double time_shift_ms_;

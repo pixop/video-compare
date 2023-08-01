@@ -132,46 +132,6 @@ void VideoCompare::thread_decode_video_right() {
   decode_video(1);
 }
 
-bool VideoCompare::process_packet(const int video_idx, AVPacket* packet, AVFrame* frame_decoded) {
-  bool sent = video_decoder_[video_idx]->send(packet);
-
-  // If a whole frame has been decoded, adjust time stamps and add to queue
-  while (video_decoder_[video_idx]->receive(frame_decoded)) {
-    // send decoded frame to filterer
-    if (!video_filterer_[video_idx]->send(frame_decoded)) {
-      throw std::runtime_error("Error while feeding the filter graph");
-    }
-
-    std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_filtered{av_frame_alloc(), [](AVFrame* f) { av_free(f->data[0]); }};
-
-    while (true) {
-      // get next filtered frame
-      if (!video_filterer_[video_idx]->receive(frame_filtered.get())) {
-        break;
-      }
-
-      // scale and convert pixel format before pushing to frame queue for displaying
-      std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted{av_frame_alloc(), [](AVFrame* f) { av_free(f->data[0]); }};
-
-      if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
-        throw std::runtime_error("Copying filtered frame properties");
-      }
-      if (av_image_alloc(frame_converted->data, frame_converted->linesize, format_converter_[video_idx]->dest_width(), format_converter_[video_idx]->dest_height(), format_converter_[video_idx]->output_pixel_format(), 1) < 0) {
-        throw std::runtime_error("Allocating converted picture");
-      }
-      (*format_converter_[video_idx])(frame_filtered.get(), frame_converted.get());
-
-      av_frame_unref(frame_filtered.get());
-
-      if (!frame_queue_[video_idx]->push(std::move(frame_converted))) {
-        return sent;
-      }
-    }
-  }
-
-  return sent;
-}
-
 void VideoCompare::decode_video(const int video_idx) {
   try {
     for (;;) {
@@ -188,6 +148,9 @@ void VideoCompare::decode_video(const int video_idx) {
         while (process_packet(video_idx, packet.get(), frame_decoded.get())) {
           ;
         }
+
+        // Flush the filter graph
+        filter_decoded_frame(video_idx, nullptr);
 
         frame_queue_[video_idx]->finished();
         break;
@@ -213,6 +176,54 @@ void VideoCompare::decode_video(const int video_idx) {
     frame_queue_[video_idx]->quit();
     packet_queue_[video_idx]->quit();
   }
+}
+
+bool VideoCompare::process_packet(const int video_idx, AVPacket* packet, AVFrame* frame_decoded) {
+  bool sent = video_decoder_[video_idx]->send(packet);
+
+  // If a whole frame has been decoded, adjust time stamps and add to queue
+  while (video_decoder_[video_idx]->receive(frame_decoded)) {
+    if (!filter_decoded_frame(video_idx, frame_decoded)) {
+      return sent;
+    }
+  }
+
+  return sent;
+}
+
+bool VideoCompare::filter_decoded_frame(const int video_idx, AVFrame* frame_decoded) {
+  // send decoded frame to filterer
+  if (!video_filterer_[video_idx]->send(frame_decoded)) {
+    throw std::runtime_error("Error while feeding the filter graph");
+  }
+
+  std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_filtered{av_frame_alloc(), [](AVFrame* f) { av_free(f->data[0]); }};
+
+  while (true) {
+    // get next filtered frame
+    if (!video_filterer_[video_idx]->receive(frame_filtered.get())) {
+      break;
+    }
+
+    // scale and convert pixel format before pushing to frame queue for displaying
+    std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted{av_frame_alloc(), [](AVFrame* f) { av_free(f->data[0]); }};
+
+    if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
+      throw std::runtime_error("Copying filtered frame properties");
+    }
+    if (av_image_alloc(frame_converted->data, frame_converted->linesize, format_converter_[video_idx]->dest_width(), format_converter_[video_idx]->dest_height(), format_converter_[video_idx]->output_pixel_format(), 1) < 0) {
+      throw std::runtime_error("Allocating converted picture");
+    }
+    (*format_converter_[video_idx])(frame_filtered.get(), frame_converted.get());
+
+    av_frame_unref(frame_filtered.get());
+
+    if (!frame_queue_[video_idx]->push(std::move(frame_converted))) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 void VideoCompare::video() {
