@@ -412,6 +412,8 @@ void VideoCompare::video() {
         }
         if (delta_left_pts > 0) {
           frame_left->pkt_duration = delta_left_pts;
+        } else {
+          delta_left_pts = frame_left->pkt_duration;
         }
 
         left_pts = frame_left->pts;
@@ -429,6 +431,8 @@ void VideoCompare::video() {
         }
         if (delta_right_pts > 0) {
           frame_right->pkt_duration = delta_right_pts;
+        } else {
+          delta_right_pts = frame_right->pkt_duration;
         }
 
         right_pts = new_right_pts;
