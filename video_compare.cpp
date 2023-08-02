@@ -149,6 +149,9 @@ void VideoCompare::decode_video(const int video_idx) {
           ;
         }
 
+        // Close the filter source
+        video_filterer_[video_idx]->close_src();
+
         // Flush the filter graph
         filter_decoded_frame(video_idx, nullptr);
 

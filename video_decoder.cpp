@@ -44,6 +44,9 @@ bool VideoDecoder::receive(AVFrame* frame) {
   // use best effort timestamp when PTS is not available
   frame->pts = frame->pts != AV_NOPTS_VALUE ? frame->pts : frame->best_effort_timestamp;
 
+  // save next PTS
+  next_pts_ = frame->pts + frame->pkt_duration;
+
   return true;
 }
 
@@ -73,4 +76,8 @@ const AVCodec* VideoDecoder::codec() const {
 
 AVCodecContext* VideoDecoder::codec_context() const {
   return codec_context_;
+}
+
+int64_t VideoDecoder::next_pts() const {
+  return next_pts_;
 }

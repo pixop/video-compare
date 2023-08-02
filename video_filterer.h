@@ -16,6 +16,8 @@ class VideoFilterer {
   void free();
   void reinit();
 
+  void close_src();
+
   bool send(AVFrame* decoded_frame);
   bool receive(AVFrame* filtered_frame);
 

@@ -19,8 +19,10 @@ class VideoDecoder {
   AVRational time_base() const;
   const AVCodec* codec() const;
   AVCodecContext* codec_context() const;
+  int64_t next_pts() const;
 
  private:
   const AVCodec* codec_{};
   AVCodecContext* codec_context_{};
+  int64_t next_pts_;
 };

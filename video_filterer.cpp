@@ -98,6 +98,10 @@ bool VideoFilterer::send(AVFrame* decoded_frame) {
   return av_buffersrc_add_frame_flags(buffersrc_ctx_, decoded_frame, AV_BUFFERSRC_FLAG_KEEP_REF) >= 0;
 }
 
+void VideoFilterer::close_src() {
+  av_buffersrc_close(buffersrc_ctx_, video_decoder_->next_pts(), AV_BUFFERSRC_FLAG_PUSH);
+}
+
 bool VideoFilterer::receive(AVFrame* filtered_frame) {
   auto ret = av_buffersink_get_frame_flags(buffersink_ctx_, filtered_frame, 0);
 
