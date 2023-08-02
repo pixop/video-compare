@@ -20,7 +20,7 @@ static inline bool is_behind(int64_t frame1_pts, int64_t frame2_pts, int64_t del
   float delta_s = static_cast<float>(delta_pts) * AV_TIME_TO_SEC;
 
   float diff = t1 - t2;
-  float tolerance = std::max(delta_s, 1.0F / 120.0F);
+  float tolerance = std::max(delta_s, 1.0F / 480.0F);
 
   return diff < -tolerance;
 }
@@ -360,14 +360,16 @@ void VideoCompare::video() {
         bool adjusting = false;
 
         // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
-        if ((left_pts < 0) || is_behind(left_pts, right_pts, delta_left_pts)) {
+        const int64_t half_min_delta = std::min(delta_left_pts, delta_right_pts) / 2.0;
+
+        if ((left_pts < 0) || is_behind(left_pts, right_pts, half_min_delta)) {
           adjusting = true;
 
           if (frame_queue_[0]->pop(frame_left)) {
             left_decoded_picture_number++;
           }
         }
-        if ((right_pts < 0) || is_behind(right_pts, left_pts, delta_right_pts)) {
+        if ((right_pts < 0) || is_behind(right_pts, left_pts, half_min_delta)) {
           adjusting = true;
 
           if (frame_queue_[1]->pop(frame_right)) {
