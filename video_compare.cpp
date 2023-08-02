@@ -379,14 +379,8 @@ void VideoCompare::video() {
 
         if (!adjusting && display_->get_play()) {
           if (!frame_queue_[0]->pop(frame_left) || !frame_queue_[1]->pop(frame_right)) {
-            if (frame_left != nullptr) {
-              left_decoded_picture_number++;
-            }
-            if (frame_right != nullptr) {
-              right_decoded_picture_number++;
-            }
-
-            timer_->update();
+            frame_left = nullptr;
+            frame_right = nullptr;
           } else {
             left_decoded_picture_number++;
             right_decoded_picture_number++;
