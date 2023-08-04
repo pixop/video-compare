@@ -18,7 +18,7 @@ std::string format_position(const float position, const bool use_compact) {
   const int hours = minutes / 60;
 
   if (!use_compact || minutes >= 60) {
-    return string_sprintf("%s%02d:%02d:%02d.%03d", sign.c_str(), minutes % 60, seconds % 60, milliseconds % 1000);
+    return string_sprintf("%s%02d:%02d:%02d.%03d", sign.c_str(), hours, minutes % 60, seconds % 60, milliseconds % 1000);
   }
   if (seconds >= 60) {
     return string_sprintf("%s%02d:%02d.%03d", sign.c_str(), minutes, seconds % 60, milliseconds % 1000);
