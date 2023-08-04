@@ -68,9 +68,11 @@ inline float round_3(float value) {
 }
 
 static std::string format_position_difference(const float position1, const float position2) {
+  // round both for the sake of consistency with the displayed positions
   const float position1_rounded = round_3(position1);
   const float position2_rounded = round_3(position2);
 
+  // absolute difference very close to 0.001 -> we are in sync!
   if (std::abs(position1_rounded - position2_rounded) < 9.99e-4) {
     return "";
   } else if (position1 < position2) {
