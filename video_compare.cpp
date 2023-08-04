@@ -360,16 +360,16 @@ void VideoCompare::video() {
         bool adjusting = false;
 
         // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
-        const int64_t half_min_delta = std::min(delta_left_pts, delta_right_pts) / 2.0;
+        const int64_t min_delta = std::min(delta_left_pts, delta_right_pts);
 
-        if ((left_pts < 0) || is_behind(left_pts, right_pts, half_min_delta)) {
+        if (is_behind(left_pts, right_pts, min_delta)) {
           adjusting = true;
 
           if (frame_queue_[0]->pop(frame_left)) {
             left_decoded_picture_number++;
           }
         }
-        if ((right_pts < 0) || is_behind(right_pts, left_pts, half_min_delta)) {
+        if (is_behind(right_pts, left_pts, min_delta)) {
           adjusting = true;
 
           if (frame_queue_[1]->pop(frame_right)) {
