@@ -63,14 +63,21 @@ static const SDL_Color TARGET_COLOR = {200, 200, 140, 0};
 static const SDL_Color BUFFER_COLOR = {160, 225, 192, 0};
 static const int BACKGROUND_ALPHA = 100;
 
+inline float round_3(float value) {
+    return std::round(value * 1000.0F) / 1000.0F;
+}
+
 static std::string format_position_difference(const float position1, const float position2) {
-  if (std::abs(position1 - position2) <= 1e-4) {
+  const float position1_rounded = round_3(position1);
+  const float position2_rounded = round_3(position2);
+
+  if (std::abs(position1_rounded - position2_rounded) < 9.99e-4) {
     return "";
   } else if (position1 < position2) {
-    return " (-" + format_position(position2 - position1, true) + ")";
+    return " (-" + format_position(position2_rounded - position1_rounded, true) + ")";
   }
 
-  return " (+" + format_position(position1 - position2, true) + ")";
+  return " (+" + format_position(position1_rounded - position2_rounded, true) + ")";
 }
 
 static std::string to_hex(const uint32_t value, const int width) {
