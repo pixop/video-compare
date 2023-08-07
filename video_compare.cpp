@@ -87,7 +87,7 @@ void VideoCompare::thread_demultiplex_right() {
 
 void VideoCompare::demultiplex(const int video_idx) {
   try {
-    for (;;) {
+    while (!packet_queue_[video_idx]->is_finished()) {
       if (seeking_ && readyToSeek_[1][video_idx]) {
         readyToSeek_[0][video_idx] = true;
 
@@ -134,7 +134,7 @@ void VideoCompare::thread_decode_video_right() {
 
 void VideoCompare::decode_video(const int video_idx) {
   try {
-    for (;;) {
+    while (!frame_queue_[video_idx]->is_finished()) {
       // Create AVFrame and AVPacket
       std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
       std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet{nullptr, [](AVPacket* p) {
@@ -231,6 +231,10 @@ bool VideoCompare::filter_decoded_frame(const int video_idx, AVFrame* frame_deco
 
 void VideoCompare::video() {
   try {
+#ifdef _DEBUG
+    std::string previous_state;
+#endif
+
     std::deque<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>> left_frames;
     std::deque<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>> right_frames;
     int frame_offset = 0;
@@ -269,8 +273,6 @@ void VideoCompare::video() {
 
       display_->input();
 
-      float current_position = left_pts * AV_TIME_TO_SEC;
-
       if ((display_->get_seek_relative() != 0.0F) || (display_->get_shift_right_frames() != 0)) {
         total_right_time_shifted += display_->get_shift_right_frames();
 
@@ -280,13 +282,17 @@ void VideoCompare::video() {
           // compute effective time shift
           right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
 
-          seeking_ = true;
+          // TODO: fix concurrency issues
           readyToSeek_[0][0] = false;
           readyToSeek_[0][1] = false;
           readyToSeek_[1][0] = false;
           readyToSeek_[1][1] = false;
+          seeking_ = true;
 
-          while (true) {
+          // ensure that we did not reach EOF while waiting for the demuxer to become ready
+          bool can_seek;
+
+          while ((can_seek = (!packet_queue_[0]->is_finished() && !packet_queue_[1]->is_finished()))) {
             bool all_empty = true;
 
             all_empty = all_empty && readyToSeek_[0][0];
@@ -301,54 +307,73 @@ void VideoCompare::video() {
             frame_queue_[1]->empty();
           }
 
-          packet_queue_[0]->empty();
-          packet_queue_[1]->empty();
-          frame_queue_[0]->empty();
-          frame_queue_[1]->empty();
-          video_filterer_[0]->reinit();
-          video_filterer_[1]->reinit();
+          if (can_seek) {
+            packet_queue_[0]->empty();
+            packet_queue_[1]->empty();
+            frame_queue_[0]->empty();
+            frame_queue_[1]->empty();
+            video_filterer_[0]->reinit();
+            video_filterer_[1]->reinit();
 
-          float next_position;
+            float next_left_position, next_right_position;
 
-          if (display_->get_seek_from_start()) {
-            // seek from start based on the shortest stream duration in seconds
-            next_position = shortest_duration_ * display_->get_seek_relative();
+            float left_position = left_pts * AV_TIME_TO_SEC + left_start_time;
+            float right_position = left_pts * AV_TIME_TO_SEC + right_start_time;
+
+            if (display_->get_seek_from_start()) {
+                // seek from start based on the shortest stream duration in seconds
+                next_left_position = shortest_duration_ * display_->get_seek_relative() + left_start_time;
+                next_right_position = shortest_duration_ * display_->get_seek_relative() + right_start_time;
+            } else {
+                next_left_position = left_position + display_->get_seek_relative();
+                next_right_position = right_position + display_->get_seek_relative();
+
+                if (right_time_shift < 0) {
+                    next_right_position += (right_time_shift + delta_right_pts) * AV_TIME_TO_SEC;
+                }
+            }
+
+            bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
+
+#ifdef _DEBUG
+            std::cout << "SEEK: next_left_position=" << (int) (next_left_position * 1000) << ", next_right_position=" << (int) (next_right_position * 1000) << ", backward=" << backward << std::endl;
+#endif
+            if ((!demuxer_[0]->seek(next_left_position, backward) && !backward) || (!demuxer_[1]->seek(next_right_position, backward) && !backward)) {
+                // restore position if unable to perform forward seek
+                error_message = "Unable to seek past end of file";
+
+                demuxer_[0]->seek(left_position, true);
+                demuxer_[1]->seek(right_position, true);
+            };
+
+            seeking_ = false;
+
+            frame_queue_[0]->pop(frame_left);
+            left_pts = frame_left->pts;
+            left_previous_decoded_picture_number = -1;
+            left_decoded_picture_number = 1;
+
+            // round away from zero to nearest 2 ms
+            if (right_time_shift > 0) {
+                right_time_shift = ((right_time_shift / 1000) + 2) * 1000;
+            } else if (right_time_shift < 0) {
+                right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
+            }
+
+            frame_queue_[1]->pop(frame_right);
+            right_pts = frame_right->pts - right_time_shift;
+            right_previous_decoded_picture_number = -1;
+            right_decoded_picture_number = 1;
+
+            left_frames.clear();
+            right_frames.clear();
           } else {
-            next_position = current_position + display_->get_seek_relative();
+            error_message = "Unable to perform seek (end of file reached)";
+
+            // flag both demuxer queues as finished to ensure a clean exit
+            packet_queue_[0]->finished();
+            packet_queue_[1]->finished();
           }
-
-          bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
-
-          if ((!demuxer_[0]->seek(std::max(0.0F, next_position + left_start_time), backward) && !backward) || (!demuxer_[1]->seek(std::max(0.0F, next_position + right_start_time), backward) && !backward)) {
-            // restore position if unable to perform forward seek
-            error_message = "Unable to seek past end of file";
-            demuxer_[0]->seek(std::max(0.0F, current_position + left_start_time), true);
-            demuxer_[1]->seek(std::max(0.0F, current_position + right_start_time), true);
-          };
-
-          seeking_ = false;
-
-          frame_queue_[0]->pop(frame_left);
-          left_pts = frame_left->pts;
-          left_previous_decoded_picture_number = -1;
-          left_decoded_picture_number = 1;
-
-          // round away from zero to nearest 2 ms (except when the left PTS is 0 then round towards zero)
-          if (right_time_shift > 0) {
-            right_time_shift = ((right_time_shift / 1000) + (left_pts > 0 ? 2 : -2)) * 1000;
-          } else if (right_time_shift < 0) {
-            right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
-          }
-
-          frame_queue_[1]->pop(frame_right);
-          right_pts = frame_right->pts - right_time_shift;
-          right_previous_decoded_picture_number = -1;
-          right_decoded_picture_number = 1;
-
-          left_frames.clear();
-          right_frames.clear();
-
-          current_position = frame_left->pts * AV_TIME_TO_SEC;
         }
       }
 
@@ -360,7 +385,17 @@ void VideoCompare::video() {
         bool adjusting = false;
 
         // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
-        const int64_t min_delta = std::min(delta_left_pts, delta_right_pts);
+        const int64_t min_delta = std::min(delta_left_pts, delta_right_pts) * 8 / 10;
+
+#ifdef _DEBUG
+        const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, right_time_shift=%5d", left_pts / 1000, is_behind(left_pts, right_pts, min_delta), (right_pts + right_time_shift) / 1000, is_behind(right_pts, left_pts, min_delta), min_delta / 1000, right_time_shift / 1000);
+
+        if (current_state != previous_state) {
+            std::cout << current_state << std::endl;
+        }
+
+        previous_state = current_state;
+#endif
 
         if (is_behind(left_pts, right_pts, min_delta)) {
           adjusting = true;
