@@ -64,7 +64,7 @@ static const SDL_Color BUFFER_COLOR = {160, 225, 192, 0};
 static const int BACKGROUND_ALPHA = 100;
 
 inline float round_3(float value) {
-    return std::round(value * 1000.0F) / 1000.0F;
+  return std::round(value * 1000.0F) / 1000.0F;
 }
 
 static std::string format_position_difference(const float position1, const float position2) {

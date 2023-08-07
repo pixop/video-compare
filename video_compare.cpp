@@ -321,29 +321,29 @@ void VideoCompare::video() {
             float right_position = left_pts * AV_TIME_TO_SEC + right_start_time;
 
             if (display_->get_seek_from_start()) {
-                // seek from start based on the shortest stream duration in seconds
-                next_left_position = shortest_duration_ * display_->get_seek_relative() + left_start_time;
-                next_right_position = shortest_duration_ * display_->get_seek_relative() + right_start_time;
+              // seek from start based on the shortest stream duration in seconds
+              next_left_position = shortest_duration_ * display_->get_seek_relative() + left_start_time;
+              next_right_position = shortest_duration_ * display_->get_seek_relative() + right_start_time;
             } else {
-                next_left_position = left_position + display_->get_seek_relative();
-                next_right_position = right_position + display_->get_seek_relative();
+              next_left_position = left_position + display_->get_seek_relative();
+              next_right_position = right_position + display_->get_seek_relative();
 
-                if (right_time_shift < 0) {
-                    next_right_position += (right_time_shift + delta_right_pts) * AV_TIME_TO_SEC;
-                }
+              if (right_time_shift < 0) {
+                next_right_position += (right_time_shift + delta_right_pts) * AV_TIME_TO_SEC;
+              }
             }
 
             bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
 
 #ifdef _DEBUG
-            std::cout << "SEEK: next_left_position=" << (int) (next_left_position * 1000) << ", next_right_position=" << (int) (next_right_position * 1000) << ", backward=" << backward << std::endl;
+            std::cout << "SEEK: next_left_position=" << (int)(next_left_position * 1000) << ", next_right_position=" << (int)(next_right_position * 1000) << ", backward=" << backward << std::endl;
 #endif
             if ((!demuxer_[0]->seek(next_left_position, backward) && !backward) || (!demuxer_[1]->seek(next_right_position, backward) && !backward)) {
-                // restore position if unable to perform forward seek
-                error_message = "Unable to seek past end of file";
+              // restore position if unable to perform forward seek
+              error_message = "Unable to seek past end of file";
 
-                demuxer_[0]->seek(left_position, true);
-                demuxer_[1]->seek(right_position, true);
+              demuxer_[0]->seek(left_position, true);
+              demuxer_[1]->seek(right_position, true);
             };
 
             seeking_ = false;
@@ -355,9 +355,9 @@ void VideoCompare::video() {
 
             // round away from zero to nearest 2 ms
             if (right_time_shift > 0) {
-                right_time_shift = ((right_time_shift / 1000) + 2) * 1000;
+              right_time_shift = ((right_time_shift / 1000) + 2) * 1000;
             } else if (right_time_shift < 0) {
-                right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
+              right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
             }
 
             frame_queue_[1]->pop(frame_right);
@@ -388,10 +388,11 @@ void VideoCompare::video() {
         const int64_t min_delta = std::min(delta_left_pts, delta_right_pts) * 8 / 10;
 
 #ifdef _DEBUG
-        const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, right_time_shift=%5d", left_pts / 1000, is_behind(left_pts, right_pts, min_delta), (right_pts + right_time_shift) / 1000, is_behind(right_pts, left_pts, min_delta), min_delta / 1000, right_time_shift / 1000);
+        const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, right_time_shift=%5d", left_pts / 1000, is_behind(left_pts, right_pts, min_delta),
+                                                         (right_pts + right_time_shift) / 1000, is_behind(right_pts, left_pts, min_delta), min_delta / 1000, right_time_shift / 1000);
 
         if (current_state != previous_state) {
-            std::cout << current_state << std::endl;
+          std::cout << current_state << std::endl;
         }
 
         previous_state = current_state;

@@ -2,9 +2,9 @@
 #include "demuxer.h"
 #include "video_decoder.h"
 extern "C" {
+#include <libavcodec/avcodec.h>
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
-#include <libavcodec/avcodec.h>
 }
 
 class VideoFilterer {
