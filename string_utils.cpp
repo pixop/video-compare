@@ -73,8 +73,6 @@ std::string stringify_fraction(const uint64_t num, const uint64_t den, const uns
   return result;
 }
 
-static const char FILE_SIZE_UNITS[7][3] = {"B", "KB", "MB", "GB", "TB", "PB", "EB"};
-
 // https://stackoverflow.com/questions/994593/how-to-do-an-integer-log2-in-c
 int uint64_log2(uint64_t n) {
 #define S(k)                     \
@@ -95,13 +93,15 @@ int uint64_log2(uint64_t n) {
 #undef S
 }
 
-// Inspired by https://stackoverflow.com/questions/63512258/how-can-i-print-a-human-readable-file-size-in-c-without-a-loop
+static const char FILE_SIZE_UNITS[7][3] = {"B", "KB", "MB", "GB", "TB", "PB", "EB"};
+
+// Derived from https://stackoverflow.com/questions/63512258/how-can-i-print-a-human-readable-file-size-in-c-without-a-loop
 std::string stringify_file_size(const int64_t size, const unsigned precision) noexcept {
   if (size < 0) {
     return "unknown size";
   }
 
-  unsigned unit = uint64_log2(size) / 10;
+  unsigned unit = uint64_log2(size) / 10; // 10 bits = 1024
 
   std::string result = stringify_fraction(size, 1L << (10 * unit), precision);
   result.reserve(result.size() + 5);
@@ -109,7 +109,7 @@ std::string stringify_file_size(const int64_t size, const unsigned precision) no
   result.push_back(' ');
   result.push_back(FILE_SIZE_UNITS[unit][0]);
 
-  // Don't insert anything more in case of single bytes.
+  // Don't insert anything more in case of single bytes
   if (unit != 0) {
     result.push_back('i');
     result.push_back(FILE_SIZE_UNITS[unit][1]);
