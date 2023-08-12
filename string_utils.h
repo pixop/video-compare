@@ -23,3 +23,7 @@ std::string string_join(std::vector<std::string>& strings, const std::string& de
 std::string format_position(const float position, const bool use_compact);
 
 std::string::const_iterator string_ci_find(std::string& str, const std::string& query);
+
+std::string stringify_fraction(const uint64_t num, const uint64_t den, const unsigned precision);
+
+std::string stringify_file_size(const int64_t size, const unsigned precision = 0) noexcept;

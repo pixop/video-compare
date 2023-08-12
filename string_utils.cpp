@@ -38,3 +38,82 @@ std::string::const_iterator string_ci_find(std::string& str, const std::string& 
 
   return (search(str.cbegin(), str.cend(), tmp.cbegin(), tmp.cend(), ci_compare_char));
 }
+
+// Slightly modified from https://stackoverflow.com/questions/63511627/how-can-i-stringify-a-fraction-with-n-decimals-in-c/63511628#63511628
+std::string stringify_fraction(const uint64_t num, const uint64_t den, const unsigned precision) {
+  constexpr unsigned base = 10;
+
+  // prevent division by zero if necessary
+  if (den == 0) {
+    return "inf";
+  }
+
+  // integral part can be computed using regular division
+  std::string result = std::to_string(num / den);
+
+  // perform first step of long division
+  // also cancel early if there is no fractional part
+  unsigned tmp = num % den;
+  if (tmp == 0 || precision == 0) {
+    return result;
+  }
+
+  // reserve characters to avoid unnecessary re-allocation
+  result.reserve(result.size() + precision + 1);
+
+  // fractional part can be computed using long divison
+  result += '.';
+  for (size_t i = 0; i < precision; ++i) {
+    tmp *= base;
+    char nextDigit = '0' + static_cast<char>(tmp / den);
+    result.push_back(nextDigit);
+    tmp %= den;
+  }
+
+  return result;
+}
+
+static const char FILE_SIZE_UNITS[7][3] = {"B", "KB", "MB", "GB", "TB", "PB", "EB"};
+
+// https://stackoverflow.com/questions/994593/how-to-do-an-integer-log2-in-c
+int uint64_log2(uint64_t n) {
+#define S(k)                     \
+  if (n >= (UINT64_C(1) << k)) { \
+    i += k;                      \
+    n >>= k;                     \
+  }
+
+  int i = -(n == 0);
+  S(32);
+  S(16);
+  S(8);
+  S(4);
+  S(2);
+  S(1);
+  return i;
+
+#undef S
+}
+
+// Inspired by https://stackoverflow.com/questions/63512258/how-can-i-print-a-human-readable-file-size-in-c-without-a-loop
+std::string stringify_file_size(const int64_t size, const unsigned precision) noexcept {
+  if (size < 0) {
+    return "unknown size";
+  }
+
+  unsigned unit = uint64_log2(size) / 10;
+
+  std::string result = stringify_fraction(size, 1L << (10 * unit), precision);
+  result.reserve(result.size() + 5);
+
+  result.push_back(' ');
+  result.push_back(FILE_SIZE_UNITS[unit][0]);
+
+  // Don't insert anything more in case of single bytes.
+  if (unit != 0) {
+    result.push_back('i');
+    result.push_back(FILE_SIZE_UNITS[unit][1]);
+  }
+
+  return result;
+}

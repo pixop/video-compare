@@ -76,3 +76,7 @@ bool Demuxer::seek(const float position, const bool backward) {
 std::string Demuxer::format_name() {
   return format_context_->iformat->name;
 }
+
+int64_t Demuxer::file_size() {
+  return avio_size(format_context_->pb);
+}

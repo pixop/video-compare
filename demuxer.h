@@ -18,6 +18,7 @@ class Demuxer {
   bool operator()(AVPacket& packet);
   bool seek(float position, bool backward);
   std::string format_name();
+  int64_t file_size();
 
  private:
   AVFormatContext* format_context_{};
