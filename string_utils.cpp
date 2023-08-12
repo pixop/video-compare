@@ -53,7 +53,7 @@ std::string stringify_fraction(const uint64_t num, const uint64_t den, const uns
 
   // perform first step of long division
   // also cancel early if there is no fractional part
-  unsigned tmp = num % den;
+  uint64_t tmp = num % den;
   if (tmp == 0 || precision == 0) {
     return result;
   }
