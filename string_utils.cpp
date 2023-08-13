@@ -93,17 +93,16 @@ int uint64_log2(uint64_t n) {
 #undef S
 }
 
-static const uint64_t powersOf10[] = {1,           10,           100,           1000,           10000,           100000,           1000000,           10000000,           100000000,           1000000000,
-                                      10000000000, 100000000000, 1000000000000, 10000000000000, 100000000000000, 1000000000000000, 10000000000000000, 100000000000000000, 1000000000000000000, 10000000000000000000u};
+static const uint64_t powersOf1000[] = { 1, 1000, 1000000, 1000000000, 1000000000000, 1000000000000000, 1000000000000000000u };
 
-int uint64_log10(uint64_t n) {
+int uint64_log1000(uint64_t n) {
   int left = 0;
-  int right = sizeof(powersOf10) / sizeof(uint64_t) - 1;
+  int right = sizeof(powersOf1000) / sizeof(uint64_t) - 1;
 
   while (left < right) {
     int mid = (left + right + 1) / 2;
 
-    if (powersOf10[mid] <= n) {
+    if (powersOf1000[mid] <= n) {
       left = mid;
     } else {
       right = mid - 1;
@@ -143,9 +142,9 @@ std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision)
     return "unknown bitrate";
   }
 
-  unsigned unit = uint64_log10(bit_rate) / 3;  // 10^3 = 1000
+  unsigned unit = uint64_log1000(bit_rate);
 
-  std::string result = stringify_fraction(bit_rate, powersOf10[unit * 3], precision);
+  std::string result = stringify_fraction(bit_rate, powersOf1000[unit], precision);
   result.reserve(result.size() + 8);
 
   result.push_back(' ');
