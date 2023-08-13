@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <iostream>
 
 // Borrowed from https://www.techiedelight.com/implode-a-vector-of-strings-into-a-comma-separated-string-in-cpp/
 std::string string_join(std::vector<std::string>& strings, const std::string& delim) {
@@ -73,36 +74,18 @@ std::string stringify_fraction(const uint64_t num, const uint64_t den, const uns
   return result;
 }
 
-// https://stackoverflow.com/questions/994593/how-to-do-an-integer-log2-in-c
-int uint64_log2(uint64_t n) {
-#define S(k)                     \
-  if (n >= (UINT64_C(1) << k)) { \
-    i += k;                      \
-    n >>= k;                     \
-  }
+static const uint64_t POWERS_OF_1000[] = { 1, 1000, 1000000, 1000000000, 1000000000000, 1000000000000000, 1000000000000000000u };
+static const uint64_t POWERS_OF_1024[] = { 1, 1024, 1048576, 1073741824, 1099511627776, 1125899906842624, 1152921504606846976u };
 
-  int i = -(n == 0);
-  S(32);
-  S(16);
-  S(8);
-  S(4);
-  S(2);
-  S(1);
-  return i;
-
-#undef S
-}
-
-static const uint64_t powersOf1000[] = { 1, 1000, 1000000, 1000000000, 1000000000000, 1000000000000000, 1000000000000000000u };
-
-int uint64_log1000(uint64_t n) {
+int uint64_log(uint64_t n, const uint64_t *power_table, const size_t table_size) {
   int left = 0;
-  int right = sizeof(powersOf1000) / sizeof(uint64_t) - 1;
+  int right = table_size / sizeof(uint64_t) - 1;
 
+  // binary search
   while (left < right) {
     int mid = (left + right + 1) / 2;
 
-    if (powersOf1000[mid] <= n) {
+    if (power_table[mid] <= n) {
       left = mid;
     } else {
       right = mid - 1;
@@ -120,9 +103,10 @@ std::string stringify_file_size(const int64_t size, const unsigned precision) no
     return "unknown size";
   }
 
-  unsigned unit = uint64_log2(size) / 10;  // 2^10 = 1024
 
-  std::string result = stringify_fraction(size, 1L << (10 * unit), precision);
+  unsigned unit = uint64_log(size, POWERS_OF_1024, sizeof(POWERS_OF_1024));
+
+  std::string result = stringify_fraction(size, POWERS_OF_1024[unit], precision);
   result.reserve(result.size() + 5);
 
   result.push_back(' ');
@@ -142,9 +126,9 @@ std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision)
     return "unknown bitrate";
   }
 
-  unsigned unit = uint64_log1000(bit_rate);
+  unsigned unit = uint64_log(bit_rate, POWERS_OF_1000, sizeof(POWERS_OF_1000));
 
-  std::string result = stringify_fraction(bit_rate, powersOf1000[unit], precision);
+  std::string result = stringify_fraction(bit_rate, POWERS_OF_1000[unit], precision);
   result.reserve(result.size() + 8);
 
   result.push_back(' ');
