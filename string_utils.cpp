@@ -93,6 +93,26 @@ int uint64_log2(uint64_t n) {
 #undef S
 }
 
+static const uint64_t powersOf10[] = {1,           10,           100,           1000,           10000,           100000,           1000000,           10000000,           100000000,           1000000000,
+                                      10000000000, 100000000000, 1000000000000, 10000000000000, 100000000000000, 1000000000000000, 10000000000000000, 100000000000000000, 1000000000000000000, 10000000000000000000u};
+
+int uint64_log10(uint64_t n) {
+  int left = 0;
+  int right = sizeof(powersOf10) / sizeof(uint64_t) - 1;
+
+  while (left < right) {
+    int mid = (left + right + 1) / 2;
+
+    if (powersOf10[mid] <= n) {
+      left = mid;
+    } else {
+      right = mid - 1;
+    }
+  }
+
+  return left;
+}
+
 static const char FILE_SIZE_UNITS[7][3] = {"B", "KB", "MB", "GB", "TB", "PB", "EB"};
 
 // Derived from https://stackoverflow.com/questions/63512258/how-can-i-print-a-human-readable-file-size-in-c-without-a-loop
@@ -101,7 +121,7 @@ std::string stringify_file_size(const int64_t size, const unsigned precision) no
     return "unknown size";
   }
 
-  unsigned unit = uint64_log2(size) / 10;  // 10 bits = 1024
+  unsigned unit = uint64_log2(size) / 10;  // 2^10 = 1024
 
   std::string result = stringify_fraction(size, 1L << (10 * unit), precision);
   result.reserve(result.size() + 5);
@@ -123,15 +143,17 @@ std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision)
     return "unknown bitrate";
   }
 
-  unsigned unit = uint64_log2(bit_rate) / 10;  // 10 bits = 1024
+  unsigned unit = uint64_log10(bit_rate) / 3;  // 10^3 = 1000
 
-  std::string result = stringify_fraction(bit_rate, 1L << (10 * unit), precision);
+  std::string result = stringify_fraction(bit_rate, powersOf10[unit * 3], precision);
   result.reserve(result.size() + 8);
 
   result.push_back(' ');
 
   if (unit != 0) {
-    result.push_back(FILE_SIZE_UNITS[unit][0]);
+    char first = FILE_SIZE_UNITS[unit][0];
+    first += 'a' - 'A';
+    result.push_back(first);
   }
 
   result.append("bit/s");
