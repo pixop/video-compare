@@ -73,8 +73,8 @@ std::string stringify_fraction(const uint64_t num, const uint64_t den, const uns
   return result;
 }
 
-static const uint64_t POWERS_OF_1000[] = { 1, 1000, 1000000, 1000000000, 1000000000000, 1000000000000000, 1000000000000000000u };
-static const uint64_t POWERS_OF_1024[] = { 1, 1024, 1048576, 1073741824, 1099511627776, 1125899906842624, 1152921504606846976u };
+static const uint64_t POWERS_OF_1000[] = { 1, 1000, 1000000, 1000000000, 1000000000000, 1000000000000000, 1000000000000000000 };
+static const uint64_t POWERS_OF_1024[] = { 1, 1024, 1048576, 1073741824, 1099511627776, 1125899906842624, 1152921504606846976 };
 
 int uint64_log(uint64_t n, const uint64_t *power_table, const size_t table_size) {
   int left = 0;
@@ -101,7 +101,6 @@ std::string stringify_file_size(const int64_t size, const unsigned precision) no
   if (size < 0) {
     return "unknown size";
   }
-
 
   unsigned unit = uint64_log(size, POWERS_OF_1024, sizeof(POWERS_OF_1024));
 
