@@ -27,3 +27,5 @@ std::string::const_iterator string_ci_find(std::string& str, const std::string& 
 std::string stringify_fraction(const uint64_t num, const uint64_t den, const unsigned precision);
 
 std::string stringify_file_size(const int64_t size, const unsigned precision = 0) noexcept;
+
+std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision = 0) noexcept;

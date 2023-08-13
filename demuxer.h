@@ -19,6 +19,7 @@ class Demuxer {
   bool seek(float position, bool backward);
   std::string format_name();
   int64_t file_size();
+  int64_t bit_rate();
 
  private:
   AVFormatContext* format_context_{};

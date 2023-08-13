@@ -101,7 +101,7 @@ std::string stringify_file_size(const int64_t size, const unsigned precision) no
     return "unknown size";
   }
 
-  unsigned unit = uint64_log2(size) / 10; // 10 bits = 1024
+  unsigned unit = uint64_log2(size) / 10;  // 10 bits = 1024
 
   std::string result = stringify_fraction(size, 1L << (10 * unit), precision);
   result.reserve(result.size() + 5);
@@ -109,11 +109,32 @@ std::string stringify_file_size(const int64_t size, const unsigned precision) no
   result.push_back(' ');
   result.push_back(FILE_SIZE_UNITS[unit][0]);
 
-  // Don't insert anything more in case of single bytes
   if (unit != 0) {
     result.push_back('i');
     result.push_back(FILE_SIZE_UNITS[unit][1]);
   }
+
+  return result;
+}
+
+// Derived from https://stackoverflow.com/questions/63512258/how-can-i-print-a-human-readable-file-size-in-c-without-a-loop
+std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision) noexcept {
+  if (bit_rate == 0) {
+    return "unknown bitrate";
+  }
+
+  unsigned unit = uint64_log2(bit_rate) / 10;  // 10 bits = 1024
+
+  std::string result = stringify_fraction(bit_rate, 1L << (10 * unit), precision);
+  result.reserve(result.size() + 8);
+
+  result.push_back(' ');
+
+  if (unit != 0) {
+    result.push_back(FILE_SIZE_UNITS[unit][0]);
+  }
+
+  result.append("bit/s");
 
   return result;
 }

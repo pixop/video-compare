@@ -80,3 +80,10 @@ std::string Demuxer::format_name() {
 int64_t Demuxer::file_size() {
   return avio_size(format_context_->pb);
 }
+
+int64_t Demuxer::bit_rate() {
+  // use stream bit rate if available, otherwise use container bit rate
+  const int64_t stream_bit_rate = format_context_->streams[video_stream_index_]->codecpar->bit_rate;
+
+  return stream_bit_rate > 0 ? stream_bit_rate : format_context_->bit_rate;
+}
