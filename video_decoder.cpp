@@ -3,7 +3,7 @@
 #include <string>
 #include "ffmpeg.h"
 
-VideoDecoder::VideoDecoder(const std::string& decoder_name, AVCodecParameters* codec_parameters) {
+VideoDecoder::VideoDecoder(const std::string& decoder_name, AVCodecParameters* codec_parameters) : next_pts_(AV_NOPTS_VALUE) {
   if (decoder_name.empty()) {
     codec_ = avcodec_find_decoder(codec_parameters->codec_id);
   } else {
@@ -41,8 +41,8 @@ bool VideoDecoder::receive(AVFrame* frame) {
   }
   ffmpeg::check(ret);
 
-  // use best effort timestamp when PTS is not available
-  frame->pts = frame->pts != AV_NOPTS_VALUE ? frame->pts : frame->best_effort_timestamp;
+  // use an increasing timestamp via pkt_duration between keyframes; otherwise, fall back to the best effort timestamp when PTS is not available
+  frame->pts = (next_pts_ == AV_NOPTS_VALUE || frame->key_frame) ? (frame->pts != AV_NOPTS_VALUE ? frame->pts : frame->best_effort_timestamp) : next_pts_;
 
   // save next PTS
   next_pts_ = frame->pts + frame->pkt_duration;
