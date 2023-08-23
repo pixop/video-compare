@@ -15,6 +15,9 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
+using PacketQueue = Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>>;
+using FrameQueue = Queue<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>>;
+
 class VideoCompare {
  public:
   VideoCompare(const int display_number,

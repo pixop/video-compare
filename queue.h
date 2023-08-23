@@ -7,9 +7,6 @@
 #include <mutex>
 #include <queue>
 
-struct AVPacket;
-struct AVFrame;
-
 template <class T>
 class Queue {
  protected:
@@ -40,9 +37,6 @@ class Queue {
 
   void empty();
 };
-
-using PacketQueue = Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>>;
-using FrameQueue = Queue<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>>;
 
 template <class T>
 Queue<T>::Queue(size_t size_max) : size_max_{size_max} {}
