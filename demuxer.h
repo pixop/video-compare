@@ -15,7 +15,7 @@ class Demuxer {
   int64_t duration() const;
   int64_t start_time() const;
   int rotation() const;
-  AVRational guess_frame_rate(AVFrame *frame) const;
+  AVRational guess_frame_rate(AVFrame* frame) const;
   bool operator()(AVPacket& packet);
   bool seek(float position, bool backward);
   std::string format_name();

@@ -73,10 +73,10 @@ std::string stringify_fraction(const uint64_t num, const uint64_t den, const uns
   return result;
 }
 
-static const uint64_t POWERS_OF_1000[] = { 1, 1000, 1000000, 1000000000, 1000000000000, 1000000000000000, 1000000000000000000 };
-static const uint64_t POWERS_OF_1024[] = { 1, 1024, 1048576, 1073741824, 1099511627776, 1125899906842624, 1152921504606846976 };
+static const uint64_t POWERS_OF_1000[] = {1, 1000, 1000000, 1000000000, 1000000000000, 1000000000000000, 1000000000000000000};
+static const uint64_t POWERS_OF_1024[] = {1, 1024, 1048576, 1073741824, 1099511627776, 1125899906842624, 1152921504606846976};
 
-int uint64_log(uint64_t n, const uint64_t *power_table, const size_t table_size) {
+int uint64_log(uint64_t n, const uint64_t* power_table, const size_t table_size) {
   int left = 0;
   int right = table_size / sizeof(uint64_t) - 1;
 

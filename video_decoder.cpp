@@ -34,7 +34,7 @@ bool VideoDecoder::send(AVPacket* packet) {
   return true;
 }
 
-bool VideoDecoder::receive(AVFrame* frame, Demuxer *demuxer) {
+bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
   auto ret = avcodec_receive_frame(codec_context_, frame);
   if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
     return false;

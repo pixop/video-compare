@@ -11,7 +11,7 @@ class VideoDecoder {
   explicit VideoDecoder(const std::string& decoder_name, AVCodecParameters* codec_parameters);
   ~VideoDecoder();
   bool send(AVPacket* packet);
-  bool receive(AVFrame* frame, Demuxer *demuxer);
+  bool receive(AVFrame* frame, Demuxer* demuxer);
   void flush();
   bool swap_dimensions() const;
   unsigned width() const;
