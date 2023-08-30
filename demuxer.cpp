@@ -46,7 +46,7 @@ int64_t Demuxer::duration() const {
 }
 
 int64_t Demuxer::start_time() const {
-  return format_context_->start_time;
+  return format_context_->start_time != AV_NOPTS_VALUE ? format_context_->start_time : 0;
 }
 
 int Demuxer::rotation() const {
