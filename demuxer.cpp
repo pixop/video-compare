@@ -63,6 +63,10 @@ int Demuxer::rotation() const {
   return theta;
 }
 
+AVRational Demuxer::guess_frame_rate(AVFrame *frame) const {
+  return av_guess_frame_rate(format_context_, format_context_->streams[video_stream_index_], frame);
+}
+
 bool Demuxer::operator()(AVPacket& packet) {
   return av_read_frame(format_context_, &packet) >= 0;
 }

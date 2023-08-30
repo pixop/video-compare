@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include "demuxer.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -10,7 +11,7 @@ class VideoDecoder {
   explicit VideoDecoder(const std::string& decoder_name, AVCodecParameters* codec_parameters);
   ~VideoDecoder();
   bool send(AVPacket* packet);
-  bool receive(AVFrame* frame);
+  bool receive(AVFrame* frame, Demuxer *demuxer);
   void flush();
   bool swap_dimensions() const;
   unsigned width() const;
@@ -24,5 +25,6 @@ class VideoDecoder {
  private:
   const AVCodec* codec_{};
   AVCodecContext* codec_context_{};
+  int64_t previous_pts_;
   int64_t next_pts_;
 };

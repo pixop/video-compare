@@ -187,7 +187,7 @@ bool VideoCompare::process_packet(const int video_idx, AVPacket* packet, AVFrame
   bool sent = video_decoder_[video_idx]->send(packet);
 
   // If a whole frame has been decoded, adjust time stamps and add to queue
-  while (video_decoder_[video_idx]->receive(frame_decoded)) {
+  while (video_decoder_[video_idx]->receive(frame_decoded, demuxer_[video_idx].get())) {
     if (!filter_decoded_frame(video_idx, frame_decoded)) {
       return sent;
     }
