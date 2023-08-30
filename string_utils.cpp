@@ -137,7 +137,7 @@ std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision)
     result.push_back(first);
   }
 
-  result.append("bit/s");
+  result.append("b/s");
 
   return result;
 }
