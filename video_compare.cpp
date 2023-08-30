@@ -53,13 +53,13 @@ VideoCompare::VideoCompare(const int display_number,
       timer_{std::make_unique<Timer>()},
       packet_queue_{std::make_unique<PacketQueue>(QUEUE_SIZE), std::make_unique<PacketQueue>(QUEUE_SIZE)},
       frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
-  std::cout << string_sprintf("Left video:  %dx%d, %s, %s, %s, %s, %s, %s, %s", video_decoder_[0]->width(), video_decoder_[0]->height(), format_position(demuxer_[0]->duration() * AV_TIME_TO_SEC, false).c_str(),
-                              video_decoder_[0]->codec()->name, av_get_pix_fmt_name(video_decoder_[0]->pixel_format()), demuxer_[0]->format_name().c_str(), left_file_name.c_str(), stringify_file_size(demuxer_[0]->file_size(), 2).c_str(),
-                              stringify_bit_rate(demuxer_[0]->bit_rate(), 1).c_str())
+  std::cout << string_sprintf("Left video:  %dx%d, %s, %s, %s, %s, %s, %s, %s, %s", video_decoder_[0]->width(), video_decoder_[0]->height(), format_position(demuxer_[0]->duration() * AV_TIME_TO_SEC, false).c_str(),
+                              stringify_frame_rate(demuxer_[0]->guess_frame_rate(nullptr)).c_str(), video_decoder_[0]->codec()->name, av_get_pix_fmt_name(video_decoder_[0]->pixel_format()), demuxer_[0]->format_name().c_str(),
+                              left_file_name.c_str(), stringify_file_size(demuxer_[0]->file_size(), 2).c_str(), stringify_bit_rate(demuxer_[0]->bit_rate(), 1).c_str())
             << std::endl;
-  std::cout << string_sprintf("Right video: %dx%d, %s, %s, %s, %s, %s, %s, %s", video_decoder_[1]->width(), video_decoder_[1]->height(), format_position(demuxer_[1]->duration() * AV_TIME_TO_SEC, false).c_str(),
-                              video_decoder_[1]->codec()->name, av_get_pix_fmt_name(video_decoder_[1]->pixel_format()), demuxer_[1]->format_name().c_str(), right_file_name.c_str(), stringify_file_size(demuxer_[1]->file_size(), 2).c_str(),
-                              stringify_bit_rate(demuxer_[1]->bit_rate(), 1).c_str())
+  std::cout << string_sprintf("Right video: %dx%d, %s, %s, %s, %s, %s, %s, %s, %s", video_decoder_[1]->width(), video_decoder_[1]->height(), format_position(demuxer_[1]->duration() * AV_TIME_TO_SEC, false).c_str(),
+                              stringify_frame_rate(demuxer_[1]->guess_frame_rate(nullptr)).c_str(), video_decoder_[1]->codec()->name, av_get_pix_fmt_name(video_decoder_[1]->pixel_format()), demuxer_[1]->format_name().c_str(),
+                              right_file_name.c_str(), stringify_file_size(demuxer_[1]->file_size(), 2).c_str(), stringify_bit_rate(demuxer_[1]->bit_rate(), 1).c_str())
             << std::endl;
 }
 

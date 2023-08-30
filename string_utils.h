@@ -4,6 +4,10 @@
 #include <string>
 #include <vector>
 
+extern "C" {
+#include <libavutil/rational.h>
+}
+
 // Credits to user2622016 for this C++11 approach
 // https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf
 template <typename... Args>
@@ -30,3 +34,5 @@ std::string stringify_fraction(const uint64_t num, const uint64_t den, const uns
 std::string stringify_file_size(const int64_t size, const unsigned precision = 0) noexcept;
 
 std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision = 0) noexcept;
+
+std::string stringify_frame_rate(const AVRational frame_rate) noexcept;

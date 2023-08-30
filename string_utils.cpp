@@ -141,3 +141,21 @@ std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision)
 
   return result;
 }
+
+std::string stringify_frame_rate(const AVRational frame_rate) noexcept {
+  static const std::string postfix = "fps";
+  const double d = av_q2d(frame_rate);
+
+  // formatting code borrowed (with love!) from libavformat/dump.c
+  const uint64_t v = lrintf(av_q2d(frame_rate) * 100);
+
+  if (!v) {
+    return string_sprintf("%1.4f %s", d, postfix.c_str());
+  } else if (v % 100) {
+    return string_sprintf("%3.2f %s", d, postfix.c_str());
+  } else if (v % (100 * 1000)) {
+    return string_sprintf("%1.0f %s", d, postfix.c_str());
+  }
+
+  return string_sprintf("%1.0fk %s", d / 1000, postfix.c_str());
+}
