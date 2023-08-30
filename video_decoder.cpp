@@ -49,13 +49,13 @@ bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
 
   // ensure pkt_duration is always some sensible value
   if (frame->pkt_duration == 0) {
-    // initial estimate based on guessed frame rate
+    // estimate based on guessed frame rate
     frame->pkt_duration = av_rescale_q(1, av_inv_q(demuxer->guess_frame_rate(frame)), demuxer->time_base());
 
     if (!use_avframe_state) {
       const int64_t avframe_delta_pts = avframe_pts - previous_pts_;
 
-      // can avframe_pts be trusted?
+      // can avframe_delta_pts be relied on?
       if (abs(frame->pkt_duration - avframe_delta_pts) <= (frame->pkt_duration * 20 / 100)) {
         // use the delta between the current and previous PTS instead to reduce accumulated error
         frame->pkt_duration = avframe_delta_pts;
