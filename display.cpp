@@ -880,6 +880,7 @@ void Display::input() {
             break;
           case SDLK_PLUS:
           case SDLK_KP_PLUS:
+          case SDLK_EQUALS: // for tenkeyless keyboards
             if (event_.key.keysym.mod & KMOD_ALT) {
               shift_right_frames_ += 100;
             } else if (event_.key.keysym.mod & KMOD_CTRL) {
