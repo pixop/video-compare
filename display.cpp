@@ -624,8 +624,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   int dst_half_zoomed_size = dst_zoomed_size / 2;
 
   if (zoom_left_ || zoom_right_) {
-    SDL_Rect src_zoomed_area = {std::min(std::max(0, mouse_video_x - src_half_zoomed_size), video_width_ * ((mode_ == Mode::hstack) ? 2 : 1)),
-                                std::min(std::max(0, mouse_video_y - src_half_zoomed_size), video_height_ * ((mode_ == Mode::vstack) ? 2 : 1)), src_zoomed_size, src_zoomed_size};
+    SDL_Rect src_zoomed_area = {std::min(std::max(0, mouse_video_x - src_half_zoomed_size), video_width_ * ((mode_ == Mode::hstack) ? 2 : 1) - src_zoomed_size),
+                                std::min(std::max(0, mouse_video_y - src_half_zoomed_size), video_height_ * ((mode_ == Mode::vstack) ? 2 : 1) - src_zoomed_size), src_zoomed_size, src_zoomed_size};
 
     if (zoom_left_) {
       SDL_Rect dst_zoomed_area = {0, drawable_height_ - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size};
