@@ -43,19 +43,26 @@ std::string stringify_frame_rate(const AVRational frame_rate, const AVFieldOrder
   static const std::string postfix = "fps";
   const double d = av_q2d(frame_rate);
 
-  // interlaced field order formatting code inspired by libavcodec/avcodec.c
-  std::string field_order_str = "";
+  std::string field_order_str;
 
-  if (field_order != AV_FIELD_UNKNOWN) {
-    field_order_str = " (progressive)";
-    if (field_order == AV_FIELD_TT)
+  switch (field_order) {
+    case AV_FIELD_PROGRESSIVE:
+      field_order_str = " (progressive)";
+      break;
+    case AV_FIELD_TT:
       field_order_str = " (top first)";
-    else if (field_order == AV_FIELD_BB)
+      break;
+    case AV_FIELD_BB:
       field_order_str = " (bottom first)";
-    else if (field_order == AV_FIELD_TB)
+      break;
+    case AV_FIELD_TB:
       field_order_str = " (top coded first, swapped)";
-    else if (field_order == AV_FIELD_BT)
+      break;
+    case AV_FIELD_BT:
       field_order_str = " (bottom coded first, swapped)";
+      break;
+    default:
+      field_order_str = "";
   }
 
   // formatting code borrowed (with love!) from libavformat/dump.c
