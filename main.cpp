@@ -159,7 +159,8 @@ int main(int argc, char** argv) {
                               {"find-demuxers", {"--find-demuxers"}, "find FFmpeg video demuxers matching the provided search term (e.g. 'matroska', 'mp4', 'vapoursynth' or 'pipe'; use \"\" to list all)", 1},
                               {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name", 1},
                               {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name", 1},
-                              {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1}}};
+                              {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1},
+                              {"disable-auto-filters", {"--disable-auto-filters"}, "disable the automatically injected filters for deinterlacing, frame rate harmonization, and rotation", 0}}};
 
     argagg::parser_results args;
     args = argparser.parse(argc, argv_decoded);
@@ -266,7 +267,8 @@ int main(int argc, char** argv) {
       }
 
       VideoCompare compare{display_number,     display_mode, args["high-dpi"], args["10-bpc"],  window_size,         time_shift_ms, left_file_name,
-                           left_video_filters, left_demuxer, left_decoder,     right_file_name, right_video_filters, right_demuxer, right_decoder};
+                           left_video_filters, left_demuxer, left_decoder,     right_file_name, right_video_filters, right_demuxer, right_decoder,
+                           args["disable-auto-filters"]};
       compare();
     }
   } catch (const std::exception& e) {
