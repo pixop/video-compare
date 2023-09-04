@@ -5,8 +5,8 @@
 #include <vector>
 
 extern "C" {
-#include <libavutil/rational.h>
 #include <libavcodec/codec_par.h>
+#include <libavutil/rational.h>
 }
 
 // Credits to user2622016 for this C++11 approach

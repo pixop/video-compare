@@ -4,7 +4,8 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
-VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters, const Demuxer* other_demuxer, const VideoDecoder* other_video_decoder, const bool disable_auto_filters) : demuxer_(demuxer), video_decoder_(video_decoder) {
+VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters, const Demuxer* other_demuxer, const VideoDecoder* other_video_decoder, const bool disable_auto_filters)
+    : demuxer_(demuxer), video_decoder_(video_decoder) {
   std::vector<std::string> filters;
 
   if (!disable_auto_filters) {
