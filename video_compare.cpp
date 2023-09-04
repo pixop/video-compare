@@ -38,11 +38,12 @@ VideoCompare::VideoCompare(const int display_number,
                            const std::string& right_file_name,
                            const std::string& right_video_filters,
                            const std::string& right_demuxer,
-                           const std::string& right_decoder)
+                           const std::string& right_decoder,
+                           const bool disable_auto_filters)
     : time_shift_ms_(time_shift_ms),
       demuxer_{std::make_unique<Demuxer>(left_demuxer, left_file_name), std::make_unique<Demuxer>(right_demuxer, right_file_name)},
       video_decoder_{std::make_unique<VideoDecoder>(left_decoder, demuxer_[0]->video_codec_parameters()), std::make_unique<VideoDecoder>(right_decoder, demuxer_[1]->video_codec_parameters())},
-      video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get(), left_video_filters), std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get(), right_video_filters)},
+      video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get(), left_video_filters, demuxer_[1].get(), video_decoder_[1].get(), disable_auto_filters), std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get(), right_video_filters, demuxer_[0].get(), video_decoder_[0].get(), disable_auto_filters)},
       max_width_{std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width())},
       max_height_{std::max(video_filterer_[0]->dest_height(), video_filterer_[1]->dest_height())},
       shortest_duration_{std::min(demuxer_[0]->duration(), demuxer_[1]->duration()) * AV_TIME_TO_SEC},
@@ -53,13 +54,13 @@ VideoCompare::VideoCompare(const int display_number,
       timer_{std::make_unique<Timer>()},
       packet_queue_{std::make_unique<PacketQueue>(QUEUE_SIZE), std::make_unique<PacketQueue>(QUEUE_SIZE)},
       frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
-  std::cout << string_sprintf("Left video:  %dx%d, %s, %s, %s, %s, %s, %s, %s, %s", video_decoder_[0]->width(), video_decoder_[0]->height(), format_position(demuxer_[0]->duration() * AV_TIME_TO_SEC, false).c_str(),
+  std::cout << string_sprintf("Left video:  %dx%d, %s, %s, %s, %s, %s, %s, %s, %s, %s", video_decoder_[0]->width(), video_decoder_[0]->height(), format_position(demuxer_[0]->duration() * AV_TIME_TO_SEC, false).c_str(),
                               stringify_frame_rate(demuxer_[0]->guess_frame_rate()).c_str(), video_decoder_[0]->codec()->name, av_get_pix_fmt_name(video_decoder_[0]->pixel_format()), demuxer_[0]->format_name().c_str(),
-                              left_file_name.c_str(), stringify_file_size(demuxer_[0]->file_size(), 2).c_str(), stringify_bit_rate(demuxer_[0]->bit_rate(), 1).c_str())
+                              left_file_name.c_str(), stringify_file_size(demuxer_[0]->file_size(), 2).c_str(), stringify_bit_rate(demuxer_[0]->bit_rate(), 1).c_str(), video_filterer_[0]->filter_description().c_str())
             << std::endl;
-  std::cout << string_sprintf("Right video: %dx%d, %s, %s, %s, %s, %s, %s, %s, %s", video_decoder_[1]->width(), video_decoder_[1]->height(), format_position(demuxer_[1]->duration() * AV_TIME_TO_SEC, false).c_str(),
+  std::cout << string_sprintf("Right video: %dx%d, %s, %s, %s, %s, %s, %s, %s, %s, %s", video_decoder_[1]->width(), video_decoder_[1]->height(), format_position(demuxer_[1]->duration() * AV_TIME_TO_SEC, false).c_str(),
                               stringify_frame_rate(demuxer_[1]->guess_frame_rate()).c_str(), video_decoder_[1]->codec()->name, av_get_pix_fmt_name(video_decoder_[1]->pixel_format()), demuxer_[1]->format_name().c_str(),
-                              right_file_name.c_str(), stringify_file_size(demuxer_[1]->file_size(), 2).c_str(), stringify_bit_rate(demuxer_[1]->bit_rate(), 1).c_str())
+                              right_file_name.c_str(), stringify_file_size(demuxer_[1]->file_size(), 2).c_str(), stringify_bit_rate(demuxer_[1]->bit_rate(), 1).c_str(), video_filterer_[1]->filter_description().c_str())
             << std::endl;
 }
 

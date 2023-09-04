@@ -4,12 +4,33 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
-VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters) : demuxer_(demuxer), video_decoder_(video_decoder) {
+VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters, const Demuxer* other_demuxer, const VideoDecoder* other_video_decoder, const bool disable_auto_filters) : demuxer_(demuxer), video_decoder_(video_decoder) {
   std::vector<std::string> filters;
 
-  if (!custom_video_filters.empty()) {
-    filters.push_back(custom_video_filters);
-  } else {
+  if (!disable_auto_filters) {
+    const bool this_is_interlaced = video_decoder->codec_context()->field_order != AV_FIELD_PROGRESSIVE && video_decoder->codec_context()->field_order != AV_FIELD_UNKNOWN;
+    const bool other_is_interlaced = other_video_decoder->codec_context()->field_order != AV_FIELD_PROGRESSIVE && other_video_decoder->codec_context()->field_order != AV_FIELD_UNKNOWN;
+
+    if (this_is_interlaced) {
+      filters.push_back("bwdif");
+    }
+
+    double this_frame_rate_dbl = av_q2d(demuxer->guess_frame_rate());
+    double other_frame_rate_dbl = av_q2d(other_demuxer->guess_frame_rate());
+
+    if (this_is_interlaced) {
+      this_frame_rate_dbl *= 2.0;
+    }
+    if (other_is_interlaced) {
+      other_frame_rate_dbl *= 2.0;
+    }
+
+    // harmonize the frame rate to the most frames per second
+    if (this_frame_rate_dbl < (other_frame_rate_dbl * 0.9995)) {
+      filters.push_back(string_sprintf("fps=%.3f", other_frame_rate_dbl));
+    }
+
+    // rotation
     if (demuxer->rotation() == 90) {
       filters.push_back("transpose=clock");
     } else if (demuxer->rotation() == 270) {
@@ -17,9 +38,13 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_d
     } else if (demuxer->rotation() == 180) {
       filters.push_back("hflip");
       filters.push_back("vflip");
-    } else {
-      filters.push_back("copy");
     }
+  }
+
+  if (!custom_video_filters.empty()) {
+    filters.push_back(custom_video_filters);
+  } else if (filters.empty()) {
+    filters.push_back("copy");
   }
 
   filter_description_ = string_join(filters, ",");
@@ -115,6 +140,10 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
   filtered_frame->pkt_duration = av_rescale_q(filtered_frame->pkt_duration, demuxer_->time_base(), AV_R_MICROSECONDS);
 
   return true;
+}
+
+std::string VideoFilterer::filter_description() const {
+  return filter_description_;
 }
 
 size_t VideoFilterer::src_width() const {

@@ -33,7 +33,8 @@ class VideoCompare {
                const std::string& right_file_name,
                const std::string& right_video_filters,
                const std::string& right_demuxer,
-               const std::string& right_decoder);
+               const std::string& right_decoder,
+               const bool disable_auto_filters);
   void operator()();
 
  private:

@@ -9,7 +9,7 @@ extern "C" {
 
 class VideoFilterer {
  public:
-  VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters);
+  VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters, const Demuxer* other_demuxer, const VideoDecoder* other_video_decoder, const bool disable_auto_filters);
   ~VideoFilterer();
 
   void init();
@@ -20,6 +20,8 @@ class VideoFilterer {
 
   bool send(AVFrame* decoded_frame);
   bool receive(AVFrame* filtered_frame);
+
+  std::string filter_description() const;
 
   size_t src_width() const;
   size_t src_height() const;
