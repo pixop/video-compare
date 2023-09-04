@@ -39,6 +39,39 @@ std::string::const_iterator string_ci_find(std::string& str, const std::string& 
   return (search(str.cbegin(), str.cend(), tmp.cbegin(), tmp.cend(), ci_compare_char));
 }
 
+std::string stringify_frame_rate(const AVRational frame_rate, const AVFieldOrder field_order) noexcept {
+  static const std::string postfix = "fps";
+  const double d = av_q2d(frame_rate);
+
+  // interlaced field order formatting code inspired by libavcodec/avcodec.c
+  std::string field_order_str = "";
+
+  if (field_order != AV_FIELD_UNKNOWN) {
+    field_order_str = " (progressive)";
+    if (field_order == AV_FIELD_TT)
+      field_order_str = " (top first)";
+    else if (field_order == AV_FIELD_BB)
+      field_order_str = " (bottom first)";
+    else if (field_order == AV_FIELD_TB)
+      field_order_str = " (top coded first, swapped)";
+    else if (field_order == AV_FIELD_BT)
+      field_order_str = " (bottom coded first, swapped)";
+  }
+
+  // formatting code borrowed (with love!) from libavformat/dump.c
+  const uint64_t v = lrintf(av_q2d(frame_rate) * 100);
+
+  if (!v) {
+    return string_sprintf("%1.4f %s%s", d, postfix.c_str(), field_order_str.c_str());
+  } else if (v % 100) {
+    return string_sprintf("%3.2f %s%s", d, postfix.c_str(), field_order_str.c_str());
+  } else if (v % (100 * 1000)) {
+    return string_sprintf("%1.0f %s%s", d, postfix.c_str(), field_order_str.c_str());
+  }
+
+  return string_sprintf("%1.0fk %s%s", d / 1000, postfix.c_str(), field_order_str.c_str());
+}
+
 // Slightly modified from https://stackoverflow.com/questions/63511627/how-can-i-stringify-a-fraction-with-n-decimals-in-c/63511628#63511628
 std::string stringify_fraction(const uint64_t num, const uint64_t den, const unsigned precision) {
   constexpr unsigned base = 10;
@@ -142,20 +175,3 @@ std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision)
   return result;
 }
 
-std::string stringify_frame_rate(const AVRational frame_rate) noexcept {
-  static const std::string postfix = "fps";
-  const double d = av_q2d(frame_rate);
-
-  // formatting code borrowed (with love!) from libavformat/dump.c
-  const uint64_t v = lrintf(av_q2d(frame_rate) * 100);
-
-  if (!v) {
-    return string_sprintf("%1.4f %s", d, postfix.c_str());
-  } else if (v % 100) {
-    return string_sprintf("%3.2f %s", d, postfix.c_str());
-  } else if (v % (100 * 1000)) {
-    return string_sprintf("%1.0f %s", d, postfix.c_str());
-  }
-
-  return string_sprintf("%1.0fk %s", d / 1000, postfix.c_str());
-}

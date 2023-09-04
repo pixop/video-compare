@@ -6,6 +6,7 @@
 
 extern "C" {
 #include <libavutil/rational.h>
+#include <libavcodec/codec_par.h>
 }
 
 // Credits to user2622016 for this C++11 approach
@@ -29,10 +30,10 @@ std::string format_position(const float position, const bool use_compact);
 
 std::string::const_iterator string_ci_find(std::string& str, const std::string& query);
 
+std::string stringify_frame_rate(const AVRational frame_rate, const AVFieldOrder field_order) noexcept;
+
 std::string stringify_fraction(const uint64_t num, const uint64_t den, const unsigned precision);
 
 std::string stringify_file_size(const int64_t size, const unsigned precision = 0) noexcept;
 
 std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision = 0) noexcept;
-
-std::string stringify_frame_rate(const AVRational frame_rate) noexcept;
