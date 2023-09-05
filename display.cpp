@@ -166,8 +166,8 @@ Display::Display(const int display_number,
 
   window_to_drawable_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
   window_to_drawable_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);
-  screen_to_video_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::hstack) ? 2.F : 1.F);
-  screen_to_video_height_factor_ = static_cast<float>(video_height_) / static_cast<float>(window_height_) * ((mode_ == Mode::vstack) ? 2.F : 1.F);
+  window_to_video_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::hstack) ? 2.F : 1.F);
+  window_to_video_height_factor_ = static_cast<float>(video_height_) / static_cast<float>(window_height_) * ((mode_ == Mode::vstack) ? 2.F : 1.F);
 
   font_scale_ = (window_to_drawable_width_factor_ + window_to_drawable_height_factor_) / 2.0F;
 
@@ -522,8 +522,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
   bool compare_mode = show_left_ && show_right_;
 
-  int mouse_video_x = std::round(static_cast<float>(mouse_x_) * screen_to_video_width_factor_);
-  int mouse_video_y = std::round(static_cast<float>(mouse_y_) * screen_to_video_height_factor_);
+  int mouse_video_x = std::round(static_cast<float>(mouse_x_) * window_to_video_width_factor_);
+  int mouse_video_y = std::round(static_cast<float>(mouse_y_) * window_to_video_height_factor_);
 
   // print pixel position in original video coordinates and RGB+YUV color value
   if (print_mouse_position_and_color_ && mouse_is_inside_window_) {
@@ -566,13 +566,17 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
   SDL_RenderClear(renderer_);
 
+  // stretch mouse video coordinates to full window size
+  int full_ws_mouse_video_x = mouse_video_x * window_width_ / (window_width_ - 1);
+  int full_ws_mouse_video_y = mouse_video_y * window_height_ / (window_height_ - 1);
+
   if (show_left_ || show_right_) {
-    int split_x = (compare_mode && mode_ == Mode::split) ? mouse_video_x : show_left_ ? video_width_ : 0;
+    int split_x = (compare_mode && mode_ == Mode::split) ? full_ws_mouse_video_x : show_left_ ? video_width_ : 0;
 
     // update video
     if (show_left_ && (split_x > 0)) {
       SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
-      SDL_Rect screen_render_quad_left = video_to_screen_space(tex_render_quad_left);
+      SDL_Rect screen_render_quad_left = video_rect_to_drawable_space(tex_render_quad_left);
 
       if (use_10_bpc_) {
         convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
@@ -591,7 +595,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
       SDL_Rect tex_render_quad_right = {right_x_offset + start_right, right_y_offset, (video_width_ - start_right), video_height_};
       SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
-      SDL_Rect screen_render_quad_right = video_to_screen_space(tex_render_quad_right);
+      SDL_Rect screen_render_quad_right = video_rect_to_drawable_space(tex_render_quad_right);
 
       if (subtraction_mode_) {
         update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
@@ -616,7 +620,6 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       check_sdl(SDL_RenderCopy(renderer_, video_texture_, &tex_render_quad_right, &screen_render_quad_right) == 0, "right video texture render copy");
     }
   }
-
   // zoomed area
   int src_zoomed_size = 64;
   int src_half_zoomed_size = src_zoomed_size / 2;
@@ -624,8 +627,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   int dst_half_zoomed_size = dst_zoomed_size / 2;
 
   if (zoom_left_ || zoom_right_) {
-    SDL_Rect src_zoomed_area = {std::min(std::max(0, mouse_video_x - src_half_zoomed_size), video_width_ * ((mode_ == Mode::hstack) ? 2 : 1) - src_zoomed_size - 1),
-                                std::min(std::max(0, mouse_video_y - src_half_zoomed_size), video_height_ * ((mode_ == Mode::vstack) ? 2 : 1) - src_zoomed_size - 1), src_zoomed_size, src_zoomed_size};
+    SDL_Rect src_zoomed_area = {std::min(std::max(0, full_ws_mouse_video_x - src_half_zoomed_size), video_width_ * ((mode_ == Mode::hstack) ? 2 : 1) - src_zoomed_size - 1),
+                                std::min(std::max(0, full_ws_mouse_video_y - src_half_zoomed_size), video_height_ * ((mode_ == Mode::vstack) ? 2 : 1) - src_zoomed_size - 1), src_zoomed_size, src_zoomed_size};
 
     if (zoom_left_) {
       SDL_Rect dst_zoomed_area = {0, drawable_height_ - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size};
