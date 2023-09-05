@@ -164,12 +164,12 @@ Display::Display(const int display_number,
   std::cout << "SDL GL drawable size: " << drawable_width_ << "x" << drawable_height_ << std::endl;
   std::cout << "SDL window size: " << window_width_ << "x" << window_height_ << std::endl;
 
-  window_to_drawable_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
-  window_to_drawable_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);
-  window_to_video_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::hstack) ? 2.F : 1.F);
-  window_to_video_height_factor_ = static_cast<float>(video_height_) / static_cast<float>(window_height_) * ((mode_ == Mode::vstack) ? 2.F : 1.F);
+  drawable_to_window_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
+  drawable_to_window_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);
+  video_to_window_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::hstack) ? 2.F : 1.F);
+  video_to_window_height_factor_ = static_cast<float>(video_height_) / static_cast<float>(window_height_) * ((mode_ == Mode::vstack) ? 2.F : 1.F);
 
-  font_scale_ = (window_to_drawable_width_factor_ + window_to_drawable_height_factor_) / 2.0F;
+  font_scale_ = (drawable_to_window_width_factor_ + drawable_to_window_height_factor_) / 2.0F;
 
   border_extension_ = 3 * font_scale_;
   double_border_extension_ = border_extension_ * 2;
@@ -403,8 +403,8 @@ void Display::render_progress_dots(const float position, const float progress, c
   if (duration_ > 0) {
     const float dot_size = 2.f;
 
-    const int dot_width = std::round(window_to_drawable_width_factor_ * dot_size);
-    const int dot_height = std::round(window_to_drawable_height_factor_ * dot_size);
+    const int dot_width = std::round(drawable_to_window_width_factor_ * dot_size);
+    const int dot_height = std::round(drawable_to_window_height_factor_ * dot_size);
 
     const int y_offset = is_top ? 1 : drawable_height_ - 1 - dot_height;
 
@@ -522,8 +522,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
   bool compare_mode = show_left_ && show_right_;
 
-  int mouse_video_x = std::round(static_cast<float>(mouse_x_) * window_to_video_width_factor_);
-  int mouse_video_y = std::round(static_cast<float>(mouse_y_) * window_to_video_height_factor_);
+  int mouse_video_x = std::round(static_cast<float>(mouse_x_) * video_to_window_width_factor_);
+  int mouse_video_y = std::round(static_cast<float>(mouse_y_) * video_to_window_height_factor_);
 
   // print pixel position in original video coordinates and RGB+YUV color value
   if (print_mouse_position_and_color_ && mouse_is_inside_window_) {
@@ -576,7 +576,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     // update video
     if (show_left_ && (split_x > 0)) {
       SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
-      SDL_Rect screen_render_quad_left = video_rect_to_drawable_space(tex_render_quad_left);
+      SDL_Rect screen_render_quad_left = video_rect_to_drawable_transform(tex_render_quad_left);
 
       if (use_10_bpc_) {
         convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
@@ -595,7 +595,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
       SDL_Rect tex_render_quad_right = {right_x_offset + start_right, right_y_offset, (video_width_ - start_right), video_height_};
       SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
-      SDL_Rect screen_render_quad_right = video_rect_to_drawable_space(tex_render_quad_right);
+      SDL_Rect screen_render_quad_right = video_rect_to_drawable_transform(tex_render_quad_right);
 
       if (subtraction_mode_) {
         update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
@@ -764,7 +764,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   }
 
   if (mode_ == Mode::split && show_hud_ && compare_mode) {
-    int draw_x = std::round(static_cast<float>(mouse_x_) * window_to_drawable_width_factor_);
+    int draw_x = std::round(static_cast<float>(mouse_x_) * drawable_to_window_width_factor_);
 
     // render movable slider(s)
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, SDL_ALPHA_OPAQUE);

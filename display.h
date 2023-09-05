@@ -31,10 +31,10 @@ class Display {
   int drawable_height_;
   int window_width_;
   int window_height_;
-  float window_to_drawable_width_factor_;
-  float window_to_drawable_height_factor_;
-  float window_to_video_width_factor_;
-  float window_to_video_height_factor_;
+  float drawable_to_window_width_factor_;
+  float drawable_to_window_height_factor_;
+  float video_to_window_width_factor_;
+  float video_to_window_height_factor_;
   float font_scale_;
 
   bool quit_{false};
@@ -105,9 +105,9 @@ class Display {
 
   inline int static round(const float value) { return static_cast<int>(std::round(value)); }
 
-  SDL_Rect video_rect_to_drawable_space(const SDL_Rect& rect) const {
-    const float width_scale = window_to_drawable_width_factor_ / window_to_video_width_factor_;
-    const float height_scale = window_to_drawable_height_factor_ / window_to_video_height_factor_;
+  SDL_Rect video_rect_to_drawable_transform(const SDL_Rect& rect) const {
+    const float width_scale = drawable_to_window_width_factor_ / video_to_window_width_factor_;
+    const float height_scale = drawable_to_window_height_factor_ / video_to_window_height_factor_;
 
     return {round(static_cast<float>(rect.x) * width_scale), round(static_cast<float>(rect.y) * height_scale), round(static_cast<float>(rect.w) * width_scale), round(static_cast<float>(rect.h) * height_scale)};
   }
