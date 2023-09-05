@@ -588,7 +588,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
       check_sdl(SDL_RenderCopy(renderer_, video_texture_, &tex_render_quad_left, &screen_render_quad_left) == 0, "left video texture render copy");
     }
-    if (show_right_ && ((split_x < (video_width_ - 1)) || mode_ != Mode::split)) {
+    if (show_right_ && ((split_x < video_width_) || mode_ != Mode::split)) {
       int start_right = (mode_ == Mode::split) ? split_x : 0;
       int right_x_offset = (mode_ == Mode::hstack) ? video_width_ : 0;
       int right_y_offset = (mode_ == Mode::vstack) ? video_height_ : 0;
