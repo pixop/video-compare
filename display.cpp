@@ -566,9 +566,9 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
   SDL_RenderClear(renderer_);
 
-  // stretch mouse video coordinates to full window size
-  int full_ws_mouse_video_x = mouse_video_x * window_width_ / (window_width_ - 1);
-  int full_ws_mouse_video_y = mouse_video_y * window_height_ / (window_height_ - 1);
+  // compute mouse video coordinates stretched to full window extent
+  int full_ws_mouse_video_x = std::round(static_cast<float>(mouse_x_ * window_width_ / (window_width_ - 1)) * video_to_window_width_factor_);
+  int full_ws_mouse_video_y = std::round(static_cast<float>(mouse_y_ * window_height_ / (window_height_ - 1)) * video_to_window_height_factor_);
 
   if (show_left_ || show_right_) {
     int split_x = (compare_mode && mode_ == Mode::split) ? full_ws_mouse_video_x : show_left_ ? video_width_ : 0;
@@ -774,7 +774,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       SDL_RenderDrawLine(renderer_, dst_half_zoomed_size, drawable_height_ - dst_zoomed_size, dst_half_zoomed_size, drawable_height_);
     }
     if (zoom_right_) {
-      SDL_RenderDrawLine(renderer_, drawable_width_ - dst_half_zoomed_size, drawable_height_ - dst_zoomed_size, drawable_width_ - dst_half_zoomed_size, drawable_height_);
+      SDL_RenderDrawLine(renderer_, drawable_width_ - dst_half_zoomed_size - 1, drawable_height_ - dst_zoomed_size, drawable_width_ - dst_half_zoomed_size - 1, drawable_height_);
     }
   }
 
