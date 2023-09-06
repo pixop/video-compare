@@ -41,8 +41,8 @@ std::string::const_iterator string_ci_find(std::string& str, const std::string& 
 
 std::string stringify_frame_rate(const AVRational frame_rate, const AVFieldOrder field_order) noexcept {
   static const std::string postfix = "fps";
-  const double d = av_q2d(frame_rate);
 
+  // format field order
   std::string field_order_str;
 
   switch (field_order) {
@@ -66,7 +66,8 @@ std::string stringify_frame_rate(const AVRational frame_rate, const AVFieldOrder
   }
 
   // formatting code borrowed (with love!) from libavformat/dump.c
-  const uint64_t v = lrintf(av_q2d(frame_rate) * 100);
+  const double d = av_q2d(frame_rate);
+  const uint64_t v = lrintf(d * 100);
 
   if (!v) {
     return string_sprintf("%1.4f %s%s", d, postfix.c_str(), field_order_str.c_str());
