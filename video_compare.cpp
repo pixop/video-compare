@@ -510,9 +510,9 @@ void VideoCompare::video() {
 
       frame_offset = std::min(std::max(0, frame_offset + display_->get_frame_offset_delta()), static_cast<int>(left_frames.size()) - 1);
 
-      const std::string current_total_browsable = string_sprintf("%d/%d", frame_offset + 1, static_cast<int>(left_frames.size()));
-
       if (frame_offset >= 0 && !left_frames.empty() && !right_frames.empty()) {
+        const std::string current_total_browsable = string_sprintf("%d/%d", frame_offset + 1, static_cast<int>(left_frames.size()));
+
         if (!display_->get_swap_left_right()) {
           display_->refresh({left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
                             {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
