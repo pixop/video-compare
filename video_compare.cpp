@@ -15,12 +15,12 @@ extern "C" {
 const size_t VideoCompare::QUEUE_SIZE{5};
 
 static inline bool is_behind(int64_t frame1_pts, int64_t frame2_pts, int64_t delta_pts) {
-  float t1 = static_cast<float>(frame1_pts) * AV_TIME_TO_SEC;
-  float t2 = static_cast<float>(frame2_pts) * AV_TIME_TO_SEC;
-  float delta_s = static_cast<float>(delta_pts) * AV_TIME_TO_SEC - 1e-5F;
+  const float t1 = static_cast<float>(frame1_pts) * AV_TIME_TO_SEC;
+  const float t2 = static_cast<float>(frame2_pts) * AV_TIME_TO_SEC;
+  const float delta_s = static_cast<float>(delta_pts) * AV_TIME_TO_SEC - 1e-5F;
 
-  float diff = t1 - t2;
-  float tolerance = std::max(delta_s, 1.0F / 480.0F);
+  const float diff = t1 - t2;
+  const float tolerance = std::max(delta_s, 1.0F / 480.0F);
 
   return diff < -tolerance;
 }
@@ -323,8 +323,8 @@ void VideoCompare::video() {
 
             float next_left_position, next_right_position;
 
-            float left_position = left_pts * AV_TIME_TO_SEC + left_start_time;
-            float right_position = left_pts * AV_TIME_TO_SEC + right_start_time;
+            const float left_position = left_pts * AV_TIME_TO_SEC + left_start_time;
+            const float right_position = left_pts * AV_TIME_TO_SEC + right_start_time;
 
             if (display_->get_seek_from_start()) {
               // seek from start based on the shortest stream duration in seconds

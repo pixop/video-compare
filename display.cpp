@@ -40,9 +40,9 @@ inline uint16_t clamp_int_to_10_bpc(int value) {
 
 // Credits to Kemin Zhou for this approach which does not require Boost or C++17
 // https://stackoverflow.com/questions/4430780/how-can-i-extract-the-file-name-and-extension-from-a-path-in-c
-std::string get_file_stem(const std::string& filePath) {
-  char* buff = new char[filePath.size() + 1];
-  strcpy(buff, filePath.c_str());
+std::string get_file_stem(const std::string& file_path) {
+  char* buff = new char[file_path.size() + 1];
+  strcpy(buff, file_path.c_str());
 
   std::string tmp = std::string(basename(buff));
 
@@ -247,9 +247,9 @@ void Display::convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::a
 
   for (int y = 0; y < roi.h; y++) {
     for (int in_x = 0, out_x = 0; out_x < roi.w; in_x += 3, out_x++) {
-      uint32_t r = p_in[in_x] >> 6;
-      uint32_t g = p_in[in_x + 1] >> 6;
-      uint32_t b = p_in[in_x + 2] >> 6;
+      const uint32_t r = p_in[in_x] >> 6;
+      const uint32_t g = p_in[in_x + 1] >> 6;
+      const uint32_t b = p_in[in_x + 2] >> 6;
 
       p_out[out_x] = (r << 20) | (g << 10) | (b);
     }
@@ -269,17 +269,17 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 
     for (int y = 0; y < video_height_; y++) {
       for (int in_x = 0, out_x = 0; out_x < (video_width_ - split_x) * 3; in_x += 3, out_x += 3) {
-        int rl = p_left[in_x] >> 6;
-        int gl = p_left[in_x + 1] >> 6;
-        int bl = p_left[in_x + 2] >> 6;
+        const int rl = p_left[in_x] >> 6;
+        const int gl = p_left[in_x + 1] >> 6;
+        const int bl = p_left[in_x + 2] >> 6;
 
-        int rr = p_right[in_x] >> 6;
-        int gr = p_right[in_x + 1] >> 6;
-        int br = p_right[in_x + 2] >> 6;
+        const int rr = p_right[in_x] >> 6;
+        const int gr = p_right[in_x + 1] >> 6;
+        const int br = p_right[in_x + 2] >> 6;
 
-        int r_diff = abs(rl - rr) * amplification;
-        int g_diff = abs(gl - gr) * amplification;
-        int b_diff = abs(bl - br) * amplification;
+        const int r_diff = abs(rl - rr) * amplification;
+        const int g_diff = abs(gl - gr) * amplification;
+        const int b_diff = abs(bl - br) * amplification;
 
         p_diff[out_x] = clamp_int_to_10_bpc(r_diff) << 6;
         p_diff[out_x + 1] = clamp_int_to_10_bpc(g_diff) << 6;
@@ -297,17 +297,17 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 
     for (int y = 0; y < video_height_; y++) {
       for (int in_x = 0, out_x = 0; out_x < (video_width_ - split_x) * 3; in_x += 3, out_x += 3) {
-        int rl = p_left[in_x];
-        int gl = p_left[in_x + 1];
-        int bl = p_left[in_x + 2];
+        const int rl = p_left[in_x];
+        const int gl = p_left[in_x + 1];
+        const int bl = p_left[in_x + 2];
 
-        int rr = p_right[in_x];
-        int gr = p_right[in_x + 1];
-        int br = p_right[in_x + 2];
+        const int rr = p_right[in_x];
+        const int gr = p_right[in_x + 1];
+        const int br = p_right[in_x + 2];
 
-        int r_diff = abs(rl - rr) * amplification;
-        int g_diff = abs(gl - gr) * amplification;
-        int b_diff = abs(bl - br) * amplification;
+        const int r_diff = abs(rl - rr) * amplification;
+        const int g_diff = abs(gl - gr) * amplification;
+        const int b_diff = abs(bl - br) * amplification;
 
         p_diff[out_x] = clamp_int_to_byte(r_diff);
         p_diff[out_x + 1] = clamp_int_to_byte(g_diff);
@@ -322,7 +322,7 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 }
 
 void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right) {
-  auto write_png = [this](std::array<uint8_t*, 3> planes, std::array<size_t, 3> pitches, const std::string& filename) {
+  const auto write_png = [this](std::array<uint8_t*, 3> planes, std::array<size_t, 3> pitches, const std::string& filename) {
     if (use_10_bpc_) {
       if (stbi_write_png_16(filename.c_str(), video_width_, video_height_, 3, planes[0], pitches[0]) == 0) {
         std::cerr << "Error saving video PNG image to file: " << filename << std::endl;
@@ -439,7 +439,7 @@ void Display::update_textures(const SDL_Rect* rect, const void* pixels, int pitc
 }
 
 int Display::round_and_clamp(const float value) {
-  int result = static_cast<int>(std::roundf(value));
+  const int result = static_cast<int>(std::roundf(value));
 
   return use_10_bpc_ ? clamp_int_to_10_bpc_range(result) : clamp_int_to_byte_range(result);
 }
@@ -466,16 +466,16 @@ const std::array<int, 3> Display::get_rgb_pixel(uint8_t* rgb_plane, const size_t
 }
 
 const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rgb) {
-  float scale = use_10_bpc_ ? 4.f : 1.f;
+  const float scale = use_10_bpc_ ? 4.f : 1.f;
 
-  float r = rgb[0] / (256.f * scale);
-  float g = rgb[1] / (256.f * scale);
-  float b = rgb[2] / (256.f * scale);
+  const float r = rgb[0] / (256.f * scale);
+  const float g = rgb[1] / (256.f * scale);
+  const float b = rgb[2] / (256.f * scale);
 
   // https://en.wikipedia.org/wiki/YCbCr#ITU-R_BT.601_conversion
-  float y = scale * (16.f + 65.738f * r + 129.057f * g + 25.064f * b);
-  float cr = scale * (128.f - 37.945f * r - 74.494f * g + 112.439f * b);
-  float cb = scale * (128.f + 112.439f * r - 94.154f * g - 18.285f * b);
+  const float y = scale * (16.f + 65.738f * r + 129.057f * g + 25.064f * b);
+  const float cr = scale * (128.f - 37.945f * r - 74.494f * g + 112.439f * b);
+  const float cb = scale * (128.f + 112.439f * r - 94.154f * g - 18.285f * b);
 
   return {round_and_clamp(y), round_and_clamp(cr), round_and_clamp(cb)};
 }
@@ -520,10 +520,10 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     }
   }
 
-  bool compare_mode = show_left_ && show_right_;
+  const bool compare_mode = show_left_ && show_right_;
 
-  int mouse_video_x = std::round(static_cast<float>(mouse_x_) * video_to_window_width_factor_);
-  int mouse_video_y = std::round(static_cast<float>(mouse_y_) * video_to_window_height_factor_);
+  const int mouse_video_x = std::round(static_cast<float>(mouse_x_) * video_to_window_width_factor_);
+  const int mouse_video_y = std::round(static_cast<float>(mouse_y_) * video_to_window_height_factor_);
 
   // print pixel position in original video coordinates and RGB+YUV color value
   if (print_mouse_position_and_color_ && mouse_is_inside_window_) {
@@ -543,8 +543,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
         print_right_pixel = true;
     }
 
-    int pixel_video_x = mouse_video_x % video_width_;
-    int pixel_video_y = mouse_video_y % video_height_;
+    const int pixel_video_x = mouse_video_x % video_width_;
+    const int pixel_video_y = mouse_video_y % video_height_;
 
     if (print_left_pixel) {
       std::cout << "Left:  " << string_sprintf("[%4d,%4d]", pixel_video_x * original_dims_left[0] / video_width_, pixel_video_y * original_dims_left[1] / video_height_);
@@ -567,16 +567,16 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   SDL_RenderClear(renderer_);
 
   // compute mouse video coordinates stretched to full window extent
-  int full_ws_mouse_video_x = std::round(static_cast<float>(mouse_x_ * window_width_ / (window_width_ - 1)) * video_to_window_width_factor_);
-  int full_ws_mouse_video_y = std::round(static_cast<float>(mouse_y_ * window_height_ / (window_height_ - 1)) * video_to_window_height_factor_);
+  const int full_ws_mouse_video_x = std::round(static_cast<float>(mouse_x_ * window_width_ / (window_width_ - 1)) * video_to_window_width_factor_);
+  const int full_ws_mouse_video_y = std::round(static_cast<float>(mouse_y_ * window_height_ / (window_height_ - 1)) * video_to_window_height_factor_);
 
   if (show_left_ || show_right_) {
     int split_x = (compare_mode && mode_ == Mode::split) ? full_ws_mouse_video_x : show_left_ ? video_width_ : 0;
 
     // update video
     if (show_left_ && (split_x > 0)) {
-      SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
-      SDL_Rect screen_render_quad_left = video_rect_to_drawable_transform(tex_render_quad_left);
+      const SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
+      const SDL_Rect screen_render_quad_left = video_rect_to_drawable_transform(tex_render_quad_left);
 
       if (use_10_bpc_) {
         convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
@@ -589,13 +589,13 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       check_sdl(SDL_RenderCopy(renderer_, video_texture_, &tex_render_quad_left, &screen_render_quad_left) == 0, "left video texture render copy");
     }
     if (show_right_ && ((split_x < video_width_) || mode_ != Mode::split)) {
-      int start_right = (mode_ == Mode::split) ? split_x : 0;
-      int right_x_offset = (mode_ == Mode::hstack) ? video_width_ : 0;
-      int right_y_offset = (mode_ == Mode::vstack) ? video_height_ : 0;
+      const int start_right = (mode_ == Mode::split) ? split_x : 0;
+      const int right_x_offset = (mode_ == Mode::hstack) ? video_width_ : 0;
+      const int right_y_offset = (mode_ == Mode::vstack) ? video_height_ : 0;
 
-      SDL_Rect tex_render_quad_right = {right_x_offset + start_right, right_y_offset, (video_width_ - start_right), video_height_};
-      SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
-      SDL_Rect screen_render_quad_right = video_rect_to_drawable_transform(tex_render_quad_right);
+      const SDL_Rect tex_render_quad_right = {right_x_offset + start_right, right_y_offset, (video_width_ - start_right), video_height_};
+      const SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
+      const SDL_Rect screen_render_quad_right = video_rect_to_drawable_transform(tex_render_quad_right);
 
       if (subtraction_mode_) {
         update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
@@ -620,22 +620,24 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       check_sdl(SDL_RenderCopy(renderer_, video_texture_, &tex_render_quad_right, &screen_render_quad_right) == 0, "right video texture render copy");
     }
   }
+
   // zoomed area
-  int src_zoomed_size = 64;
-  int src_half_zoomed_size = src_zoomed_size / 2;
-  int dst_zoomed_size = static_cast<int>(std::round(std::min(drawable_width_, drawable_height_) * 0.5F)) & -2;
-  int dst_half_zoomed_size = dst_zoomed_size / 2;
+  const int dst_zoomed_size = static_cast<int>(std::round(std::min(drawable_width_, drawable_height_) * 0.5F)) & -2; // size must be an even number of pixels
+  const int dst_half_zoomed_size = dst_zoomed_size / 2;
 
   if (zoom_left_ || zoom_right_) {
-    SDL_Rect src_zoomed_area = {std::min(std::max(0, full_ws_mouse_video_x - src_half_zoomed_size), video_width_ * ((mode_ == Mode::hstack) ? 2 : 1) - src_zoomed_size - 1),
-                                std::min(std::max(0, full_ws_mouse_video_y - src_half_zoomed_size), video_height_ * ((mode_ == Mode::vstack) ? 2 : 1) - src_zoomed_size - 1), src_zoomed_size, src_zoomed_size};
+    const int src_zoomed_size = 64;
+    const int src_half_zoomed_size = src_zoomed_size / 2;
+
+    const SDL_Rect src_zoomed_area = {std::min(std::max(0, full_ws_mouse_video_x - src_half_zoomed_size), video_width_ * ((mode_ == Mode::hstack) ? 2 : 1) - src_zoomed_size - 1),
+                                      std::min(std::max(0, full_ws_mouse_video_y - src_half_zoomed_size), video_height_ * ((mode_ == Mode::vstack) ? 2 : 1) - src_zoomed_size - 1), src_zoomed_size, src_zoomed_size};
 
     if (zoom_left_) {
-      SDL_Rect dst_zoomed_area = {0, drawable_height_ - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size};
+      const SDL_Rect dst_zoomed_area = {0, drawable_height_ - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size};
       SDL_RenderCopy(renderer_, zoom_texture_, &src_zoomed_area, &dst_zoomed_area);
     }
     if (zoom_right_) {
-      SDL_Rect dst_zoomed_area = {drawable_width_ - dst_zoomed_size, drawable_height_ - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size};
+      const SDL_Rect dst_zoomed_area = {drawable_width_ - dst_zoomed_size, drawable_height_ - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size};
       SDL_RenderCopy(renderer_, zoom_texture_, &src_zoomed_area, &dst_zoomed_area);
     }
   }
@@ -660,8 +662,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       const std::string left_pos_str = format_position(left_position, true) + " " + left_picture_type + format_position_difference(left_position, right_position);
       text_surface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), POSITION_COLOR);
       SDL_Texture* left_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-      int left_position_text_width = text_surface->w;
-      int left_position_text_height = text_surface->h;
+      const int left_position_text_width = text_surface->w;
+      const int left_position_text_height = text_surface->h;
       SDL_FreeSurface(text_surface);
 
       render_text(line1_y_, line1_y_, left_text_texture_, left_text_width_, left_text_height_, border_extension_, true);
@@ -708,8 +710,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       const std::string target_pos_str = format_position(target_position, true);
       text_surface = TTF_RenderText_Blended(small_font_, target_pos_str.c_str(), TARGET_COLOR);
       SDL_Texture* target_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-      int target_position_text_width = text_surface->w;
-      int target_position_text_height = text_surface->h;
+      const int target_position_text_width = text_surface->w;
+      const int target_position_text_height = text_surface->h;
       SDL_FreeSurface(text_surface);
 
       SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 2);
@@ -722,11 +724,11 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     // current frame / number of frames in history buffer
     text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), BUFFER_COLOR);
     SDL_Texture* current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-    int current_total_browsable_text_width = text_surface->w;
-    int current_total_browsable_text_height = text_surface->h;
+    const int current_total_browsable_text_width = text_surface->w;
+    const int current_total_browsable_text_height = text_surface->h;
     SDL_FreeSurface(text_surface);
 
-    int text_y = (mode_ == Mode::vstack) ? middle_y_ : line2_y_;
+    const int text_y = (mode_ == Mode::vstack) ? middle_y_ : line2_y_;
 
     fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
                  current_total_browsable_text_height + double_border_extension_};
@@ -752,7 +754,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   }
   if (error_message_texture_ != nullptr) {
     std::chrono::milliseconds now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-    float keep_alpha = std::max(sqrtf(1.0F - (now - error_message_shown_at_).count() / 1000.0F / 4.0F), 0.0F);
+    const float keep_alpha = std::max(sqrtf(1.0F - (now - error_message_shown_at_).count() / 1000.0F / 4.0F), 0.0F);
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * keep_alpha);
     fill_rect = {drawable_width_ / 2 - error_message_width_ / 2 - 2, drawable_height_ / 2 - error_message_height_ / 2 - 2, error_message_width_ + 4, error_message_height_ + 4};
@@ -764,7 +766,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   }
 
   if (mode_ == Mode::split && show_hud_ && compare_mode) {
-    int draw_x = std::round(static_cast<float>(mouse_x_) * drawable_to_window_width_factor_);
+    const int draw_x = std::round(static_cast<float>(mouse_x_) * drawable_to_window_width_factor_);
 
     // render movable slider(s)
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, SDL_ALPHA_OPAQUE);
