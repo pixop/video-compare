@@ -622,7 +622,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   }
 
   // zoomed area
-  const int dst_zoomed_size = static_cast<int>(std::round(std::min(drawable_width_, drawable_height_) * 0.5F)) & -2; // size must be an even number of pixels
+  const int dst_zoomed_size = static_cast<int>(std::round(std::min(drawable_width_, drawable_height_) * 0.5F)) & -2;  // size must be an even number of pixels
   const int dst_half_zoomed_size = dst_zoomed_size / 2;
 
   if (zoom_left_ || zoom_right_) {
