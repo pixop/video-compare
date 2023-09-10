@@ -28,6 +28,8 @@ std::string string_join(std::vector<std::string>& strings, const std::string& de
 
 std::string format_position(const float position, const bool use_compact);
 
+std::string format_duration(const float duration);
+
 std::string::const_iterator string_ci_find(std::string& str, const std::string& query);
 
 std::string stringify_frame_rate(const AVRational frame_rate, const AVFieldOrder field_order) noexcept;

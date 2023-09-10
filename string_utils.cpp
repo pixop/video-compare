@@ -27,6 +27,10 @@ std::string format_position(const float position, const bool use_compact) {
   return string_sprintf("%s%d.%03d", sign.c_str(), seconds, milliseconds % 1000);
 }
 
+std::string format_duration(const float duration) {
+  return duration > 0 ? format_position(duration, false) : "unknown duration";
+}
+
 inline bool ci_compare_char(char a, char b) {
   return (::toupper(a) == b);
 }
@@ -182,4 +186,3 @@ std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision)
 
   return result;
 }
-
