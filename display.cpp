@@ -57,11 +57,14 @@ std::string get_file_stem(const std::string& file_path) {
   return tmp;
 }
 
+static const SDL_Color BACKGROUND_COLOR = {54, 69, 79, 0};
 static const SDL_Color TEXT_COLOR = {255, 255, 255, 0};
 static const SDL_Color POSITION_COLOR = {255, 255, 192, 0};
 static const SDL_Color TARGET_COLOR = {200, 200, 140, 0};
+static const SDL_Color ZOOM_COLOR = {255, 165, 0, 0};
 static const SDL_Color BUFFER_COLOR = {160, 225, 192, 0};
 static const int BACKGROUND_ALPHA = 100;
+static const float ZOOM_SPEED = 1.06F;
 
 inline float round_3(float value) {
   return std::round(value * 1000.0F) / 1000.0F;
@@ -187,14 +190,9 @@ Display::Display(const int display_number,
   small_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 16 * font_scale_), "font open");
   big_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 24 * font_scale_), "font open");
 
-  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
   video_texture_ = check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height),
                              "video texture");
-
-  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-  zoom_texture_ = check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height),
-                            "zoom texture");
 
   SDL_Surface* text_surface = TTF_RenderUTF8_Blended(small_font_, left_file_name.c_str(), TEXT_COLOR);
   left_text_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
@@ -217,7 +215,6 @@ Display::Display(const int display_number,
 
 Display::~Display() {
   SDL_DestroyTexture(video_texture_);
-  SDL_DestroyTexture(zoom_texture_);
   SDL_DestroyTexture(left_text_texture_);
   SDL_DestroyTexture(right_text_texture_);
 
@@ -431,11 +428,6 @@ void Display::render_progress_dots(const float position, const float progress, c
 
 void Display::update_textures(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& error_message) {
   check_sdl(SDL_UpdateTexture(video_texture_, rect, pixels, pitch) == 0, "video texture - " + error_message);
-
-  if (zoom_left_ || zoom_right_) {
-    // perform a full update - optimize later...
-    check_sdl(SDL_UpdateTexture(zoom_texture_, rect, pixels, pitch) == 0, "zoom texture - " + error_message);
-  }
 }
 
 int Display::round_and_clamp(const float value) {
@@ -522,25 +514,29 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
   const bool compare_mode = show_left_ && show_right_;
 
-  const int mouse_video_x = std::round(static_cast<float>(mouse_x_) * video_to_window_width_factor_);
-  const int mouse_video_y = std::round(static_cast<float>(mouse_y_) * video_to_window_height_factor_);
+  const Vector2D video_extent(video_width_, video_height_);
+  const Vector2D zoom_rect_start((global_center_ - global_zoom_factor_ * 0.5F) * video_extent);
+  const Vector2D zoom_rect_end((global_center_ + global_zoom_factor_ * 0.5F) * video_extent);
+  const Vector2D zoom_rect_size(zoom_rect_end - zoom_rect_start);
+
+  const int mouse_video_x = std::round((static_cast<float>(mouse_x_) * video_to_window_width_factor_ - zoom_rect_start.x()) * static_cast<float>(video_width_) / zoom_rect_size.x());
+  const int mouse_video_y = std::round((static_cast<float>(mouse_y_) * video_to_window_height_factor_ - zoom_rect_start.y()) * static_cast<float>(video_height_) / zoom_rect_size.y());
 
   // print pixel position in original video coordinates and RGB+YUV color value
   if (print_mouse_position_and_color_ && mouse_is_inside_window_) {
-    bool print_left_pixel, print_right_pixel;
+    const bool print_left_pixel = mouse_video_x >= 0 && mouse_video_x < video_width_ && mouse_video_y >= 0 && mouse_video_y < video_height_;
+
+    bool print_right_pixel;
 
     switch (mode_) {
       case Mode::hstack:
-        print_left_pixel = mouse_video_x < video_width_;
-        print_right_pixel = !print_left_pixel;
+        print_right_pixel = mouse_video_x >= video_width_ && mouse_video_x < (2 * video_width_) && mouse_video_y >= 0 && mouse_video_y < video_height_;
         break;
       case Mode::vstack:
-        print_left_pixel = mouse_video_y < video_height_;
-        print_right_pixel = !print_left_pixel;
+        print_right_pixel = mouse_video_x >= 0 && mouse_video_x < video_width_ && mouse_video_y >= video_height_ && mouse_video_y < (video_height_ * 2);
         break;
       default:
-        print_left_pixel = true;
-        print_right_pixel = true;
+        print_right_pixel = print_left_pixel;
     }
 
     const int pixel_video_x = mouse_video_x % video_width_;
@@ -557,26 +553,39 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       std::cout << "Right: " << string_sprintf("[%4d,%4d]", pixel_video_x * original_dims_right[0] / video_width_, pixel_video_y * original_dims_right[1] / video_height_);
       std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_right[0], pitches_right[0], pixel_video_x, pixel_video_y);
     }
-    std::cout << std::endl;
+    if (print_left_pixel || print_right_pixel) {
+      std::cout << std::endl;
+    }
 
     print_mouse_position_and_color_ = false;
   }
 
   // clear everything
-  SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
+  SDL_SetRenderDrawColor(renderer_, BACKGROUND_COLOR.r, BACKGROUND_COLOR.g, BACKGROUND_COLOR.b, BACKGROUND_COLOR.a);
   SDL_RenderClear(renderer_);
 
-  // compute mouse video coordinates stretched to full window extent
-  const int full_ws_mouse_video_x = std::round(static_cast<float>(mouse_x_ * window_width_ / (window_width_ - 1)) * video_to_window_width_factor_);
-  const int full_ws_mouse_video_y = std::round(static_cast<float>(mouse_y_ * window_height_ / (window_height_ - 1)) * video_to_window_height_factor_);
+  // mouse video x-position stretched to full window extent
+  const float full_ws_mouse_video_x = static_cast<float>(mouse_x_ * window_width_ / (window_width_ - 1)) * video_to_window_width_factor_;
+
+  // mouse x-position in video coordinates
+  const float video_mouse_x = (full_ws_mouse_video_x - zoom_rect_start.x()) * static_cast<float>(video_width_) / zoom_rect_size.x();
+
+  // the nearest texel border to the mouse x-position in window coordinates 
+  const float video_texel_clamped_mouse_x = (std::round(video_mouse_x) * zoom_rect_size.x() / static_cast<float>(video_width_) + zoom_rect_start.x()) / video_to_window_width_factor_;
 
   if (show_left_ || show_right_) {
-    int split_x = (compare_mode && mode_ == Mode::split) ? full_ws_mouse_video_x : show_left_ ? video_width_ : 0;
+    const int split_x = (compare_mode && mode_ == Mode::split) ? std::round(video_mouse_x) : show_left_ ? video_width_ : 0;
+
+    // transform video coordinates to the currently zoomed area space
+    auto video_to_zoom_space = [this, zoom_rect_start, zoom_rect_size](const SDL_Rect &video_rect)
+    {
+      return SDL_FRect({zoom_rect_start.x() + float(video_rect.x) * global_zoom_factor_, zoom_rect_start.y() + float(video_rect.y) * global_zoom_factor_, std::min(float(video_rect.w) * global_zoom_factor_, zoom_rect_size.x()), std::min(float(video_rect.h) * global_zoom_factor_, zoom_rect_size.y())});
+    };    
 
     // update video
     if (show_left_ && (split_x > 0)) {
       const SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
-      const SDL_Rect screen_render_quad_left = video_rect_to_drawable_transform(tex_render_quad_left);
+      const SDL_FRect screen_render_quad_left = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_left));
 
       if (use_10_bpc_) {
         convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
@@ -586,16 +595,16 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
         update_textures(&tex_render_quad_left, planes_left[0], pitches_left[0], "left update (video mode)");
       }
 
-      check_sdl(SDL_RenderCopy(renderer_, video_texture_, &tex_render_quad_left, &screen_render_quad_left) == 0, "left video texture render copy");
+      check_sdl(SDL_RenderCopyF(renderer_, video_texture_, &tex_render_quad_left, &screen_render_quad_left) == 0, "left video texture render copy");
     }
     if (show_right_ && ((split_x < video_width_) || mode_ != Mode::split)) {
-      const int start_right = (mode_ == Mode::split) ? split_x : 0;
+      const int start_right = (mode_ == Mode::split) ? std::max(split_x, 0) : 0;
       const int right_x_offset = (mode_ == Mode::hstack) ? video_width_ : 0;
       const int right_y_offset = (mode_ == Mode::vstack) ? video_height_ : 0;
 
       const SDL_Rect tex_render_quad_right = {right_x_offset + start_right, right_y_offset, (video_width_ - start_right), video_height_};
       const SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
-      const SDL_Rect screen_render_quad_right = video_rect_to_drawable_transform(tex_render_quad_right);
+      const SDL_FRect screen_render_quad_right = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_right));
 
       if (subtraction_mode_) {
         update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
@@ -605,7 +614,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
           update_textures(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, subtraction mode)");
         } else {
-          update_textures(&tex_render_quad_right, diff_planes_[0] + start_right * 3, video_width_ * 3, "right update (subtraction mode)");
+          update_textures(&tex_render_quad_right, diff_planes_[0] + start_right * 3, pitches_right[0], "right update (subtraction mode)");
         }
       } else {
         if (use_10_bpc_) {
@@ -617,9 +626,12 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
         }
       }
 
-      check_sdl(SDL_RenderCopy(renderer_, video_texture_, &tex_render_quad_right, &screen_render_quad_right) == 0, "right video texture render copy");
+      check_sdl(SDL_RenderCopyF(renderer_, video_texture_, &tex_render_quad_right, &screen_render_quad_right) == 0, "right video texture render copy");
     }
   }
+
+  const int mouse_drawable_x = std::round(video_texel_clamped_mouse_x * drawable_to_window_width_factor_);
+  const int mouse_drawable_y = std::round(static_cast<float>(mouse_y_) * drawable_to_window_height_factor_);
 
   // zoomed area
   const int dst_zoomed_size = static_cast<int>(std::round(std::min(drawable_width_, drawable_height_) * 0.5F)) & -2;  // size must be an even number of pixels
@@ -629,17 +641,24 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     const int src_zoomed_size = 64;
     const int src_half_zoomed_size = src_zoomed_size / 2;
 
-    const SDL_Rect src_zoomed_area = {std::min(std::max(0, full_ws_mouse_video_x - src_half_zoomed_size), video_width_ * ((mode_ == Mode::hstack) ? 2 : 1) - src_zoomed_size - 1),
-                                      std::min(std::max(0, full_ws_mouse_video_y - src_half_zoomed_size), video_height_ * ((mode_ == Mode::vstack) ? 2 : 1) - src_zoomed_size - 1), src_zoomed_size, src_zoomed_size};
+    SDL_Rect src_zoomed_area = {std::min(std::max(0, mouse_drawable_x - src_half_zoomed_size), drawable_width_ - src_zoomed_size - 1),
+                                std::min(std::max(0, mouse_drawable_y - src_half_zoomed_size), drawable_height_ - src_zoomed_size - 1), src_zoomed_size, src_zoomed_size};
+
+    SDL_Surface* render_surface = SDL_CreateRGBSurface(0, src_zoomed_size, src_zoomed_size, 32, 0, 0, 0, 0);
+    SDL_RenderReadPixels(renderer_, &src_zoomed_area, render_surface->format->format, render_surface->pixels, render_surface->pitch);
+    SDL_Texture* render_texture = SDL_CreateTextureFromSurface(renderer_, render_surface);
 
     if (zoom_left_) {
       const SDL_Rect dst_zoomed_area = {0, drawable_height_ - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size};
-      SDL_RenderCopy(renderer_, zoom_texture_, &src_zoomed_area, &dst_zoomed_area);
+      SDL_RenderCopy(renderer_, render_texture, nullptr, &dst_zoomed_area);
     }
     if (zoom_right_) {
       const SDL_Rect dst_zoomed_area = {drawable_width_ - dst_zoomed_size, drawable_height_ - dst_zoomed_size, dst_zoomed_size, dst_zoomed_size};
-      SDL_RenderCopy(renderer_, zoom_texture_, &src_zoomed_area, &dst_zoomed_area);
+      SDL_RenderCopy(renderer_, render_texture, nullptr, &dst_zoomed_area);
     }
+
+    SDL_DestroyTexture(render_texture);
+    SDL_FreeSurface(render_surface);
   }
 
   SDL_Rect fill_rect;
@@ -721,6 +740,18 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       SDL_DestroyTexture(target_position_text_texture);
     }
 
+    // zoom factor
+    const std::string zoom_factor_str = string_sprintf("x%.3f", global_zoom_factor_);
+    text_surface = TTF_RenderText_Blended(small_font_, zoom_factor_str.c_str(), ZOOM_COLOR);
+    SDL_Texture* zoom_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+    const int zoom_position_text_width = text_surface->w;
+    const int zoom_position_text_height = text_surface->h;
+    SDL_FreeSurface(text_surface);
+
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 2);
+    render_text(line1_y_, drawable_height_ - line1_y_ - zoom_position_text_height, zoom_position_text_texture, zoom_position_text_width, zoom_position_text_height, border_extension_, false);
+    SDL_DestroyTexture(zoom_position_text_texture);
+
     // current frame / number of frames in history buffer
     text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), BUFFER_COLOR);
     SDL_Texture* current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
@@ -766,11 +797,9 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   }
 
   if (mode_ == Mode::split && show_hud_ && compare_mode) {
-    const int draw_x = std::round(static_cast<float>(mouse_x_) * drawable_to_window_width_factor_);
-
     // render movable slider(s)
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, SDL_ALPHA_OPAQUE);
-    SDL_RenderDrawLine(renderer_, draw_x, 0, draw_x, drawable_height_);
+    SDL_RenderDrawLine(renderer_, mouse_drawable_x, 0, mouse_drawable_x, drawable_height_);
 
     if (zoom_left_) {
       SDL_RenderDrawLine(renderer_, dst_half_zoomed_size, drawable_height_ - dst_zoomed_size, dst_half_zoomed_size, drawable_height_);
@@ -781,6 +810,15 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   }
 
   SDL_RenderPresent(renderer_);
+}
+
+float Display::compute_zoom_level(const float zoom_level) const {
+  return pow(ZOOM_SPEED, zoom_level);
+}
+
+void Display::update_zoom_factor(const float zoom_factor) {
+  global_zoom_factor_ = zoom_factor;
+  global_zoom_level_ = log(zoom_factor) / log(ZOOM_SPEED);
 }
 
 void Display::input() {
@@ -803,6 +841,39 @@ void Display::input() {
             break;
         }
         break;
+      case SDL_MOUSEWHEEL:
+        if (event_.wheel.y != 0) {
+          float delta_zoom = event_.wheel.y * (event_.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -1 : 1);
+
+          if (delta_zoom > 0) {
+            delta_zoom /= 2.0F;
+          }
+
+          global_zoom_level_ += delta_zoom;
+          const float new_global_zoom_factor = compute_zoom_level(global_zoom_level_);
+
+          // logic ported from YUView's MoveAndZoomableView.cpp with thanks :)
+          if (new_global_zoom_factor >= 0.00001 && new_global_zoom_factor <= 100000) {
+            // zoom factor for this step
+            const float step_zoom_factor = new_global_zoom_factor / global_zoom_factor_;
+
+            const Vector2D view_center(std::round(static_cast<float>(window_width_ / (mode_ == Mode::hstack ? 4 : 2)) * video_to_window_width_factor_), std::round(static_cast<float>(window_height_ / (mode_ == Mode::vstack ? 4 : 2)) * video_to_window_height_factor_));
+            const Vector2D zoom_point = mouse_is_inside_window_ ? 
+              Vector2D(std::round(static_cast<float>(mouse_x_) * video_to_window_width_factor_), std::round(static_cast<float>(mouse_y_) * video_to_window_height_factor_)) :
+              view_center;
+
+            // the center point has to be moved relative to the zoom point
+            const Vector2D origin(view_center);
+            const Vector2D center_move_offset(origin + move_offset_);
+
+            const Vector2D movement_delta = center_move_offset - zoom_point;
+            const Vector2D new_move_offset = move_offset_ - movement_delta * (1.0F - step_zoom_factor);
+
+            global_zoom_factor_ = new_global_zoom_factor;
+            move_offset_ = new_move_offset;
+            global_center_ = Vector2D(move_offset_.x() / video_width_ + 0.5F, move_offset_.y() / video_height_ + 0.5F);
+          }
+        }
       case SDL_MOUSEBUTTONDOWN:
         seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
         seek_from_start_ = true;
@@ -865,6 +936,27 @@ void Display::input() {
           case SDLK_p:
             print_mouse_position_and_color_ = true;
             break;
+          case SDLK_5:
+          case SDLK_KP_5:
+            update_zoom_factor(0.5F);
+            break;
+          case SDLK_6:
+          case SDLK_KP_6:
+            update_zoom_factor(1.0F);
+            break;
+          case SDLK_7:
+          case SDLK_KP_7:
+            update_zoom_factor(2.0F);
+            break;            
+          case SDLK_8:
+          case SDLK_KP_8:
+            update_zoom_factor(4.0F);
+            break;            
+          case SDLK_r:
+            update_zoom_factor(1.0F);
+            move_offset_ = Vector2D({0.0F, 0.0F});
+            global_center_ = Vector2D({0.5F, 0.5F});            
+            break;            
           case SDLK_LEFT:
             seek_relative_ -= 1.0F;
             break;
