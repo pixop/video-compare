@@ -63,11 +63,16 @@ void print_controls() {
                                                                   {"D", "Next frame"},
                                                                   {"F", "Save both frames as PNG images in the current directory"},
                                                                   {"P", "Print mouse position and pixel value under cursor to console"},
-                                                                  {"Z", "Zoom area around cursor (result shown in lower left corner)"},
-                                                                  {"C", "Zoom area around cursor (result shown in lower right corner)"},
+                                                                  {"Z", "Magnify area around cursor (result shown in lower left corner)"},
+                                                                  {"C", "Magnify area around cursor (result shown in lower right corner)"},
+                                                                  {"R", "Re-center and reset zoom to 100% (x1)"},
                                                                   {"1", "Toggle hide/show left video"},
                                                                   {"2", "Toggle hide/show right video"},
                                                                   {"3", "Toggle hide/show HUD"},
+                                                                  {"5", "Zoom  50% (x0.5)"},
+                                                                  {"6", "Zoom 100% (x1)"},
+                                                                  {"7", "Zoom 200% (x2)"},
+                                                                  {"8", "Zoom 400% (x4)"},
                                                                   {"0", "Toggle video/subtraction mode"},
                                                                   {"+", "Time-shift right video 1 frame forward"},
                                                                   {"-", "Time-shift right video 1 frame backward"}};
@@ -79,6 +84,8 @@ void print_controls() {
   }
 
   std::cout << std::endl << "Move the mouse horizontally to adjust the movable slider position." << std::endl << std::endl;
+
+  std::cout << "Use the mouse wheel to zoom in/out on the pixel under the cursor." << std::endl << std::endl;
 
   std::cout << "Click the mouse to perform a time seek based on the horizontal position" << std::endl;
   std::cout << "of the mouse cursor relative to the window width (the target position is" << std::endl;
