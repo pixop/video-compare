@@ -885,7 +885,7 @@ void Display::input() {
           }
         }
       case SDL_MOUSEBUTTONDOWN:
-        if (event_.button.button > 0) {
+        if (event_.button.button >= SDL_BUTTON_LMASK && event_.button.button <= SDL_BUTTON_X2MASK) {
           seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
           seek_from_start_ = true;
         }
