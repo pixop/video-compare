@@ -749,7 +749,11 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     SDL_FreeSurface(text_surface);
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 2);
-    render_text(line1_y_, drawable_height_ - line1_y_ - zoom_position_text_height, zoom_position_text_texture, zoom_position_text_width, zoom_position_text_height, border_extension_, false);
+
+    int text_x = (mode_ == Mode::vstack) ? drawable_width_ - line1_y_ - zoom_position_text_width : line1_y_;
+    int text_y = (mode_ == Mode::vstack) ? line1_y_ : drawable_height_ - line1_y_ - zoom_position_text_height;
+
+    render_text(text_x, text_y, zoom_position_text_texture, zoom_position_text_width, zoom_position_text_height, border_extension_, false);
     SDL_DestroyTexture(zoom_position_text_texture);
 
     // current frame / number of frames in history buffer
@@ -759,7 +763,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     const int current_total_browsable_text_height = text_surface->h;
     SDL_FreeSurface(text_surface);
 
-    const int text_y = (mode_ == Mode::vstack) ? middle_y_ : line2_y_;
+    text_y = (mode_ == Mode::vstack) ? middle_y_ : line2_y_;
 
     fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
                  current_total_browsable_text_height + double_border_extension_};
