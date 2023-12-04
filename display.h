@@ -171,7 +171,9 @@ class Display {
   std::string get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const int x, const int y);
 
   float compute_zoom_level(const float zoom_level) const;
+  void update_zoom_factor_and_move_offset(const float zoom_factor);
   void update_zoom_factor(const float zoom_factor);
+  void update_move_offset(const Vector2D& move_offset);
 
  public:
   Display(int display_number, Mode mode, bool high_dpi_allowed, bool use_10_bpc, std::tuple<int, int> window_size, unsigned width, unsigned height, double duration, const std::string& left_file_name, const std::string& right_file_name);

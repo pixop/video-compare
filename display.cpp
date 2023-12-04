@@ -816,9 +816,19 @@ float Display::compute_zoom_level(const float zoom_level) const {
   return pow(ZOOM_SPEED, zoom_level);
 }
 
+void Display::update_zoom_factor_and_move_offset(const float zoom_factor) {
+  update_move_offset(move_offset_ * (zoom_factor / global_zoom_factor_));
+  update_zoom_factor(zoom_factor);
+}
+
 void Display::update_zoom_factor(const float zoom_factor) {
   global_zoom_factor_ = zoom_factor;
   global_zoom_level_ = log(zoom_factor) / log(ZOOM_SPEED);
+}
+
+void Display::update_move_offset(const Vector2D& move_offset) {
+  move_offset_ = move_offset;
+  global_center_ = Vector2D(move_offset_.x() / video_width_ + 0.5F, move_offset_.y() / video_height_ + 0.5F);
 }
 
 void Display::input() {
@@ -870,13 +880,15 @@ void Display::input() {
             const Vector2D new_move_offset = move_offset_ - movement_delta * (1.0F - step_zoom_factor);
 
             global_zoom_factor_ = new_global_zoom_factor;
-            move_offset_ = new_move_offset;
-            global_center_ = Vector2D(move_offset_.x() / video_width_ + 0.5F, move_offset_.y() / video_height_ + 0.5F);
+
+            update_move_offset(new_move_offset);
           }
         }
       case SDL_MOUSEBUTTONDOWN:
-        seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
-        seek_from_start_ = true;
+        if (event_.button.button > 0) {
+          seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
+          seek_from_start_ = true;
+        }
         break;
       case SDL_KEYDOWN:
         switch (event_.key.keysym.sym) {
@@ -938,19 +950,19 @@ void Display::input() {
             break;
           case SDLK_5:
           case SDLK_KP_5:
-            update_zoom_factor(0.5F);
+            update_zoom_factor_and_move_offset(0.5F);
             break;
           case SDLK_6:
           case SDLK_KP_6:
-            update_zoom_factor(1.0F);
+            update_zoom_factor_and_move_offset(1.0F);
             break;
           case SDLK_7:
           case SDLK_KP_7:
-            update_zoom_factor(2.0F);
+            update_zoom_factor_and_move_offset(2.0F);
             break;            
           case SDLK_8:
           case SDLK_KP_8:
-            update_zoom_factor(4.0F);
+            update_zoom_factor_and_move_offset(4.0F);
             break;            
           case SDLK_r:
             update_zoom_factor(1.0F);
