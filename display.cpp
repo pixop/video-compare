@@ -574,7 +574,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   const float video_texel_clamped_mouse_x = (std::round(video_mouse_x) * zoom_rect_size.x() / static_cast<float>(video_width_) + zoom_rect_start.x()) / video_to_window_width_factor_;
 
   if (show_left_ || show_right_) {
-    const int split_x = (compare_mode && mode_ == Mode::split) ? std::min(std::max(std::round(video_mouse_x), 0.0F), float(video_width_ - 1)) : show_left_ ? video_width_ : 0;
+    const int split_x = (compare_mode && mode_ == Mode::split) ? std::min(std::max(std::round(video_mouse_x), 0.0F), float(video_width_)) : show_left_ ? video_width_ : 0;
 
     // transform video coordinates to the currently zoomed area space
     auto video_to_zoom_space = [this, zoom_rect_start, zoom_rect_size](const SDL_Rect &video_rect)
