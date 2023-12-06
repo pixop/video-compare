@@ -169,6 +169,7 @@ int main(int argc, char** argv) {
   try {
     argagg::parser argparser{{{"help", {"-h", "--help"}, "show help", 0},
                               {"show-controls", {"-c", "--show-controls"}, "show controls", 0},
+                              {"verbose", {"-v", "--verbose"}, "enable verbose output, including information such as library versions and rendering details", 0},
                               {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
                               {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
                               {"display-number", {"-n", "--display-number"}, "open main window on specific display (e.g. 0, 1 or 2), default is 0", 1},
@@ -301,8 +302,8 @@ int main(int argc, char** argv) {
         right_file_name = left_file_name;
       }
 
-      VideoCompare compare{display_number, display_mode,       args["high-dpi"], args["10-bpc"],      window_size,   time_shift_ms, left_file_name,      left_video_filters,          left_demuxer,
-                           left_decoder,   left_hw_accel_spec, right_file_name,  right_video_filters, right_demuxer, right_decoder, right_hw_accel_spec, args["disable-auto-filters"]};
+      VideoCompare compare{display_number, display_mode, args["verbose"],    args["high-dpi"], args["10-bpc"],      window_size,   time_shift_ms, left_file_name,      left_video_filters,
+                           left_demuxer,   left_decoder, left_hw_accel_spec, right_file_name,  right_video_filters, right_demuxer, right_decoder, right_hw_accel_spec, args["disable-auto-filters"]};
       compare();
     }
   } catch (const std::exception& e) {

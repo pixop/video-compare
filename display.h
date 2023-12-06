@@ -162,7 +162,17 @@ class Display {
   void update_move_offset(const Vector2D& move_offset);
 
  public:
-  Display(int display_number, Mode mode, bool high_dpi_allowed, bool use_10_bpc, std::tuple<int, int> window_size, unsigned width, unsigned height, double duration, const std::string& left_file_name, const std::string& right_file_name);
+  Display(int display_number,
+          Mode mode,
+          bool verbose,
+          bool high_dpi_allowed,
+          bool use_10_bpc,
+          std::tuple<int, int> window_size,
+          unsigned width,
+          unsigned height,
+          double duration,
+          const std::string& left_file_name,
+          const std::string& right_file_name);
   ~Display();
 
   // Copy frame to display

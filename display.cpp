@@ -10,6 +10,10 @@
 #include "ffmpeg.h"
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
+extern "C" {
+#include <libavfilter/avfilter.h>
+#include <libswscale/swscale.h>
+}
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -92,13 +96,16 @@ static std::string to_hex(const uint32_t value, const int width) {
   return sstream.str();
 }
 
+std::string format_libav_version(unsigned version) {
+  int major = (version >> 16) & 0xff;
+  int minor = (version >> 8) & 0xff;
+  int patch = version & 0xff;
+  return string_sprintf("%3u.%3u.%3u", major, minor, patch);
+}
+
 SDL::SDL() {
   check_sdl(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) == 0, "SDL init");
   check_sdl(TTF_Init() == 0, "TTF init");
-
-  SDL_version linked;
-  SDL_GetVersion(&linked);
-  std::cout << "SDL version: " << string_sprintf("%u.%u.%u", linked.major, linked.minor, linked.patch) << std::endl;
 }
 
 SDL::~SDL() {
@@ -107,6 +114,7 @@ SDL::~SDL() {
 
 Display::Display(const int display_number,
                  const Mode mode,
+                 const bool verbose,
                  const bool high_dpi_allowed,
                  const bool use_10_bpc,
                  const std::tuple<int, int> window_size,
@@ -153,10 +161,6 @@ Display::Display(const int display_number,
 
   renderer_ = check_sdl(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "renderer");
 
-  SDL_RendererInfo info;
-  SDL_GetRendererInfo(renderer_, &info);
-  std::cout << "SDL renderer: " << info.name << std::endl;
-
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
   SDL_RenderClear(renderer_);
   SDL_RenderPresent(renderer_);
@@ -164,8 +168,26 @@ Display::Display(const int display_number,
   SDL_GL_GetDrawableSize(window_, &drawable_width_, &drawable_height_);
   SDL_GetWindowSize(window_, &window_width_, &window_height_);
 
-  std::cout << "SDL GL drawable size: " << drawable_width_ << "x" << drawable_height_ << std::endl;
-  std::cout << "SDL window size: " << window_width_ << "x" << window_height_ << std::endl;
+  if (verbose) {
+    SDL_version sdl_linked_version;
+    SDL_GetVersion(&sdl_linked_version);
+    std::cout << "SDL version: " << string_sprintf("%u.%u.%u", sdl_linked_version.major, sdl_linked_version.minor, sdl_linked_version.patch) << std::endl;
+
+    SDL_RendererInfo info;
+    SDL_GetRendererInfo(renderer_, &info);
+    std::cout << "SDL renderer: " << info.name << std::endl;
+
+    std::cout << "SDL GL drawable size: " << drawable_width_ << "x" << drawable_height_ << std::endl;
+    std::cout << "SDL window size: " << window_width_ << "x" << window_height_ << std::endl;
+
+    std::cout << "FFmpeg version: " << av_version_info() << std::endl;
+    std::cout << "libavutil version:   " << format_libav_version(avutil_version()) << std::endl;
+    std::cout << "libavcodec version:  " << format_libav_version(avcodec_version()) << std::endl;
+    std::cout << "libavformat version: " << format_libav_version(avformat_version()) << std::endl;
+    std::cout << "libavfilter version: " << format_libav_version(avfilter_version()) << std::endl;
+    std::cout << "libswscale version:  " << format_libav_version(swscale_version()) << std::endl;
+    std::cout << "libavcodec configuration: " << avcodec_configuration() << std::endl;
+  }
 
   drawable_to_window_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
   drawable_to_window_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);

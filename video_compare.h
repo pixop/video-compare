@@ -22,6 +22,7 @@ class VideoCompare {
  public:
   VideoCompare(const int display_number,
                const Display::Mode display_mode,
+               const bool verbose,
                const bool high_dpi_allowed,
                const bool use_10_bpc,
                const std::tuple<int, int> window_size,
