@@ -570,17 +570,17 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   // mouse x-position in video coordinates
   const float video_mouse_x = (full_ws_mouse_video_x - zoom_rect_start.x()) * static_cast<float>(video_width_) / zoom_rect_size.x();
 
-  // the nearest texel border to the mouse x-position in window coordinates 
+  // the nearest texel border to the mouse x-position in window coordinates
   const float video_texel_clamped_mouse_x = (std::round(video_mouse_x) * zoom_rect_size.x() / static_cast<float>(video_width_) + zoom_rect_start.x()) / video_to_window_width_factor_;
 
   if (show_left_ || show_right_) {
     const int split_x = (compare_mode && mode_ == Mode::split) ? std::min(std::max(std::round(video_mouse_x), 0.0F), float(video_width_)) : show_left_ ? video_width_ : 0;
 
     // transform video coordinates to the currently zoomed area space
-    auto video_to_zoom_space = [this, zoom_rect_start, zoom_rect_size](const SDL_Rect &video_rect)
-    {
-      return SDL_FRect({zoom_rect_start.x() + float(video_rect.x) * global_zoom_factor_, zoom_rect_start.y() + float(video_rect.y) * global_zoom_factor_, std::min(float(video_rect.w) * global_zoom_factor_, zoom_rect_size.x()), std::min(float(video_rect.h) * global_zoom_factor_, zoom_rect_size.y())});
-    };    
+    auto video_to_zoom_space = [this, zoom_rect_start, zoom_rect_size](const SDL_Rect& video_rect) {
+      return SDL_FRect({zoom_rect_start.x() + float(video_rect.x) * global_zoom_factor_, zoom_rect_start.y() + float(video_rect.y) * global_zoom_factor_, std::min(float(video_rect.w) * global_zoom_factor_, zoom_rect_size.x()),
+                        std::min(float(video_rect.h) * global_zoom_factor_, zoom_rect_size.y())});
+    };
 
     // update video
     if (show_left_ && (split_x > 0)) {
@@ -641,8 +641,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     const int src_zoomed_size = 64;
     const int src_half_zoomed_size = src_zoomed_size / 2;
 
-    SDL_Rect src_zoomed_area = {std::min(std::max(0, mouse_drawable_x - src_half_zoomed_size), drawable_width_ - src_zoomed_size - 1),
-                                std::min(std::max(0, mouse_drawable_y - src_half_zoomed_size), drawable_height_ - src_zoomed_size - 1), src_zoomed_size, src_zoomed_size};
+    SDL_Rect src_zoomed_area = {std::min(std::max(0, mouse_drawable_x - src_half_zoomed_size), drawable_width_ - src_zoomed_size - 1), std::min(std::max(0, mouse_drawable_y - src_half_zoomed_size), drawable_height_ - src_zoomed_size - 1),
+                                src_zoomed_size, src_zoomed_size};
 
     SDL_Surface* render_surface = SDL_CreateRGBSurface(0, src_zoomed_size, src_zoomed_size, 32, 0, 0, 0, 0);
     SDL_RenderReadPixels(renderer_, &src_zoomed_area, render_surface->format->format, render_surface->pixels, render_surface->pitch);
@@ -871,10 +871,9 @@ void Display::input() {
             // zoom factor for this step
             const float step_zoom_factor = new_global_zoom_factor / global_zoom_factor_;
 
-            const Vector2D view_center(std::round(static_cast<float>(window_width_ / (mode_ == Mode::hstack ? 4 : 2)) * video_to_window_width_factor_), std::round(static_cast<float>(window_height_ / (mode_ == Mode::vstack ? 4 : 2)) * video_to_window_height_factor_));
-            const Vector2D zoom_point = mouse_is_inside_window_ ? 
-              Vector2D(std::round(static_cast<float>(mouse_x_) * video_to_window_width_factor_), std::round(static_cast<float>(mouse_y_) * video_to_window_height_factor_)) :
-              view_center;
+            const Vector2D view_center(std::round(static_cast<float>(window_width_ / (mode_ == Mode::hstack ? 4 : 2)) * video_to_window_width_factor_),
+                                       std::round(static_cast<float>(window_height_ / (mode_ == Mode::vstack ? 4 : 2)) * video_to_window_height_factor_));
+            const Vector2D zoom_point = mouse_is_inside_window_ ? Vector2D(std::round(static_cast<float>(mouse_x_) * video_to_window_width_factor_), std::round(static_cast<float>(mouse_y_) * video_to_window_height_factor_)) : view_center;
 
             // the center point has to be moved relative to the zoom point
             const Vector2D origin(view_center);
@@ -963,16 +962,16 @@ void Display::input() {
           case SDLK_7:
           case SDLK_KP_7:
             update_zoom_factor_and_move_offset(2.0F);
-            break;            
+            break;
           case SDLK_8:
           case SDLK_KP_8:
             update_zoom_factor_and_move_offset(4.0F);
-            break;            
+            break;
           case SDLK_r:
             update_zoom_factor(1.0F);
             move_offset_ = Vector2D({0.0F, 0.0F});
-            global_center_ = Vector2D({0.5F, 0.5F});            
-            break;            
+            global_center_ = Vector2D({0.5F, 0.5F});
+            break;
           case SDLK_LEFT:
             seek_relative_ -= 1.0F;
             break;

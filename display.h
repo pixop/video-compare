@@ -3,9 +3,9 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <iostream>
 #include <memory>
 #include <string>
-#include <iostream>
 #include "SDL2/SDL.h"
 extern "C" {
 #include <libavutil/frame.h>
@@ -23,33 +23,19 @@ class Vector2D {
   float x() const { return x_; }
   float y() const { return y_; }
 
-  Vector2D operator+(const Vector2D& v) const {
-    return Vector2D(x_ + v.x_, y_ + v.y_);
-  }
+  Vector2D operator+(const Vector2D& v) const { return Vector2D(x_ + v.x_, y_ + v.y_); }
 
-  Vector2D operator-(const Vector2D& v) const {
-    return Vector2D(x_ - v.x_, y_ - v.y_);
-  }
+  Vector2D operator-(const Vector2D& v) const { return Vector2D(x_ - v.x_, y_ - v.y_); }
 
-  Vector2D operator*(const Vector2D& v) const {
-    return Vector2D(x_ * v.x_, y_ * v.y_);
-  }
+  Vector2D operator*(const Vector2D& v) const { return Vector2D(x_ * v.x_, y_ * v.y_); }
 
-  Vector2D operator+(const float scalar) const {
-    return Vector2D(x_ + scalar, y_ + scalar);
-  }
+  Vector2D operator+(const float scalar) const { return Vector2D(x_ + scalar, y_ + scalar); }
 
-  Vector2D operator-(const float scalar) const {
-    return Vector2D(x_ - scalar, y_ - scalar);
-  }
+  Vector2D operator-(const float scalar) const { return Vector2D(x_ - scalar, y_ - scalar); }
 
-  Vector2D operator*(const float scalar) const {
-    return Vector2D(x_ * scalar, y_ * scalar);
-  }
+  Vector2D operator*(const float scalar) const { return Vector2D(x_ * scalar, y_ * scalar); }
 
-  friend std::ostream& operator<<(std::ostream& os, const Vector2D& v) {
-    return os << "(" << v.x_ << ", " << v.y_ << ")";
-  }
+  friend std::ostream& operator<<(std::ostream& os, const Vector2D& v) { return os << "(" << v.x_ << ", " << v.y_ << ")"; }
 
  private:
   float x_, y_;
