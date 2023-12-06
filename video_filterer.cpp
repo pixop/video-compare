@@ -110,15 +110,6 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
     inputs->next = nullptr;
 
     if ((ret = avfilter_graph_parse_ptr(filter_graph_, filter_description_.c_str(), &inputs, &outputs, nullptr)) >= 0) {
-      /*
-      for (int i = 0; i < filter_graph_->nb_filters; i++) {
-          filter_graph_->filters[i]->hw_device_ctx =
-              av_buffer_ref(dec_ctx->hw_device_ctx);
-          if (!filter_graph_->filters[i]->hw_device_ctx)
-              return AVERROR(ENOMEM);
-      }
-      */
-
       ret = avfilter_graph_config(filter_graph_, nullptr);
     }
   }
@@ -135,7 +126,7 @@ bool VideoFilterer::send(AVFrame* decoded_frame) {
       throw ffmpeg::Error{"Decoded frame with invalid pixel format received"};
     }
 
-    pixel_format_ = static_cast<enum AVPixelFormat>(decoded_frame->format);
+    pixel_format_ = static_cast<AVPixelFormat>(decoded_frame->format);
     reinit();
   }
 

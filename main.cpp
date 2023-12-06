@@ -142,7 +142,7 @@ void find_matching_video_decoders(const std::string& search_string) {
 }
 
 void find_matching_hw_accels(const std::string& search_string) {
-  enum AVHWDeviceType type = AV_HWDEVICE_TYPE_NONE;
+  AVHWDeviceType type = AV_HWDEVICE_TYPE_NONE;
 
   std::cout << "Hardware acceleration methods:" << std::endl << std::endl;
 
@@ -183,8 +183,8 @@ int main(int argc, char** argv) {
                               {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name", 1},
                               {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name", 1},
                               {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1},
-                              {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg hardware acceleration, specified as [type][:device] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128)", 1},
-                              {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg hardware acceleration, specified as [type][:device] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128)", 1},
+                              {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg hardware acceleration, specified as [type][:device?] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128)", 1},
+                              {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg hardware acceleration, specified as [type][:device?]", 1},
                               {"find-hwaccels", {"--find-hwaccels"}, "find FFmpeg hardware acceleration types matching the provided search term (e.g. 'videotoolbox' or 'vulkan'; use \"\" to list all)", 1},
                               {"disable-auto-filters", {"--no-auto-filters"}, "disable the default behaviour of automatically injecting filters for deinterlacing, frame rate harmonization, and rotation", 0}}};
 
