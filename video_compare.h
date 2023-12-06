@@ -30,10 +30,12 @@ class VideoCompare {
                const std::string& left_video_filters,
                const std::string& left_demuxer,
                const std::string& left_decoder,
+               const std::string& left_hw_accel_spec,
                const std::string& right_file_name,
                const std::string& right_video_filters,
                const std::string& right_demuxer,
                const std::string& right_decoder,
+               const std::string& right_hw_accel_spec,
                const bool disable_auto_filters);
   void operator()();
 
@@ -45,7 +47,7 @@ class VideoCompare {
   void thread_decode_video_left();
   void thread_decode_video_right();
   void decode_video(int video_idx);
-  bool process_packet(int video_idx, AVPacket* packet, AVFrame* frame_decoded);
+  bool process_packet(int video_idx, AVPacket* packet, AVFrame* frame_decoded, AVFrame* sw_frame_decoded = nullptr);
   bool filter_decoded_frame(int video_idx, AVFrame* frame_decoded);
   void video();
 

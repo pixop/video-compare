@@ -84,6 +84,10 @@ std::string stringify_frame_rate(const AVRational frame_rate, const AVFieldOrder
   return string_sprintf("%1.0fk %s%s", d / 1000, postfix.c_str(), field_order_str.c_str());
 }
 
+std::string stringify_decoder(const VideoDecoder* video_decoder) noexcept {
+  return video_decoder->is_hw_accelerated() ? string_sprintf("%s (%s)", video_decoder->codec()->name, video_decoder->hw_accel_name().c_str()) : video_decoder->codec()->name;
+}
+
 // Slightly modified from https://stackoverflow.com/questions/63511627/how-can-i-stringify-a-fraction-with-n-decimals-in-c/63511628#63511628
 std::string stringify_fraction(const uint64_t num, const uint64_t den, const unsigned precision) {
   constexpr unsigned base = 10;

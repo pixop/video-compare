@@ -2,8 +2,9 @@
 #include <iostream>
 #include <string>
 #include "ffmpeg.h"
+#include "string_utils.h"
 
-VideoDecoder::VideoDecoder(const std::string& decoder_name, AVCodecParameters* codec_parameters) : next_pts_(AV_NOPTS_VALUE) {
+VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, AVCodecParameters* codec_parameters) : hw_pixel_format_(AV_PIX_FMT_NONE), next_pts_(AV_NOPTS_VALUE) {
   if (decoder_name.empty()) {
     codec_ = avcodec_find_decoder(codec_parameters->codec_id);
   } else {
@@ -18,11 +19,69 @@ VideoDecoder::VideoDecoder(const std::string& decoder_name, AVCodecParameters* c
     throw ffmpeg::Error{"Couldn't allocate video codec context"};
   }
   ffmpeg::check(avcodec_parameters_to_context(codec_context_, codec_parameters));
+
+  // optionally set up hardware acceleration
+  if (!hw_accel_spec.empty()) {
+    const char* device = nullptr;
+
+    const size_t colon_pos = hw_accel_spec.rfind(":");
+
+    if (colon_pos == std::string::npos) {
+      hw_accel_name_ = hw_accel_spec;
+    } else {
+      hw_accel_name_ = hw_accel_spec.substr(0, colon_pos);
+      device = hw_accel_spec.substr(colon_pos + 1).c_str();
+    }
+
+    const AVHWDeviceType hw_accel_type = av_hwdevice_find_type_by_name(hw_accel_name_.c_str());
+
+    if (hw_accel_type == AV_HWDEVICE_TYPE_NONE) {
+      throw ffmpeg::Error{"Could not find HW acceleration: " + hw_accel_name_};
+    }
+
+    for (int i = 0;; i++) {
+      const AVCodecHWConfig* config = avcodec_get_hw_config(codec_, i);
+
+      if (!config) {
+        throw ffmpeg::Error{string_sprintf("Decoder %s does not support HW device %s", codec_->name, hw_accel_name_.c_str())};
+      }
+
+      if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX && config->device_type == hw_accel_type) {
+        hw_pixel_format_ = config->pix_fmt;
+        break;
+      }
+    }
+
+    AVBufferRef* hw_device_ctx;
+
+    if (av_hwdevice_ctx_create(&hw_device_ctx, hw_accel_type, device, nullptr, 0) < 0) {
+      throw ffmpeg::Error{"Failed to create a HW device context for " + hw_accel_name_};
+    }
+
+    codec_context_->hw_device_ctx = hw_device_ctx;
+  }
+
   ffmpeg::check(avcodec_open2(codec_context_, codec_, nullptr));
 }
 
 VideoDecoder::~VideoDecoder() {
   avcodec_free_context(&codec_context_);
+}
+
+const AVCodec* VideoDecoder::codec() const {
+  return codec_;
+}
+
+AVCodecContext* VideoDecoder::codec_context() const {
+  return codec_context_;
+}
+
+bool VideoDecoder::is_hw_accelerated() const {
+  return codec_context_->hw_device_ctx != nullptr;
+}
+
+std::string VideoDecoder::hw_accel_name() const {
+  return hw_accel_name_;
 }
 
 bool VideoDecoder::send(AVPacket* packet) {
@@ -85,16 +144,12 @@ AVPixelFormat VideoDecoder::pixel_format() const {
   return codec_context_->pix_fmt;
 }
 
+AVPixelFormat VideoDecoder::hw_pixel_format() const {
+  return hw_pixel_format_;
+}
+
 AVRational VideoDecoder::time_base() const {
   return codec_context_->time_base;
-}
-
-const AVCodec* VideoDecoder::codec() const {
-  return codec_;
-}
-
-AVCodecContext* VideoDecoder::codec_context() const {
-  return codec_context_;
 }
 
 int64_t VideoDecoder::next_pts() const {

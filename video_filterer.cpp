@@ -5,7 +5,7 @@
 #include "string_utils.h"
 
 VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters, const Demuxer* other_demuxer, const VideoDecoder* other_video_decoder, const bool disable_auto_filters)
-    : demuxer_(demuxer), video_decoder_(video_decoder) {
+    : demuxer_(demuxer), video_decoder_(video_decoder), pixel_format_(video_decoder->codec_context()->pix_fmt) {
   std::vector<std::string> filters;
 
   if (!disable_auto_filters) {
@@ -84,7 +84,7 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
     // buffer video source: the decoded frames go here
     const AVFilter* buffersrc = avfilter_get_by_name("buffer");
     const std::string args =
-        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d", dec_ctx->width, dec_ctx->height, dec_ctx->pix_fmt, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num, dec_ctx->sample_aspect_ratio.den);
+        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d", dec_ctx->width, dec_ctx->height, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num, dec_ctx->sample_aspect_ratio.den);
 
     ret = avfilter_graph_create_filter(&buffersrc_ctx_, buffersrc, "in", args.c_str(), nullptr, filter_graph_);
     if (ret < 0) {
@@ -110,6 +110,15 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
     inputs->next = nullptr;
 
     if ((ret = avfilter_graph_parse_ptr(filter_graph_, filter_description_.c_str(), &inputs, &outputs, nullptr)) >= 0) {
+      /*
+      for (int i = 0; i < filter_graph_->nb_filters; i++) {
+          filter_graph_->filters[i]->hw_device_ctx =
+              av_buffer_ref(dec_ctx->hw_device_ctx);
+          if (!filter_graph_->filters[i]->hw_device_ctx)
+              return AVERROR(ENOMEM);
+      }
+      */
+
       ret = avfilter_graph_config(filter_graph_, nullptr);
     }
   }
@@ -121,6 +130,15 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
 }
 
 bool VideoFilterer::send(AVFrame* decoded_frame) {
+  if (decoded_frame != nullptr && pixel_format_ != decoded_frame->format) {
+    if (decoded_frame->format == AV_PIX_FMT_NONE) {
+      throw ffmpeg::Error{"Decoded frame with invalid pixel format received"};
+    }
+
+    pixel_format_ = static_cast<enum AVPixelFormat>(decoded_frame->format);
+    reinit();
+  }
+
   return av_buffersrc_add_frame_flags(buffersrc_ctx_, decoded_frame, AV_BUFFERSRC_FLAG_KEEP_REF) >= 0;
 }
 
