@@ -99,8 +99,8 @@ static std::string to_hex(const uint32_t value, const int width) {
 std::string format_libav_version(unsigned version) {
   int major = (version >> 16) & 0xff;
   int minor = (version >> 8) & 0xff;
-  int patch = version & 0xff;
-  return string_sprintf("%3u.%3u.%3u", major, minor, patch);
+  int micro = version & 0xff;
+  return string_sprintf("%3u.%3u.%3u", major, minor, micro);
 }
 
 SDL::SDL() {
@@ -169,24 +169,7 @@ Display::Display(const int display_number,
   SDL_GetWindowSize(window_, &window_width_, &window_height_);
 
   if (verbose) {
-    SDL_version sdl_linked_version;
-    SDL_GetVersion(&sdl_linked_version);
-    std::cout << "SDL version: " << string_sprintf("%u.%u.%u", sdl_linked_version.major, sdl_linked_version.minor, sdl_linked_version.patch) << std::endl;
-
-    SDL_RendererInfo info;
-    SDL_GetRendererInfo(renderer_, &info);
-    std::cout << "SDL renderer: " << info.name << std::endl;
-
-    std::cout << "SDL GL drawable size: " << drawable_width_ << "x" << drawable_height_ << std::endl;
-    std::cout << "SDL window size: " << window_width_ << "x" << window_height_ << std::endl;
-
-    std::cout << "FFmpeg version: " << av_version_info() << std::endl;
-    std::cout << "libavutil version:   " << format_libav_version(avutil_version()) << std::endl;
-    std::cout << "libavcodec version:  " << format_libav_version(avcodec_version()) << std::endl;
-    std::cout << "libavformat version: " << format_libav_version(avformat_version()) << std::endl;
-    std::cout << "libavfilter version: " << format_libav_version(avfilter_version()) << std::endl;
-    std::cout << "libswscale version:  " << format_libav_version(swscale_version()) << std::endl;
-    std::cout << "libavcodec configuration: " << avcodec_configuration() << std::endl;
+    print_verbose_info();
   }
 
   drawable_to_window_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
@@ -258,6 +241,27 @@ Display::~Display() {
 
   SDL_DestroyRenderer(renderer_);
   SDL_DestroyWindow(window_);
+}
+
+void Display::print_verbose_info() {
+  SDL_version sdl_linked_version;
+  SDL_GetVersion(&sdl_linked_version);
+  std::cout << "SDL version: " << string_sprintf("%u.%u.%u", sdl_linked_version.major, sdl_linked_version.minor, sdl_linked_version.patch) << std::endl;
+
+  SDL_RendererInfo info;
+  SDL_GetRendererInfo(renderer_, &info);
+  std::cout << "SDL renderer: " << info.name << std::endl;
+
+  std::cout << "SDL GL drawable size: " << drawable_width_ << "x" << drawable_height_ << std::endl;
+  std::cout << "SDL window size: " << window_width_ << "x" << window_height_ << std::endl;
+
+  std::cout << "FFmpeg version: " << av_version_info() << std::endl;
+  std::cout << "libavutil version:   " << format_libav_version(avutil_version()) << std::endl;
+  std::cout << "libavcodec version:  " << format_libav_version(avcodec_version()) << std::endl;
+  std::cout << "libavformat version: " << format_libav_version(avformat_version()) << std::endl;
+  std::cout << "libavfilter version: " << format_libav_version(avfilter_version()) << std::endl;
+  std::cout << "libswscale version:  " << format_libav_version(swscale_version()) << std::endl;
+  std::cout << "libavcodec configuration: " << avcodec_configuration() << std::endl;
 }
 
 void Display::convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi) {
