@@ -184,8 +184,8 @@ int main(int argc, char** argv) {
                               {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name", 1},
                               {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name", 1},
                               {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1},
-                              {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg video hardware acceleration, specified as [type][:device?] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128)", 1},
-                              {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg video hardware acceleration, specified as [type][:device?]", 1},
+                              {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg video hardware acceleration, specified as [type][:device?] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128')", 1},
+                              {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg video hardware acceleration, specified as [type][:device?] (e.g. 'cuda', 'cuda:1' or 'vulkan')", 1},
                               {"find-hwaccels", {"--find-hwaccels"}, "find FFmpeg video hardware acceleration types matching the provided search term (e.g. 'videotoolbox' or 'vulkan'; use \"\" to list all)", 1},
                               {"disable-auto-filters", {"--no-auto-filters"}, "disable the default behaviour of automatically injecting filters for deinterlacing, frame rate harmonization, and rotation", 0}}};
 
