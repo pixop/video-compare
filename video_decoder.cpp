@@ -24,7 +24,7 @@ VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& h
   if (!hw_accel_spec.empty()) {
     const char* device = nullptr;
 
-    const size_t colon_pos = hw_accel_spec.rfind(":");
+    const size_t colon_pos = hw_accel_spec.find(":");
 
     if (colon_pos == std::string::npos) {
       hw_accel_name_ = hw_accel_spec;
