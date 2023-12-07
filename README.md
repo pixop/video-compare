@@ -54,7 +54,7 @@ Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://gi
 
 ## Usage
 
-Launch using the operating system's DPI setting. Video pixels are doubled on devices like a Retina 5K display; 
+Launch using the operating system's DPI setting. Video pixels are doubled on devices like a Retina 5K display;
 therefore, it is the preferred option for displaying HD 1080p videos on such screens:
 
     video-compare video1.mp4 video2.mp4
@@ -65,7 +65,7 @@ for e.g. displaying UHD 4K video on a Retina 5K display:
     video-compare -d video1.mp4 video2.mp4
 
 Increase bit depth to 10 bits per color component (8 bits is the default). Fidelity is increased while
-performance takes a hit. Significantly reduces visible banding on systems with a higher grade display 
+performance takes a hit. Significantly reduces visible banding on systems with a higher grade display
 and driver support for 30-bit color:
 
     video-compare -b video1.mp4 video2.mp4
@@ -95,10 +95,17 @@ adjusting colors, deinterlacing, denoising, speeding up/slowing down, etc.:
 
     video-compare -l crop=iw:ih-240 -r format=gray,pad=iw+320:ih:160:0 video1.mp4 video2.mp4
 
-Manually set the demuxer and decoder used for each video. Useful for selecting a demuxer that cannot be
-auto-detected (such as VapourSynth) or enabling hardware-accelerated decoding:
+Select a demuxer that cannot be auto-detected (such as VapourSynth):
 
-    video-compare --left-demuxer vapoursynth --right-decoder h264_cuvid script.vpy video.mp4
+    video-compare --left-demuxer vapoursynth script.vpy video.mp4
+
+Explicit decoder selection for the right video:
+
+    video-compare --right-decoder h264_cuvid video1.mp4 video2.mp4
+
+Set the hardware acceleration type for the left video:
+
+    video-compare --left-hwaccel videotoolbox video1.mp4 video2.mp4
 
 Perform simpler comparison of a video with itself using double underscore (`__`) as a placeholder. This
 enables tasks such as comparing the video with a time-shifted version of itself or testing various sets
