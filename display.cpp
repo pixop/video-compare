@@ -545,8 +545,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   const Vector2D zoom_rect_end((global_center_ + global_zoom_factor_ * 0.5F) * video_extent);
   const Vector2D zoom_rect_size(zoom_rect_end - zoom_rect_start);
 
-  const int mouse_video_x = std::round((static_cast<float>(mouse_x_) * video_to_window_width_factor_ - zoom_rect_start.x()) * static_cast<float>(video_width_) / zoom_rect_size.x());
-  const int mouse_video_y = std::round((static_cast<float>(mouse_y_) * video_to_window_height_factor_ - zoom_rect_start.y()) * static_cast<float>(video_height_) / zoom_rect_size.y());
+  const int mouse_video_x = std::floor((static_cast<float>(mouse_x_) * video_to_window_width_factor_ - zoom_rect_start.x()) * static_cast<float>(video_width_) / zoom_rect_size.x());
+  const int mouse_video_y = std::floor((static_cast<float>(mouse_y_) * video_to_window_height_factor_ - zoom_rect_start.y()) * static_cast<float>(video_height_) / zoom_rect_size.y());
 
   // print pixel position in original video coordinates and RGB+YUV color value
   if (print_mouse_position_and_color_ && mouse_is_inside_window_) {
