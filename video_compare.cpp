@@ -226,7 +226,7 @@ bool VideoCompare::filter_decoded_frame(const int video_idx, AVFrame* frame_deco
     throw std::runtime_error("Error while feeding the filter graph");
   }
 
-  std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_filtered{av_frame_alloc(), [](AVFrame* f) { av_free(f->data[0]); }};
+  std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_filtered{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
 
   while (true) {
     // get next filtered frame
@@ -235,7 +235,7 @@ bool VideoCompare::filter_decoded_frame(const int video_idx, AVFrame* frame_deco
     }
 
     // scale and convert pixel format before pushing to frame queue for displaying
-    std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted{av_frame_alloc(), [](AVFrame* f) { av_free(f->data[0]); }};
+    std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
 
     if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
       throw std::runtime_error("Copying filtered frame properties");
