@@ -1,4 +1,5 @@
 #pragma once
+#include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <array>
 #include <chrono>
@@ -6,7 +7,6 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include "SDL2/SDL.h"
 extern "C" {
 #include <libavutil/frame.h>
 }
