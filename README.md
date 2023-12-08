@@ -159,8 +159,10 @@ keystroke. Similarly, hold down the ALT key for even bigger time-shifts of 100 f
 
 ### Requirements
 
-Requires FFmpeg headers and development libraries to be installed, along with SDL2 and its
-TrueType font rendering add on (libsdl2_ttf).
+Requires FFmpeg headers and development libraries to be installed, along with SDL2 and 
+its TrueType font rendering add on (libsdl2_ttf). SDL2 version 2.0.10 or later is now 
+specifically required for subpixel accuracy rendering capabilities. Users may need to 
+upgrade their existing SDL2 installation before compiling.
 
 On Debian GNU/Linux the required development packages can be installed via `apt`:
 
