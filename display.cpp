@@ -152,6 +152,12 @@ Display::Display(const int display_number,
       window_height = std::get<1>(window_size);
     }
   }
+  if (window_width < 2) {
+    throw std::runtime_error{"Window width cannot be less than 2"};
+  }
+  if (window_height < 1) {
+    throw std::runtime_error{"Window height cannot be less than 1"};
+  }
 
   const int create_window_flags = SDL_WINDOW_SHOWN;
 
