@@ -895,7 +895,7 @@ void Display::input() {
             delta_zoom /= 2.0F;
           }
 
-          global_zoom_level_ += delta_zoom;
+          global_zoom_level_ -= delta_zoom;
           const float new_global_zoom_factor = compute_zoom_level(global_zoom_level_);
 
           // logic ported from YUView's MoveAndZoomableView.cpp with thanks :)
