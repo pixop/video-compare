@@ -909,11 +909,10 @@ void Display::input() {
             update_move_offset(new_move_offset);
           }
         }
+        break;
       case SDL_MOUSEBUTTONDOWN:
-        if (event_.button.button >= SDL_BUTTON_LMASK && event_.button.button <= SDL_BUTTON_X2MASK && event_.button.clicks > 0) {
-          seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
-          seek_from_start_ = true;
-        }
+        seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
+        seek_from_start_ = true;
         break;
       case SDL_KEYDOWN:
         switch (event_.key.keysym.sym) {
