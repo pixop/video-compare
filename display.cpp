@@ -895,14 +895,14 @@ void Display::input() {
           // logic ported from YUView's MoveAndZoomableView.cpp with thanks :)
           if (new_global_zoom_factor >= 0.00001 && new_global_zoom_factor <= 100000) {
             // zoom factor for this update
-            const float update_zoom_factor = new_global_zoom_factor / global_zoom_factor_;
+            const float zoom_factor_change = new_global_zoom_factor / global_zoom_factor_;
 
             const Vector2D view_center(std::round(static_cast<float>(window_width_ / (mode_ == Mode::hstack ? 4 : 2)) * video_to_window_width_factor_),
                                        std::round(static_cast<float>(window_height_ / (mode_ == Mode::vstack ? 4 : 2)) * video_to_window_height_factor_));
             const Vector2D zoom_point = mouse_is_inside_window_ ? Vector2D(std::round(static_cast<float>(mouse_x_) * video_to_window_width_factor_), std::round(static_cast<float>(mouse_y_) * video_to_window_height_factor_)) : view_center;
 
             // the center point has to be moved relative to the zoom point
-            const Vector2D new_move_offset = move_offset_ - (view_center + move_offset_ - zoom_point) * (1.0F - update_zoom_factor);
+            const Vector2D new_move_offset = move_offset_ - (view_center + move_offset_ - zoom_point) * (1.0F - zoom_factor_change);
 
             global_zoom_factor_ = new_global_zoom_factor;
 
