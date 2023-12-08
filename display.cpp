@@ -991,8 +991,8 @@ void Display::input() {
             break;
           case SDLK_r:
             update_zoom_factor(1.0F);
-            move_offset_ = Vector2D({0.0F, 0.0F});
-            global_center_ = Vector2D({0.5F, 0.5F});
+            move_offset_ = Vector2D(0.0F, 0.0F);
+            global_center_ = Vector2D(0.5F, 0.5F);
             break;
           case SDLK_LEFT:
             seek_relative_ -= 1.0F;
