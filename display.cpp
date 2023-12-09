@@ -918,7 +918,9 @@ void Display::input() {
         break;
       case SDL_MOUSEMOTION:
         if (event_.motion.state & SDL_BUTTON_RMASK) {
-          update_move_offset(move_offset_ + Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_) / Vector2D(drawable_to_window_width_factor_, drawable_to_window_height_factor_));
+          const auto pan_offset = Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_) / Vector2D(drawable_to_window_width_factor_, drawable_to_window_height_factor_);
+
+          update_move_offset(move_offset_ + pan_offset);
         }
         break;
       case SDL_MOUSEBUTTONDOWN:
