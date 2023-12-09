@@ -69,6 +69,7 @@ static const SDL_Color ZOOM_COLOR = {255, 165, 0, 0};
 static const SDL_Color BUFFER_COLOR = {160, 225, 192, 0};
 static const int BACKGROUND_ALPHA = 100;
 static const float ZOOM_SPEED = 1.06F;
+static const float PAN_SPEED = 2.0F;
 
 inline float round_3(float value) {
   return std::round(value * 1000.0F) / 1000.0F;
@@ -903,9 +904,9 @@ void Display::input() {
             // zoom factor for this update
             const float zoom_factor_change = new_global_zoom_factor / global_zoom_factor_;
 
-            const Vector2D view_center(std::round(static_cast<float>(window_width_ / (mode_ == Mode::hstack ? 4 : 2)) * video_to_window_width_factor_),
-                                       std::round(static_cast<float>(window_height_ / (mode_ == Mode::vstack ? 4 : 2)) * video_to_window_height_factor_));
-            const Vector2D zoom_point = mouse_is_inside_window_ ? Vector2D(std::round(static_cast<float>(mouse_x_) * video_to_window_width_factor_), std::round(static_cast<float>(mouse_y_) * video_to_window_height_factor_)) : view_center;
+            const Vector2D view_center(static_cast<float>(window_width_) / (mode_ == Mode::hstack ? 4.0F : 2.0F) * video_to_window_width_factor_,
+                                       static_cast<float>(window_height_) / (mode_ == Mode::vstack ? 4.0F : 2.0F) * video_to_window_height_factor_);
+            const Vector2D zoom_point = mouse_is_inside_window_ ? Vector2D(static_cast<float>(mouse_x_) * video_to_window_width_factor_, static_cast<float>(mouse_y_) * video_to_window_height_factor_) : view_center;
 
             // the center point has to be moved relative to the zoom point
             const Vector2D new_move_offset = move_offset_ - (view_center + move_offset_ - zoom_point) * (1.0F - zoom_factor_change);
@@ -916,9 +917,16 @@ void Display::input() {
           }
         }
         break;
+      case SDL_MOUSEMOTION:
+        if (event_.motion.state & SDL_BUTTON_RMASK) {
+          update_move_offset(move_offset_ - Vector2D(event_.motion.xrel, event_.motion.yrel) * std::sqrt(global_zoom_factor_) * PAN_SPEED);
+        }
+        break;
       case SDL_MOUSEBUTTONDOWN:
-        seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
-        seek_from_start_ = true;
+        if (event_.button.button != SDL_BUTTON_RIGHT) {
+          seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
+          seek_from_start_ = true;
+        }
         break;
       case SDL_KEYDOWN:
         switch (event_.key.keysym.sym) {
