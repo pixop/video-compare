@@ -69,7 +69,6 @@ static const SDL_Color ZOOM_COLOR = {255, 165, 0, 0};
 static const SDL_Color BUFFER_COLOR = {160, 225, 192, 0};
 static const int BACKGROUND_ALPHA = 100;
 static const float ZOOM_SPEED = 1.06F;
-static const float PAN_SPEED = 2.0F;
 
 inline float round_3(float value) {
   return std::round(value * 1000.0F) / 1000.0F;
@@ -849,7 +848,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   SDL_RenderPresent(renderer_);
 }
 
-float Display::compute_zoom_level(const float zoom_level) const {
+float Display::compute_zoom_factor(const float zoom_level) const {
   return pow(ZOOM_SPEED, zoom_level);
 }
 
@@ -897,7 +896,7 @@ void Display::input() {
           }
 
           global_zoom_level_ -= delta_zoom;
-          const float new_global_zoom_factor = compute_zoom_level(global_zoom_level_);
+          const float new_global_zoom_factor = compute_zoom_factor(global_zoom_level_);
 
           // logic ported from YUView's MoveAndZoomableView.cpp with thanks :)
           if (new_global_zoom_factor >= 0.00001 && new_global_zoom_factor <= 100000) {
@@ -919,7 +918,7 @@ void Display::input() {
         break;
       case SDL_MOUSEMOTION:
         if (event_.motion.state & SDL_BUTTON_RMASK) {
-          update_move_offset(move_offset_ - Vector2D(event_.motion.xrel, event_.motion.yrel) * std::sqrt(global_zoom_factor_) * PAN_SPEED);
+          update_move_offset(move_offset_ + Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_));
         }
         break;
       case SDL_MOUSEBUTTONDOWN:
