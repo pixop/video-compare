@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "video_decoder.h"
 
 extern "C" {
 #include <libavcodec/codec_par.h>
@@ -33,6 +34,8 @@ std::string format_duration(const float duration);
 std::string::const_iterator string_ci_find(std::string& str, const std::string& query);
 
 std::string stringify_frame_rate(const AVRational frame_rate, const AVFieldOrder field_order) noexcept;
+
+std::string stringify_decoder(const VideoDecoder* video_decoder) noexcept;
 
 std::string stringify_fraction(const uint64_t num, const uint64_t den, const unsigned precision);
 

@@ -63,11 +63,16 @@ void print_controls() {
                                                                   {"D", "Next frame"},
                                                                   {"F", "Save both frames as PNG images in the current directory"},
                                                                   {"P", "Print mouse position and pixel value under cursor to console"},
-                                                                  {"Z", "Zoom area around cursor (result shown in lower left corner)"},
-                                                                  {"C", "Zoom area around cursor (result shown in lower right corner)"},
+                                                                  {"Z", "Magnify area around cursor (result shown in lower left corner)"},
+                                                                  {"C", "Magnify area around cursor (result shown in lower right corner)"},
+                                                                  {"R", "Re-center and reset zoom to 100% (x1)"},
                                                                   {"1", "Toggle hide/show left video"},
                                                                   {"2", "Toggle hide/show right video"},
                                                                   {"3", "Toggle hide/show HUD"},
+                                                                  {"5", "Zoom  50% (x0.5)"},
+                                                                  {"6", "Zoom 100% (x1)"},
+                                                                  {"7", "Zoom 200% (x2)"},
+                                                                  {"8", "Zoom 400% (x4)"},
                                                                   {"0", "Toggle video/subtraction mode"},
                                                                   {"+", "Time-shift right video 1 frame forward"},
                                                                   {"-", "Time-shift right video 1 frame backward"}};
@@ -79,6 +84,8 @@ void print_controls() {
   }
 
   std::cout << std::endl << "Move the mouse horizontally to adjust the movable slider position." << std::endl << std::endl;
+
+  std::cout << "Use the mouse wheel to zoom in/out on the pixel under the cursor." << std::endl << std::endl;
 
   std::cout << "Click the mouse to perform a time seek based on the horizontal position" << std::endl;
   std::cout << "of the mouse cursor relative to the window width (the target position is" << std::endl;
@@ -134,6 +141,22 @@ void find_matching_video_decoders(const std::string& search_string) {
   }
 }
 
+void find_matching_hw_accels(const std::string& search_string) {
+  AVHWDeviceType type = AV_HWDEVICE_TYPE_NONE;
+
+  std::cout << "Hardware acceleration methods:" << std::endl << std::endl;
+
+  while ((type = av_hwdevice_iterate_types(type)) != AV_HWDEVICE_TYPE_NONE) {
+    std::string hw_accel_method(av_hwdevice_get_type_name(type));
+
+    auto name_it = string_ci_find(hw_accel_method, search_string);
+
+    if (name_it != hw_accel_method.end()) {
+      std::cout << string_sprintf(" %s", hw_accel_method.c_str()) << std::endl;
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   char** argv_decoded = get_argv(&argc, argv);
   int exit_code = 0;
@@ -146,6 +169,7 @@ int main(int argc, char** argv) {
   try {
     argagg::parser argparser{{{"help", {"-h", "--help"}, "show help", 0},
                               {"show-controls", {"-c", "--show-controls"}, "show controls", 0},
+                              {"verbose", {"-v", "--verbose"}, "enable verbose output, including information such as library versions and rendering details", 0},
                               {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
                               {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
                               {"display-number", {"-n", "--display-number"}, "open main window on specific display (e.g. 0, 1 or 2), default is 0", 1},
@@ -160,6 +184,9 @@ int main(int argc, char** argv) {
                               {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name", 1},
                               {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name", 1},
                               {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1},
+                              {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg video hardware acceleration, specified as [type][:device?] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128')", 1},
+                              {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg video hardware acceleration, specified as [type][:device?] (e.g. 'cuda', 'cuda:1' or 'vulkan')", 1},
+                              {"find-hwaccels", {"--find-hwaccels"}, "find FFmpeg video hardware acceleration types matching the provided search term (e.g. 'videotoolbox' or 'vulkan'; use \"\" to list all)", 1},
                               {"disable-auto-filters", {"--no-auto-filters"}, "disable the default behaviour of automatically injecting filters for deinterlacing, frame rate harmonization, and rotation", 0}}};
 
     argagg::parser_results args;
@@ -172,6 +199,7 @@ int main(int argc, char** argv) {
     std::string left_video_filters, right_video_filters;
     std::string left_demuxer, right_demuxer;
     std::string left_decoder, right_decoder;
+    std::string left_hw_accel_spec, right_hw_accel_spec;
 
     if (args["show-controls"]) {
       print_controls();
@@ -179,6 +207,8 @@ int main(int argc, char** argv) {
       find_matching_video_demuxers(args["find-demuxers"]);
     } else if (args["find-decoders"]) {
       find_matching_video_decoders(args["find-decoders"]);
+    } else if (args["find-hwaccels"]) {
+      find_matching_hw_accels(args["find-hwaccels"]);
     } else if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
       usage << "video-compare 20231119-github Copyright (c) 2018-2023 Jon Frydensbjerg, the video-compare community" << std::endl << std::endl;
@@ -254,6 +284,12 @@ int main(int argc, char** argv) {
       if (args["right-decoder"]) {
         right_decoder = static_cast<const std::string&>(args["right-decoder"]);
       }
+      if (args["left-hwaccel"]) {
+        left_hw_accel_spec = static_cast<const std::string&>(args["left-hwaccel"]);
+      }
+      if (args["right-hwaccel"]) {
+        right_hw_accel_spec = static_cast<const std::string&>(args["right-hwaccel"]);
+      }
 
       std::string left_file_name = args.pos[0];
       std::string right_file_name = args.pos[1];
@@ -266,9 +302,8 @@ int main(int argc, char** argv) {
         right_file_name = left_file_name;
       }
 
-      VideoCompare compare{display_number,  display_mode,        args["high-dpi"],   args["10-bpc"], window_size,
-                           time_shift_ms,   left_file_name,      left_video_filters, left_demuxer,   left_decoder,
-                           right_file_name, right_video_filters, right_demuxer,      right_decoder,  args["disable-auto-filters"]};
+      VideoCompare compare{display_number, display_mode, args["verbose"],    args["high-dpi"], args["10-bpc"],      window_size,   time_shift_ms, left_file_name,      left_video_filters,
+                           left_demuxer,   left_decoder, left_hw_accel_spec, right_file_name,  right_video_filters, right_demuxer, right_decoder, right_hw_accel_spec, args["disable-auto-filters"]};
       compare();
     }
   } catch (const std::exception& e) {

@@ -1,11 +1,12 @@
 #pragma once
+#include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <iostream>
 #include <memory>
 #include <string>
-#include "SDL2/SDL.h"
 extern "C" {
 #include <libavutil/frame.h>
 }
@@ -13,6 +14,31 @@ extern "C" {
 struct SDL {
   SDL();
   ~SDL();
+};
+
+class Vector2D {
+ public:
+  Vector2D(float px, float py) : x_(px), y_(py) {}
+
+  float x() const { return x_; }
+  float y() const { return y_; }
+
+  Vector2D operator+(const Vector2D& v) const { return Vector2D(x_ + v.x_, y_ + v.y_); }
+
+  Vector2D operator-(const Vector2D& v) const { return Vector2D(x_ - v.x_, y_ - v.y_); }
+
+  Vector2D operator*(const Vector2D& v) const { return Vector2D(x_ * v.x_, y_ * v.y_); }
+
+  Vector2D operator+(const float scalar) const { return Vector2D(x_ + scalar, y_ + scalar); }
+
+  Vector2D operator-(const float scalar) const { return Vector2D(x_ - scalar, y_ - scalar); }
+
+  Vector2D operator*(const float scalar) const { return Vector2D(x_ * scalar, y_ * scalar); }
+
+  friend std::ostream& operator<<(std::ostream& os, const Vector2D& v) { return os << "(" << v.x_ << ", " << v.y_ << ")"; }
+
+ private:
+  float x_, y_;
 };
 
 class Display {
@@ -54,6 +80,11 @@ class Display {
   bool print_mouse_position_and_color_{false};
   bool mouse_is_inside_window_{false};
 
+  float global_zoom_level_{0.0F};
+  float global_zoom_factor_{1.0F};
+  Vector2D move_offset_{0.0F, 0.0F};
+  Vector2D global_center_{0.5F, 0.5F};
+
   SDL sdl_;
   TTF_Font* small_font_;
   TTF_Font* big_font_;
@@ -87,7 +118,6 @@ class Display {
   SDL_Window* window_;
   SDL_Renderer* renderer_;
   SDL_Texture* video_texture_;
-  SDL_Texture* zoom_texture_;
 
   SDL_Event event_;
   int mouse_x_;
@@ -97,6 +127,8 @@ class Display {
   const std::string right_file_stem_;
   int saved_image_number_{1};
 
+  void print_verbose_info();
+
   void convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi);
 
   void update_difference(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x);
@@ -105,11 +137,11 @@ class Display {
 
   inline int static round(const float value) { return static_cast<int>(std::round(value)); }
 
-  SDL_Rect video_rect_to_drawable_transform(const SDL_Rect& rect) const {
+  SDL_FRect video_rect_to_drawable_transform(const SDL_FRect& rect) const {
     const float width_scale = drawable_to_window_width_factor_ / video_to_window_width_factor_;
     const float height_scale = drawable_to_window_height_factor_ / video_to_window_height_factor_;
 
-    return {round(static_cast<float>(rect.x) * width_scale), round(static_cast<float>(rect.y) * height_scale), round(static_cast<float>(rect.w) * width_scale), round(static_cast<float>(rect.h) * height_scale)};
+    return {rect.x * width_scale, rect.y * height_scale, rect.w * width_scale, rect.h * height_scale};
   }
 
   void render_text(int x, int y, SDL_Texture* texture, int texture_width, int texture_height, int border_extension, bool left_adjust);
@@ -126,8 +158,23 @@ class Display {
   std::string format_pixel(const std::array<int, 3>& rgb);
   std::string get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const int x, const int y);
 
+  float compute_zoom_level(const float zoom_level) const;
+  void update_zoom_factor_and_move_offset(const float zoom_factor);
+  void update_zoom_factor(const float zoom_factor);
+  void update_move_offset(const Vector2D& move_offset);
+
  public:
-  Display(int display_number, Mode mode, bool high_dpi_allowed, bool use_10_bpc, std::tuple<int, int> window_size, unsigned width, unsigned height, double duration, const std::string& left_file_name, const std::string& right_file_name);
+  Display(int display_number,
+          Mode mode,
+          bool verbose,
+          bool high_dpi_allowed,
+          bool use_10_bpc,
+          std::tuple<int, int> window_size,
+          unsigned width,
+          unsigned height,
+          double duration,
+          const std::string& left_file_name,
+          const std::string& right_file_name);
   ~Display();
 
   // Copy frame to display

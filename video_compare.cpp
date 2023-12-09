@@ -27,6 +27,7 @@ static inline bool is_behind(int64_t frame1_pts, int64_t frame2_pts, int64_t del
 
 VideoCompare::VideoCompare(const int display_number,
                            const Display::Mode display_mode,
+                           const bool verbose,
                            const bool high_dpi_allowed,
                            const bool use_10_bpc,
                            const std::tuple<int, int> window_size,
@@ -35,14 +36,16 @@ VideoCompare::VideoCompare(const int display_number,
                            const std::string& left_video_filters,
                            const std::string& left_demuxer,
                            const std::string& left_decoder,
+                           const std::string& left_hw_accel_spec,
                            const std::string& right_file_name,
                            const std::string& right_video_filters,
                            const std::string& right_demuxer,
                            const std::string& right_decoder,
+                           const std::string& right_hw_accel_spec,
                            const bool disable_auto_filters)
     : time_shift_ms_(time_shift_ms),
       demuxer_{std::make_unique<Demuxer>(left_demuxer, left_file_name), std::make_unique<Demuxer>(right_demuxer, right_file_name)},
-      video_decoder_{std::make_unique<VideoDecoder>(left_decoder, demuxer_[0]->video_codec_parameters()), std::make_unique<VideoDecoder>(right_decoder, demuxer_[1]->video_codec_parameters())},
+      video_decoder_{std::make_unique<VideoDecoder>(left_decoder, left_hw_accel_spec, demuxer_[0]->video_codec_parameters()), std::make_unique<VideoDecoder>(right_decoder, right_hw_accel_spec, demuxer_[1]->video_codec_parameters())},
       video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get(), left_video_filters, demuxer_[1].get(), video_decoder_[1].get(), disable_auto_filters),
                       std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get(), right_video_filters, demuxer_[0].get(), video_decoder_[0].get(), disable_auto_filters)},
       max_width_{std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width())},
@@ -51,19 +54,19 @@ VideoCompare::VideoCompare(const int display_number,
       format_converter_{
           std::make_unique<FormatConverter>(video_filterer_[0]->dest_width(), video_filterer_[0]->dest_height(), max_width_, max_height_, video_filterer_[0]->dest_pixel_format(), use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24),
           std::make_unique<FormatConverter>(video_filterer_[1]->dest_width(), video_filterer_[1]->dest_height(), max_width_, max_height_, video_filterer_[1]->dest_pixel_format(), use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24)},
-      display_{std::make_unique<Display>(display_number, display_mode, high_dpi_allowed, use_10_bpc, window_size, max_width_, max_height_, shortest_duration_, left_file_name, right_file_name)},
+      display_{std::make_unique<Display>(display_number, display_mode, verbose, high_dpi_allowed, use_10_bpc, window_size, max_width_, max_height_, shortest_duration_, left_file_name, right_file_name)},
       timer_{std::make_unique<Timer>()},
       packet_queue_{std::make_unique<PacketQueue>(QUEUE_SIZE), std::make_unique<PacketQueue>(QUEUE_SIZE)},
       frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
   std::cout << string_sprintf("Left video:  %dx%d, %s, %s, %s, %s, %s, %s, %s, %s, %s", video_decoder_[0]->width(), video_decoder_[0]->height(), format_duration(demuxer_[0]->duration() * AV_TIME_TO_SEC).c_str(),
-                              stringify_frame_rate(demuxer_[0]->guess_frame_rate(), video_decoder_[0]->codec_context()->field_order).c_str(), video_decoder_[0]->codec()->name, av_get_pix_fmt_name(video_decoder_[0]->pixel_format()),
-                              demuxer_[0]->format_name().c_str(), left_file_name.c_str(), stringify_file_size(demuxer_[0]->file_size(), 2).c_str(), stringify_bit_rate(demuxer_[0]->bit_rate(), 1).c_str(),
-                              video_filterer_[0]->filter_description().c_str())
+                              stringify_frame_rate(demuxer_[0]->guess_frame_rate(), video_decoder_[0]->codec_context()->field_order).c_str(), stringify_decoder(video_decoder_[0].get()).c_str(),
+                              av_get_pix_fmt_name(video_decoder_[0]->pixel_format()), demuxer_[0]->format_name().c_str(), left_file_name.c_str(), stringify_file_size(demuxer_[0]->file_size(), 2).c_str(),
+                              stringify_bit_rate(demuxer_[0]->bit_rate(), 1).c_str(), video_filterer_[0]->filter_description().c_str())
             << std::endl;
   std::cout << string_sprintf("Right video: %dx%d, %s, %s, %s, %s, %s, %s, %s, %s, %s", video_decoder_[1]->width(), video_decoder_[1]->height(), format_duration(demuxer_[1]->duration() * AV_TIME_TO_SEC).c_str(),
-                              stringify_frame_rate(demuxer_[1]->guess_frame_rate(), video_decoder_[1]->codec_context()->field_order).c_str(), video_decoder_[1]->codec()->name, av_get_pix_fmt_name(video_decoder_[1]->pixel_format()),
-                              demuxer_[1]->format_name().c_str(), right_file_name.c_str(), stringify_file_size(demuxer_[1]->file_size(), 2).c_str(), stringify_bit_rate(demuxer_[1]->bit_rate(), 1).c_str(),
-                              video_filterer_[1]->filter_description().c_str())
+                              stringify_frame_rate(demuxer_[1]->guess_frame_rate(), video_decoder_[1]->codec_context()->field_order).c_str(), stringify_decoder(video_decoder_[1].get()).c_str(),
+                              av_get_pix_fmt_name(video_decoder_[1]->pixel_format()), demuxer_[1]->format_name().c_str(), right_file_name.c_str(), stringify_file_size(demuxer_[1]->file_size(), 2).c_str(),
+                              stringify_bit_rate(demuxer_[1]->bit_rate(), 1).c_str(), video_filterer_[1]->filter_description().c_str())
             << std::endl;
 }
 
@@ -141,8 +144,9 @@ void VideoCompare::thread_decode_video_right() {
 void VideoCompare::decode_video(const int video_idx) {
   try {
     while (!frame_queue_[video_idx]->is_finished()) {
-      // Create AVFrame and AVPacket
+      // Create AVFrames and AVPacket
       std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
+      std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> sw_frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
       std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet{nullptr, [](AVPacket* p) {
                                                                          av_packet_unref(p);
                                                                          delete p;
@@ -151,7 +155,7 @@ void VideoCompare::decode_video(const int video_idx) {
       // Read packet from queue
       if (!packet_queue_[video_idx]->pop(packet)) {
         // Flush remaining frames cached in the decoder
-        while (process_packet(video_idx, packet.get(), frame_decoded.get())) {
+        while (process_packet(video_idx, packet.get(), frame_decoded.get(), sw_frame_decoded.get())) {
           ;
         }
 
@@ -176,7 +180,7 @@ void VideoCompare::decode_video(const int video_idx) {
       }
 
       // If the packet didn't send, receive more frames and try again
-      while (!process_packet(video_idx, packet.get(), frame_decoded.get()) && !seeking_) {
+      while (!process_packet(video_idx, packet.get(), frame_decoded.get(), sw_frame_decoded.get()) && !seeking_) {
         ;
       }
     }
@@ -187,12 +191,28 @@ void VideoCompare::decode_video(const int video_idx) {
   }
 }
 
-bool VideoCompare::process_packet(const int video_idx, AVPacket* packet, AVFrame* frame_decoded) {
+bool VideoCompare::process_packet(const int video_idx, AVPacket* packet, AVFrame* frame_decoded, AVFrame* sw_frame_decoded) {
   bool sent = video_decoder_[video_idx]->send(packet);
 
   // If a whole frame has been decoded, adjust time stamps and add to queue
   while (video_decoder_[video_idx]->receive(frame_decoded, demuxer_[video_idx].get())) {
-    if (!filter_decoded_frame(video_idx, frame_decoded)) {
+    AVFrame* frame_for_filtering;
+
+    if (frame_decoded->format == video_decoder_[video_idx]->hw_pixel_format()) {
+      // transfer data from GPU to CPU
+      if (av_hwframe_transfer_data(sw_frame_decoded, frame_decoded, 0) < 0) {
+        throw std::runtime_error("Error transferring frame from GPU to CPU");
+      }
+      if (av_frame_copy_props(sw_frame_decoded, frame_decoded) < 0) {
+        throw std::runtime_error("Copying SW frame properties");
+      }
+
+      frame_for_filtering = sw_frame_decoded;
+    } else {
+      frame_for_filtering = frame_decoded;
+    }
+
+    if (!filter_decoded_frame(video_idx, frame_for_filtering)) {
       return sent;
     }
   }
@@ -206,7 +226,7 @@ bool VideoCompare::filter_decoded_frame(const int video_idx, AVFrame* frame_deco
     throw std::runtime_error("Error while feeding the filter graph");
   }
 
-  std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_filtered{av_frame_alloc(), [](AVFrame* f) { av_free(f->data[0]); }};
+  std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_filtered{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
 
   while (true) {
     // get next filtered frame
@@ -215,7 +235,7 @@ bool VideoCompare::filter_decoded_frame(const int video_idx, AVFrame* frame_deco
     }
 
     // scale and convert pixel format before pushing to frame queue for displaying
-    std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted{av_frame_alloc(), [](AVFrame* f) { av_free(f->data[0]); }};
+    std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
 
     if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
       throw std::runtime_error("Copying filtered frame properties");
