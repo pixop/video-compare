@@ -918,7 +918,7 @@ void Display::input() {
         break;
       case SDL_MOUSEMOTION:
         if (event_.motion.state & SDL_BUTTON_RMASK) {
-          update_move_offset(move_offset_ + Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_));
+          update_move_offset(move_offset_ + Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_) * Vector2D(1.0F / drawable_to_window_width_factor_, 1.0F / drawable_to_window_height_factor_));
         }
         break;
       case SDL_MOUSEBUTTONDOWN:
