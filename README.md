@@ -15,6 +15,16 @@ two images. The common PNG and JPEG formats have been successfully tested to wor
 
 ## Installation
 
+### Arch Linux
+
+Install [via AUR](https://aur.archlinux.org/packages/video-compare):
+
+```sh
+git clone https://aur.archlinux.org/video-compare.git
+cd video-compare
+makepkg -sic
+```
+
 ### Homebrew
 
 Install [via Homebrew](https://formulae.brew.sh/formula/video-compare):
