@@ -792,7 +792,16 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     SDL_DestroyTexture(zoom_position_text_texture);
 
     // current frame / number of frames in history buffer
-    text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), BUFFER_COLOR);
+    std::string play_direction_str;
+
+    if (play_) {
+      play_direction_str = "> ";
+    } else if (buffer_play_loop_mode_ != Display::Loop::off) {
+      play_direction_str = buffer_play_forward_ ? "> " : "< ";
+    }
+
+    const std::string frame_buffer_str = string_sprintf("%s%s", play_direction_str.c_str(), current_total_browsable.c_str());
+    text_surface = TTF_RenderText_Blended(small_font_, frame_buffer_str.c_str(), BUFFER_COLOR);
     SDL_Texture* current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
     const int current_total_browsable_text_width = text_surface->w;
     const int current_total_browsable_text_height = text_surface->h;
@@ -801,14 +810,12 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     text_y = (mode_ == Mode::vstack) ? middle_y_ : line2_y_;
 
     // blink label in loop mode
-    const bool show_label_background = buffer_play_loop_mode_ == Display::Loop::off ? true : (SDL_GetTicks() % 800 >= 200);
+    fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
+                current_total_browsable_text_height + double_border_extension_};
 
-    if (show_label_background) {
-      fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
-                  current_total_browsable_text_height + double_border_extension_};
+    SDL_Color label_color = LOOP_OFF_LABEL_COLOR;
 
-      SDL_Color label_color;
-
+    if (buffer_play_loop_mode_ != Display::Loop::off && (SDL_GetTicks() % 800 >= 400)) {
       switch (buffer_play_loop_mode_) {
         case Display::Loop::off:
           label_color = LOOP_OFF_LABEL_COLOR;
@@ -820,11 +827,11 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
           label_color = LOOP_PP_LABEL_COLOR;
           break;
       }
-
-      SDL_SetRenderDrawColor(renderer_, label_color.r, label_color.g, label_color.b, BACKGROUND_ALPHA);
-
-      SDL_RenderFillRect(renderer_, &fill_rect);
     }
+
+    SDL_SetRenderDrawColor(renderer_, label_color.r, label_color.g, label_color.b, BACKGROUND_ALPHA);
+    SDL_RenderFillRect(renderer_, &fill_rect);
+
     text_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, text_y, current_total_browsable_text_width, current_total_browsable_text_height};
     SDL_RenderCopy(renderer_, current_total_browsable_text_texture, nullptr, &text_rect);
     SDL_DestroyTexture(current_total_browsable_text_texture);
