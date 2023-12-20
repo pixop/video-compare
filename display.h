@@ -48,6 +48,7 @@ class Vector2D {
 class Display {
  public:
   enum Mode { split, vstack, hstack };
+  enum Loop { off, forwardonly, pingpong };
 
  private:
   const Mode mode_;
@@ -69,6 +70,8 @@ class Display {
 
   bool quit_{false};
   bool play_{true};
+  Loop buffer_play_loop_mode_{off};
+  bool buffer_play_forward_{true};
   bool swap_left_right_{false};
   bool zoom_left_{false};
   bool zoom_right_{false};
@@ -198,6 +201,9 @@ class Display {
 
   bool get_quit() const;
   bool get_play() const;
+  Loop get_buffer_play_loop_mode() const;
+  bool get_buffer_play_forward() const;
+  void toggle_buffer_play_direction();
   bool get_swap_left_right() const;
   float get_seek_relative() const;
   bool get_seek_from_start() const;

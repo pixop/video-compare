@@ -62,6 +62,9 @@ std::string get_file_stem(const std::string& file_path) {
 }
 
 static const SDL_Color BACKGROUND_COLOR = {54, 69, 79, 0};
+static const SDL_Color LOOP_OFF_LABEL_COLOR = {0, 0, 0, 0};
+static const SDL_Color LOOP_FW_LABEL_COLOR = {80, 127, 255, 0};
+static const SDL_Color LOOP_PP_LABEL_COLOR = {255, 127, 80, 0};
 static const SDL_Color TEXT_COLOR = {255, 255, 255, 0};
 static const SDL_Color POSITION_COLOR = {255, 255, 192, 0};
 static const SDL_Color TARGET_COLOR = {200, 200, 140, 0};
@@ -797,10 +800,31 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
     text_y = (mode_ == Mode::vstack) ? middle_y_ : line2_y_;
 
-    fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
-                 current_total_browsable_text_height + double_border_extension_};
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
-    SDL_RenderFillRect(renderer_, &fill_rect);
+    // blink label in loop mode
+    const bool show_label_background = buffer_play_loop_mode_ == Display::Loop::off ? true : (SDL_GetTicks() % 800 >= 200);
+
+    if (show_label_background) {
+      fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
+                  current_total_browsable_text_height + double_border_extension_};
+
+      SDL_Color label_color;
+
+      switch (buffer_play_loop_mode_) {
+        case Display::Loop::off:
+          label_color = LOOP_OFF_LABEL_COLOR;
+          break;
+        case Display::Loop::forwardonly:
+          label_color = LOOP_FW_LABEL_COLOR;
+          break;
+        case Display::Loop::pingpong:
+          label_color = LOOP_PP_LABEL_COLOR;
+          break;
+      }
+
+      SDL_SetRenderDrawColor(renderer_, label_color.r, label_color.g, label_color.b, BACKGROUND_ALPHA);
+
+      SDL_RenderFillRect(renderer_, &fill_rect);
+    }
     text_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, text_y, current_total_browsable_text_width, current_total_browsable_text_height};
     SDL_RenderCopy(renderer_, current_total_browsable_text_texture, nullptr, &text_rect);
     SDL_DestroyTexture(current_total_browsable_text_texture);
@@ -936,6 +960,17 @@ void Display::input() {
             break;
           case SDLK_SPACE:
             play_ = !play_;
+            buffer_play_loop_mode_ = Loop::off;
+            break;
+          case SDLK_COMMA:
+          case SDLK_KP_COMMA:
+            buffer_play_loop_mode_ = buffer_play_loop_mode_ != Loop::pingpong ? Loop::pingpong : Loop::off;
+            play_ = false;
+            break;
+          case SDLK_PERIOD:
+            buffer_play_loop_mode_ = buffer_play_loop_mode_ != Loop::forwardonly ? Loop::forwardonly : Loop::off;
+            buffer_play_forward_ = true;
+            play_ = false;
             break;
           case SDLK_1:
           case SDLK_KP_1:
@@ -1068,6 +1103,10 @@ void Display::input() {
         break;
     }
   }
+
+  if (buffer_play_loop_mode_ != Loop::off && frame_offset_delta_ == 0) {
+    frame_offset_delta_ += buffer_play_forward_ ? -1 : 1;
+  }
 }
 
 bool Display::get_quit() const {
@@ -1076,6 +1115,18 @@ bool Display::get_quit() const {
 
 bool Display::get_play() const {
   return play_;
+}
+
+Display::Loop Display::get_buffer_play_loop_mode() const {
+  return buffer_play_loop_mode_;
+}
+
+bool Display::get_buffer_play_forward() const {
+  return buffer_play_forward_;
+}
+
+void Display::toggle_buffer_play_direction() {
+  buffer_play_forward_ = !buffer_play_forward_;
 }
 
 bool Display::get_swap_left_right() const {

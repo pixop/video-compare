@@ -51,6 +51,8 @@ static const std::string REPEAT_FILE_NAME("__");
 
 void print_controls() {
   const std::vector<std::pair<std::string, std::string>> controls{{"Space", "Toggle play/pause"},
+                                                                  {",", "Toggle bidirectional in-buffer loop/pause"},
+                                                                  {".", "Toggle forward-only in-buffer loop/pause"},
                                                                   {"Escape", "Quit"},
                                                                   {"Down arrow", "Seek 15 seconds backward"},
                                                                   {"Left arrow", "Seek 1 second backward"},
@@ -85,9 +87,10 @@ void print_controls() {
 
   std::cout << std::endl << "Move the mouse horizontally to adjust the movable slider position." << std::endl << std::endl;
 
-  std::cout << "Use the mouse wheel to zoom in/out on the pixel under the cursor." << std::endl << std::endl;
+  std::cout << "Use the mouse wheel to zoom in/out on the pixel under the cursor. Pan the view" << std::endl;
+  std::cout << "by moving the mouse while holding down the right button." << std::endl << std::endl;
 
-  std::cout << "Click the mouse to perform a time seek based on the horizontal position" << std::endl;
+  std::cout << "Left-click the mouse to perform a time seek based on the horizontal position" << std::endl;
   std::cout << "of the mouse cursor relative to the window width (the target position is" << std::endl;
   std::cout << "shown in the lower right corner)." << std::endl << std::endl;
 
