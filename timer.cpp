@@ -2,7 +2,17 @@
 #include <algorithm>
 #include <thread>
 
-Timer::Timer() : target_time_{std::chrono::high_resolution_clock::now()} {}
+Timer::Timer() {
+  reset();
+}
+
+void Timer::reset() {
+  proportional_ = 0;
+  integral_ = 0;
+  derivative_ = 0;
+
+  update();
+}
 
 void Timer::wait(const int64_t period) {
   target_time_ += std::chrono::microseconds{period};

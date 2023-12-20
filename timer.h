@@ -16,6 +16,8 @@ class Timer {
 
  public:
   Timer();
+
+  void reset();
   void wait(int64_t period);
   void update();
 

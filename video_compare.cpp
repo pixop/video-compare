@@ -455,8 +455,8 @@ void VideoCompare::video() {
               timer_->update();
             }
           }
-        } else if (adjusting || display_->get_buffer_play_loop_mode() == Display::Loop::off) {
-          timer_->update();
+        } else if (display_->get_buffer_play_loop_mode() != Display::Loop::off) {
+          timer_->reset();
         }
       }
 
@@ -531,6 +531,10 @@ void VideoCompare::video() {
 
       frame_offset = std::min(std::max(0, frame_offset + display_->get_frame_offset_delta()), maxLeftFrameIndex);
 
+      if (!adjusting && display_->get_buffer_play_loop_mode() != Display::Loop::off) {
+        timer_->wait(left_frames[frame_offset].get()->pkt_duration);
+      }
+
       if (frame_offset >= 0 && !left_frames.empty() && !right_frames.empty()) {
         const std::string current_total_browsable = string_sprintf("%d/%d", frame_offset + 1, static_cast<int>(left_frames.size()));
 
@@ -549,22 +553,16 @@ void VideoCompare::video() {
         }
       }
 
-      if (!adjusting && display_->get_buffer_play_loop_mode() != Display::Loop::off) {
-          timer_->wait(left_frames[frame_offset].get()->pkt_duration);
-      }
-
       switch (display_->get_buffer_play_loop_mode()) {
         case Display::Loop::off:
           break;
         case Display::Loop::forwardonly:
           if (frame_offset == 0) {
-              frame_offset = maxLeftFrameIndex + 1;
+            frame_offset = maxLeftFrameIndex + 1;
           }
           break;
         case Display::Loop::pingpong:
-          if (display_->get_buffer_play_forward() && frame_offset == 0) {
-            display_->toggle_buffer_play_direction();
-          } else if (!display_->get_buffer_play_forward() && frame_offset == maxLeftFrameIndex) {
+          if (frame_offset == 0 || frame_offset == maxLeftFrameIndex) {
             display_->toggle_buffer_play_direction();
           }
           break;
