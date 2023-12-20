@@ -64,7 +64,7 @@ std::string get_file_stem(const std::string& file_path) {
 static const SDL_Color BACKGROUND_COLOR = {54, 69, 79, 0};
 static const SDL_Color LOOP_OFF_LABEL_COLOR = {0, 0, 0, 0};
 static const SDL_Color LOOP_FW_LABEL_COLOR = {80, 127, 255, 0};
-static const SDL_Color LOOP_PP_LABEL_COLOR = {255, 127, 80, 0};
+static const SDL_Color LOOP_PP_LABEL_COLOR = {191, 95, 60, 0};
 static const SDL_Color TEXT_COLOR = {255, 255, 255, 0};
 static const SDL_Color POSITION_COLOR = {255, 255, 192, 0};
 static const SDL_Color TARGET_COLOR = {200, 200, 140, 0};
@@ -792,16 +792,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     SDL_DestroyTexture(zoom_position_text_texture);
 
     // current frame / number of frames in history buffer
-    std::string play_direction_str;
-
-    if (play_) {
-      play_direction_str = "> ";
-    } else if (buffer_play_loop_mode_ != Display::Loop::off) {
-      play_direction_str = buffer_play_forward_ ? "> " : "< ";
-    }
-
-    const std::string frame_buffer_str = string_sprintf("%s%s", play_direction_str.c_str(), current_total_browsable.c_str());
-    text_surface = TTF_RenderText_Blended(small_font_, frame_buffer_str.c_str(), BUFFER_COLOR);
+    text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), BUFFER_COLOR);
     SDL_Texture* current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
     const int current_total_browsable_text_width = text_surface->w;
     const int current_total_browsable_text_height = text_surface->h;
@@ -814,22 +805,24 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
                  current_total_browsable_text_height + double_border_extension_};
 
     SDL_Color label_color = LOOP_OFF_LABEL_COLOR;
+    int label_alpha = BACKGROUND_ALPHA;
 
-    if (buffer_play_loop_mode_ != Display::Loop::off && (SDL_GetTicks() % 800 >= 400)) {
-      switch (buffer_play_loop_mode_) {
-        case Display::Loop::off:
-          label_color = LOOP_OFF_LABEL_COLOR;
-          break;
-        case Display::Loop::forwardonly:
-          label_color = LOOP_FW_LABEL_COLOR;
-          break;
-        case Display::Loop::pingpong:
-          label_color = LOOP_PP_LABEL_COLOR;
-          break;
-      }
+    if (buffer_play_loop_mode_ != Display::Loop::off) {
+        label_alpha *= 1.8 + sin(float(SDL_GetTicks()) / 180.0) * 0.5; // SDL_GetTicks() % 800 >= 400 ? 1.75 : 1.1;
+
+        switch (buffer_play_loop_mode_) {
+          case Display::Loop::off:
+            break;
+          case Display::Loop::forwardonly:
+            label_color = LOOP_FW_LABEL_COLOR;
+            break;
+          case Display::Loop::pingpong:
+            label_color = LOOP_PP_LABEL_COLOR;
+            break;
+        }
     }
 
-    SDL_SetRenderDrawColor(renderer_, label_color.r, label_color.g, label_color.b, BACKGROUND_ALPHA);
+    SDL_SetRenderDrawColor(renderer_, label_color.r, label_color.g, label_color.b, label_alpha);
     SDL_RenderFillRect(renderer_, &fill_rect);
 
     text_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, text_y, current_total_browsable_text_width, current_total_browsable_text_height};

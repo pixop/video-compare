@@ -538,7 +538,16 @@ void VideoCompare::video() {
           timer_->wait(left_frames[frame_offset].get()->pkt_duration);
         }
 
-        const std::string current_total_browsable = string_sprintf("%d/%d", frame_offset + 1, static_cast<int>(left_frames.size()));
+        std::string prefix_str, suffix_str;
+
+        if (store_frames) {
+          prefix_str = "[";
+          suffix_str = "]";
+        }
+
+        const int maxDigits = std::log10(frame_buffer_size_) + 1;
+        const std::string frame_offset_format_str = string_sprintf("%%s%%0%dd/%%0%dd%%s", maxDigits, maxDigits);
+        const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, maxLeftFrameIndex + 1, suffix_str.c_str());
 
         if (!display_->get_swap_left_right()) {
           display_->refresh({left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
