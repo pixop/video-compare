@@ -808,7 +808,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     int label_alpha = BACKGROUND_ALPHA;
 
     if (buffer_play_loop_mode_ != Display::Loop::off) {
-        label_alpha *= 1.8 + sin(float(SDL_GetTicks()) / 180.0) * 0.5; // SDL_GetTicks() % 800 >= 400 ? 1.75 : 1.1;
+        label_alpha *= 1.0 + sin(float(SDL_GetTicks()) / 180.0) * 0.6;
 
         switch (buffer_play_loop_mode_) {
           case Display::Loop::off:
