@@ -26,6 +26,7 @@ class VideoCompare {
                const bool high_dpi_allowed,
                const bool use_10_bpc,
                const std::tuple<int, int> window_size,
+               const size_t frame_buffer_size,
                const double time_shift_ms,
                const std::string& left_file_name,
                const std::string& left_video_filters,
@@ -52,7 +53,8 @@ class VideoCompare {
   bool filter_decoded_frame(int video_idx, AVFrame* frame_decoded);
   void video();
 
-  double time_shift_ms_;
+  const size_t frame_buffer_size_;
+  const double time_shift_ms_;
   std::unique_ptr<Demuxer> demuxer_[2];
   std::unique_ptr<VideoDecoder> video_decoder_[2];
   std::unique_ptr<VideoFilterer> video_filterer_[2];

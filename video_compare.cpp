@@ -31,6 +31,7 @@ VideoCompare::VideoCompare(const int display_number,
                            const bool high_dpi_allowed,
                            const bool use_10_bpc,
                            const std::tuple<int, int> window_size,
+                           const size_t frame_buffer_size,
                            const double time_shift_ms,
                            const std::string& left_file_name,
                            const std::string& left_video_filters,
@@ -43,7 +44,8 @@ VideoCompare::VideoCompare(const int display_number,
                            const std::string& right_decoder,
                            const std::string& right_hw_accel_spec,
                            const bool disable_auto_filters)
-    : time_shift_ms_(time_shift_ms),
+    : frame_buffer_size_(frame_buffer_size),
+      time_shift_ms_(time_shift_ms),
       demuxer_{std::make_unique<Demuxer>(left_demuxer, left_file_name), std::make_unique<Demuxer>(right_demuxer, right_file_name)},
       video_decoder_{std::make_unique<VideoDecoder>(left_decoder, left_hw_accel_spec, demuxer_[0]->video_codec_parameters()), std::make_unique<VideoDecoder>(right_decoder, right_hw_accel_spec, demuxer_[1]->video_codec_parameters())},
       video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get(), left_video_filters, demuxer_[1].get(), video_decoder_[1].get(), disable_auto_filters),
@@ -501,10 +503,10 @@ void VideoCompare::video() {
       }
 
       if (store_frames) {
-        if (left_frames.size() >= 50) {
+        if (left_frames.size() >= frame_buffer_size_) {
           left_frames.pop_back();
         }
-        if (right_frames.size() >= 50) {
+        if (right_frames.size() >= frame_buffer_size_) {
           right_frames.pop_back();
         }
 

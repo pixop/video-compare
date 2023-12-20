@@ -178,6 +178,7 @@ int main(int argc, char** argv) {
                               {"display-number", {"-n", "--display-number"}, "open main window on specific display (e.g. 0, 1 or 2), default is 0", 1},
                               {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
                               {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
+                              {"frame-buffer-size", {"-f", "--frame-buffer-size"}, "frame buffer size (e.g. 10, 70 or 150), default is 50", 1},
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
                               {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
@@ -196,6 +197,7 @@ int main(int argc, char** argv) {
     args = argparser.parse(argc, argv_decoded);
 
     int display_number = 0;
+    size_t frame_buffer_size = 50;
     Display::Mode display_mode = Display::Mode::split;
     std::tuple<int, int> window_size(-1, -1);
     double time_shift_ms = 0;
@@ -259,6 +261,20 @@ int main(int argc, char** argv) {
 
         window_size = std::make_tuple(!token_vec[0].empty() ? std::stoi(token_vec[0]) : -1, token_vec.size() == 2 ? std::stoi(token_vec[1]) : -1);
       }
+      if (args["frame-buffer-size"]) {
+        const std::string frame_buffer_size_arg = args["frame-buffer-size"];
+        const std::regex frame_buffer_size_re("(\\d*)");
+
+        if (!std::regex_match(frame_buffer_size_arg, frame_buffer_size_re)) {
+          throw std::logic_error{"Cannot parse frame buffer size (required format: [number], e.g. 10, 70 or 150)"};
+        }
+
+        frame_buffer_size = std::stoi(frame_buffer_size_arg);
+
+        if (frame_buffer_size < 1) {
+          throw std::logic_error{"Frame buffer size must be at least 1"};
+        }
+      }
       if (args["time-shift"]) {
         const std::string time_shift_arg = args["time-shift"];
         const std::regex time_shift_re("^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$");
@@ -305,8 +321,9 @@ int main(int argc, char** argv) {
         right_file_name = left_file_name;
       }
 
-      VideoCompare compare{display_number, display_mode, args["verbose"],    args["high-dpi"], args["10-bpc"],      window_size,   time_shift_ms, left_file_name,      left_video_filters,
-                           left_demuxer,   left_decoder, left_hw_accel_spec, right_file_name,  right_video_filters, right_demuxer, right_decoder, right_hw_accel_spec, args["disable-auto-filters"]};
+      VideoCompare compare{
+          display_number,     display_mode,    args["verbose"],     args["high-dpi"], args["10-bpc"], window_size,         frame_buffer_size,           time_shift_ms, left_file_name, left_video_filters, left_demuxer, left_decoder,
+          left_hw_accel_spec, right_file_name, right_video_filters, right_demuxer,    right_decoder,  right_hw_accel_spec, args["disable-auto-filters"]};
       compare();
     }
   } catch (const std::exception& e) {

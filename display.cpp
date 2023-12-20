@@ -811,7 +811,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
     // blink label in loop mode
     fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
-                current_total_browsable_text_height + double_border_extension_};
+                 current_total_browsable_text_height + double_border_extension_};
 
     SDL_Color label_color = LOOP_OFF_LABEL_COLOR;
 
