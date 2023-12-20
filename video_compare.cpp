@@ -455,7 +455,7 @@ void VideoCompare::video() {
               timer_->update();
             }
           }
-        } else if (display_->get_buffer_play_loop_mode() != Display::Loop::off) {
+        } else if (display_->get_buffer_play_loop_mode() == Display::Loop::off) {
           timer_->reset();
         }
       }
