@@ -1,4 +1,5 @@
 #include "timer.h"
+#include <iostream>
 #include <algorithm>
 #include <thread>
 
@@ -18,11 +19,11 @@ void Timer::update() {
   target_time_ = std::chrono::high_resolution_clock::now();
 }
 
-std::chrono::microseconds Timer::delta() {
-  return std::chrono::duration_cast<std::chrono::microseconds>(target_time_ - std::chrono::high_resolution_clock::now());
+int64_t Timer::us_until_target() {
+  return std::chrono::duration_cast<std::chrono::microseconds>(target_time_ - std::chrono::high_resolution_clock::now()).count();
 }
 
-void Timer::add_offset(int64_t period) {
+void Timer::shift_target(int64_t period) {
     target_time_ += std::chrono::microseconds{period};
 }
 

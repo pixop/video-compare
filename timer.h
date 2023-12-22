@@ -20,9 +20,11 @@ class Timer {
   void reset();
   void update();
 
-  std::chrono::microseconds delta();
-  void add_offset(int64_t period);
+  int64_t us_until_target();
+
+  void shift_target(int64_t period);
   void wait(const int64_t period);
+  void update_error();
 
  private:
   int64_t adjust() const;

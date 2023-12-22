@@ -408,8 +408,8 @@ void VideoCompare::video() {
         }
       }
 
+      // average refresh time
       const int64_t avg_refresh_time = refresh_time_deque.average();
-      const int64_t delta_minus_avg_refresh_time = timer_->delta().count() - avg_refresh_time;
 
       bool store_frames = false;
       bool adjusting = false;
@@ -446,7 +446,10 @@ void VideoCompare::video() {
           }
         }
 
-        if (delta_minus_avg_refresh_time <= 0) {
+        // update frame or keep showing currently displayed frame
+        const bool may_update_frame = (timer_->us_until_target() - avg_refresh_time) <= 0;
+
+        if (may_update_frame && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
           if (!adjusting && display_->get_play()) {
             if (!frame_queue_[0]->pop(frame_left) || !frame_queue_[1]->pop(frame_right)) {
               frame_left = nullptr;
@@ -459,12 +462,12 @@ void VideoCompare::video() {
 
               if (frame_number > 0) {
                 const int64_t frame_delay = frame_left->pts - left_pts;
-                timer_->add_offset(frame_delay);
+                timer_->shift_target(frame_delay);
               } else {
                 timer_->update();
               }
             }
-          } else if (display_->get_buffer_play_loop_mode() == Display::Loop::off) {
+          } else {
             timer_->reset();
           }
         }
@@ -546,29 +549,29 @@ void VideoCompare::video() {
       frame_offset = adjust_frame_offset(display_->get_frame_offset_delta());
 
       if (frame_offset >= 0 && !left_frames.empty() && !right_frames.empty()) {
-        if (timer_->delta().count() <= 0 && !adjusting && display_->get_buffer_play_loop_mode() != Display::Loop::off) {
-          timer_->add_offset(left_frames[frame_offset].get()->pkt_duration);
-        }
-
-        if (delta_minus_avg_refresh_time > 0 && delta_minus_avg_refresh_time < avg_refresh_time) {
-          timer_->wait(delta_minus_avg_refresh_time);
-        }
-
-        std::string prefix_str, suffix_str;
-
         // in-sync playback?
-        if (display_->get_play() && !adjusting) {
-          prefix_str = "[";
-          suffix_str = "]";
-        }
+        auto in_sync = [this, left_pts, right_pts, delta_left_pts, delta_right_pts]() {
+          const int64_t min_delta = std::min(delta_left_pts, delta_right_pts) * 8 / 10;
+          return !is_behind(left_pts, right_pts, min_delta) && !is_behind(right_pts, left_pts, min_delta);
+        };
+        const bool is_playback_in_sync = in_sync();
 
-        const int maxDigits = std::log10(frame_buffer_size_) + 1;
-        const std::string frame_offset_format_str = string_sprintf("%%s%%0%dd/%%0%dd%%s", maxDigits, maxDigits);
-        const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, max_left_frame_index + 1, suffix_str.c_str());
-
-        const bool skip_refresh = adjusting && refresh_timer.delta().count() > -40000;
+        // reduce refreshes to max 10 per second for better responsiveness while re-syncing
+        const bool skip_refresh = !is_playback_in_sync && refresh_timer.us_until_target() > -100000;
 
         if (!skip_refresh) {
+          std::string prefix_str, suffix_str;
+
+          // add [] to the current / total browsable string when in sync
+          if (display_->get_play() && is_playback_in_sync) {
+            prefix_str = "[";
+            suffix_str = "]";
+          }
+
+          const int max_digits = std::log10(frame_buffer_size_) + 1;
+          const std::string frame_offset_format_str = string_sprintf("%%s%%0%dd/%%0%dd%%s", max_digits, max_digits);
+          const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, max_left_frame_index + 1, suffix_str.c_str());
+
           refresh_timer.update();
 
           if (!display_->get_swap_left_right()) {
@@ -585,13 +588,18 @@ void VideoCompare::video() {
                               {video_decoder_[0]->width(), video_decoder_[0]->height()}, right_frames[frame_offset].get(), left_frames[frame_offset].get(), current_total_browsable, error_message);
           }
 
-          refresh_time_deque.push_back(-refresh_timer.delta().count());
+          refresh_time_deque.push_back(-refresh_timer.us_until_target());
         }
 
-        if (timer_->delta().count() <= 0) {
+        // check if sleeping is the best option for accurate playback; the sleep period
+        // is determined by taking the average refresh time into account.
+        const int64_t time_until_final_refresh = timer_->us_until_target();
+
+        if (time_until_final_refresh > 0 && time_until_final_refresh < avg_refresh_time) {
+          timer_->wait(time_until_final_refresh);
+        } else if (time_until_final_refresh <= 0 && display_->get_buffer_play_loop_mode() != Display::Loop::off) {
+          // auto-adjust current frame during in-buffer playback
           switch (display_->get_buffer_play_loop_mode()) {
-            case Display::Loop::off:
-              break;
             case Display::Loop::forwardonly:
               if (frame_offset == 0) {
                 frame_offset = max_left_frame_index;
@@ -603,10 +611,14 @@ void VideoCompare::video() {
               if (max_left_frame_index >= 1 && (frame_offset == 0 || frame_offset == max_left_frame_index)) {
                 display_->toggle_buffer_play_direction();
               }
-
               frame_offset = adjust_frame_offset(display_->get_buffer_play_forward() ? -1 : 1);
               break;
+            default:
+              break;
           }
+
+          // update timer for accurate in-buffer playback
+          timer_->shift_target(left_frames[frame_offset].get()->pkt_duration);
         }
       }
     }
