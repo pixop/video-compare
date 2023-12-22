@@ -18,8 +18,11 @@ class Timer {
   Timer();
 
   void reset();
-  void wait(int64_t period);
   void update();
+
+  std::chrono::microseconds delta();
+  void add_offset(int64_t period);
+  void wait(const int64_t period);
 
  private:
   int64_t adjust() const;

@@ -293,6 +293,9 @@ void VideoCompare::video() {
     sorted_flat_deque<int32_t> left_deque(8);
     sorted_flat_deque<int32_t> right_deque(8);
 
+    Timer refresh_timer;
+    sorted_flat_deque<int32_t> refresh_time_deque(8);
+
     int64_t right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME;
     int total_right_time_shifted = 0;
 
@@ -405,6 +408,9 @@ void VideoCompare::video() {
         }
       }
 
+      const int64_t avg_refresh_time = refresh_time_deque.average();
+      const int64_t delta_minus_avg_refresh_time = timer_->delta().count() - avg_refresh_time;
+
       bool store_frames = false;
       bool adjusting = false;
 
@@ -440,25 +446,27 @@ void VideoCompare::video() {
           }
         }
 
-        if (!adjusting && display_->get_play()) {
-          if (!frame_queue_[0]->pop(frame_left) || !frame_queue_[1]->pop(frame_right)) {
-            frame_left = nullptr;
-            frame_right = nullptr;
-          } else {
-            left_decoded_picture_number++;
-            right_decoded_picture_number++;
-
-            store_frames = true;
-
-            if (frame_number > 0) {
-              const int64_t frame_delay = frame_left->pts - left_pts;
-              timer_->wait(frame_delay);
+        if (delta_minus_avg_refresh_time <= 0) {
+          if (!adjusting && display_->get_play()) {
+            if (!frame_queue_[0]->pop(frame_left) || !frame_queue_[1]->pop(frame_right)) {
+              frame_left = nullptr;
+              frame_right = nullptr;
             } else {
-              timer_->update();
+              left_decoded_picture_number++;
+              right_decoded_picture_number++;
+
+              store_frames = true;
+
+              if (frame_number > 0) {
+                const int64_t frame_delay = frame_left->pts - left_pts;
+                timer_->add_offset(frame_delay);
+              } else {
+                timer_->update();
+              }
             }
+          } else if (display_->get_buffer_play_loop_mode() == Display::Loop::off) {
+            timer_->reset();
           }
-        } else if (display_->get_buffer_play_loop_mode() == Display::Loop::off) {
-          timer_->reset();
         }
       }
 
@@ -529,53 +537,76 @@ void VideoCompare::video() {
         }
       }
 
-      const int maxLeftFrameIndex = static_cast<int>(left_frames.size()) - 1;
+      const int max_left_frame_index = static_cast<int>(left_frames.size()) - 1;
 
-      frame_offset = std::min(std::max(0, frame_offset + display_->get_frame_offset_delta()), maxLeftFrameIndex);
+      auto adjust_frame_offset = [frame_offset, max_left_frame_index](int adjustment) {
+        return std::min(std::max(0, frame_offset + adjustment), max_left_frame_index);
+      };
+
+      frame_offset = adjust_frame_offset(display_->get_frame_offset_delta());
 
       if (frame_offset >= 0 && !left_frames.empty() && !right_frames.empty()) {
-        if (!adjusting && display_->get_buffer_play_loop_mode() != Display::Loop::off) {
-          timer_->wait(left_frames[frame_offset].get()->pkt_duration);
+        if (timer_->delta().count() <= 0 && !adjusting && display_->get_buffer_play_loop_mode() != Display::Loop::off) {
+          timer_->add_offset(left_frames[frame_offset].get()->pkt_duration);
+        }
+
+        if (delta_minus_avg_refresh_time > 0 && delta_minus_avg_refresh_time < avg_refresh_time) {
+          timer_->wait(delta_minus_avg_refresh_time);
         }
 
         std::string prefix_str, suffix_str;
 
-        if (store_frames) {
+        // in-sync playback?
+        if (display_->get_play() && !adjusting) {
           prefix_str = "[";
           suffix_str = "]";
         }
 
         const int maxDigits = std::log10(frame_buffer_size_) + 1;
         const std::string frame_offset_format_str = string_sprintf("%%s%%0%dd/%%0%dd%%s", maxDigits, maxDigits);
-        const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, maxLeftFrameIndex + 1, suffix_str.c_str());
+        const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, max_left_frame_index + 1, suffix_str.c_str());
 
-        if (!display_->get_swap_left_right()) {
-          display_->refresh({left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
-                            {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                            {video_decoder_[0]->width(), video_decoder_[0]->height()}, {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
-                            {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                            {video_decoder_[1]->width(), video_decoder_[1]->height()}, left_frames[frame_offset].get(), right_frames[frame_offset].get(), current_total_browsable, error_message);
-        } else {
-          display_->refresh({right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
-                            {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                            {video_decoder_[1]->width(), video_decoder_[1]->height()}, {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
-                            {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                            {video_decoder_[0]->width(), video_decoder_[0]->height()}, right_frames[frame_offset].get(), left_frames[frame_offset].get(), current_total_browsable, error_message);
+        const bool skip_refresh = adjusting && refresh_timer.delta().count() > -40000;
+
+        if (!skip_refresh) {
+          refresh_timer.update();
+
+          if (!display_->get_swap_left_right()) {
+            display_->refresh({left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
+                              {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
+                              {video_decoder_[0]->width(), video_decoder_[0]->height()}, {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
+                              {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
+                              {video_decoder_[1]->width(), video_decoder_[1]->height()}, left_frames[frame_offset].get(), right_frames[frame_offset].get(), current_total_browsable, error_message);
+          } else {
+            display_->refresh({right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
+                              {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
+                              {video_decoder_[1]->width(), video_decoder_[1]->height()}, {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
+                              {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
+                              {video_decoder_[0]->width(), video_decoder_[0]->height()}, right_frames[frame_offset].get(), left_frames[frame_offset].get(), current_total_browsable, error_message);
+          }
+
+          refresh_time_deque.push_back(-refresh_timer.delta().count());
         }
 
-        switch (display_->get_buffer_play_loop_mode()) {
-          case Display::Loop::off:
-            break;
-          case Display::Loop::forwardonly:
-            if (frame_offset == 0) {
-              frame_offset = maxLeftFrameIndex + 1;
-            }
-            break;
-          case Display::Loop::pingpong:
-            if (maxLeftFrameIndex >= 1 && (frame_offset == 0 || frame_offset == maxLeftFrameIndex)) {
-              display_->toggle_buffer_play_direction();
-            }
-            break;
+        if (timer_->delta().count() <= 0) {
+          switch (display_->get_buffer_play_loop_mode()) {
+            case Display::Loop::off:
+              break;
+            case Display::Loop::forwardonly:
+              if (frame_offset == 0) {
+                frame_offset = max_left_frame_index;
+              } else {
+                frame_offset = adjust_frame_offset(-1);
+              }
+              break;
+            case Display::Loop::pingpong:
+              if (max_left_frame_index >= 1 && (frame_offset == 0 || frame_offset == max_left_frame_index)) {
+                display_->toggle_buffer_play_direction();
+              }
+
+              frame_offset = adjust_frame_offset(display_->get_buffer_play_forward() ? -1 : 1);
+              break;
+          }
         }
       }
     }

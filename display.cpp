@@ -1103,10 +1103,6 @@ void Display::input() {
         break;
     }
   }
-
-  if (buffer_play_loop_mode_ != Loop::off && frame_offset_delta_ == 0) {
-    frame_offset_delta_ += buffer_play_forward_ ? -1 : 1;
-  }
 }
 
 bool Display::get_quit() const {
