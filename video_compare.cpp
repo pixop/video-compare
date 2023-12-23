@@ -588,8 +588,7 @@ void VideoCompare::video() {
 
           refresh_time_deque.push_back(-refresh_timer.us_until_target());
 
-          // check if sleeping is the best option for accurate playback; the decision to slee
-          // is determined by taking the average refresh time into account.
+          // check if sleeping is the best option for accurate playback by taking the average refresh time into account
           const int64_t time_until_final_refresh = timer_->us_until_target();
 
           if (time_until_final_refresh > 0 && time_until_final_refresh < refresh_time_deque.average()) {
