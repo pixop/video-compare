@@ -408,9 +408,6 @@ void VideoCompare::video() {
         }
       }
 
-      // average refresh time
-      const int64_t avg_refresh_time = refresh_time_deque.average();
-
       bool store_frames = false;
       bool adjusting = false;
 
@@ -447,7 +444,7 @@ void VideoCompare::video() {
         }
 
         // update frame or keep showing currently displayed frame
-        const bool may_update_frame = (timer_->us_until_target() - avg_refresh_time) <= 0;
+        const bool may_update_frame = (timer_->us_until_target() - refresh_time_deque.average()) <= 0;
 
         if (may_update_frame && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
           if (!adjusting && display_->get_play()) {
@@ -556,7 +553,7 @@ void VideoCompare::video() {
         };
         const bool is_playback_in_sync = in_sync();
 
-        // reduce refreshes to max 10 per second for better responsiveness while re-syncing
+        // reduce refresh rate to 10 Hz for faster re-syncing
         const bool skip_refresh = !is_playback_in_sync && refresh_timer.us_until_target() > -100000;
 
         if (!skip_refresh) {
@@ -589,36 +586,36 @@ void VideoCompare::video() {
           }
 
           refresh_time_deque.push_back(-refresh_timer.us_until_target());
-        }
 
-        // check if sleeping is the best option for accurate playback; the sleep period
-        // is determined by taking the average refresh time into account.
-        const int64_t time_until_final_refresh = timer_->us_until_target();
+          // check if sleeping is the best option for accurate playback; the decision to slee
+          // is determined by taking the average refresh time into account.
+          const int64_t time_until_final_refresh = timer_->us_until_target();
 
-        if (time_until_final_refresh > 0 && time_until_final_refresh < avg_refresh_time) {
-          timer_->wait(time_until_final_refresh);
-        } else if (time_until_final_refresh <= 0 && display_->get_buffer_play_loop_mode() != Display::Loop::off) {
-          // auto-adjust current frame during in-buffer playback
-          switch (display_->get_buffer_play_loop_mode()) {
-            case Display::Loop::forwardonly:
-              if (frame_offset == 0) {
-                frame_offset = max_left_frame_index;
-              } else {
-                frame_offset = adjust_frame_offset(-1);
-              }
-              break;
-            case Display::Loop::pingpong:
-              if (max_left_frame_index >= 1 && (frame_offset == 0 || frame_offset == max_left_frame_index)) {
-                display_->toggle_buffer_play_direction();
-              }
-              frame_offset = adjust_frame_offset(display_->get_buffer_play_forward() ? -1 : 1);
-              break;
-            default:
-              break;
+          if (time_until_final_refresh > 0 && time_until_final_refresh < refresh_time_deque.average()) {
+            timer_->wait(time_until_final_refresh);
+          } else if (time_until_final_refresh <= 0 && display_->get_buffer_play_loop_mode() != Display::Loop::off) {
+            // auto-adjust current frame during in-buffer playback
+            switch (display_->get_buffer_play_loop_mode()) {
+              case Display::Loop::forwardonly:
+                if (frame_offset == 0) {
+                  frame_offset = max_left_frame_index;
+                } else {
+                  frame_offset = adjust_frame_offset(-1);
+                }
+                break;
+              case Display::Loop::pingpong:
+                if (max_left_frame_index >= 1 && (frame_offset == 0 || frame_offset == max_left_frame_index)) {
+                  display_->toggle_buffer_play_direction();
+                }
+                frame_offset = adjust_frame_offset(display_->get_buffer_play_forward() ? -1 : 1);
+                break;
+              default:
+                break;
+            }
+
+            // update timer for accurate in-buffer playback
+            timer_->shift_target(left_frames[frame_offset].get()->pkt_duration);
           }
-
-          // update timer for accurate in-buffer playback
-          timer_->shift_target(left_frames[frame_offset].get()->pkt_duration);
         }
       }
     }
