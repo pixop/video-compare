@@ -104,7 +104,7 @@ bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
   const int64_t avframe_pts = frame->pts != AV_NOPTS_VALUE ? frame->pts : frame->best_effort_timestamp;
 
   // use an increasing timestamp via pkt_duration between keyframes; otherwise, fall back to the best effort timestamp when PTS is not available
-  frame->pts = use_avframe_state ? avframe_pts : next_pts_;
+  frame->pts = (use_avframe_state || (next_pts_ + 1) == avframe_pts) ? avframe_pts : next_pts_;
 
   // ensure pkt_duration is always some sensible value
   if (frame->pkt_duration == 0) {
