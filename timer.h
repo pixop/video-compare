@@ -18,8 +18,13 @@ class Timer {
   Timer();
 
   void reset();
-  void wait(int64_t period);
   void update();
+
+  int64_t us_until_target();
+
+  void shift_target(int64_t period);
+  void wait(const int64_t period);
+  void update_error();
 
  private:
   int64_t adjust() const;

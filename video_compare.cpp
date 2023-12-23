@@ -25,6 +25,20 @@ static inline bool is_behind(int64_t frame1_pts, int64_t frame2_pts, int64_t del
   return diff < -tolerance;
 }
 
+static inline int64_t compute_min_delta(const int64_t delta_left_pts, const int64_t delta_right_pts) {
+  return std::min(delta_left_pts, delta_right_pts) * 8 / 10;
+};
+
+static inline bool is_in_sync(const int64_t left_pts, const int64_t right_pts, const int64_t delta_left_pts,  const int64_t delta_right_pts) {
+  const int64_t min_delta = compute_min_delta(delta_left_pts, delta_right_pts);
+
+  return !is_behind(left_pts, right_pts, min_delta) && !is_behind(right_pts, left_pts, min_delta);
+};
+
+static inline int64_t compute_frame_delay(const int64_t left_pts, const int64_t right_pts) {
+  return std::max(left_pts, right_pts);
+}
+
 VideoCompare::VideoCompare(const int display_number,
                            const Display::Mode display_mode,
                            const bool verbose,
@@ -293,6 +307,9 @@ void VideoCompare::video() {
     sorted_flat_deque<int32_t> left_deque(8);
     sorted_flat_deque<int32_t> right_deque(8);
 
+    Timer refresh_timer;
+    sorted_flat_deque<int32_t> refresh_time_deque(8);
+
     int64_t right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME;
     int total_right_time_shifted = 0;
 
@@ -412,7 +429,7 @@ void VideoCompare::video() {
         break;
       } else {
         // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
-        const int64_t min_delta = std::min(delta_left_pts, delta_right_pts) * 8 / 10;
+        const int64_t min_delta = compute_min_delta(delta_left_pts, delta_right_pts);
 
 #ifdef _DEBUG
         const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, right_time_shift=%5d", left_pts / 1000, is_behind(left_pts, right_pts, min_delta),
@@ -440,25 +457,33 @@ void VideoCompare::video() {
           }
         }
 
-        if (!adjusting && display_->get_play()) {
-          if (!frame_queue_[0]->pop(frame_left) || !frame_queue_[1]->pop(frame_right)) {
-            frame_left = nullptr;
-            frame_right = nullptr;
-          } else {
-            left_decoded_picture_number++;
-            right_decoded_picture_number++;
+        // keep showing currently displayed frame for another iteration?
+        const bool skip_update = (timer_->us_until_target() - refresh_time_deque.average()) > 0;
 
-            store_frames = true;
-
-            if (frame_number > 0) {
-              const int64_t frame_delay = frame_left->pts - left_pts;
-              timer_->wait(frame_delay);
+        // handle regular playback only
+        if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
+          if (!adjusting && display_->get_play()) {
+            if (!frame_queue_[0]->pop(frame_left) || !frame_queue_[1]->pop(frame_right)) {
+              frame_left = nullptr;
+              frame_right = nullptr;
             } else {
-              timer_->update();
+              left_decoded_picture_number++;
+              right_decoded_picture_number++;
+
+              store_frames = true;
+
+              // update timer for regular playback
+              if (frame_number > 0) {
+                const int64_t play_frame_delay = compute_frame_delay(frame_left->pts - left_pts, frame_right->pts - right_pts);
+
+                timer_->shift_target(play_frame_delay);
+              } else {
+                timer_->update();
+              }
             }
+          } else {
+            timer_->reset();
           }
-        } else if (display_->get_buffer_play_loop_mode() == Display::Loop::off) {
-          timer_->reset();
         }
       }
 
@@ -529,53 +554,81 @@ void VideoCompare::video() {
         }
       }
 
-      const int maxLeftFrameIndex = static_cast<int>(left_frames.size()) - 1;
+      const int max_left_frame_index = static_cast<int>(left_frames.size()) - 1;
 
-      frame_offset = std::min(std::max(0, frame_offset + display_->get_frame_offset_delta()), maxLeftFrameIndex);
+      auto adjust_frame_offset = [max_left_frame_index](const int frame_offset, const int adjustment) {
+        return std::min(std::max(0, frame_offset + adjustment), max_left_frame_index);
+      };
+
+      frame_offset = adjust_frame_offset(frame_offset, display_->get_frame_offset_delta());
 
       if (frame_offset >= 0 && !left_frames.empty() && !right_frames.empty()) {
-        if (!adjusting && display_->get_buffer_play_loop_mode() != Display::Loop::off) {
-          timer_->wait(left_frames[frame_offset].get()->pkt_duration);
-        }
+        const bool is_playback_in_sync = is_in_sync(left_pts, right_pts, delta_left_pts, delta_right_pts);
 
-        std::string prefix_str, suffix_str;
+        // reduce refresh rate to 10 Hz for faster re-syncing
+        const bool skip_refresh = !is_playback_in_sync && refresh_timer.us_until_target() > -100000;
 
-        if (store_frames) {
-          prefix_str = "[";
-          suffix_str = "]";
-        }
+        if (!skip_refresh) {
+          std::string prefix_str, suffix_str;
 
-        const int maxDigits = std::log10(frame_buffer_size_) + 1;
-        const std::string frame_offset_format_str = string_sprintf("%%s%%0%dd/%%0%dd%%s", maxDigits, maxDigits);
-        const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, maxLeftFrameIndex + 1, suffix_str.c_str());
+          // add [] to the current / total browsable string when in sync
+          if (display_->get_play() && is_playback_in_sync) {
+            prefix_str = "[";
+            suffix_str = "]";
+          }
 
-        if (!display_->get_swap_left_right()) {
-          display_->refresh({left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
-                            {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                            {video_decoder_[0]->width(), video_decoder_[0]->height()}, {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
-                            {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                            {video_decoder_[1]->width(), video_decoder_[1]->height()}, left_frames[frame_offset].get(), right_frames[frame_offset].get(), current_total_browsable, error_message);
-        } else {
-          display_->refresh({right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
-                            {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                            {video_decoder_[1]->width(), video_decoder_[1]->height()}, {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
-                            {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                            {video_decoder_[0]->width(), video_decoder_[0]->height()}, right_frames[frame_offset].get(), left_frames[frame_offset].get(), current_total_browsable, error_message);
-        }
+          const int max_digits = std::log10(frame_buffer_size_) + 1;
+          const std::string frame_offset_format_str = string_sprintf("%%s%%0%dd/%%0%dd%%s", max_digits, max_digits);
+          const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, max_left_frame_index + 1, suffix_str.c_str());
 
-        switch (display_->get_buffer_play_loop_mode()) {
-          case Display::Loop::off:
-            break;
-          case Display::Loop::forwardonly:
-            if (frame_offset == 0) {
-              frame_offset = maxLeftFrameIndex + 1;
+          refresh_timer.update();
+
+          if (!display_->get_swap_left_right()) {
+            display_->refresh({left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
+                              {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
+                              {video_decoder_[0]->width(), video_decoder_[0]->height()}, {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
+                              {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
+                              {video_decoder_[1]->width(), video_decoder_[1]->height()}, left_frames[frame_offset].get(), right_frames[frame_offset].get(), current_total_browsable, error_message);
+          } else {
+            display_->refresh({right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
+                              {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
+                              {video_decoder_[1]->width(), video_decoder_[1]->height()}, {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
+                              {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
+                              {video_decoder_[0]->width(), video_decoder_[0]->height()}, right_frames[frame_offset].get(), left_frames[frame_offset].get(), current_total_browsable, error_message);
+          }
+
+          refresh_time_deque.push_back(-refresh_timer.us_until_target());
+
+          // check if sleeping is the best option for accurate playback by taking the average refresh time into account
+          const int64_t time_until_final_refresh = timer_->us_until_target();
+
+          if (time_until_final_refresh > 0 && time_until_final_refresh < refresh_time_deque.average()) {
+            timer_->wait(time_until_final_refresh);
+          } else if (time_until_final_refresh <= 0 && display_->get_buffer_play_loop_mode() != Display::Loop::off) {
+            // auto-adjust current frame during in-buffer playback
+            switch (display_->get_buffer_play_loop_mode()) {
+              case Display::Loop::forwardonly:
+                if (frame_offset == 0) {
+                  frame_offset = max_left_frame_index;
+                } else {
+                  frame_offset = adjust_frame_offset(frame_offset, -1);
+                }
+                break;
+              case Display::Loop::pingpong:
+                if (max_left_frame_index >= 1 && (frame_offset == 0 || frame_offset == max_left_frame_index)) {
+                  display_->toggle_buffer_play_direction();
+                }
+                frame_offset = adjust_frame_offset(frame_offset, display_->get_buffer_play_forward() ? -1 : 1);
+                break;
+              default:
+                break;
             }
-            break;
-          case Display::Loop::pingpong:
-            if (maxLeftFrameIndex >= 1 && (frame_offset == 0 || frame_offset == maxLeftFrameIndex)) {
-              display_->toggle_buffer_play_direction();
-            }
-            break;
+
+            // update timer for accurate in-buffer playback
+            const int64_t in_buffer_frame_delay = compute_frame_delay(left_frames[frame_offset].get()->pkt_duration, right_frames[frame_offset].get()->pkt_duration);
+
+            timer_->shift_target(in_buffer_frame_delay);
+          }
         }
       }
     }

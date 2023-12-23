@@ -811,13 +811,13 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
         label_alpha *= 1.0 + sin(float(SDL_GetTicks()) / 180.0) * 0.6;
 
         switch (buffer_play_loop_mode_) {
-          case Display::Loop::off:
-            break;
           case Display::Loop::forwardonly:
             label_color = LOOP_FW_LABEL_COLOR;
             break;
           case Display::Loop::pingpong:
             label_color = LOOP_PP_LABEL_COLOR;
+            break;
+          default:
             break;
         }
     }
@@ -1102,10 +1102,6 @@ void Display::input() {
       default:
         break;
     }
-  }
-
-  if (buffer_play_loop_mode_ != Loop::off && frame_offset_delta_ == 0) {
-    frame_offset_delta_ += buffer_play_forward_ ? -1 : 1;
   }
 }
 
