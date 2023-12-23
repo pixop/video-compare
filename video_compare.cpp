@@ -25,6 +25,20 @@ static inline bool is_behind(int64_t frame1_pts, int64_t frame2_pts, int64_t del
   return diff < -tolerance;
 }
 
+static inline int64_t compute_min_delta(const int64_t delta_left_pts, const int64_t delta_right_pts) {
+  return std::min(delta_left_pts, delta_right_pts) * 8 / 10;
+};
+
+static inline bool is_in_sync(const int64_t left_pts, const int64_t right_pts, const int64_t delta_left_pts,  const int64_t delta_right_pts) {
+  const int64_t min_delta = compute_min_delta(delta_left_pts, delta_right_pts);
+
+  return !is_behind(left_pts, right_pts, min_delta) && !is_behind(right_pts, left_pts, min_delta);
+};
+
+static inline int64_t compute_frame_delay(const int64_t left_pts, const int64_t right_pts) {
+  return std::max(left_pts, right_pts);
+}
+
 VideoCompare::VideoCompare(const int display_number,
                            const Display::Mode display_mode,
                            const bool verbose,
@@ -415,7 +429,7 @@ void VideoCompare::video() {
         break;
       } else {
         // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
-        const int64_t min_delta = std::min(delta_left_pts, delta_right_pts) * 8 / 10;
+        const int64_t min_delta = compute_min_delta(delta_left_pts, delta_right_pts);
 
 #ifdef _DEBUG
         const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, right_time_shift=%5d", left_pts / 1000, is_behind(left_pts, right_pts, min_delta),
@@ -458,9 +472,11 @@ void VideoCompare::video() {
 
               store_frames = true;
 
+              // update timer for regular playback
               if (frame_number > 0) {
-                const int64_t frame_delay = frame_left->pts - left_pts;
-                timer_->shift_target(frame_delay);
+                const int64_t play_frame_delay = compute_frame_delay(frame_left->pts - left_pts, frame_right->pts - right_pts);
+
+                timer_->shift_target(play_frame_delay);
               } else {
                 timer_->update();
               }
@@ -540,19 +556,14 @@ void VideoCompare::video() {
 
       const int max_left_frame_index = static_cast<int>(left_frames.size()) - 1;
 
-      auto adjust_frame_offset = [frame_offset, max_left_frame_index](int adjustment) {
+      auto adjust_frame_offset = [max_left_frame_index](const int frame_offset, const int adjustment) {
         return std::min(std::max(0, frame_offset + adjustment), max_left_frame_index);
       };
 
-      frame_offset = adjust_frame_offset(display_->get_frame_offset_delta());
+      frame_offset = adjust_frame_offset(frame_offset, display_->get_frame_offset_delta());
 
       if (frame_offset >= 0 && !left_frames.empty() && !right_frames.empty()) {
-        // in-sync playback?
-        auto in_sync = [this, left_pts, right_pts, delta_left_pts, delta_right_pts]() {
-          const int64_t min_delta = std::min(delta_left_pts, delta_right_pts) * 8 / 10;
-          return !is_behind(left_pts, right_pts, min_delta) && !is_behind(right_pts, left_pts, min_delta);
-        };
-        const bool is_playback_in_sync = in_sync();
+        const bool is_playback_in_sync = is_in_sync(left_pts, right_pts, delta_left_pts, delta_right_pts);
 
         // reduce refresh rate to 10 Hz for faster re-syncing
         const bool skip_refresh = !is_playback_in_sync && refresh_timer.us_until_target() > -100000;
@@ -600,21 +611,23 @@ void VideoCompare::video() {
                 if (frame_offset == 0) {
                   frame_offset = max_left_frame_index;
                 } else {
-                  frame_offset = adjust_frame_offset(-1);
+                  frame_offset = adjust_frame_offset(frame_offset, -1);
                 }
                 break;
               case Display::Loop::pingpong:
                 if (max_left_frame_index >= 1 && (frame_offset == 0 || frame_offset == max_left_frame_index)) {
                   display_->toggle_buffer_play_direction();
                 }
-                frame_offset = adjust_frame_offset(display_->get_buffer_play_forward() ? -1 : 1);
+                frame_offset = adjust_frame_offset(frame_offset, display_->get_buffer_play_forward() ? -1 : 1);
                 break;
               default:
                 break;
             }
 
             // update timer for accurate in-buffer playback
-            timer_->shift_target(left_frames[frame_offset].get()->pkt_duration);
+            const int64_t in_buffer_frame_delay = compute_frame_delay(left_frames[frame_offset].get()->pkt_duration, right_frames[frame_offset].get()->pkt_duration);
+
+            timer_->shift_target(in_buffer_frame_delay);
           }
         }
       }
