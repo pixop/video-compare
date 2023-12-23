@@ -443,10 +443,11 @@ void VideoCompare::video() {
           }
         }
 
-        // update frame or keep showing currently displayed frame
-        const bool may_update_frame = (timer_->us_until_target() - refresh_time_deque.average()) <= 0;
+        // keep showing currently displayed frame for another iteration?
+        const bool skip_update = (timer_->us_until_target() - refresh_time_deque.average()) > 0;
 
-        if (may_update_frame && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
+        // handle regular playback only
+        if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
           if (!adjusting && display_->get_play()) {
             if (!frame_queue_[0]->pop(frame_left) || !frame_queue_[1]->pop(frame_right)) {
               frame_left = nullptr;
