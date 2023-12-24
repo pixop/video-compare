@@ -474,7 +474,7 @@ void VideoCompare::video() {
 
               // update timer for regular playback
               if (frame_number > 0) {
-                const int64_t play_frame_delay = compute_frame_delay(frame_left->pts - left_pts, frame_right->pts - right_pts);
+                const int64_t play_frame_delay = compute_frame_delay(frame_left->pts - left_pts, frame_right->pts - right_pts - right_time_shift);
 
                 timer_->shift_target(play_frame_delay);
               } else {
