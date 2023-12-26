@@ -180,7 +180,7 @@ int main(int argc, char** argv) {
                               {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
                               {"frame-buffer-size", {"-f", "--frame-buffer-size"}, "frame buffer size (e.g. 10, 70 or 150), default is 50", 1},
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
-                              {"wheel-sensitivity", {"-s", "--wheel-sensivitiy"}, "mouse wheel sensitivity (e.g. 0.5, -1 or 1.7), default is 1; negative values invert the input direction", 1},
+                              {"wheel-sensitivity", {"-s", "--wheel-sensitivity"}, "mouse wheel sensitivity (e.g. 0.5, -1 or 1.7), default is 1; negative values invert the input direction", 1},
                               {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
                               {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name", 1},
@@ -292,7 +292,7 @@ int main(int argc, char** argv) {
         const std::regex wheel_sensitivity_re("^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$");
 
         if (!std::regex_match(wheel_sensitivity_arg, wheel_sensitivity_re)) {
-          throw std::logic_error{"Cannot parse wheel sensitivity argument; must be a valid number, e.g. 1.3 or -1"};
+          throw std::logic_error{"Cannot parse mouse wheel sensitivity argument; must be a valid number, e.g. 1.3 or -1"};
         }
 
         wheel_sensitivity = std::stod(wheel_sensitivity_arg);
