@@ -129,6 +129,7 @@ class Display {
   SDL_Event event_;
   int mouse_x_;
   int mouse_y_;
+  float wheel_sensitivity_;
 
   const std::string left_file_stem_;
   const std::string right_file_stem_;
@@ -180,6 +181,7 @@ class Display {
           unsigned width,
           unsigned height,
           double duration,
+          const float wheel_sensitivity,
           const std::string& left_file_name,
           const std::string& right_file_name);
   ~Display();

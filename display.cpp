@@ -124,6 +124,7 @@ Display::Display(const int display_number,
                  const unsigned width,
                  const unsigned height,
                  const double duration,
+                 const float wheel_sensitivity,
                  const std::string& left_file_name,
                  const std::string& right_file_name)
     : mode_{mode},
@@ -132,6 +133,7 @@ Display::Display(const int display_number,
       video_width_{static_cast<int>(width)},
       video_height_{static_cast<int>(height)},
       duration_{duration},
+      wheel_sensitivity_{wheel_sensitivity},
       left_file_stem_{get_file_stem(left_file_name)},
       right_file_stem_{get_file_stem(right_file_name)} {
   const int auto_width = mode == Mode::hstack ? width * 2 : width;
@@ -913,7 +915,7 @@ void Display::input() {
         break;
       case SDL_MOUSEWHEEL:
         if (event_.wheel.y != 0) {
-          float delta_zoom = event_.wheel.y * (event_.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -1 : 1);
+          float delta_zoom = wheel_sensitivity_ * event_.wheel.y * (event_.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -1 : 1);
 
           if (delta_zoom > 0) {
             delta_zoom /= 2.0F;

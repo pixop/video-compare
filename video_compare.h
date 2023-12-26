@@ -28,6 +28,7 @@ class VideoCompare {
                const std::tuple<int, int> window_size,
                const size_t frame_buffer_size,
                const double time_shift_ms,
+               const float wheel_sensitivity,
                const std::string& left_file_name,
                const std::string& left_video_filters,
                const std::string& left_demuxer,
