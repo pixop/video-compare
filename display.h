@@ -167,6 +167,7 @@ class Display {
   std::string get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const int x, const int y);
 
   float compute_zoom_factor(const float zoom_level) const;
+  Vector2D compute_relative_move_offset(const Vector2D& zoom_point, const float zoom_factor) const;
   void update_zoom_factor_and_move_offset(const float zoom_factor);
   void update_zoom_factor(const float zoom_factor);
   void update_move_offset(const Vector2D& move_offset);

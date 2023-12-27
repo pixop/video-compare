@@ -878,8 +878,22 @@ float Display::compute_zoom_factor(const float zoom_level) const {
   return pow(ZOOM_SPEED, zoom_level);
 }
 
+Vector2D Display::compute_relative_move_offset(const Vector2D& zoom_point, const float zoom_factor) const {
+  const float zoom_factor_change = zoom_factor / global_zoom_factor_;
+
+  const Vector2D view_center(static_cast<float>(window_width_) / (mode_ == Mode::hstack ? 4.0F : 2.0F) * video_to_window_width_factor_,
+                             static_cast<float>(window_height_) / (mode_ == Mode::vstack ? 4.0F : 2.0F) * video_to_window_height_factor_);
+
+  // the center point has to be moved relative to the zoom point
+  const Vector2D new_move_offset = move_offset_ - (view_center + move_offset_ - zoom_point) * (1.0F - zoom_factor_change);
+
+  return new_move_offset;
+}
+
 void Display::update_zoom_factor_and_move_offset(const float zoom_factor) {
-  update_move_offset(move_offset_ * (zoom_factor / global_zoom_factor_));
+  const Vector2D zoom_point(static_cast<float>(video_width_) * (mode_ == Mode::hstack ? 1.0F : 0.5F), static_cast<float>(video_height_) * (mode_ == Mode::vstack ? 1.0F : 0.5F));
+  update_move_offset(compute_relative_move_offset(zoom_point, zoom_factor));
+
   update_zoom_factor(zoom_factor);
 }
 
@@ -914,7 +928,7 @@ void Display::input() {
         }
         break;
       case SDL_MOUSEWHEEL:
-        if (event_.wheel.y != 0) {
+        if (mouse_is_inside_window_ && event_.wheel.y != 0) {
           float delta_zoom = wheel_sensitivity_ * event_.wheel.y * (event_.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -1 : 1);
 
           if (delta_zoom > 0) {
@@ -926,19 +940,10 @@ void Display::input() {
 
           // logic ported from YUView's MoveAndZoomableView.cpp with thanks :)
           if (new_global_zoom_factor >= 0.00001 && new_global_zoom_factor <= 100000) {
-            // zoom factor for this update
-            const float zoom_factor_change = new_global_zoom_factor / global_zoom_factor_;
-
-            const Vector2D view_center(static_cast<float>(window_width_) / (mode_ == Mode::hstack ? 4.0F : 2.0F) * video_to_window_width_factor_,
-                                       static_cast<float>(window_height_) / (mode_ == Mode::vstack ? 4.0F : 2.0F) * video_to_window_height_factor_);
-            const Vector2D zoom_point = mouse_is_inside_window_ ? Vector2D(static_cast<float>(mouse_x_) * video_to_window_width_factor_, static_cast<float>(mouse_y_) * video_to_window_height_factor_) : view_center;
-
-            // the center point has to be moved relative to the zoom point
-            const Vector2D new_move_offset = move_offset_ - (view_center + move_offset_ - zoom_point) * (1.0F - zoom_factor_change);
+            const Vector2D zoom_point = Vector2D(static_cast<float>(mouse_x_) * video_to_window_width_factor_, static_cast<float>(mouse_y_) * video_to_window_height_factor_);
+            update_move_offset(compute_relative_move_offset(zoom_point, new_global_zoom_factor));
 
             global_zoom_factor_ = new_global_zoom_factor;
-
-            update_move_offset(new_move_offset);
           }
         }
         break;
