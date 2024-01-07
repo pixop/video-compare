@@ -810,18 +810,18 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     int label_alpha = BACKGROUND_ALPHA;
 
     if (buffer_play_loop_mode_ != Display::Loop::off) {
-        label_alpha *= 1.0 + sin(float(SDL_GetTicks()) / 180.0) * 0.6;
+      label_alpha *= 1.0 + sin(float(SDL_GetTicks()) / 180.0) * 0.6;
 
-        switch (buffer_play_loop_mode_) {
-          case Display::Loop::forwardonly:
-            label_color = LOOP_FW_LABEL_COLOR;
-            break;
-          case Display::Loop::pingpong:
-            label_color = LOOP_PP_LABEL_COLOR;
-            break;
-          default:
-            break;
-        }
+      switch (buffer_play_loop_mode_) {
+        case Display::Loop::forwardonly:
+          label_color = LOOP_FW_LABEL_COLOR;
+          break;
+        case Display::Loop::pingpong:
+          label_color = LOOP_PP_LABEL_COLOR;
+          break;
+        default:
+          break;
+      }
     }
 
     SDL_SetRenderDrawColor(renderer_, label_color.r, label_color.g, label_color.b, label_alpha);

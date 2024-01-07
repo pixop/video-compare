@@ -333,9 +333,8 @@ int main(int argc, char** argv) {
         right_file_name = left_file_name;
       }
 
-      VideoCompare compare{
-          display_number, display_mode,       args["verbose"], args["high-dpi"],    args["10-bpc"], window_size,   frame_buffer_size,   time_shift_ms, wheel_sensitivity, left_file_name, left_video_filters, left_demuxer,
-          left_decoder,   left_hw_accel_spec, right_file_name, right_video_filters, right_demuxer,  right_decoder, right_hw_accel_spec, args["disable-auto-filters"]};
+      VideoCompare compare{display_number,     display_mode, args["verbose"], args["high-dpi"],   args["10-bpc"],  window_size,         frame_buffer_size, time_shift_ms, wheel_sensitivity,   left_file_name,
+                           left_video_filters, left_demuxer, left_decoder,    left_hw_accel_spec, right_file_name, right_video_filters, right_demuxer,     right_decoder, right_hw_accel_spec, args["disable-auto-filters"]};
       compare();
     }
   } catch (const std::exception& e) {

@@ -1,6 +1,6 @@
 #include "timer.h"
-#include <iostream>
 #include <algorithm>
+#include <iostream>
 #include <thread>
 
 Timer::Timer() {
@@ -24,7 +24,7 @@ int64_t Timer::us_until_target() {
 }
 
 void Timer::shift_target(int64_t period) {
-    target_time_ += std::chrono::microseconds{period};
+  target_time_ += std::chrono::microseconds{period};
 }
 
 void Timer::wait(const int64_t period) {

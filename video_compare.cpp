@@ -29,7 +29,7 @@ static inline int64_t compute_min_delta(const int64_t delta_left_pts, const int6
   return std::min(delta_left_pts, delta_right_pts) * 8 / 10;
 };
 
-static inline bool is_in_sync(const int64_t left_pts, const int64_t right_pts, const int64_t delta_left_pts,  const int64_t delta_right_pts) {
+static inline bool is_in_sync(const int64_t left_pts, const int64_t right_pts, const int64_t delta_left_pts, const int64_t delta_right_pts) {
   const int64_t min_delta = compute_min_delta(delta_left_pts, delta_right_pts);
 
   return !is_behind(left_pts, right_pts, min_delta) && !is_behind(right_pts, left_pts, min_delta);
@@ -557,9 +557,7 @@ void VideoCompare::video() {
 
       const int max_left_frame_index = static_cast<int>(left_frames.size()) - 1;
 
-      auto adjust_frame_offset = [max_left_frame_index](const int frame_offset, const int adjustment) {
-        return std::min(std::max(0, frame_offset + adjustment), max_left_frame_index);
-      };
+      auto adjust_frame_offset = [max_left_frame_index](const int frame_offset, const int adjustment) { return std::min(std::max(0, frame_offset + adjustment), max_left_frame_index); };
 
       frame_offset = adjust_frame_offset(frame_offset, display_->get_frame_offset_delta());
 
