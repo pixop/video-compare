@@ -137,6 +137,8 @@ see all supported options.
 - Up arrow: Seek 15 seconds forward
 - Right arrow: Seek 1 second forward
 - Page up: Seek 600 seconds forward
+- J: Reduce playback speed
+- L: Increase playback speed
 - S: Swap left and right video
 - A: Previous frame
 - D: Next frame
