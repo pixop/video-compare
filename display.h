@@ -86,6 +86,8 @@ class Display {
   bool save_image_frames_{false};
   bool print_mouse_position_and_color_{false};
   bool mouse_is_inside_window_{false};
+  int playback_speed_level_{0};
+  float playback_speed_factor_{1.0F};
 
   float global_zoom_level_{0.0F};
   float global_zoom_factor_{1.0F};
@@ -117,10 +119,10 @@ class Display {
   int middle_y_;
   int max_text_width_;
 
-  std::chrono::milliseconds error_message_shown_at_;
-  SDL_Texture* error_message_texture_{nullptr};
-  int error_message_width_;
-  int error_message_height_;
+  std::chrono::milliseconds message_shown_at_;
+  SDL_Texture* message_texture_{nullptr};
+  int message_width_;
+  int message_height_;
 
   SDL_Window* window_;
   SDL_Renderer* renderer_;
@@ -156,7 +158,7 @@ class Display {
 
   void render_progress_dots(const float position, const float progress, const bool is_top);
 
-  void update_textures(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& error_message);
+  void update_textures(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& message);
 
   int round_and_clamp(const float value);
 
@@ -171,6 +173,8 @@ class Display {
   void update_zoom_factor_and_move_offset(const float zoom_factor);
   void update_zoom_factor(const float zoom_factor);
   void update_move_offset(const Vector2D& move_offset);
+
+  void update_playback_speed(const int playback_speed_level);
 
  public:
   Display(int display_number,
@@ -197,7 +201,7 @@ class Display {
                const AVFrame* left_frame,
                const AVFrame* right_frame,
                const std::string& current_total_browsable,
-               const std::string& error_message);
+               const std::string& message);
 
   // Handle events
   void input();
@@ -212,4 +216,5 @@ class Display {
   bool get_seek_from_start() const;
   int get_frame_offset_delta() const;
   int get_shift_right_frames() const;
+  float get_playback_speed_factor() const;
 };

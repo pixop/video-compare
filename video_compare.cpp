@@ -290,6 +290,7 @@ void VideoCompare::video() {
     int64_t left_previous_decoded_picture_number = -1;
     int64_t delta_left_pts = 0;
     float left_start_time = demuxer_[0]->start_time() * AV_TIME_TO_SEC;
+    int64_t left_first_pts;
 
     if (left_start_time > 0) {
       std::cout << "Note: The left video has a start time of " << format_position(left_start_time, true) << " - timestamps will be shifted so they start at zero!" << std::endl;
@@ -300,6 +301,7 @@ void VideoCompare::video() {
     int64_t right_previous_decoded_picture_number = -1;
     int64_t delta_right_pts = 0;
     float right_start_time = demuxer_[1]->start_time() * AV_TIME_TO_SEC;
+    int64_t right_first_pts;
 
     if (right_start_time > 0) {
       std::cout << "Note: The right video has a start time of " << format_position(right_start_time, true) << " - timestamps will be shifted so they start at zero!" << std::endl;
@@ -315,7 +317,7 @@ void VideoCompare::video() {
     int total_right_time_shifted = 0;
 
     for (uint64_t frame_number = 0;; ++frame_number) {
-      std::string error_message;
+      std::string message;
 
       display_->input();
 
@@ -323,7 +325,7 @@ void VideoCompare::video() {
         total_right_time_shifted += display_->get_shift_right_frames();
 
         if (packet_queue_[0]->is_finished() || packet_queue_[1]->is_finished()) {
-          error_message = "Unable to perform seek (end of file reached)";
+          message = "Unable to perform seek (end of file reached)";
         } else {
           // compute effective time shift
           right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
@@ -386,7 +388,7 @@ void VideoCompare::video() {
 #endif
             if ((!demuxer_[0]->seek(next_left_position, backward) && !backward) || (!demuxer_[1]->seek(next_right_position, backward) && !backward)) {
               // restore position if unable to perform forward seek
-              error_message = "Unable to seek past end of file";
+              message = "Unable to seek past end of file";
 
               demuxer_[0]->seek(left_position, true);
               demuxer_[1]->seek(right_position, true);
@@ -414,7 +416,7 @@ void VideoCompare::video() {
             left_frames.clear();
             right_frames.clear();
           } else {
-            error_message = "Unable to perform seek (end of file reached)";
+            message = "Unable to perform seek (end of file reached)";
 
             // flag both demuxer queues as finished to ensure a clean exit
             packet_queue_[0]->finished();
@@ -477,8 +479,11 @@ void VideoCompare::video() {
               if (frame_number > 0) {
                 const int64_t play_frame_delay = compute_frame_delay(frame_left->pts - left_pts, frame_right->pts - right_pts - right_time_shift);
 
-                timer_->shift_target(play_frame_delay);
+                timer_->shift_target(play_frame_delay / display_->get_playback_speed_factor());
               } else {
+                left_first_pts = frame_left->pts;
+                right_first_pts = frame_right->pts;
+
                 timer_->update();
               }
             }
@@ -494,13 +499,17 @@ void VideoCompare::video() {
       if (frame_left != nullptr) {
         if ((left_decoded_picture_number - left_previous_decoded_picture_number) == 1) {
           const int64_t last_duration = frame_left->pts - left_pts;
-          left_frames[0]->pkt_duration = last_duration;
 
           left_deque.push_back(last_duration);
           delta_left_pts = left_deque.average();
         }
         if (delta_left_pts > 0) {
           frame_left->pkt_duration = delta_left_pts;
+
+          if (!left_frames.empty() && left_frames.back()->pts == left_first_pts) {
+            // update the duration of the first stored left frame
+            left_frames.back()->pkt_duration = delta_left_pts;
+          }
         } else {
           delta_left_pts = frame_left->pkt_duration;
         }
@@ -513,13 +522,17 @@ void VideoCompare::video() {
 
         if ((right_decoded_picture_number - right_previous_decoded_picture_number) == 1) {
           const int64_t last_duration = new_right_pts - right_pts;
-          right_frames[0]->pkt_duration = last_duration;
 
           right_deque.push_back(last_duration);
           delta_right_pts = right_deque.average();
         }
         if (delta_right_pts > 0) {
           frame_right->pkt_duration = delta_right_pts;
+
+          if (!right_frames.empty() && right_frames.back()->pts == right_first_pts) {
+            // update the duration of the first stored right frame
+            right_frames.back()->pkt_duration = delta_right_pts;
+          }
         } else {
           delta_right_pts = frame_right->pkt_duration;
         }
@@ -541,14 +554,14 @@ void VideoCompare::video() {
       } else {
         if (frame_left != nullptr) {
           if (!left_frames.empty()) {
-            left_frames[0] = std::move(frame_left);
+            left_frames.front() = std::move(frame_left);
           } else {
             left_frames.push_front(std::move(frame_left));
           }
         }
         if (frame_right != nullptr) {
           if (!right_frames.empty()) {
-            right_frames[0] = std::move(frame_right);
+            right_frames.front() = std::move(frame_right);
           } else {
             right_frames.push_front(std::move(frame_right));
           }
@@ -587,13 +600,13 @@ void VideoCompare::video() {
                               {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
                               {video_decoder_[0]->width(), video_decoder_[0]->height()}, {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
                               {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                              {video_decoder_[1]->width(), video_decoder_[1]->height()}, left_frames[frame_offset].get(), right_frames[frame_offset].get(), current_total_browsable, error_message);
+                              {video_decoder_[1]->width(), video_decoder_[1]->height()}, left_frames[frame_offset].get(), right_frames[frame_offset].get(), current_total_browsable, message);
           } else {
             display_->refresh({right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
                               {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
                               {video_decoder_[1]->width(), video_decoder_[1]->height()}, {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
                               {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                              {video_decoder_[0]->width(), video_decoder_[0]->height()}, right_frames[frame_offset].get(), left_frames[frame_offset].get(), current_total_browsable, error_message);
+                              {video_decoder_[0]->width(), video_decoder_[0]->height()}, right_frames[frame_offset].get(), left_frames[frame_offset].get(), current_total_browsable, message);
           }
 
           refresh_time_deque.push_back(-refresh_timer.us_until_target());
@@ -626,7 +639,7 @@ void VideoCompare::video() {
             // update timer for accurate in-buffer playback
             const int64_t in_buffer_frame_delay = compute_frame_delay(left_frames[frame_offset].get()->pkt_duration, right_frames[frame_offset].get()->pkt_duration);
 
-            timer_->shift_target(in_buffer_frame_delay);
+            timer_->shift_target(in_buffer_frame_delay / display_->get_playback_speed_factor());
           }
         }
       }

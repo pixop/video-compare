@@ -69,9 +69,12 @@ static const SDL_Color TEXT_COLOR = {255, 255, 255, 0};
 static const SDL_Color POSITION_COLOR = {255, 255, 192, 0};
 static const SDL_Color TARGET_COLOR = {200, 200, 140, 0};
 static const SDL_Color ZOOM_COLOR = {255, 165, 0, 0};
+static const SDL_Color PLAYBACK_SPEED_COLOR = {0, 192, 160, 0};
 static const SDL_Color BUFFER_COLOR = {160, 225, 192, 0};
 static const int BACKGROUND_ALPHA = 100;
-static const float ZOOM_SPEED = 1.06F;
+static const float ZOOM_STEP_SIZE = 1.06F;
+static const int PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE = 6;
+static const float PLAYBACK_SPEED_STEP_SIZE = pow(2.0F, 1.0F / float(PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE));
 
 inline float round_3(float value) {
   return std::round(value * 1000.0F) / 1000.0F;
@@ -234,8 +237,8 @@ Display::~Display() {
   SDL_DestroyTexture(left_text_texture_);
   SDL_DestroyTexture(right_text_texture_);
 
-  if (error_message_texture_ != nullptr) {
-    SDL_DestroyTexture(error_message_texture_);
+  if (message_texture_ != nullptr) {
+    SDL_DestroyTexture(message_texture_);
   }
 
   TTF_CloseFont(small_font_);
@@ -463,8 +466,8 @@ void Display::render_progress_dots(const float position, const float progress, c
   }
 }
 
-void Display::update_textures(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& error_message) {
-  check_sdl(SDL_UpdateTexture(video_texture_, rect, pixels, pitch) == 0, "video texture - " + error_message);
+void Display::update_textures(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& message) {
+  check_sdl(SDL_UpdateTexture(video_texture_, rect, pixels, pitch) == 0, "video texture - " + message);
 }
 
 int Display::round_and_clamp(const float value) {
@@ -531,7 +534,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
                       const AVFrame* left_frame,
                       const AVFrame* right_frame,
                       const std::string& current_total_browsable,
-                      const std::string& error_message) {
+                      const std::string& message) {
   if (save_image_frames_) {
     save_image_frames(planes_left, pitches_left, planes_right, pitches_right);
     save_image_frames_ = false;
@@ -793,6 +796,18 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     render_text(text_x, text_y, zoom_position_text_texture, zoom_position_text_width, zoom_position_text_height, border_extension_, false);
     SDL_DestroyTexture(zoom_position_text_texture);
 
+    // playback speed
+    const std::string playback_speed_factor_str = playback_speed_level_ != 0 ? string_sprintf("|%.2f", playback_speed_factor_) : "";
+    const std::string playback_speed_str = string_sprintf("@%.2f%s", 1000000.0f * playback_speed_factor_ / float(std::max(left_frame->pkt_duration, right_frame->pkt_duration)), playback_speed_factor_str.c_str());
+    text_surface = TTF_RenderText_Blended(small_font_, playback_speed_str.c_str(), PLAYBACK_SPEED_COLOR);
+    SDL_Texture* playack_speed_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+    const int playack_speed_text_width = text_surface->w;
+    const int playack_speed_text_height = text_surface->h;
+    SDL_FreeSurface(text_surface);
+
+    render_text(drawable_width_ / 2 - playack_speed_text_width / 2 - border_extension_, text_y, playack_speed_text_texture, playack_speed_text_width, playack_speed_text_height, border_extension_, false);
+    SDL_DestroyTexture(playack_speed_text_texture);
+
     // current frame / number of frames in history buffer
     text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), BUFFER_COLOR);
     SDL_Texture* current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
@@ -837,25 +852,30 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   }
 
   // render (optional) error message
-  if (!error_message.empty()) {
-    error_message_shown_at_ = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-    text_surface = TTF_RenderText_Blended(big_font_, error_message.c_str(), TEXT_COLOR);
-    error_message_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
-    error_message_width_ = text_surface->w;
-    error_message_height_ = text_surface->h;
+  if (!message.empty()) {
+    message_shown_at_ = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+    text_surface = TTF_RenderText_Blended(big_font_, message.c_str(), TEXT_COLOR);
+
+    if (message_texture_ != nullptr) {
+      SDL_DestroyTexture(message_texture_);
+    }
+    message_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
+
+    message_width_ = text_surface->w;
+    message_height_ = text_surface->h;
     SDL_FreeSurface(text_surface);
   }
-  if (error_message_texture_ != nullptr) {
+  if (message_texture_ != nullptr) {
     std::chrono::milliseconds now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-    const float keep_alpha = std::max(sqrtf(1.0F - (now - error_message_shown_at_).count() / 1000.0F / 4.0F), 0.0F);
+    const float keep_alpha = std::max(sqrtf(1.0F - (now - message_shown_at_).count() / 1000.0F / 4.0F), 0.0F);
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * keep_alpha);
-    fill_rect = {drawable_width_ / 2 - error_message_width_ / 2 - 2, drawable_height_ / 2 - error_message_height_ / 2 - 2, error_message_width_ + 4, error_message_height_ + 4};
+    fill_rect = {drawable_width_ / 2 - message_width_ / 2 - 2, drawable_height_ / 2 - message_height_ / 2 - 2, message_width_ + 4, message_height_ + 4};
     SDL_RenderFillRect(renderer_, &fill_rect);
 
-    SDL_SetTextureAlphaMod(error_message_texture_, 255 * keep_alpha);
-    text_rect = {drawable_width_ / 2 - error_message_width_ / 2, drawable_height_ / 2 - error_message_height_ / 2, error_message_width_, error_message_height_};
-    SDL_RenderCopy(renderer_, error_message_texture_, nullptr, &text_rect);
+    SDL_SetTextureAlphaMod(message_texture_, 255 * keep_alpha);
+    text_rect = {drawable_width_ / 2 - message_width_ / 2, drawable_height_ / 2 - message_height_ / 2, message_width_, message_height_};
+    SDL_RenderCopy(renderer_, message_texture_, nullptr, &text_rect);
   }
 
   if (mode_ == Mode::split && show_hud_ && compare_mode) {
@@ -875,7 +895,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 }
 
 float Display::compute_zoom_factor(const float zoom_level) const {
-  return pow(ZOOM_SPEED, zoom_level);
+  return pow(ZOOM_STEP_SIZE, zoom_level);
 }
 
 Vector2D Display::compute_relative_move_offset(const Vector2D& zoom_point, const float zoom_factor) const {
@@ -899,12 +919,20 @@ void Display::update_zoom_factor_and_move_offset(const float zoom_factor) {
 
 void Display::update_zoom_factor(const float zoom_factor) {
   global_zoom_factor_ = zoom_factor;
-  global_zoom_level_ = log(zoom_factor) / log(ZOOM_SPEED);
+  global_zoom_level_ = log(zoom_factor) / log(ZOOM_STEP_SIZE);
 }
 
 void Display::update_move_offset(const Vector2D& move_offset) {
   move_offset_ = move_offset;
   global_center_ = Vector2D(move_offset_.x() / video_width_ + 0.5F, move_offset_.y() / video_height_ + 0.5F);
+}
+
+void Display::update_playback_speed(const int playback_speed_level) {
+  // allow 128x change of playback speed
+  if (abs(playback_speed_level) <= (PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE * 7)) {
+    playback_speed_level_ = playback_speed_level;
+    playback_speed_factor_ = pow(PLAYBACK_SPEED_STEP_SIZE, playback_speed_level);
+  }
 }
 
 void Display::input() {
@@ -1068,6 +1096,12 @@ void Display::input() {
           case SDLK_PAGEUP:
             seek_relative_ += 600.0F;
             break;
+          case SDLK_j:
+            update_playback_speed(playback_speed_level_ - 1);
+            break;
+          case SDLK_l:
+            update_playback_speed(playback_speed_level_ + 1);
+            break;
           case SDLK_PLUS:
           case SDLK_KP_PLUS:
           case SDLK_EQUALS:  // for tenkeyless keyboards
@@ -1150,4 +1184,8 @@ int Display::get_frame_offset_delta() const {
 
 int Display::get_shift_right_frames() const {
   return shift_right_frames_;
+}
+
+float Display::get_playback_speed_factor() const {
+  return playback_speed_factor_;
 }
