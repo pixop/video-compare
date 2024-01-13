@@ -252,7 +252,10 @@ bool VideoCompare::filter_decoded_frame(const int video_idx, AVFrame* frame_deco
     }
 
     // scale and convert pixel format before pushing to frame queue for displaying
-    std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
+    std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted{av_frame_alloc(), [](AVFrame* f) {
+                                                                              av_freep(&f->data[0]);
+                                                                              av_frame_free(&f);
+                                                                            }};
 
     if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
       throw std::runtime_error("Copying filtered frame properties");
@@ -261,8 +264,6 @@ bool VideoCompare::filter_decoded_frame(const int video_idx, AVFrame* frame_deco
       throw std::runtime_error("Allocating converted picture");
     }
     (*format_converter_[video_idx])(frame_filtered.get(), frame_converted.get());
-
-    av_frame_unref(frame_filtered.get());
 
     if (!frame_queue_[video_idx]->push(std::move(frame_converted))) {
       return false;
