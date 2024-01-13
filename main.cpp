@@ -60,8 +60,8 @@ void print_controls() {
                                                                   {"Up arrow", "Seek 15 seconds forward"},
                                                                   {"Right arrow", "Seek 1 second forward"},
                                                                   {"Page up", "Seek 600 seconds forward"},
-                                                                  {"J", "Reduce playback speed ~12%"},
-                                                                  {"L", "Increase playback speed ~12%"},
+                                                                  {"J", "Reduce playback speed"},
+                                                                  {"L", "Increase playback speed"},
                                                                   {"S", "Swap left and right video"},
                                                                   {"A", "Previous frame"},
                                                                   {"D", "Next frame"},
@@ -220,7 +220,7 @@ int main(int argc, char** argv) {
       find_matching_hw_accels(args["find-hwaccels"]);
     } else if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
-      usage << "video-compare 20240107-nairobi Copyright (c) 2018-2024 Jon Frydensbjerg, the video-compare community" << std::endl << std::endl;
+      usage << "video-compare 20240114-caracas Copyright (c) 2018-2024 Jon Frydensbjerg, the video-compare community" << std::endl << std::endl;
       usage << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl << std::endl;
       argagg::fmt_ostream fmt(std::cerr);
       fmt << usage.str() << argparser;
