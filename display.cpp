@@ -725,8 +725,13 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       const int left_position_text_height = text_surface->h;
       SDL_FreeSurface(text_surface);
 
-      render_text(line1_y_, line1_y_, left_text_texture_, left_text_width_, left_text_height_, border_extension_, true);
-      render_text(line1_y_, line2_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
+      if (mode_ == Mode::vstack) {
+        render_text(line1_y_, line1_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
+        render_text(line1_y_, line2_y_, left_text_texture_, left_text_width_, left_text_height_, border_extension_, true);
+      } else {
+        render_text(line1_y_, line1_y_, left_text_texture_, left_text_width_, left_text_height_, border_extension_, true);
+        render_text(line1_y_, line2_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
+      }
 
       SDL_DestroyTexture(left_position_text_texture);
     }
@@ -805,7 +810,10 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     const int playack_speed_text_height = text_surface->h;
     SDL_FreeSurface(text_surface);
 
-    render_text(drawable_width_ / 2 - playack_speed_text_width / 2 - border_extension_, text_y, playack_speed_text_texture, playack_speed_text_width, playack_speed_text_height, border_extension_, false);
+    text_x = drawable_width_ / 2 - playack_speed_text_width / 2 - border_extension_;
+    text_y = drawable_height_ - line1_y_ - zoom_position_text_height;
+
+    render_text(text_x, text_y, playack_speed_text_texture, playack_speed_text_width, playack_speed_text_height, border_extension_, false);
     SDL_DestroyTexture(playack_speed_text_texture);
 
     // current frame / number of frames in history buffer
