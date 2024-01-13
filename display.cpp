@@ -197,7 +197,6 @@ Display::Display(const int display_number,
   double_border_extension_ = border_extension_ * 2;
   line1_y_ = 20;
   line2_y_ = line1_y_ + 30 * font_scale_;
-  middle_y_ = drawable_height_ / 2 - (30 * font_scale_ - double_border_extension_) / 2;
 
   if (mode_ != Mode::vstack) {
     max_text_width_ = drawable_width_ / 2 - double_border_extension_ - line1_y_;
@@ -823,7 +822,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     const int current_total_browsable_text_height = text_surface->h;
     SDL_FreeSurface(text_surface);
 
-    text_y = (mode_ == Mode::vstack) ? middle_y_ : line2_y_;
+    text_y = (mode_ == Mode::vstack) ? line1_y_ : line2_y_;
 
     // blink label in loop mode
     fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
