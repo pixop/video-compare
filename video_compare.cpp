@@ -291,7 +291,7 @@ void VideoCompare::video() {
     int64_t left_previous_decoded_picture_number = -1;
     int64_t delta_left_pts = 0;
     float left_start_time = demuxer_[0]->start_time() * AV_TIME_TO_SEC;
-    int64_t left_first_pts;
+    int64_t left_first_pt = 0;
 
     if (left_start_time > 0) {
       std::cout << "Note: The left video has a start time of " << format_position(left_start_time, true) << " - timestamps will be shifted so they start at zero!" << std::endl;
@@ -302,7 +302,7 @@ void VideoCompare::video() {
     int64_t right_previous_decoded_picture_number = -1;
     int64_t delta_right_pts = 0;
     float right_start_time = demuxer_[1]->start_time() * AV_TIME_TO_SEC;
-    int64_t right_first_pts;
+    int64_t right_first_pts = 0;
 
     if (right_start_time > 0) {
       std::cout << "Note: The right video has a start time of " << format_position(right_start_time, true) << " - timestamps will be shifted so they start at zero!" << std::endl;
