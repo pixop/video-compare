@@ -801,9 +801,32 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     SDL_DestroyTexture(zoom_position_text_texture);
 
     // playback speed
-    const std::string playback_speed_factor_str = playback_speed_level_ != 0 ? string_sprintf("|%.2f", playback_speed_factor_) : "";
-    const std::string playback_speed_str = string_sprintf("@%.2f%s", 1000000.0f * playback_speed_factor_ / float(std::max(left_frame->pkt_duration, right_frame->pkt_duration)), playback_speed_factor_str.c_str());
-    text_surface = TTF_RenderText_Blended(small_font_, playback_speed_str.c_str(), PLAYBACK_SPEED_COLOR);
+    std::string playback_speed_str;
+    std::string playback_speed_factor_str;
+
+    const float playback_speed = 1000000.0f * playback_speed_factor_ / float(std::max(left_frame->pkt_duration, right_frame->pkt_duration));
+    const uint64_t playback_speed_rounded = lrintf(playback_speed * 100);
+
+    if (playback_speed_rounded < 100) {
+      playback_speed_str = string_sprintf("%1.2f", playback_speed);
+    } else if (playback_speed_rounded % 100 && playback_speed_rounded < 24000) {
+      playback_speed_str = string_sprintf("%2.1f", playback_speed);
+    } else {
+      playback_speed_str = string_sprintf("%1.0f", playback_speed);
+    }
+
+    if (playback_speed_level_ != 0) {
+      if (lrintf(playback_speed_factor_ * 100) < 10) {
+        playback_speed_factor_str = string_sprintf("|%1.1f%%", playback_speed_factor_ * 100);
+      } else {
+        playback_speed_factor_str = string_sprintf("|%1.0f%%", playback_speed_factor_ * 100);
+      }
+    } else {
+       playback_speed_factor_str = "";
+    }
+
+    const std::string united_playback_speed_str = string_sprintf("@%s%s", playback_speed_str.c_str(), playback_speed_factor_str.c_str());
+    text_surface = TTF_RenderText_Blended(small_font_, united_playback_speed_str.c_str(), PLAYBACK_SPEED_COLOR);
     SDL_Texture* playack_speed_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
     const int playack_speed_text_width = text_surface->w;
     const int playack_speed_text_height = text_surface->h;
