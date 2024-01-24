@@ -807,8 +807,6 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     const float playback_speed = 1000000.0f * playback_speed_factor_ / float(std::max(left_frame->pkt_duration, right_frame->pkt_duration));
     const uint64_t playback_speed_rounded = lrintf(playback_speed * 1000);
 
-    std::cerr << playback_speed_rounded << " " << playback_speed_rounded % 100 << std::endl;
-
     if (playback_speed_rounded < 1000) {
       playback_speed_str = string_sprintf("%1.2f", playback_speed);
     } else if (playback_speed_rounded % 1000 && playback_speed_rounded < 240000) {
