@@ -322,6 +322,10 @@ void VideoCompare::video() {
 
       display_->input();
 
+      if (display_->get_playback_speed_changed()) {
+        timer_->reset();
+      }
+
       if ((display_->get_seek_relative() != 0.0F) || (display_->get_shift_right_frames() != 0)) {
         total_right_time_shifted += display_->get_shift_right_frames();
 

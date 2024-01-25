@@ -966,6 +966,7 @@ void Display::update_playback_speed(const int playback_speed_level) {
   if (abs(playback_speed_level) <= (PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE * 7)) {
     playback_speed_level_ = playback_speed_level;
     playback_speed_factor_ = pow(PLAYBACK_SPEED_STEP_SIZE, playback_speed_level);
+    playback_speed_changed_ = true;
   }
 }
 
@@ -976,6 +977,7 @@ void Display::input() {
   seek_from_start_ = false;
   frame_offset_delta_ = 0;
   shift_right_frames_ = 0;
+  playback_speed_changed_ = false;
 
   while (SDL_PollEvent(&event_) != 0) {
     switch (event_.type) {
@@ -1222,4 +1224,8 @@ int Display::get_shift_right_frames() const {
 
 float Display::get_playback_speed_factor() const {
   return playback_speed_factor_;
+}
+
+bool Display::get_playback_speed_changed() const {
+  return playback_speed_changed_;
 }

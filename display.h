@@ -88,6 +88,7 @@ class Display {
   bool mouse_is_inside_window_{false};
   int playback_speed_level_{0};
   float playback_speed_factor_{1.0F};
+  bool playback_speed_changed_{false};
 
   float global_zoom_level_{0.0F};
   float global_zoom_factor_{1.0F};
@@ -217,4 +218,5 @@ class Display {
   int get_frame_offset_delta() const;
   int get_shift_right_frames() const;
   float get_playback_speed_factor() const;
+  bool get_playback_speed_changed() const;
 };
