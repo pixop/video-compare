@@ -80,7 +80,7 @@ VideoCompare::VideoCompare(const int display_number,
     const std::string pixel_format_and_color_space =
         stringify_pixel_format(video_decoder_[index]->pixel_format(), video_decoder_[index]->color_range(), video_decoder_[index]->color_space(), video_decoder_[index]->color_primaries(), video_decoder_[index]->color_trc());
 
-    std::cout << string_sprintf("%s %s, %s, %s, %s, %s, %s, %s, %s, %s, %s", label.c_str(), dimensions.c_str(), format_duration(demuxer_[index]->duration() * AV_TIME_TO_SEC).c_str(),
+    std::cout << string_sprintf("%s %9s, %s, %s, %s, %s, %s, %s, %s, %s, %s", label.c_str(), dimensions.c_str(), format_duration(demuxer_[index]->duration() * AV_TIME_TO_SEC).c_str(),
                                 stringify_frame_rate(demuxer_[index]->guess_frame_rate(), video_decoder_[index]->codec_context()->field_order).c_str(), stringify_decoder(video_decoder_[index].get()).c_str(),
                                 pixel_format_and_color_space.c_str(), demuxer_[index]->format_name().c_str(), file_name.c_str(), stringify_file_size(demuxer_[index]->file_size(), 2).c_str(),
                                 stringify_bit_rate(demuxer_[index]->bit_rate(), 1).c_str(), video_filterer_[index]->filter_description().c_str())
