@@ -600,21 +600,19 @@ void VideoCompare::video() {
           const std::string frame_offset_format_str = string_sprintf("%%s%%0%dd/%%0%dd%%s", max_digits, max_digits);
           const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, max_left_frame_index + 1, suffix_str.c_str());
 
+          // refresh display
           refresh_timer.update();
 
-          if (!display_->get_swap_left_right()) {
-            display_->refresh({left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
-                              {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                              {video_decoder_[0]->width(), video_decoder_[0]->height()}, {right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
-                              {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                              {video_decoder_[1]->width(), video_decoder_[1]->height()}, left_frames[frame_offset].get(), right_frames[frame_offset].get(), current_total_browsable, message);
-          } else {
-            display_->refresh({right_frames[frame_offset]->data[0], right_frames[frame_offset]->data[1], right_frames[frame_offset]->data[2]},
-                              {static_cast<size_t>(right_frames[frame_offset]->linesize[0]), static_cast<size_t>(right_frames[frame_offset]->linesize[1]), static_cast<size_t>(right_frames[frame_offset]->linesize[2])},
-                              {video_decoder_[1]->width(), video_decoder_[1]->height()}, {left_frames[frame_offset]->data[0], left_frames[frame_offset]->data[1], left_frames[frame_offset]->data[2]},
-                              {static_cast<size_t>(left_frames[frame_offset]->linesize[0]), static_cast<size_t>(left_frames[frame_offset]->linesize[1]), static_cast<size_t>(left_frames[frame_offset]->linesize[2])},
-                              {video_decoder_[0]->width(), video_decoder_[0]->height()}, right_frames[frame_offset].get(), left_frames[frame_offset].get(), current_total_browsable, message);
-          }
+          const int left_index = !display_->get_swap_left_right() ? 0 : 1;
+          const int right_index = 1 - left_index;
+          const auto& left_frames_ref = !display_->get_swap_left_right() ? left_frames : right_frames;
+          const auto& right_frames_ref = !display_->get_swap_left_right() ? right_frames : left_frames;
+
+          display_->refresh({left_frames_ref[frame_offset]->data[0], left_frames_ref[frame_offset]->data[1], left_frames_ref[frame_offset]->data[2]},
+                            {static_cast<size_t>(left_frames_ref[frame_offset]->linesize[0]), static_cast<size_t>(left_frames_ref[frame_offset]->linesize[1]), static_cast<size_t>(left_frames_ref[frame_offset]->linesize[2])},
+                            {video_decoder_[left_index]->width(), video_decoder_[left_index]->height()}, {right_frames_ref[frame_offset]->data[0], right_frames_ref[frame_offset]->data[1], right_frames_ref[frame_offset]->data[2]},
+                            {static_cast<size_t>(right_frames_ref[frame_offset]->linesize[0]), static_cast<size_t>(right_frames_ref[frame_offset]->linesize[1]), static_cast<size_t>(right_frames_ref[frame_offset]->linesize[2])},
+                            {video_decoder_[right_index]->width(), video_decoder_[right_index]->height()}, left_frames_ref[frame_offset].get(), right_frames_ref[frame_offset].get(), current_total_browsable, message);
 
           refresh_time_deque.push_back(-refresh_timer.us_until_target());
 
