@@ -18,6 +18,23 @@ extern "C" {
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+static const SDL_Color BACKGROUND_COLOR = {54, 69, 79, 0};
+static const SDL_Color LOOP_OFF_LABEL_COLOR = {0, 0, 0, 0};
+static const SDL_Color LOOP_FW_LABEL_COLOR = {80, 127, 255, 0};
+static const SDL_Color LOOP_PP_LABEL_COLOR = {191, 95, 60, 0};
+static const SDL_Color TEXT_COLOR = {255, 255, 255, 0};
+static const SDL_Color POSITION_COLOR = {255, 255, 192, 0};
+static const SDL_Color TARGET_COLOR = {200, 200, 140, 0};
+static const SDL_Color ZOOM_COLOR = {255, 165, 0, 0};
+static const SDL_Color PLAYBACK_SPEED_COLOR = {0, 192, 160, 0};
+static const SDL_Color BUFFER_COLOR = {160, 225, 192, 0};
+static const int BACKGROUND_ALPHA = 100;
+
+static const int MOUSE_WHEEL_SCROLL_STEPS_TO_DOUBLE = 12;
+static const float ZOOM_STEP_SIZE = pow(2.0F, 1.0F / float(MOUSE_WHEEL_SCROLL_STEPS_TO_DOUBLE));
+static const int PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE = 6;
+static const float PLAYBACK_SPEED_STEP_SIZE = pow(2.0F, 1.0F / float(PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE));
+
 template <typename T>
 inline T check_sdl(T value, const std::string& message) {
   if (!value) {
@@ -60,21 +77,6 @@ std::string get_file_stem(const std::string& file_path) {
 
   return tmp;
 }
-
-static const SDL_Color BACKGROUND_COLOR = {54, 69, 79, 0};
-static const SDL_Color LOOP_OFF_LABEL_COLOR = {0, 0, 0, 0};
-static const SDL_Color LOOP_FW_LABEL_COLOR = {80, 127, 255, 0};
-static const SDL_Color LOOP_PP_LABEL_COLOR = {191, 95, 60, 0};
-static const SDL_Color TEXT_COLOR = {255, 255, 255, 0};
-static const SDL_Color POSITION_COLOR = {255, 255, 192, 0};
-static const SDL_Color TARGET_COLOR = {200, 200, 140, 0};
-static const SDL_Color ZOOM_COLOR = {255, 165, 0, 0};
-static const SDL_Color PLAYBACK_SPEED_COLOR = {0, 192, 160, 0};
-static const SDL_Color BUFFER_COLOR = {160, 225, 192, 0};
-static const int BACKGROUND_ALPHA = 100;
-static const float ZOOM_STEP_SIZE = 1.06F;
-static const int PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE = 6;
-static const float PLAYBACK_SPEED_STEP_SIZE = pow(2.0F, 1.0F / float(PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE));
 
 inline float round_3(float value) {
   return std::round(value * 1000.0F) / 1000.0F;
@@ -785,7 +787,23 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     }
 
     // zoom factor
-    const std::string zoom_factor_str = string_sprintf("x%.3f", global_zoom_factor_);
+    std::string zoom_factor_str;
+    const uint64_t global_zoom_factor_rounded = lrintf(global_zoom_factor_ * 1000);
+    int global_zoom_factor_trailing_zeros = (global_zoom_factor_rounded % 10) > 0 ? 0 : 1;
+    global_zoom_factor_trailing_zeros += (global_zoom_factor_rounded % 100) > 0 ? 0 : 1;
+    global_zoom_factor_trailing_zeros += (global_zoom_factor_rounded % 1000) > 0 ? 0 : 1;
+
+    if (global_zoom_factor_ < 1e-1 || (global_zoom_factor_trailing_zeros == 0 && global_zoom_factor_rounded < 1000)) {
+      zoom_factor_str = string_sprintf("x%1.3f", global_zoom_factor_);
+    } else if (global_zoom_factor_trailing_zeros <= 1 && global_zoom_factor_rounded < 10000) {
+      zoom_factor_str = string_sprintf("x%1.2f", global_zoom_factor_);
+    } else if (global_zoom_factor_trailing_zeros <= 2 && global_zoom_factor_rounded < 100000) {
+      zoom_factor_str = string_sprintf("x%1.1f", global_zoom_factor_);
+    } else {
+      zoom_factor_str = string_sprintf("x%1.0f", global_zoom_factor_);
+    }
+
+    //const std::string zoom_factor_str = string_sprintf("x%.3f", global_zoom_factor_);
     text_surface = TTF_RenderText_Blended(small_font_, zoom_factor_str.c_str(), ZOOM_COLOR);
     SDL_Texture* zoom_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
     const int zoom_position_text_width = text_surface->w;
@@ -999,14 +1017,14 @@ void Display::input() {
             delta_zoom /= 2.0F;
           }
 
-          global_zoom_level_ -= delta_zoom;
-          const float new_global_zoom_factor = compute_zoom_factor(global_zoom_level_);
+          const float new_global_zoom_factor = compute_zoom_factor(global_zoom_level_ - delta_zoom);
 
           // logic ported from YUView's MoveAndZoomableView.cpp with thanks :)
-          if (new_global_zoom_factor >= 0.00001 && new_global_zoom_factor <= 100000) {
+          if (new_global_zoom_factor >= 0.001 && new_global_zoom_factor <= 10000) {
             const Vector2D zoom_point = Vector2D(static_cast<float>(mouse_x_) * video_to_window_width_factor_, static_cast<float>(mouse_y_) * video_to_window_height_factor_);
             update_move_offset(compute_relative_move_offset(zoom_point, new_global_zoom_factor));
 
+            global_zoom_level_ -= delta_zoom;
             global_zoom_factor_ = new_global_zoom_factor;
           }
         }
