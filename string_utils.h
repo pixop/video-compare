@@ -42,3 +42,5 @@ std::string stringify_fraction(const uint64_t num, const uint64_t den, const uns
 std::string stringify_file_size(const int64_t size, const unsigned precision = 0) noexcept;
 
 std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision = 0) noexcept;
+
+std::string stringify_pixel_format(const AVPixelFormat pixel_format, const AVColorRange color_range, const AVColorSpace color_space, const AVColorPrimaries color_primaries, const AVColorTransferCharacteristic color_trc) noexcept;

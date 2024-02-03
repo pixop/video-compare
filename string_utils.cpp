@@ -3,6 +3,10 @@
 #include <cmath>
 #include <numeric>
 
+extern "C" {
+#include <libavutil/pixdesc.h>
+}
+
 // Borrowed from https://www.techiedelight.com/implode-a-vector-of-strings-into-a-comma-separated-string-in-cpp/
 std::string string_join(std::vector<std::string>& strings, const std::string& delim) {
   return std::accumulate(strings.begin(), strings.end(), std::string(), [&delim](std::string& x, std::string& y) { return x.empty() ? y : x + delim + y; });
@@ -189,4 +193,39 @@ std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision)
   result.append("b/s");
 
   return result;
+}
+
+std::string stringify_pixel_format(const AVPixelFormat pixel_format, const AVColorRange color_range, const AVColorSpace color_space, const AVColorPrimaries color_primaries, const AVColorTransferCharacteristic color_trc) noexcept {
+  std::string color_range_str;
+  std::string color_space_str;
+
+  // code adapted from FFmpeg's avcodec.c (thanks guys!)
+  auto unknown_if_null = [](const char *str) {
+    return str ? str : "unknown";
+  };
+
+  if (color_range == AVCOL_RANGE_UNSPECIFIED || (color_range_str = av_color_range_name(color_range)).empty()) {
+    color_range_str = "";
+  }
+
+  if (color_space != AVCOL_SPC_UNSPECIFIED ||
+      color_primaries != AVCOL_PRI_UNSPECIFIED ||
+      color_trc != AVCOL_TRC_UNSPECIFIED) {
+      const char *col = unknown_if_null(av_color_space_name(color_space));
+      const char *pri = unknown_if_null(av_color_primaries_name(color_primaries));
+      const char *trc = unknown_if_null(av_color_transfer_name(color_trc));
+
+      if (strcmp(col, pri) || strcmp(col, trc)) {
+        color_space_str = string_sprintf("%s/%s/%s", col, pri, trc);
+      } else {
+        color_space_str = col;
+      }
+  } else {
+    color_space_str = "";
+  }
+
+  const std::string range_color_space_separator = !color_range_str.empty() && !color_space_str.empty() ? ", " : "";
+  const std::string range_and_color_space = !color_range_str.empty() || !color_space_str.empty() ? string_sprintf(" (%s%s%s)", color_range_str.c_str(), range_color_space_separator.c_str(), color_space_str.c_str()) : "";
+
+  return string_sprintf("%s%s", av_get_pix_fmt_name(pixel_format), range_and_color_space.c_str());
 }

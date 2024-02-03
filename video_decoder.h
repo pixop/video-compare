@@ -25,6 +25,10 @@ class VideoDecoder {
   unsigned height() const;
   AVPixelFormat pixel_format() const;
   AVPixelFormat hw_pixel_format() const;
+  AVColorRange color_range() const;
+  AVColorSpace color_space() const;
+  AVColorPrimaries color_primaries() const;
+  AVColorTransferCharacteristic color_trc() const;
   AVRational time_base() const;
 
   int64_t next_pts() const;

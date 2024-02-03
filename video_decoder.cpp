@@ -148,6 +148,22 @@ AVPixelFormat VideoDecoder::hw_pixel_format() const {
   return hw_pixel_format_;
 }
 
+AVColorRange VideoDecoder::color_range() const {
+  return codec_context_->color_range;
+}
+
+AVColorSpace VideoDecoder::color_space() const  {
+  return codec_context_->colorspace;
+}
+
+AVColorPrimaries VideoDecoder::color_primaries() const {
+  return codec_context_->color_primaries;
+}
+
+AVColorTransferCharacteristic VideoDecoder::color_trc() const {
+  return codec_context_->color_trc;
+}
+
 AVRational VideoDecoder::time_base() const {
   return codec_context_->time_base;
 }
