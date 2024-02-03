@@ -436,6 +436,7 @@ void VideoCompare::video() {
 
       bool store_frames = false;
       bool adjusting = false;
+      const bool fetch_next_frame = display_->get_play() || (display_->get_frame_offset_delta() < 0 && frame_offset == 0);
 
       if (display_->get_quit() || (exception_ != nullptr)) {
         break;
@@ -474,7 +475,7 @@ void VideoCompare::video() {
 
         // handle regular playback only
         if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
-          if (!adjusting && display_->get_play()) {
+          if (!adjusting && fetch_next_frame) {
             if (!frame_queue_[0]->pop(frame_left) || !frame_queue_[1]->pop(frame_right)) {
               frame_left = nullptr;
               frame_right = nullptr;
@@ -595,7 +596,7 @@ void VideoCompare::video() {
           std::string prefix_str, suffix_str;
 
           // add [] to the current / total browsable string when in sync
-          if (display_->get_play() && is_playback_in_sync) {
+          if (fetch_next_frame && is_playback_in_sync) {
             prefix_str = "[";
             suffix_str = "]";
           }
