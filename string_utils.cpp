@@ -200,26 +200,22 @@ std::string stringify_pixel_format(const AVPixelFormat pixel_format, const AVCol
   std::string color_space_str;
 
   // code adapted from FFmpeg's avcodec.c (thanks guys!)
-  auto unknown_if_null = [](const char *str) {
-    return str ? str : "unknown";
-  };
+  auto unknown_if_null = [](const char* str) { return str ? str : "unknown"; };
 
   if (color_range == AVCOL_RANGE_UNSPECIFIED || (color_range_str = av_color_range_name(color_range)).empty()) {
     color_range_str = "";
   }
 
-  if (color_space != AVCOL_SPC_UNSPECIFIED ||
-      color_primaries != AVCOL_PRI_UNSPECIFIED ||
-      color_trc != AVCOL_TRC_UNSPECIFIED) {
-      const char *col = unknown_if_null(av_color_space_name(color_space));
-      const char *pri = unknown_if_null(av_color_primaries_name(color_primaries));
-      const char *trc = unknown_if_null(av_color_transfer_name(color_trc));
+  if (color_space != AVCOL_SPC_UNSPECIFIED || color_primaries != AVCOL_PRI_UNSPECIFIED || color_trc != AVCOL_TRC_UNSPECIFIED) {
+    const char* col = unknown_if_null(av_color_space_name(color_space));
+    const char* pri = unknown_if_null(av_color_primaries_name(color_primaries));
+    const char* trc = unknown_if_null(av_color_transfer_name(color_trc));
 
-      if (strcmp(col, pri) || strcmp(col, trc)) {
-        color_space_str = string_sprintf("%s/%s/%s", col, pri, trc);
-      } else {
-        color_space_str = col;
-      }
+    if (strcmp(col, pri) || strcmp(col, trc)) {
+      color_space_str = string_sprintf("%s/%s/%s", col, pri, trc);
+    } else {
+      color_space_str = col;
+    }
   } else {
     color_space_str = "";
   }

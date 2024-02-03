@@ -152,7 +152,7 @@ AVColorRange VideoDecoder::color_range() const {
   return codec_context_->color_range;
 }
 
-AVColorSpace VideoDecoder::color_space() const  {
+AVColorSpace VideoDecoder::color_space() const {
   return codec_context_->colorspace;
 }
 

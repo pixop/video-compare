@@ -803,7 +803,6 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
       zoom_factor_str = string_sprintf("x%1.0f", global_zoom_factor_);
     }
 
-    //const std::string zoom_factor_str = string_sprintf("x%.3f", global_zoom_factor_);
     text_surface = TTF_RenderText_Blended(small_font_, zoom_factor_str.c_str(), ZOOM_COLOR);
     SDL_Texture* zoom_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
     const int zoom_position_text_width = text_surface->w;
@@ -844,7 +843,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
         playback_speed_factor_str = string_sprintf("|%1.0f%%", playback_speed_factor_ * 100);
       }
     } else {
-       playback_speed_factor_str = "";
+      playback_speed_factor_str = "";
     }
 
     const std::string united_playback_speed_str = string_sprintf("@%s%s", playback_speed_str.c_str(), playback_speed_factor_str.c_str());

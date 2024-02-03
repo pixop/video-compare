@@ -77,7 +77,8 @@ VideoCompare::VideoCompare(const int display_number,
       frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
   auto dump_video_info = [&](const std::string& label, const int index, const std::string& file_name) {
     const std::string dimensions = string_sprintf("%dx%d", video_decoder_[index]->width(), video_decoder_[index]->height());
-    const std::string pixel_format_and_color_space = stringify_pixel_format(video_decoder_[index]->pixel_format(), video_decoder_[index]->color_range(), video_decoder_[index]->color_space(), video_decoder_[index]->color_primaries(), video_decoder_[index]->color_trc());
+    const std::string pixel_format_and_color_space =
+        stringify_pixel_format(video_decoder_[index]->pixel_format(), video_decoder_[index]->color_range(), video_decoder_[index]->color_space(), video_decoder_[index]->color_primaries(), video_decoder_[index]->color_trc());
 
     std::cout << string_sprintf("%s %s, %s, %s, %s, %s, %s, %s, %s, %s, %s", label.c_str(), dimensions.c_str(), format_duration(demuxer_[index]->duration() * AV_TIME_TO_SEC).c_str(),
                                 stringify_frame_rate(demuxer_[index]->guess_frame_rate(), video_decoder_[index]->codec_context()->field_order).c_str(), stringify_decoder(video_decoder_[index].get()).c_str(),
