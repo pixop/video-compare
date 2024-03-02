@@ -5,7 +5,7 @@
 Split screen video comparison tool written in C++14 using FFmpeg libraries and SDL2.
 
 `video-compare` can be used to visually compare, e.g., the effect of codecs and resizing algorithms on
-two video files played in sync. The tool is flexible, allowing videos of differing resolutions, 
+two video files played in sync. The tool is flexible, allowing videos of differing resolutions,
 frame rates, scanning methods, color formats, container formats, codecs, or durations.
 
 A movable slider enables easy viewing of the difference across any region of interest.
@@ -158,7 +158,7 @@ see all supported options.
 - Plus `+`: Time-shift right video 1 frame forward
 - Minus `-`: Time-shift right video 1 frame backward
 
-Move the mouse horizontally to adjust the movable slider position. 
+Move the mouse horizontally to adjust the movable slider position.
 
 Use the mouse wheel to zoom in/out on the pixel under the cursor. Pan the view
 by moving the mouse while holding down the right button.
@@ -167,16 +167,18 @@ Left-click the mouse to perform a time seek based on the horizontal position of 
 mouse cursor relative to the window width (the target position is shown in the lower
 right corner).
 
-Hold CTRL while time-shifting with +/- for faster increments/decrements of 10 frames per
+Hold the SHIFT key while pressing `D` to fetch and navigate to the next frame.
+
+Hold CTRL while time-shifting with `+`/`-` for faster increments/decrements of 10 frames per
 keystroke. Similarly, hold down the ALT key for even bigger time-shifts of 100 frames.
 
 ## Build
 
 ### Requirements
 
-Requires FFmpeg headers and development libraries to be installed, along with SDL2 and 
-its TrueType font rendering add on (libsdl2_ttf). SDL2 version 2.0.10 or later is now 
-specifically required for subpixel accuracy rendering capabilities. Users may need to 
+Requires FFmpeg headers and development libraries to be installed, along with SDL2 and
+its TrueType font rendering add on (libsdl2_ttf). SDL2 version 2.0.10 or later is now
+specifically required for subpixel accuracy rendering capabilities. Users may need to
 upgrade their existing SDL2 installation before compiling.
 
 On Debian GNU/Linux the required development packages can be installed via `apt`:

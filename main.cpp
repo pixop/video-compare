@@ -96,6 +96,8 @@ void print_controls() {
   std::cout << "of the mouse cursor relative to the window width (the target position is" << std::endl;
   std::cout << "shown in the lower right corner)." << std::endl << std::endl;
 
+  std::cout << "Hold the SHIFT key while pressing D to fetch and navigate to the next frame." << std::endl << std::endl;
+
   std::cout << "Hold CTRL while time-shifting with +/- for faster increments/decrements" << std::endl;
   std::cout << "of 10 frames per keystroke. Similarly, hold down the ALT key for even" << std::endl;
   std::cout << "bigger time-shifts of 100 frames." << std::endl;
