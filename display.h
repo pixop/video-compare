@@ -80,7 +80,8 @@ class Display {
   bool show_hud_{true};
   bool subtraction_mode_{false};
   float seek_relative_{0.0F};
-  int frame_offset_delta_{0};
+  int frame_buffer_offset_delta_{0};
+  int frame_navigation_delta_{0};
   int shift_right_frames_{0};
   bool seek_from_start_{false};
   bool save_image_frames_{false};
@@ -215,7 +216,8 @@ class Display {
   bool get_swap_left_right() const;
   float get_seek_relative() const;
   bool get_seek_from_start() const;
-  int get_frame_offset_delta() const;
+  int get_frame_buffer_offset_delta() const;
+  int get_frame_navigation_delta() const;
   int get_shift_right_frames() const;
   float get_playback_speed_factor() const;
   bool get_playback_speed_changed() const;

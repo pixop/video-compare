@@ -992,7 +992,8 @@ void Display::input() {
 
   seek_relative_ = 0.0F;
   seek_from_start_ = false;
-  frame_offset_delta_ = 0;
+  frame_buffer_offset_delta_ = 0;
+  frame_navigation_delta_ = 0;
   shift_right_frames_ = 0;
   playback_speed_changed_ = false;
 
@@ -1083,10 +1084,18 @@ void Display::input() {
             zoom_right_ = true;
             break;
           case SDLK_a:
-            frame_offset_delta_++;
+            if (event_.key.keysym.mod & KMOD_SHIFT) {
+              std::cerr << "Frame-accurate backward navigation has not yet been implemented" << std::endl;
+            } else {
+              frame_buffer_offset_delta_++;
+            }           
             break;
           case SDLK_d:
-            frame_offset_delta_--;
+            if (event_.key.keysym.mod & KMOD_SHIFT) {
+              frame_navigation_delta_++;
+            } else {
+              frame_buffer_offset_delta_--;
+            }            
             break;
           case SDLK_s: {
             swap_left_right_ = !swap_left_right_;
@@ -1231,8 +1240,12 @@ bool Display::get_seek_from_start() const {
   return seek_from_start_;
 }
 
-int Display::get_frame_offset_delta() const {
-  return frame_offset_delta_;
+int Display::get_frame_buffer_offset_delta() const {
+  return frame_buffer_offset_delta_;
+}
+
+int Display::get_frame_navigation_delta() const {
+  return frame_navigation_delta_;
 }
 
 int Display::get_shift_right_frames() const {

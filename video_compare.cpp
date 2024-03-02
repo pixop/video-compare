@@ -321,6 +321,8 @@ void VideoCompare::video() {
     int64_t right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME;
     int total_right_time_shifted = 0;
 
+    int forward_navigate_frames = 0;
+
     for (uint64_t frame_number = 0;; ++frame_number) {
       std::string message;
 
@@ -329,6 +331,8 @@ void VideoCompare::video() {
       if (display_->get_playback_speed_changed()) {
         timer_->reset();
       }
+
+      forward_navigate_frames += display_->get_frame_navigation_delta();
 
       if ((display_->get_seek_relative() != 0.0F) || (display_->get_shift_right_frames() != 0)) {
         total_right_time_shifted += display_->get_shift_right_frames();
@@ -436,7 +440,7 @@ void VideoCompare::video() {
 
       bool store_frames = false;
       bool adjusting = false;
-      const bool fetch_next_frame = display_->get_play() || (display_->get_frame_offset_delta() < 0 && frame_offset == 0);
+      const bool fetch_next_frame = display_->get_play() || (forward_navigate_frames > 0);
 
       if (display_->get_quit() || (exception_ != nullptr)) {
         break;
@@ -503,6 +507,11 @@ void VideoCompare::video() {
             timer_->reset();
           }
         }
+      }
+
+      // for frame-accurate forward navigation, decrement counter when frame is stored in buffer
+      if (store_frames && (forward_navigate_frames > 0)) {
+        forward_navigate_frames--;
       }
 
       // 1. Update the duration of the last frame to its exact value once the next frame has been decoded
@@ -584,7 +593,7 @@ void VideoCompare::video() {
 
       auto adjust_frame_offset = [max_left_frame_index](const int frame_offset, const int adjustment) { return std::min(std::max(0, frame_offset + adjustment), max_left_frame_index); };
 
-      frame_offset = adjust_frame_offset(frame_offset, display_->get_frame_offset_delta());
+      frame_offset = adjust_frame_offset(frame_offset, display_->get_frame_buffer_offset_delta());
 
       if (frame_offset >= 0 && !left_frames.empty() && !right_frames.empty()) {
         const bool is_playback_in_sync = is_in_sync(left_pts, right_pts, delta_left_pts, delta_right_pts);
