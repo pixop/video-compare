@@ -63,8 +63,8 @@ void print_controls() {
                                                                   {"J", "Reduce playback speed"},
                                                                   {"L", "Increase playback speed"},
                                                                   {"S", "Swap left and right video"},
-                                                                  {"A", "Previous frame"},
-                                                                  {"D", "Next frame"},
+                                                                  {"A", "Move to the previous frame in the buffer"},
+                                                                  {"D", "Move to the next frame in the buffer"},
                                                                   {"F", "Save both frames as PNG images in the current directory"},
                                                                   {"P", "Print mouse position and pixel value under cursor to console"},
                                                                   {"Z", "Magnify area around cursor (result shown in lower left corner)"},
@@ -96,7 +96,7 @@ void print_controls() {
   std::cout << "of the mouse cursor relative to the window width (the target position is" << std::endl;
   std::cout << "shown in the lower right corner)." << std::endl << std::endl;
 
-  std::cout << "Hold the SHIFT key while pressing D to fetch and navigate to the next frame." << std::endl << std::endl;
+  std::cout << "Hold the SHIFT key while pressing D to decode and move to the next frame." << std::endl << std::endl;
 
   std::cout << "Hold CTRL while time-shifting with +/- for faster increments/decrements" << std::endl;
   std::cout << "of 10 frames per keystroke. Similarly, hold down the ALT key for even" << std::endl;

@@ -140,8 +140,8 @@ see all supported options.
 - J: Reduce playback speed
 - L: Increase playback speed
 - S: Swap left and right video
-- A: Previous frame
-- D: Next frame
+- A: Move to the previous frame in the buffer
+- D: Move to the next frame in the buffer
 - F: Save both frames as PNG images in the current directory
 - P: Print mouse position and pixel value under cursor to console
 - Z: Magnify area around cursor (result shown in lower left corner)
@@ -167,7 +167,7 @@ Left-click the mouse to perform a time seek based on the horizontal position of 
 mouse cursor relative to the window width (the target position is shown in the lower
 right corner).
 
-Hold the SHIFT key while pressing `D` to fetch and navigate to the next frame.
+Hold the SHIFT key while pressing `D` to decode and move to the next frame.
 
 Hold CTRL while time-shifting with `+`/`-` for faster increments/decrements of 10 frames per
 keystroke. Similarly, hold down the ALT key for even bigger time-shifts of 100 frames.
