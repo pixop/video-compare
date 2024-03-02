@@ -1088,14 +1088,14 @@ void Display::input() {
               std::cerr << "Frame-accurate backward navigation has not yet been implemented" << std::endl;
             } else {
               frame_buffer_offset_delta_++;
-            }           
+            }
             break;
           case SDLK_d:
             if (event_.key.keysym.mod & KMOD_SHIFT) {
               frame_navigation_delta_++;
             } else {
               frame_buffer_offset_delta_--;
-            }            
+            }
             break;
           case SDLK_s: {
             swap_left_right_ = !swap_left_right_;
