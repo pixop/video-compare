@@ -65,7 +65,7 @@ VideoCompare::VideoCompare(const int display_number,
       video_decoder_{std::make_unique<VideoDecoder>(left_decoder, left_hw_accel_spec, demuxer_[0]->video_codec_parameters()), std::make_unique<VideoDecoder>(right_decoder, right_hw_accel_spec, demuxer_[1]->video_codec_parameters())},
       video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get(), left_video_filters, demuxer_[1].get(), video_decoder_[1].get(), disable_auto_filters),
                       std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get(), right_video_filters, demuxer_[0].get(), video_decoder_[0].get(), disable_auto_filters)},
-      max_width_{std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width())},
+      max_width_{(std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width()) + 7) & -8},
       max_height_{std::max(video_filterer_[0]->dest_height(), video_filterer_[1]->dest_height())},
       shortest_duration_{std::min(demuxer_[0]->duration(), demuxer_[1]->duration()) * AV_TIME_TO_SEC},
       format_converter_{
