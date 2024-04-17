@@ -84,7 +84,11 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
     // buffer video source: the decoded frames go here
     const AVFilter* buffersrc = avfilter_get_by_name("buffer");
     const std::string args =
+#if (LIBAVUTIL_VERSION_INT < AV_VERSION_INT(59, 8, 100))
+        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d", dec_ctx->width, dec_ctx->height, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num, dec_ctx->sample_aspect_ratio.den);
+#else
         string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d", dec_ctx->width, dec_ctx->height, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num, dec_ctx->sample_aspect_ratio.den, dec_ctx->colorspace, dec_ctx->color_range);
+#endif
 
     ret = avfilter_graph_create_filter(&buffersrc_ctx_, buffersrc, "in", args.c_str(), nullptr, filter_graph_);
     if (ret < 0) {
