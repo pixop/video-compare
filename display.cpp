@@ -709,8 +709,8 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
   if (show_hud_) {
     const float left_position = ffmpeg::pts_in_secs(left_frame);
     const float right_position = ffmpeg::pts_in_secs(right_frame);
-    const float left_progress = left_position + ffmpeg::pkt_duration_in_secs(left_frame);
-    const float right_progress = right_position + ffmpeg::pkt_duration_in_secs(right_frame);
+    const float left_progress = left_position + ffmpeg::frame_duration_in_secs(left_frame);
+    const float right_progress = right_position + ffmpeg::frame_duration_in_secs(right_frame);
 
     // render background rectangles and text on top
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
@@ -821,7 +821,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     std::string playback_speed_str;
     std::string playback_speed_factor_str;
 
-    const float playback_speed = 1000000.0f * playback_speed_factor_ / float(std::max(left_frame->pkt_duration, right_frame->pkt_duration));
+    const float playback_speed = 1000000.0f * playback_speed_factor_ / float(std::max(ffmpeg::frame_duration(left_frame), ffmpeg::frame_duration(right_frame)));
     const uint64_t playback_speed_rounded = lrintf(playback_speed * 1000);
 
     if (playback_speed_rounded < 1000) {

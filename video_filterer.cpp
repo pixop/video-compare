@@ -84,7 +84,7 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
     // buffer video source: the decoded frames go here
     const AVFilter* buffersrc = avfilter_get_by_name("buffer");
     const std::string args =
-        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d", dec_ctx->width, dec_ctx->height, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num, dec_ctx->sample_aspect_ratio.den);
+        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d", dec_ctx->width, dec_ctx->height, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num, dec_ctx->sample_aspect_ratio.den, dec_ctx->colorspace, dec_ctx->color_range);
 
     ret = avfilter_graph_create_filter(&buffersrc_ctx_, buffersrc, "in", args.c_str(), nullptr, filter_graph_);
     if (ret < 0) {
@@ -147,7 +147,7 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
 
   // convert PTS and duration to microseconds
   filtered_frame->pts = av_rescale_q(filtered_frame->pts, av_buffersink_get_time_base(buffersink_ctx_), AV_R_MICROSECONDS) - demuxer_->start_time();
-  filtered_frame->pkt_duration = av_rescale_q(filtered_frame->pkt_duration, demuxer_->time_base(), AV_R_MICROSECONDS);
+  ffmpeg::frame_duration(filtered_frame) = av_rescale_q(ffmpeg::frame_duration(filtered_frame), demuxer_->time_base(), AV_R_MICROSECONDS);
 
   return true;
 }

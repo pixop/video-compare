@@ -40,7 +40,19 @@ inline float pts_in_secs(const AVFrame* frame) {
   return frame->pts * AV_TIME_TO_SEC;
 }
 
-inline float pkt_duration_in_secs(const AVFrame* frame) {
-  return frame->pkt_duration * AV_TIME_TO_SEC;
+inline int64_t& frame_duration(AVFrame* frame) {
+#if (LIBAVUTIL_VERSION_INT < AV_VERSION_INT(59, 8, 100))
+  return frame->pkt_duration;
+#else
+  return frame->duration;
+#endif
+}
+
+inline int64_t frame_duration(const AVFrame* frame) {
+  return frame_duration(const_cast<AVFrame *>(frame));
+}
+
+inline float frame_duration_in_secs(const AVFrame* frame) {
+  return frame_duration(frame) * AV_TIME_TO_SEC;
 }
 }  // namespace ffmpeg

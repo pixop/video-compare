@@ -525,14 +525,14 @@ void VideoCompare::video() {
           delta_left_pts = left_deque.average();
         }
         if (delta_left_pts > 0) {
-          frame_left->pkt_duration = delta_left_pts;
+          ffmpeg::frame_duration(frame_left.get()) = delta_left_pts;
 
           if (!left_frames.empty() && left_frames.back()->pts == left_first_pts) {
             // update the duration of the first stored left frame
-            left_frames.back()->pkt_duration = delta_left_pts;
+            ffmpeg::frame_duration(left_frames.back().get()) = delta_left_pts;
           }
         } else {
-          delta_left_pts = frame_left->pkt_duration;
+          delta_left_pts = ffmpeg::frame_duration(frame_left.get());
         }
 
         left_pts = frame_left->pts;
@@ -548,14 +548,14 @@ void VideoCompare::video() {
           delta_right_pts = right_deque.average();
         }
         if (delta_right_pts > 0) {
-          frame_right->pkt_duration = delta_right_pts;
+          ffmpeg::frame_duration(frame_right.get()) = delta_right_pts;
 
           if (!right_frames.empty() && right_frames.back()->pts == right_first_pts) {
             // update the duration of the first stored right frame
-            right_frames.back()->pkt_duration = delta_right_pts;
+            ffmpeg::frame_duration(right_frames.back().get()) = delta_right_pts;
           }
         } else {
-          delta_right_pts = frame_right->pkt_duration;
+          delta_right_pts = ffmpeg::frame_duration(frame_right.get());
         }
 
         right_pts = new_right_pts;
@@ -656,7 +656,7 @@ void VideoCompare::video() {
             }
 
             // update timer for accurate in-buffer playback
-            const int64_t in_buffer_frame_delay = compute_frame_delay(left_frames[frame_offset].get()->pkt_duration, right_frames[frame_offset].get()->pkt_duration);
+            const int64_t in_buffer_frame_delay = compute_frame_delay(ffmpeg::frame_duration(left_frames[frame_offset].get()), ffmpeg::frame_duration(right_frames[frame_offset].get()));
 
             timer_->shift_target(in_buffer_frame_delay / display_->get_playback_speed_factor());
           }

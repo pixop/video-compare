@@ -107,23 +107,23 @@ bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
   frame->pts = (use_avframe_state || (next_pts_ + 1) == avframe_pts) ? avframe_pts : next_pts_;
 
   // ensure pkt_duration is always some sensible value
-  if (frame->pkt_duration == 0) {
+  if (ffmpeg::frame_duration(frame) == 0) {
     // estimate based on guessed frame rate
-    frame->pkt_duration = av_rescale_q(1, av_inv_q(demuxer->guess_frame_rate(frame)), demuxer->time_base());
+    ffmpeg::frame_duration(frame) = av_rescale_q(1, av_inv_q(demuxer->guess_frame_rate(frame)), demuxer->time_base());
 
     if (!use_avframe_state) {
       const int64_t avframe_delta_pts = avframe_pts - previous_pts_;
 
       // can avframe_delta_pts be relied on?
-      if (abs(frame->pkt_duration - avframe_delta_pts) <= (frame->pkt_duration * 20 / 100)) {
+      if (abs(ffmpeg::frame_duration(frame) - avframe_delta_pts) <= (ffmpeg::frame_duration(frame) * 20 / 100)) {
         // use the delta between the current and previous PTS instead to reduce accumulated error
-        frame->pkt_duration = avframe_delta_pts;
+        ffmpeg::frame_duration(frame) = avframe_delta_pts;
       }
     }
   }
 
   previous_pts_ = avframe_pts;
-  next_pts_ = frame->pts + frame->pkt_duration;
+  next_pts_ = frame->pts + ffmpeg::frame_duration(frame);
 
   return true;
 }
