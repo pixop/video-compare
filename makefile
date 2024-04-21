@@ -26,6 +26,10 @@ else
   BINDIR = /usr/local/bin/
 endif
 
+ifneq "$(wildcard /usr/include/ffmpeg)" ""
+  CXXFLAGS += -I/usr/include/ffmpeg
+endif
+
 src = $(wildcard *.cpp)
 obj = $(src:.cpp=.o)
 dep = $(obj:.o=.d)
