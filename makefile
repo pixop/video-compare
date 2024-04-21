@@ -9,7 +9,7 @@ ifeq ($(findstring CYGWIN_NT-10.0, $(shell uname)), CYGWIN_NT-10.0)
   LDLIBS = -Lffmpeg-6.1.1-full_build-shared/lib/ -LSDL2-devel-2.28.5-mingw/SDL2-2.28.5/x86_64-w64-mingw32/lib/ -lavformat -lavcodec -lavfilter -lavutil -lswresample -lswscale -lSDL2 -lSDL2_ttf
 else
   CXX = g++
-  LDLIBS = -lavformat -lavcodec -lavfilter -lavutil -lswscale -lSDL2 -lSDL2_ttf -pthread
+  LDLIBS = -lavformat -lavcodec -lavfilter -lavutil -lswscale -lswresample -lSDL2 -lSDL2_ttf -pthread
 endif
 
 ifneq "$(wildcard /opt/homebrew)" ""
