@@ -4,7 +4,7 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
-VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, AVCodecParameters* codec_parameters) : hw_pixel_format_(AV_PIX_FMT_NONE), next_pts_(AV_NOPTS_VALUE) {
+VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, AVCodecParameters* codec_parameters) : hw_pixel_format_(AV_PIX_FMT_NONE), first_pts_(AV_NOPTS_VALUE), next_pts_(AV_NOPTS_VALUE) {
   if (decoder_name.empty()) {
     codec_ = avcodec_find_decoder(codec_parameters->codec_id);
   } else {
@@ -100,7 +100,7 @@ bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
   }
   ffmpeg::check(ret);
 
-  const bool use_avframe_state = next_pts_ == AV_NOPTS_VALUE || frame->key_frame;
+  const bool use_avframe_state = next_pts_ == AV_NOPTS_VALUE || frame->key_frame || frame->pts == first_pts_;
   const int64_t avframe_pts = frame->pts != AV_NOPTS_VALUE ? frame->pts : frame->best_effort_timestamp;
 
   // use an increasing timestamp via pkt_duration between keyframes; otherwise, fall back to the best effort timestamp when PTS is not available
@@ -122,6 +122,7 @@ bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
     }
   }
 
+  first_pts_ = first_pts_ == AV_NOPTS_VALUE ? avframe_pts : first_pts_;
   previous_pts_ = avframe_pts;
   next_pts_ = frame->pts + ffmpeg::frame_duration(frame);
 

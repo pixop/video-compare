@@ -40,6 +40,7 @@ class VideoDecoder {
   std::string hw_accel_name_;
   AVPixelFormat hw_pixel_format_;
 
+  int64_t first_pts_;
   int64_t previous_pts_;
   int64_t next_pts_;
 };
