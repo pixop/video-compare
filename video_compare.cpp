@@ -332,7 +332,7 @@ void VideoCompare::video() {
 
       display_->input();
 
-      if (display_->get_playback_speed_changed()) {
+      if (display_->get_tick_playback()) {
         timer_->reset();
       }
 

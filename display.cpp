@@ -983,7 +983,6 @@ void Display::update_playback_speed(const int playback_speed_level) {
   if (abs(playback_speed_level) <= (PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE * 7)) {
     playback_speed_level_ = playback_speed_level;
     playback_speed_factor_ = pow(PLAYBACK_SPEED_STEP_SIZE, playback_speed_level);
-    playback_speed_changed_ = true;
   }
 }
 
@@ -995,7 +994,7 @@ void Display::input() {
   frame_buffer_offset_delta_ = 0;
   frame_navigation_delta_ = 0;
   shift_right_frames_ = 0;
-  playback_speed_changed_ = false;
+  tick_playback_ = false;
 
   while (SDL_PollEvent(&event_) != 0) {
     switch (event_.type) {
@@ -1163,6 +1162,7 @@ void Display::input() {
             break;
           case SDLK_l:
             update_playback_speed(playback_speed_level_ + 1);
+            tick_playback_ = true;
             break;
           case SDLK_PLUS:
           case SDLK_KP_PLUS:
@@ -1260,6 +1260,6 @@ float Display::get_playback_speed_factor() const {
   return playback_speed_factor_;
 }
 
-bool Display::get_playback_speed_changed() const {
-  return playback_speed_changed_;
+bool Display::get_tick_playback() const {
+  return tick_playback_;
 }
