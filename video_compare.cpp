@@ -666,7 +666,10 @@ void VideoCompare::video() {
             const int64_t in_buffer_frame_delay = compute_frame_delay(ffmpeg::frame_duration(left_frames[frame_offset].get()), ffmpeg::frame_duration(right_frames[frame_offset].get()));
 
             timer_->shift_target(in_buffer_frame_delay / display_->get_playback_speed_factor());
-          } else if (auto_loop_mode_ != Display::Loop::off && !auto_loop_triggered && (buffer_is_full || end_of_file)) {
+          }
+
+          // enter in-buffer playback once if buffer is full or EOF reached
+          if (auto_loop_mode_ != Display::Loop::off && !auto_loop_triggered && (buffer_is_full || end_of_file)) {
             display_->set_buffer_play_loop_mode(auto_loop_mode_);
 
             auto_loop_triggered = true;
