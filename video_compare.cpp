@@ -326,7 +326,6 @@ void VideoCompare::video() {
     int forward_navigate_frames = 0;
 
     bool auto_loop_triggered = false;
-    bool buffer_is_full = false;
 
     for (uint64_t frame_number = 0;; ++frame_number) {
       std::string message;
@@ -514,8 +513,6 @@ void VideoCompare::video() {
         }
       }
 
-      const bool end_of_file = frame_queue_[0]->is_finished() || frame_queue_[1]->is_finished();
-
       // for frame-accurate forward navigation, decrement counter when frame is stored in buffer
       if (store_frames && (forward_navigate_frames > 0)) {
         forward_navigate_frames--;
@@ -579,10 +576,6 @@ void VideoCompare::video() {
 
         left_frames.push_front(std::move(frame_left));
         right_frames.push_front(std::move(frame_right));
-
-        if (left_frames.size() == frame_buffer_size_ && right_frames.size() == frame_buffer_size_) {
-          buffer_is_full = true;
-        }
       } else {
         if (frame_left != nullptr) {
           if (!left_frames.empty()) {
@@ -599,6 +592,9 @@ void VideoCompare::video() {
           }
         }
       }
+
+      const bool end_of_file = frame_queue_[0]->is_finished() || frame_queue_[1]->is_finished();
+      const bool buffer_is_full = left_frames.size() == frame_buffer_size_ && right_frames.size() == frame_buffer_size_;
 
       const int max_left_frame_index = static_cast<int>(left_frames.size()) - 1;
 
