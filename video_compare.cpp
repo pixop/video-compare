@@ -45,6 +45,7 @@ VideoCompare::VideoCompare(const int display_number,
                            const bool high_dpi_allowed,
                            const bool use_10_bpc,
                            const std::tuple<int, int> window_size,
+                           const Display::Loop auto_loop_mode,
                            const size_t frame_buffer_size,
                            const double time_shift_ms,
                            const float wheel_sensitivity,
@@ -59,7 +60,8 @@ VideoCompare::VideoCompare(const int display_number,
                            const std::string& right_decoder,
                            const std::string& right_hw_accel_spec,
                            const bool disable_auto_filters)
-    : frame_buffer_size_(frame_buffer_size),
+    : auto_loop_mode_(auto_loop_mode),
+      frame_buffer_size_(frame_buffer_size),
       time_shift_ms_(time_shift_ms),
       demuxer_{std::make_unique<Demuxer>(left_demuxer, left_file_name), std::make_unique<Demuxer>(right_demuxer, right_file_name)},
       video_decoder_{std::make_unique<VideoDecoder>(left_decoder, left_hw_accel_spec, demuxer_[0]->video_codec_parameters()), std::make_unique<VideoDecoder>(right_decoder, right_hw_accel_spec, demuxer_[1]->video_codec_parameters())},
@@ -323,6 +325,9 @@ void VideoCompare::video() {
 
     int forward_navigate_frames = 0;
 
+    bool auto_loop_triggered = false;
+    bool buffer_is_full = false;
+
     for (uint64_t frame_number = 0;; ++frame_number) {
       std::string message;
 
@@ -509,6 +514,8 @@ void VideoCompare::video() {
         }
       }
 
+      const bool end_of_file = frame_queue_[0]->is_finished() || frame_queue_[1]->is_finished();
+
       // for frame-accurate forward navigation, decrement counter when frame is stored in buffer
       if (store_frames && (forward_navigate_frames > 0)) {
         forward_navigate_frames--;
@@ -572,6 +579,10 @@ void VideoCompare::video() {
 
         left_frames.push_front(std::move(frame_left));
         right_frames.push_front(std::move(frame_right));
+
+        if (left_frames.size() == frame_buffer_size_ && right_frames.size() == frame_buffer_size_) {
+          buffer_is_full = true;
+        }
       } else {
         if (frame_left != nullptr) {
           if (!left_frames.empty()) {
@@ -659,6 +670,10 @@ void VideoCompare::video() {
             const int64_t in_buffer_frame_delay = compute_frame_delay(ffmpeg::frame_duration(left_frames[frame_offset].get()), ffmpeg::frame_duration(right_frames[frame_offset].get()));
 
             timer_->shift_target(in_buffer_frame_delay / display_->get_playback_speed_factor());
+          } else if (auto_loop_mode_ != Display::Loop::off && !auto_loop_triggered && (buffer_is_full || end_of_file)) {
+            display_->set_buffer_play_loop_mode(auto_loop_mode_);
+
+            auto_loop_triggered = true;
           }
         }
       }

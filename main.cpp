@@ -182,6 +182,7 @@ int main(int argc, char** argv) {
                               {"display-number", {"-n", "--display-number"}, "open main window on specific display (e.g. 0, 1 or 2), default is 0", 1},
                               {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
                               {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
+                              {"auto-loop-mode", {"-a", "--auto-loop-mode"}, "auto-loop playback when buffer fills, 'off' for continuous streaming (default), 'on' for forward-only, or 'pp' for ping-pong mode", 1},
                               {"frame-buffer-size", {"-f", "--frame-buffer-size"}, "frame buffer size (e.g. 10, 70 or 150), default is 50", 1},
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
                               {"wheel-sensitivity", {"-s", "--wheel-sensitivity"}, "mouse wheel sensitivity (e.g. 0.5, -1 or 1.7), default is 1; negative values invert the input direction", 1},
@@ -202,9 +203,10 @@ int main(int argc, char** argv) {
     args = argparser.parse(argc, argv_decoded);
 
     int display_number = 0;
-    size_t frame_buffer_size = 50;
     Display::Mode display_mode = Display::Mode::split;
     std::tuple<int, int> window_size(-1, -1);
+    Display::Loop auto_loop_mode = Display::Loop::off;
+    size_t frame_buffer_size = 50;
     double time_shift_ms = 0;
     float wheel_sensitivity = 1;
     std::string left_video_filters, right_video_filters;
@@ -266,6 +268,20 @@ int main(int argc, char** argv) {
         auto const token_vec = std::vector<std::string>(std::sregex_token_iterator{begin(window_size_arg), end(window_size_arg), delimiter_re, -1}, std::sregex_token_iterator{});
 
         window_size = std::make_tuple(!token_vec[0].empty() ? std::stoi(token_vec[0]) : -1, token_vec.size() == 2 ? std::stoi(token_vec[1]) : -1);
+      }
+
+      if (args["auto-loop-mode"]) {
+        const std::string auto_loop_mode_arg = args["auto-loop-mode"];
+
+        if (auto_loop_mode_arg == "off") {
+          auto_loop_mode = Display::Loop::off;
+        } else if (auto_loop_mode_arg == "on") {
+          auto_loop_mode = Display::Loop::forwardonly;
+        } else if (auto_loop_mode_arg == "pp") {
+          auto_loop_mode = Display::Loop::pingpong;
+        } else {
+          throw std::logic_error{"Cannot parse auto loop mode argument (valid options: off, on, pp)"};
+        }
       }
       if (args["frame-buffer-size"]) {
         const std::string frame_buffer_size_arg = args["frame-buffer-size"];
@@ -337,8 +353,8 @@ int main(int argc, char** argv) {
         right_file_name = left_file_name;
       }
 
-      VideoCompare compare{display_number,     display_mode, args["verbose"], args["high-dpi"],   args["10-bpc"],  window_size,         frame_buffer_size, time_shift_ms, wheel_sensitivity,   left_file_name,
-                           left_video_filters, left_demuxer, left_decoder,    left_hw_accel_spec, right_file_name, right_video_filters, right_demuxer,     right_decoder, right_hw_accel_spec, args["disable-auto-filters"]};
+      VideoCompare compare{display_number,     display_mode, args["verbose"], args["high-dpi"],   args["10-bpc"],  window_size,         auto_loop_mode, frame_buffer_size, time_shift_ms, wheel_sensitivity,   left_file_name,
+                           left_video_filters, left_demuxer, left_decoder,    left_hw_accel_spec, right_file_name, right_video_filters, right_demuxer,  right_decoder,     right_hw_accel_spec, args["disable-auto-filters"]};
       compare();
     }
   } catch (const std::exception& e) {

@@ -1220,6 +1220,10 @@ Display::Loop Display::get_buffer_play_loop_mode() const {
   return buffer_play_loop_mode_;
 }
 
+void Display::set_buffer_play_loop_mode(const Display::Loop &mode) {
+  buffer_play_loop_mode_ = mode;
+}
+
 bool Display::get_buffer_play_forward() const {
   return buffer_play_forward_;
 }
