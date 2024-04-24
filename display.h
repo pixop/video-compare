@@ -2,6 +2,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <array>
+#include <vector>
 #include <chrono>
 #include <cmath>
 #include <iostream>
