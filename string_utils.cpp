@@ -1,4 +1,5 @@
 #include "string_utils.h"
+#include <iostream>
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -224,4 +225,28 @@ std::string stringify_pixel_format(const AVPixelFormat pixel_format, const AVCol
   const std::string range_and_color_space = !color_range_str.empty() || !color_space_str.empty() ? string_sprintf(" (%s%s%s)", color_range_str.c_str(), range_color_space_separator.c_str(), color_space_str.c_str()) : "";
 
   return string_sprintf("%s%s", av_get_pix_fmt_name(pixel_format), range_and_color_space.c_str());
+}
+
+void print_wrapped(const std::string& text, const size_t line_length) {
+  size_t pos = 0;
+
+  while (pos < text.length()) {
+    size_t next_pos = (pos + line_length < text.length()) ? pos + line_length : text.length();
+
+    if (next_pos != text.length()) {
+      size_t space_pos = text.rfind(' ', next_pos);
+
+      if (space_pos != std::string::npos && space_pos > pos) {
+        next_pos = space_pos;
+      }
+    }
+
+    std::cout << text.substr(pos, next_pos - pos) << std::endl;
+
+    pos = text.find_first_not_of(' ', next_pos);
+
+    if (pos == std::string::npos) {
+      break;
+    }
+  }
 }

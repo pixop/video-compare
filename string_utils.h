@@ -44,3 +44,5 @@ std::string stringify_file_size(const int64_t size, const unsigned precision = 0
 std::string stringify_bit_rate(const int64_t bit_rate, const unsigned precision = 0) noexcept;
 
 std::string stringify_pixel_format(const AVPixelFormat pixel_format, const AVColorRange color_range, const AVColorSpace color_space, const AVColorPrimaries color_primaries, const AVColorTransferCharacteristic color_trc) noexcept;
+
+void print_wrapped(const std::string& text, const size_t line_length);

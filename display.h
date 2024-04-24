@@ -68,6 +68,7 @@ class Display {
   float video_to_window_height_factor_;
   float font_scale_;
 
+  bool show_help_{false};
   bool quit_{false};
   bool play_{true};
   Loop buffer_play_loop_mode_{off};
@@ -139,6 +140,10 @@ class Display {
   const std::string right_file_stem_;
   int saved_image_number_{1};
 
+  std::vector<SDL_Texture*> help_textures_;
+  int help_total_height_;
+  int help_y_offset_{0};
+
   void print_verbose_info();
 
   void convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi);
@@ -169,6 +174,8 @@ class Display {
 
   std::string format_pixel(const std::array<int, 3>& rgb);
   std::string get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const int x, const int y);
+
+  void render_help();
 
   float compute_zoom_factor(const float zoom_level) const;
   Vector2D compute_relative_move_offset(const Vector2D& zoom_point, const float zoom_factor) const;

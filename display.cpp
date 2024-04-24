@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 #include "ffmpeg.h"
+#include "controls.h"
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
 extern "C" {
@@ -23,6 +24,8 @@ static const SDL_Color LOOP_OFF_LABEL_COLOR = {0, 0, 0, 0};
 static const SDL_Color LOOP_FW_LABEL_COLOR = {80, 127, 255, 0};
 static const SDL_Color LOOP_PP_LABEL_COLOR = {191, 95, 60, 0};
 static const SDL_Color TEXT_COLOR = {255, 255, 255, 0};
+static const SDL_Color HELP_TEXT_PRIMARY_COLOR = {255, 255, 255, 0};
+static const SDL_Color HELP_TEXT_ALTERNATE_COLOR = {255, 255, 192, 0};
 static const SDL_Color POSITION_COLOR = {255, 255, 192, 0};
 static const SDL_Color TARGET_COLOR = {200, 200, 140, 0};
 static const SDL_Color ZOOM_COLOR = {255, 165, 0, 0};
@@ -231,6 +234,34 @@ Display::Display(const int display_number,
 
   diff_planes_ = {diff_plane_0, nullptr, nullptr};
   diff_pitches_ = {video_width_ * 3 * (use_10_bpc ? sizeof(uint16_t) : sizeof(uint8_t)), 0, 0};
+
+  // initialize help texts
+  bool primary_color = true;
+
+  auto add_help_texture = [&](const std::string& text) {
+    SDL_Surface* surface = TTF_RenderText_Blended_Wrapped(small_font_, text.c_str(), primary_color ? HELP_TEXT_PRIMARY_COLOR : HELP_TEXT_ALTERNATE_COLOR, drawable_width_ - 20);
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer_, surface);
+    int h;
+    SDL_QueryTexture(texture, NULL, NULL, NULL, &h);
+    help_textures_.push_back(texture);
+    SDL_FreeSurface(surface);
+
+    help_total_height_ += h;
+    primary_color = !primary_color;
+  };
+
+  add_help_texture("Controls:");
+  add_help_texture(" ");
+
+  for (auto& key_description_pair : get_controls()) {
+    add_help_texture(string_sprintf(" %-12s %s", key_description_pair.first.c_str(), key_description_pair.second.c_str()));
+  }
+
+  add_help_texture(" ");
+
+  for (auto& text : get_instructions()) {
+    add_help_texture(text);
+  }
 }
 
 Display::~Display() {
@@ -240,6 +271,10 @@ Display::~Display() {
 
   if (message_texture_ != nullptr) {
     SDL_DestroyTexture(message_texture_);
+  }
+
+  for (auto help_texture : help_textures_) {
+    SDL_DestroyTexture(help_texture);
   }
 
   TTF_CloseFont(small_font_);
@@ -524,6 +559,23 @@ std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size
   const std::array<int, 3> yuv = convert_rgb_to_yuv(rgb);
 
   return "RGB" + format_pixel(rgb) + ", YUV" + format_pixel(yuv);
+}
+
+void Display::render_help() {
+  int y = help_y_offset_; // yOffset
+
+  SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+  SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 160);
+  SDL_Rect rect = {0, 0, drawable_width_, drawable_height_};
+  SDL_RenderFillRect(renderer_, &rect);
+
+  for (size_t i = 0; i < help_textures_.size(); i++) {
+      int w, h;
+      SDL_QueryTexture(help_textures_[i], NULL, NULL, &w, &h);
+      SDL_Rect dst = {10, y, w, h};
+      SDL_RenderCopy(renderer_, help_textures_[i], NULL, &dst);
+      y += h + 5;
+  }
 }
 
 void Display::refresh(std::array<uint8_t*, 3> planes_left,
@@ -942,6 +994,10 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     }
   }
 
+  if (show_help_) {
+    render_help();
+  }
+
   SDL_RenderPresent(renderer_);
 }
 
@@ -1034,6 +1090,10 @@ void Display::input() {
 
           update_move_offset(move_offset_ + pan_offset);
         }
+
+        help_y_offset_ += -event_.motion.yrel * (help_total_height_ * 3 / drawable_height_);
+        help_y_offset_ = std::max(help_y_offset_, drawable_height_ - help_total_height_ - int(help_textures_.size()) * 5);
+        help_y_offset_ = std::min(help_y_offset_, 0);
         break;
       case SDL_MOUSEBUTTONDOWN:
         if (event_.button.button != SDL_BUTTON_RIGHT) {
@@ -1043,6 +1103,9 @@ void Display::input() {
         break;
       case SDL_KEYDOWN:
         switch (event_.key.keysym.sym) {
+          case SDLK_h:
+            show_help_ = !show_help_;
+            break;
           case SDLK_ESCAPE:
             quit_ = true;
             break;

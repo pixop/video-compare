@@ -6,6 +6,7 @@
 #include <vector>
 #include "argagg.h"
 #include "string_utils.h"
+#include "controls.h"
 #include "video_compare.h"
 
 #ifdef _WIN32
@@ -50,57 +51,17 @@ void free_argv(int argc, char** argv) {
 static const std::string REPEAT_FILE_NAME("__");
 
 void print_controls() {
-  const std::vector<std::pair<std::string, std::string>> controls{{"Space", "Toggle play/pause"},
-                                                                  {",", "Toggle bidirectional in-buffer loop/pause"},
-                                                                  {".", "Toggle forward-only in-buffer loop/pause"},
-                                                                  {"Escape", "Quit"},
-                                                                  {"Down arrow", "Seek 15 seconds backward"},
-                                                                  {"Left arrow", "Seek 1 second backward"},
-                                                                  {"Page down", "Seek 600 seconds backward"},
-                                                                  {"Up arrow", "Seek 15 seconds forward"},
-                                                                  {"Right arrow", "Seek 1 second forward"},
-                                                                  {"Page up", "Seek 600 seconds forward"},
-                                                                  {"J", "Reduce playback speed"},
-                                                                  {"L", "Increase playback speed"},
-                                                                  {"S", "Swap left and right video"},
-                                                                  {"A", "Move to the previous frame in the buffer"},
-                                                                  {"D", "Move to the next frame in the buffer"},
-                                                                  {"F", "Save both frames as PNG images in the current directory"},
-                                                                  {"P", "Print mouse position and pixel value under cursor to console"},
-                                                                  {"Z", "Magnify area around cursor (result shown in lower left corner)"},
-                                                                  {"C", "Magnify area around cursor (result shown in lower right corner)"},
-                                                                  {"R", "Re-center and reset zoom to 100% (x1)"},
-                                                                  {"1", "Toggle hide/show left video"},
-                                                                  {"2", "Toggle hide/show right video"},
-                                                                  {"3", "Toggle hide/show HUD"},
-                                                                  {"5", "Zoom  50% (x0.5)"},
-                                                                  {"6", "Zoom 100% (x1)"},
-                                                                  {"7", "Zoom 200% (x2)"},
-                                                                  {"8", "Zoom 400% (x4)"},
-                                                                  {"0", "Toggle video/subtraction mode"},
-                                                                  {"+", "Time-shift right video 1 frame forward"},
-                                                                  {"-", "Time-shift right video 1 frame backward"}};
-
   std::cout << "Controls:" << std::endl << std::endl;
 
-  for (auto& key_description_pair : controls) {
+  for (auto& key_description_pair : get_controls()) {
     std::cout << string_sprintf(" %-12s %s", key_description_pair.first.c_str(), key_description_pair.second.c_str()) << std::endl;
   }
 
-  std::cout << std::endl << "Move the mouse horizontally to adjust the movable slider position." << std::endl << std::endl;
+  for (auto& instruction : get_instructions()) {
+    std::cout << std::endl;
 
-  std::cout << "Use the mouse wheel to zoom in/out on the pixel under the cursor. Pan the view" << std::endl;
-  std::cout << "by moving the mouse while holding down the right button." << std::endl << std::endl;
-
-  std::cout << "Left-click the mouse to perform a time seek based on the horizontal position" << std::endl;
-  std::cout << "of the mouse cursor relative to the window width (the target position is" << std::endl;
-  std::cout << "shown in the lower right corner)." << std::endl << std::endl;
-
-  std::cout << "Hold the SHIFT key while pressing D to decode and move to the next frame." << std::endl << std::endl;
-
-  std::cout << "Hold CTRL while time-shifting with +/- for faster increments/decrements" << std::endl;
-  std::cout << "of 10 frames per keystroke. Similarly, hold down the ALT key for even" << std::endl;
-  std::cout << "bigger time-shifts of 100 frames." << std::endl;
+    print_wrapped(instruction, 80);
+  }
 }
 
 void find_matching_video_demuxers(const std::string& search_string) {
