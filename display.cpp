@@ -1094,9 +1094,11 @@ void Display::input() {
           update_move_offset(move_offset_ + pan_offset);
         }
 
-        help_y_offset_ += -event_.motion.yrel * (help_total_height_ * 3 / drawable_height_);
-        help_y_offset_ = std::max(help_y_offset_, drawable_height_ - help_total_height_ - static_cast<int>(help_textures_.size()) * HELP_TEXT_LINE_SPACING);
-        help_y_offset_ = std::min(help_y_offset_, 0);
+        if (show_help_) {
+          help_y_offset_ += -event_.motion.yrel * (help_total_height_ * 3 / drawable_height_);
+          help_y_offset_ = std::max(help_y_offset_, drawable_height_ - help_total_height_ - static_cast<int>(help_textures_.size()) * HELP_TEXT_LINE_SPACING);
+          help_y_offset_ = std::min(help_y_offset_, 0);
+        }
         break;
       case SDL_MOUSEBUTTONDOWN:
         if (event_.button.button != SDL_BUTTON_RIGHT) {
