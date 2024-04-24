@@ -86,6 +86,11 @@ video onto a low resolution display:
 
     video-compare -w 1280x720 video1.mp4 video2.mp4
 
+Automatic loop playback, triggered when the buffer fills or end-of-file is reached, streamlines video
+analysis, eliminating the need for manual replay initiation (ping-pong mode `pp` is also available):
+
+    video-compare -a on video1.mp4 video2.mp4
+
 Shift the presentation time stamps of the right video instead of assuming the videos are aligned. A
 positive amount has the effect of delaying the left video while negative values conversely delays the
 right video. Useful when videos are slightly out of sync:
