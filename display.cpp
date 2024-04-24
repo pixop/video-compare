@@ -38,6 +38,9 @@ static const float ZOOM_STEP_SIZE = pow(2.0F, 1.0F / float(MOUSE_WHEEL_SCROLL_ST
 static const int PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE = 6;
 static const float PLAYBACK_SPEED_STEP_SIZE = pow(2.0F, 1.0F / float(PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE));
 
+static const int HELP_TEXT_LINE_SPACING = 5;
+static const int HELP_TEXT_HORIZONTAL_MARGIN = 10;
+
 template <typename T>
 inline T check_sdl(T value, const std::string& message) {
   if (!value) {
@@ -239,7 +242,7 @@ Display::Display(const int display_number,
   bool primary_color = true;
 
   auto add_help_texture = [&](const std::string& text) {
-    SDL_Surface* surface = TTF_RenderText_Blended_Wrapped(small_font_, text.c_str(), primary_color ? HELP_TEXT_PRIMARY_COLOR : HELP_TEXT_ALTERNATE_COLOR, drawable_width_ - 20);
+    SDL_Surface* surface = TTF_RenderText_Blended_Wrapped(small_font_, text.c_str(), primary_color ? HELP_TEXT_PRIMARY_COLOR : HELP_TEXT_ALTERNATE_COLOR, drawable_width_ - HELP_TEXT_HORIZONTAL_MARGIN * 2);
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer_, surface);
     int h;
     SDL_QueryTexture(texture, NULL, NULL, NULL, &h);
@@ -247,19 +250,19 @@ Display::Display(const int display_number,
     SDL_FreeSurface(surface);
 
     help_total_height_ += h;
-    primary_color = !primary_color;
   };
 
   add_help_texture("Controls:");
   add_help_texture(" ");
 
   for (auto& key_description_pair : get_controls()) {
+    primary_color = !primary_color;
     add_help_texture(string_sprintf(" %-12s %s", key_description_pair.first.c_str(), key_description_pair.second.c_str()));
   }
 
-  add_help_texture(" ");
-
   for (auto& text : get_instructions()) {
+    primary_color = !primary_color;
+    add_help_texture(" ");
     add_help_texture(text);
   }
 }
@@ -562,19 +565,19 @@ std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size
 }
 
 void Display::render_help() {
-  int y = help_y_offset_; // yOffset
-
   SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-  SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 160);
+  SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 3 / 2);
   SDL_Rect rect = {0, 0, drawable_width_, drawable_height_};
   SDL_RenderFillRect(renderer_, &rect);
+
+  int y = help_y_offset_;
 
   for (size_t i = 0; i < help_textures_.size(); i++) {
       int w, h;
       SDL_QueryTexture(help_textures_[i], NULL, NULL, &w, &h);
-      SDL_Rect dst = {10, y, w, h};
+      SDL_Rect dst = {HELP_TEXT_HORIZONTAL_MARGIN, y, w, h};
       SDL_RenderCopy(renderer_, help_textures_[i], NULL, &dst);
-      y += h + 5;
+      y += h + HELP_TEXT_LINE_SPACING;
   }
 }
 
@@ -1092,7 +1095,7 @@ void Display::input() {
         }
 
         help_y_offset_ += -event_.motion.yrel * (help_total_height_ * 3 / drawable_height_);
-        help_y_offset_ = std::max(help_y_offset_, drawable_height_ - help_total_height_ - int(help_textures_.size()) * 5);
+        help_y_offset_ = std::max(help_y_offset_, drawable_height_ - help_total_height_ - static_cast<int>(help_textures_.size()) * HELP_TEXT_LINE_SPACING);
         help_y_offset_ = std::min(help_y_offset_, 0);
         break;
       case SDL_MOUSEBUTTONDOWN:
