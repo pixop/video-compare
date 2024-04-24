@@ -142,7 +142,7 @@ class Display {
   int saved_image_number_{1};
 
   std::vector<SDL_Texture*> help_textures_;
-  int help_total_height_;
+  int help_total_height_{0};
   int help_y_offset_{0};
 
   void print_verbose_info();
