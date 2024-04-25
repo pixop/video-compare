@@ -38,7 +38,7 @@ static const float ZOOM_STEP_SIZE = pow(2.0F, 1.0F / float(MOUSE_WHEEL_SCROLL_ST
 static const int PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE = 6;
 static const float PLAYBACK_SPEED_STEP_SIZE = pow(2.0F, 1.0F / float(PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE));
 
-static const int HELP_TEXT_LINE_SPACING = 5;
+static const int HELP_TEXT_LINE_SPACING = 1;
 static const int HELP_TEXT_HORIZONTAL_MARGIN = 10;
 
 template <typename T>
