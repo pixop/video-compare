@@ -7,8 +7,8 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
-#include "ffmpeg.h"
 #include "controls.h"
+#include "ffmpeg.h"
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
 extern "C" {
@@ -573,11 +573,11 @@ void Display::render_help() {
   int y = help_y_offset_;
 
   for (size_t i = 0; i < help_textures_.size(); i++) {
-      int w, h;
-      SDL_QueryTexture(help_textures_[i], NULL, NULL, &w, &h);
-      SDL_Rect dst = {HELP_TEXT_HORIZONTAL_MARGIN, y, w, h};
-      SDL_RenderCopy(renderer_, help_textures_[i], NULL, &dst);
-      y += h + HELP_TEXT_LINE_SPACING;
+    int w, h;
+    SDL_QueryTexture(help_textures_[i], NULL, NULL, &w, &h);
+    SDL_Rect dst = {HELP_TEXT_HORIZONTAL_MARGIN, y, w, h};
+    SDL_RenderCopy(renderer_, help_textures_[i], NULL, &dst);
+    y += h + HELP_TEXT_LINE_SPACING;
   }
 }
 
@@ -1288,7 +1288,7 @@ Display::Loop Display::get_buffer_play_loop_mode() const {
   return buffer_play_loop_mode_;
 }
 
-void Display::set_buffer_play_loop_mode(const Display::Loop &mode) {
+void Display::set_buffer_play_loop_mode(const Display::Loop& mode) {
   buffer_play_loop_mode_ = mode;
 }
 

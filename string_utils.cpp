@@ -1,7 +1,7 @@
 #include "string_utils.h"
-#include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <numeric>
 
 extern "C" {

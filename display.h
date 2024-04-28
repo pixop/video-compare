@@ -2,12 +2,12 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <array>
-#include <vector>
 #include <chrono>
 #include <cmath>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 extern "C" {
 #include <libavutil/frame.h>
 }
@@ -219,7 +219,7 @@ class Display {
   bool get_quit() const;
   bool get_play() const;
   Loop get_buffer_play_loop_mode() const;
-  void set_buffer_play_loop_mode(const Loop &mode);
+  void set_buffer_play_loop_mode(const Loop& mode);
   bool get_buffer_play_forward() const;
   void toggle_buffer_play_direction();
   bool get_swap_left_right() const;

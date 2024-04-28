@@ -49,7 +49,7 @@ inline int64_t& frame_duration(AVFrame* frame) {
 }
 
 inline int64_t frame_duration(const AVFrame* frame) {
-  return frame_duration(const_cast<AVFrame *>(frame));
+  return frame_duration(const_cast<AVFrame*>(frame));
 }
 
 inline float frame_duration_in_secs(const AVFrame* frame) {
