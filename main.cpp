@@ -185,7 +185,7 @@ int main(int argc, char** argv) {
       find_matching_hw_accels(args["find-hwaccels"]);
     } else if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
-      usage << "video-compare 20240303-belize Copyright (c) 2018-2024 Jon Frydensbjerg, the video-compare community" << std::endl << std::endl;
+      usage << "video-compare 20240429-calgary Copyright (c) 2018-2024 Jon Frydensbjerg, the video-compare community" << std::endl << std::endl;
       usage << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl << std::endl;
       argagg::fmt_ostream fmt(std::cerr);
       fmt << usage.str() << argparser;
