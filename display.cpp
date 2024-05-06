@@ -258,7 +258,7 @@ Display::Display(const int display_number,
   TTF_SetFontStyle(big_font_, TTF_STYLE_BOLD | TTF_STYLE_UNDERLINE);
   add_help_texture(big_font_, "CONTROLS");
   TTF_SetFontStyle(big_font_, TTF_STYLE_NORMAL);
-  add_help_texture(big_font_, " ");
+  add_help_texture(small_font_, " ");
 
   for (auto& key_description_pair : get_controls()) {
     primary_color = !primary_color;
