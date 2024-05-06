@@ -248,7 +248,7 @@ Display::Display(const int display_number,
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer_, surface);
     SDL_FreeSurface(surface);
 
-    SDL_QueryTexture(texture, NULL, NULL, NULL, &h);
+    SDL_QueryTexture(texture, nullptr, nullptr, nullptr, &h);
     help_total_height_ += h;
 
     help_textures_.push_back(texture);
@@ -574,16 +574,17 @@ std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size
 void Display::render_help() {
   SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 3 / 2);
-  SDL_Rect rect = {0, 0, drawable_width_, drawable_height_};
-  SDL_RenderFillRect(renderer_, &rect);
+  SDL_RenderFillRect(renderer_, nullptr);
 
   int y = help_y_offset_;
 
   for (size_t i = 0; i < help_textures_.size(); i++) {
     int w, h;
-    SDL_QueryTexture(help_textures_[i], NULL, NULL, &w, &h);
-    SDL_Rect dst = {HELP_TEXT_HORIZONTAL_MARGIN, y, w, h};
-    SDL_RenderCopy(renderer_, help_textures_[i], NULL, &dst);
+    SDL_QueryTexture(help_textures_[i], nullptr, nullptr, &w, &h);
+
+    SDL_Rect screen_area = {HELP_TEXT_HORIZONTAL_MARGIN, y, w, h};
+    SDL_RenderCopy(renderer_, help_textures_[i], nullptr, &screen_area);
+
     y += h + HELP_TEXT_LINE_SPACING;
   }
 }
