@@ -39,7 +39,7 @@ static const int PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE = 6;
 static const float PLAYBACK_SPEED_STEP_SIZE = pow(2.0F, 1.0F / float(PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE));
 
 static const int HELP_TEXT_LINE_SPACING = 1;
-static const int HELP_TEXT_HORIZONTAL_MARGIN = 10;
+static const int HELP_TEXT_HORIZONTAL_MARGIN = 26;
 
 template <typename T>
 inline T check_sdl(T value, const std::string& message) {
@@ -241,29 +241,36 @@ Display::Display(const int display_number,
   // initialize help texts
   bool primary_color = true;
 
-  auto add_help_texture = [&](const std::string& text) {
-    SDL_Surface* surface = TTF_RenderText_Blended_Wrapped(small_font_, text.c_str(), primary_color ? HELP_TEXT_PRIMARY_COLOR : HELP_TEXT_ALTERNATE_COLOR, drawable_width_ - HELP_TEXT_HORIZONTAL_MARGIN * 2);
-    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer_, surface);
+  auto add_help_texture = [&](TTF_Font* font, const std::string& text) {
     int h;
-    SDL_QueryTexture(texture, NULL, NULL, NULL, &h);
-    help_textures_.push_back(texture);
+
+    SDL_Surface* surface = TTF_RenderUTF8_Blended_Wrapped(font, text.c_str(), primary_color ? HELP_TEXT_PRIMARY_COLOR : HELP_TEXT_ALTERNATE_COLOR, drawable_width_ - HELP_TEXT_HORIZONTAL_MARGIN * 2);
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer_, surface);
     SDL_FreeSurface(surface);
 
+    SDL_QueryTexture(texture, NULL, NULL, NULL, &h);
     help_total_height_ += h;
+
+    help_textures_.push_back(texture);
   };
 
-  add_help_texture("Controls:");
-  add_help_texture(" ");
+  add_help_texture(small_font_, " ");
+  TTF_SetFontStyle(big_font_, TTF_STYLE_BOLD | TTF_STYLE_UNDERLINE);
+  add_help_texture(big_font_, "CONTROLS");
+  TTF_SetFontStyle(big_font_, TTF_STYLE_NORMAL);
+  add_help_texture(big_font_, " ");
 
   for (auto& key_description_pair : get_controls()) {
     primary_color = !primary_color;
-    add_help_texture(string_sprintf(" %-12s %s", key_description_pair.first.c_str(), key_description_pair.second.c_str()));
+    add_help_texture(small_font_, string_sprintf(" %-12s %s", key_description_pair.first.c_str(), key_description_pair.second.c_str()));
   }
+
+  add_help_texture(big_font_, " ");
 
   for (auto& text : get_instructions()) {
     primary_color = !primary_color;
-    add_help_texture(" ");
-    add_help_texture(text);
+    add_help_texture(small_font_, text);
+    add_help_texture(small_font_, " ");
   }
 }
 
