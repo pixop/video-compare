@@ -12,8 +12,6 @@ else
   LDLIBS = -pthread
 endif
 
-LDLIBS += -lavformat -lavcodec -lavfilter -lavutil -lswscale -lswresample -lSDL2 -lSDL2_ttf
-
 ifneq "$(wildcard /opt/homebrew)" ""
   CXXFLAGS += -I/opt/homebrew/include/
   LDLIBS += -L/opt/homebrew/lib/
@@ -31,6 +29,8 @@ endif
 ifneq "$(wildcard /usr/include/ffmpeg)" ""
   CXXFLAGS += -I/usr/include/ffmpeg
 endif
+
+LDLIBS += -lavformat -lavcodec -lavfilter -lavutil -lswscale -lswresample -lSDL2 -lSDL2_ttf
 
 src = $(wildcard *.cpp)
 obj = $(src:.cpp=.o)
