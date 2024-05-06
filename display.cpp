@@ -241,12 +241,22 @@ Display::Display(const int display_number,
   // initialize help texts
   bool primary_color = true;
 
+<<<<<<< HEAD
   auto add_help_texture = [&](TTF_Font* font, const std::string& text) {
     int h;
 
     SDL_Surface* surface = TTF_RenderUTF8_Blended_Wrapped(font, text.c_str(), primary_color ? HELP_TEXT_PRIMARY_COLOR : HELP_TEXT_ALTERNATE_COLOR, drawable_width_ - HELP_TEXT_HORIZONTAL_MARGIN * 2);
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer_, surface);
     SDL_FreeSurface(surface);
+=======
+  auto add_help_texture = [&](const std::string& text) {
+    SDL_Surface* help_surface = TTF_RenderText_Blended_Wrapped(small_font_, text.c_str(), primary_color ? HELP_TEXT_PRIMARY_COLOR : HELP_TEXT_ALTERNATE_COLOR, drawable_width_ - HELP_TEXT_HORIZONTAL_MARGIN * 2);
+    SDL_Texture* help_texture = SDL_CreateTextureFromSurface(renderer_, help_surface);
+    int h;
+    SDL_QueryTexture(help_texture, nullptr, nullptr, nullptr, &h);
+    help_textures_.push_back(help_texture);
+    SDL_FreeSurface(help_surface);
+>>>>>>> 8b094cce6f6001df21c2f54d05bfce471d14b3e9
 
     SDL_QueryTexture(texture, nullptr, nullptr, nullptr, &h);
     help_total_height_ += h;
