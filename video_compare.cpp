@@ -593,7 +593,8 @@ void VideoCompare::video() {
         }
       }
 
-      const bool end_of_file = !skip_update && !adjusting && !store_frames && (frame_queue_[0]->is_finished() || frame_queue_[1]->is_finished());
+      const bool no_activity = !skip_update && !adjusting && !store_frames;
+      const bool end_of_file = no_activity && (frame_queue_[0]->is_finished() || frame_queue_[1]->is_finished());
       const bool buffer_is_full = left_frames.size() == frame_buffer_size_ && right_frames.size() == frame_buffer_size_;
 
       const int max_left_frame_index = static_cast<int>(left_frames.size()) - 1;
