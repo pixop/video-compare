@@ -444,6 +444,9 @@ void VideoCompare::video() {
 
       bool store_frames = false;
       bool adjusting = false;
+
+      // keep showing currently displayed frame for another iteration?
+      const bool skip_update = (timer_->us_until_target() - refresh_time_deque.average()) > 0;
       const bool fetch_next_frame = display_->get_play() || (forward_navigate_frames > 0);
 
       if (display_->get_quit() || (exception_ != nullptr)) {
@@ -477,9 +480,6 @@ void VideoCompare::video() {
             right_decoded_picture_number++;
           }
         }
-
-        // keep showing currently displayed frame for another iteration?
-        const bool skip_update = (timer_->us_until_target() - refresh_time_deque.average()) > 0;
 
         // handle regular playback only
         if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
@@ -593,7 +593,7 @@ void VideoCompare::video() {
         }
       }
 
-      const bool end_of_file = frame_queue_[0]->is_finished() || frame_queue_[1]->is_finished();
+      const bool end_of_file = !skip_update && !adjusting && !store_frames && (frame_queue_[0]->is_finished() || frame_queue_[1]->is_finished());
       const bool buffer_is_full = left_frames.size() == frame_buffer_size_ && right_frames.size() == frame_buffer_size_;
 
       const int max_left_frame_index = static_cast<int>(left_frames.size()) - 1;
