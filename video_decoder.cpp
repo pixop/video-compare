@@ -4,7 +4,7 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
-VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, AVCodecParameters* codec_parameters) : hw_pixel_format_(AV_PIX_FMT_NONE), first_pts_(AV_NOPTS_VALUE), next_pts_(AV_NOPTS_VALUE) {
+VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, const AVCodecParameters* codec_parameters, AVDictionary* hwaccel_options, AVDictionary* codec_options) : hw_pixel_format_(AV_PIX_FMT_NONE), first_pts_(AV_NOPTS_VALUE), next_pts_(AV_NOPTS_VALUE) {
   if (decoder_name.empty()) {
     codec_ = avcodec_find_decoder(codec_parameters->codec_id);
   } else {
@@ -30,7 +30,11 @@ VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& h
       hw_accel_name_ = hw_accel_spec;
     } else {
       hw_accel_name_ = hw_accel_spec.substr(0, colon_pos);
-      device = hw_accel_spec.substr(colon_pos + 1).c_str();
+      auto device_name =  hw_accel_spec.substr(colon_pos + 1);
+
+      if (!device_name.empty()) {
+        device = device_name.c_str();
+      }
     }
 
     const AVHWDeviceType hw_accel_type = av_hwdevice_find_type_by_name(hw_accel_name_.c_str());
@@ -54,14 +58,17 @@ VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& h
 
     AVBufferRef* hw_device_ctx;
 
-    if (av_hwdevice_ctx_create(&hw_device_ctx, hw_accel_type, device, nullptr, 0) < 0) {
+    if (av_hwdevice_ctx_create(&hw_device_ctx, hw_accel_type, device, hwaccel_options, 0) < 0) {
       throw ffmpeg::Error{"Failed to create a HW device context for " + hw_accel_name_};
     }
+
+    ffmpeg::check_dict_is_empty(hwaccel_options, string_sprintf("HW acceleration %s", hw_accel_name_.c_str()));
 
     codec_context_->hw_device_ctx = hw_device_ctx;
   }
 
-  ffmpeg::check(avcodec_open2(codec_context_, codec_, nullptr));
+  ffmpeg::check(avcodec_open2(codec_context_, codec_, &codec_options));
+  ffmpeg::check_dict_is_empty(codec_options, string_sprintf("Decoder %s", codec_->name));
 }
 
 VideoDecoder::~VideoDecoder() {

@@ -18,29 +18,42 @@ extern "C" {
 using PacketQueue = Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>>;
 using FrameQueue = Queue<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>>;
 
+struct InputVideo {
+  std::string file_name;
+  std::string video_filters;
+  std::string demuxer;
+  std::string decoder;
+  std::string hw_accel_spec;
+  AVDictionary* demuxer_options{nullptr}; // mutated by Demuxer
+  AVDictionary* decoder_options{nullptr}; // mutated by VideoDecoder
+  AVDictionary* hw_accel_options{nullptr}; // mutated by VideoDecoder
+};
+
+struct VideoCompareConfig {
+  bool verbose{false};
+  bool high_dpi_allowed{false};
+  bool use_10_bpc{false};
+  bool disable_auto_filters{false};
+
+  int display_number{0};
+  std::tuple<int, int> window_size{-1, -1};
+
+  Display::Mode display_mode{Display::Mode::split};
+  Display::Loop auto_loop_mode{Display::Loop::off};
+
+  size_t frame_buffer_size{50};
+
+  double time_shift_ms{0};
+
+  float wheel_sensitivity{1};
+
+  InputVideo left;
+  InputVideo right;
+};
+
 class VideoCompare {
  public:
-  VideoCompare(const int display_number,
-               const Display::Mode display_mode,
-               const bool verbose,
-               const bool high_dpi_allowed,
-               const bool use_10_bpc,
-               const std::tuple<int, int> window_size,
-               const Display::Loop auto_loop_mode,
-               const size_t frame_buffer_size,
-               const double time_shift_ms,
-               const float wheel_sensitivity,
-               const std::string& left_file_name,
-               const std::string& left_video_filters,
-               const std::string& left_demuxer,
-               const std::string& left_decoder,
-               const std::string& left_hw_accel_spec,
-               const std::string& right_file_name,
-               const std::string& right_video_filters,
-               const std::string& right_demuxer,
-               const std::string& right_decoder,
-               const std::string& right_hw_accel_spec,
-               const bool disable_auto_filters);
+  VideoCompare(const VideoCompareConfig& config);
   void operator()();
 
  private:

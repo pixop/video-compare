@@ -39,41 +39,23 @@ static inline int64_t compute_frame_delay(const int64_t left_pts, const int64_t 
   return std::max(left_pts, right_pts);
 }
 
-VideoCompare::VideoCompare(const int display_number,
-                           const Display::Mode display_mode,
-                           const bool verbose,
-                           const bool high_dpi_allowed,
-                           const bool use_10_bpc,
-                           const std::tuple<int, int> window_size,
-                           const Display::Loop auto_loop_mode,
-                           const size_t frame_buffer_size,
-                           const double time_shift_ms,
-                           const float wheel_sensitivity,
-                           const std::string& left_file_name,
-                           const std::string& left_video_filters,
-                           const std::string& left_demuxer,
-                           const std::string& left_decoder,
-                           const std::string& left_hw_accel_spec,
-                           const std::string& right_file_name,
-                           const std::string& right_video_filters,
-                           const std::string& right_demuxer,
-                           const std::string& right_decoder,
-                           const std::string& right_hw_accel_spec,
-                           const bool disable_auto_filters)
-    : auto_loop_mode_(auto_loop_mode),
-      frame_buffer_size_(frame_buffer_size),
-      time_shift_ms_(time_shift_ms),
-      demuxer_{std::make_unique<Demuxer>(left_demuxer, left_file_name), std::make_unique<Demuxer>(right_demuxer, right_file_name)},
-      video_decoder_{std::make_unique<VideoDecoder>(left_decoder, left_hw_accel_spec, demuxer_[0]->video_codec_parameters()), std::make_unique<VideoDecoder>(right_decoder, right_hw_accel_spec, demuxer_[1]->video_codec_parameters())},
-      video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get(), left_video_filters, demuxer_[1].get(), video_decoder_[1].get(), disable_auto_filters),
-                      std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get(), right_video_filters, demuxer_[0].get(), video_decoder_[0].get(), disable_auto_filters)},
+VideoCompare::VideoCompare(const VideoCompareConfig& config)
+    : auto_loop_mode_(config.auto_loop_mode),
+      frame_buffer_size_(config.frame_buffer_size),
+      time_shift_ms_(config.time_shift_ms),
+      demuxer_{std::make_unique<Demuxer>(config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options),
+               std::make_unique<Demuxer>(config.right.demuxer, config.right.file_name, config.right.demuxer_options, config.right.decoder_options)},
+      video_decoder_{std::make_unique<VideoDecoder>(config.left.decoder, config.left.hw_accel_spec, demuxer_[0]->video_codec_parameters(), config.left.hw_accel_options, config.left.decoder_options),
+                     std::make_unique<VideoDecoder>(config.right.decoder, config.right.hw_accel_spec, demuxer_[1]->video_codec_parameters(), config.right.hw_accel_options, config.right.decoder_options)},
+      video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get(), config.left.video_filters, demuxer_[1].get(), video_decoder_[1].get(), config.disable_auto_filters),
+                      std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get(), config.right.video_filters, demuxer_[0].get(), video_decoder_[0].get(), config.disable_auto_filters)},
       max_width_{(std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width()) + 7) & -8},
       max_height_{(std::max(video_filterer_[0]->dest_height(), video_filterer_[1]->dest_height()) + 3) & -4},
       shortest_duration_{std::min(demuxer_[0]->duration(), demuxer_[1]->duration()) * AV_TIME_TO_SEC},
       format_converter_{
-          std::make_unique<FormatConverter>(video_filterer_[0]->dest_width(), video_filterer_[0]->dest_height(), max_width_, max_height_, video_filterer_[0]->dest_pixel_format(), use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24),
-          std::make_unique<FormatConverter>(video_filterer_[1]->dest_width(), video_filterer_[1]->dest_height(), max_width_, max_height_, video_filterer_[1]->dest_pixel_format(), use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24)},
-      display_{std::make_unique<Display>(display_number, display_mode, verbose, high_dpi_allowed, use_10_bpc, window_size, max_width_, max_height_, shortest_duration_, wheel_sensitivity, left_file_name, right_file_name)},
+          std::make_unique<FormatConverter>(video_filterer_[0]->dest_width(), video_filterer_[0]->dest_height(), max_width_, max_height_, video_filterer_[0]->dest_pixel_format(), config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24),
+          std::make_unique<FormatConverter>(video_filterer_[1]->dest_width(), video_filterer_[1]->dest_height(), max_width_, max_height_, video_filterer_[1]->dest_pixel_format(), config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24)},
+      display_{std::make_unique<Display>(config.display_number, config.display_mode, config.verbose, config.high_dpi_allowed, config.use_10_bpc, config.window_size, max_width_, max_height_, shortest_duration_, config.wheel_sensitivity, config.left.file_name, config.right.file_name)},
       timer_{std::make_unique<Timer>()},
       packet_queue_{std::make_unique<PacketQueue>(QUEUE_SIZE), std::make_unique<PacketQueue>(QUEUE_SIZE)},
       frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
@@ -89,8 +71,8 @@ VideoCompare::VideoCompare(const int display_number,
               << std::endl;
   };
 
-  dump_video_info("Left video: ", 0, left_file_name.c_str());
-  dump_video_info("Right video:", 1, right_file_name.c_str());
+  dump_video_info("Left video: ", 0, config.left.file_name.c_str());
+  dump_video_info("Right video:", 1, config.right.file_name.c_str());
 }
 
 void VideoCompare::operator()() {

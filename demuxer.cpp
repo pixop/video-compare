@@ -1,8 +1,9 @@
 #include "demuxer.h"
 #include <iostream>
 #include "ffmpeg.h"
+#include "string_utils.h"
 
-Demuxer::Demuxer(const std::string& demuxer_name, const std::string& file_name) {
+Demuxer::Demuxer(const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* codec_options) {
   const AVInputFormat* input_format = nullptr;
 
   if (!demuxer_name.empty()) {
@@ -13,13 +14,18 @@ Demuxer::Demuxer(const std::string& demuxer_name, const std::string& file_name) 
     }
   }
 
-  ffmpeg::check(file_name, avformat_open_input(&format_context_, file_name.c_str(), const_cast<AVInputFormat*>(input_format), nullptr));
+  ffmpeg::check(file_name, avformat_open_input(&format_context_, file_name.c_str(), const_cast<AVInputFormat*>(input_format), &demuxer_options));
+  ffmpeg::check_dict_is_empty(demuxer_options, string_sprintf("Demuxer %s", format_name().c_str()));
 
-  format_context_->probesize = 100000000;
-  format_context_->max_analyze_duration = 100000000;
-
-  ffmpeg::check(file_name, avformat_find_stream_info(format_context_, nullptr));
   video_stream_index_ = ffmpeg::check(file_name, av_find_best_stream(format_context_, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0));
+
+  AVDictionary* stream_codec_options = nullptr;
+  av_dict_copy(&stream_codec_options, codec_options, 0);
+
+  AVDictionary** opts_for_streams = (AVDictionary**) av_calloc(format_context_->nb_streams, sizeof(AVDictionary*));
+  opts_for_streams[video_stream_index_] = stream_codec_options;
+
+  ffmpeg::check(file_name, avformat_find_stream_info(format_context_, opts_for_streams));
 }
 
 Demuxer::~Demuxer() {

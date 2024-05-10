@@ -6,6 +6,7 @@ extern "C" {
 #include <libavutil/avutil.h>
 #include <libavutil/frame.h>
 }
+#include "string_utils.h"
 
 const static double AV_TIME_TO_SEC = av_q2d(AV_TIME_BASE_Q);
 const static double SEC_TO_AV_TIME = AV_TIME_BASE;
@@ -54,5 +55,13 @@ inline int64_t frame_duration(const AVFrame* frame) {
 
 inline float frame_duration_in_secs(const AVFrame* frame) {
   return frame_duration(frame) * AV_TIME_TO_SEC;
+}
+
+inline void check_dict_is_empty(AVDictionary* dict, const std::string& context) {
+  AVDictionaryEntry* unsupported_option = av_dict_get(dict, "", nullptr, AV_DICT_IGNORE_SUFFIX);
+
+  if (unsupported_option != nullptr) {
+    throw ffmpeg::Error{string_sprintf("%s does not support the option %s", context.c_str(), unsupported_option->key)};
+  }
 }
 }  // namespace ffmpeg

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <sstream>
 #include <numeric>
 
 extern "C" {
@@ -9,8 +10,20 @@ extern "C" {
 }
 
 // Borrowed from https://www.techiedelight.com/implode-a-vector-of-strings-into-a-comma-separated-string-in-cpp/
-std::string string_join(std::vector<std::string>& strings, const std::string& delim) {
-  return std::accumulate(strings.begin(), strings.end(), std::string(), [&delim](std::string& x, std::string& y) { return x.empty() ? y : x + delim + y; });
+std::string string_join(const std::vector<std::string>& strings, const std::string& delim) {
+  return std::accumulate(strings.begin(), strings.end(), std::string(), [&delim](const std::string& x, const std::string& y) { return x.empty() ? y : x + delim + y; });
+}
+
+std::vector<std::string> string_split(const std::string &string, char delim) {
+  std::vector<std::string> tokens;
+  std::string token;
+  std::istringstream token_stream(string);
+
+  while (std::getline(token_stream, token, delim)) {
+    tokens.push_back(token);
+  }
+
+  return tokens;
 }
 
 std::string format_position(const float position, const bool use_compact) {

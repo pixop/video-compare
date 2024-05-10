@@ -125,6 +125,50 @@ void find_matching_hw_accels(const std::string& search_string) {
   }
 }
 
+const std::string get_nth_token_or_empty(const std::string& options_string, const char delimiter, const size_t n) {
+  auto tokens = string_split(options_string, delimiter);
+
+  return tokens.size() > n ? tokens[n] : "";
+}
+
+AVDictionary* upsert_options_in_avdict(AVDictionary* dict, const std::string& options_string) {
+  auto options = string_split(options_string, ',');
+
+  for (auto option : options) {
+    auto key_value_pair = string_split(option, '=');
+
+    if (key_value_pair.size() != 2) {
+      throw std::logic_error{"key=value expected for option"};
+    }
+
+    av_dict_set(&dict, key_value_pair[0].c_str(), key_value_pair[1].c_str(), 0);
+  }
+
+  return dict;
+}
+
+AVDictionary* create_demuxer_options(const std::string& options_string) {
+  AVDictionary* demuxer_options = nullptr;
+  av_dict_set(&demuxer_options, "analyzeduration", "100000000", 0);
+  av_dict_set(&demuxer_options, "probesize", "100000000", 0);
+
+  demuxer_options = upsert_options_in_avdict(demuxer_options, options_string);
+
+  return demuxer_options;
+}
+
+AVDictionary* create_codec_options(const std::string& options_string) {
+  AVDictionary* codec_options = upsert_options_in_avdict(nullptr, options_string);
+
+  return codec_options;
+}
+
+AVDictionary* create_hw_accel_options(const std::string& options_string) {
+  AVDictionary* hw_accel_options = upsert_options_in_avdict(nullptr, options_string);
+
+  return hw_accel_options;
+}
+
 int main(int argc, char** argv) {
   char** argv_decoded = get_argv(&argc, argv);
   int exit_code = 0;
@@ -149,31 +193,19 @@ int main(int argc, char** argv) {
                               {"wheel-sensitivity", {"-s", "--wheel-sensitivity"}, "mouse wheel sensitivity (e.g. 0.5, -1 or 1.7), default is 1; negative values invert the input direction", 1},
                               {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
-                              {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name", 1},
-                              {"right-demuxer", {"--right-demuxer"}, "right FFmpeg video demuxer name", 1},
+                              {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name, specified as [type?][:options?] (e.g. 'rawvideo:pixel_format=rgb24,video_size=320x240,framerate=10')", 1},
+                              {"right-demuxer", {"--right-demuxer"}, "right FFmpeg video demuxer name, specified as [type?][:options?]", 1},
                               {"find-demuxers", {"--find-demuxers"}, "find FFmpeg video demuxers matching the provided search term (e.g. 'matroska', 'mp4', 'vapoursynth' or 'pipe'; use \"\" to list all)", 1},
-                              {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name", 1},
-                              {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name", 1},
+                              {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name, specified as [type?][:options?] (e.g. ':strict=unofficial', ':strict=-2' or 'vvc:strict=experimental')", 1},
+                              {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name, specified as [type?][:options?]", 1},
                               {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1},
-                              {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg video hardware acceleration, specified as [type][:device?] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128')", 1},
-                              {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg video hardware acceleration, specified as [type][:device?] (e.g. 'cuda', 'cuda:1' or 'vulkan')", 1},
+                              {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128')", 1},
+                              {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'cuda', 'cuda:1' or 'vulkan')", 1},
                               {"find-hwaccels", {"--find-hwaccels"}, "find FFmpeg video hardware acceleration types matching the provided search term (e.g. 'videotoolbox' or 'vulkan'; use \"\" to list all)", 1},
                               {"disable-auto-filters", {"--no-auto-filters"}, "disable the default behaviour of automatically injecting filters for deinterlacing, frame rate harmonization, and rotation", 0}}};
 
     argagg::parser_results args;
     args = argparser.parse(argc, argv_decoded);
-
-    int display_number = 0;
-    Display::Mode display_mode = Display::Mode::split;
-    std::tuple<int, int> window_size(-1, -1);
-    Display::Loop auto_loop_mode = Display::Loop::off;
-    size_t frame_buffer_size = 50;
-    double time_shift_ms = 0;
-    float wheel_sensitivity = 1;
-    std::string left_video_filters, right_video_filters;
-    std::string left_demuxer, right_demuxer;
-    std::string left_decoder, right_decoder;
-    std::string left_hw_accel_spec, right_hw_accel_spec;
 
     if (args["show-controls"]) {
       print_controls();
@@ -190,9 +222,17 @@ int main(int argc, char** argv) {
       argagg::fmt_ostream fmt(std::cerr);
       fmt << usage.str() << argparser;
     } else {
+      VideoCompareConfig config;
+
       if (args.pos.size() != 2) {
         throw std::logic_error{"Two FFmpeg compatible video files must be supplied"};
       }
+
+      config.verbose = args["verbose"];
+      config.high_dpi_allowed = args["high-dpi"];
+      config.use_10_bpc = args["10-bpc"];
+      config.disable_auto_filters = args["disable-auto-filters"];
+
       if (args["display-number"]) {
         const std::string display_number_arg = args["display-number"];
         const std::regex display_number_re("(\\d*)");
@@ -201,17 +241,17 @@ int main(int argc, char** argv) {
           throw std::logic_error{"Cannot parse display number argument (required format: [number], e.g. 0, 1 or 2)"};
         }
 
-        display_number = std::stoi(display_number_arg);
+        config.display_number = std::stoi(display_number_arg);
       }
       if (args["display-mode"]) {
         const std::string display_mode_arg = args["display-mode"];
 
         if (display_mode_arg == "split") {
-          display_mode = Display::Mode::split;
+          config.display_mode = Display::Mode::split;
         } else if (display_mode_arg == "vstack") {
-          display_mode = Display::Mode::vstack;
+          config.display_mode = Display::Mode::vstack;
         } else if (display_mode_arg == "hstack") {
-          display_mode = Display::Mode::hstack;
+          config.display_mode = Display::Mode::hstack;
         } else {
           throw std::logic_error{"Cannot parse display mode argument (valid options: split, vstack, hstack)"};
         }
@@ -228,18 +268,18 @@ int main(int argc, char** argv) {
 
         auto const token_vec = std::vector<std::string>(std::sregex_token_iterator{begin(window_size_arg), end(window_size_arg), delimiter_re, -1}, std::sregex_token_iterator{});
 
-        window_size = std::make_tuple(!token_vec[0].empty() ? std::stoi(token_vec[0]) : -1, token_vec.size() == 2 ? std::stoi(token_vec[1]) : -1);
+        config.window_size = std::make_tuple(!token_vec[0].empty() ? std::stoi(token_vec[0]) : -1, token_vec.size() == 2 ? std::stoi(token_vec[1]) : -1);
       }
 
       if (args["auto-loop-mode"]) {
         const std::string auto_loop_mode_arg = args["auto-loop-mode"];
 
         if (auto_loop_mode_arg == "off") {
-          auto_loop_mode = Display::Loop::off;
+          config.auto_loop_mode = Display::Loop::off;
         } else if (auto_loop_mode_arg == "on") {
-          auto_loop_mode = Display::Loop::forwardonly;
+          config.auto_loop_mode = Display::Loop::forwardonly;
         } else if (auto_loop_mode_arg == "pp") {
-          auto_loop_mode = Display::Loop::pingpong;
+          config.auto_loop_mode = Display::Loop::pingpong;
         } else {
           throw std::logic_error{"Cannot parse auto loop mode argument (valid options: off, on, pp)"};
         }
@@ -252,9 +292,9 @@ int main(int argc, char** argv) {
           throw std::logic_error{"Cannot parse frame buffer size (required format: [number], e.g. 10, 70 or 150)"};
         }
 
-        frame_buffer_size = std::stoi(frame_buffer_size_arg);
+        config.frame_buffer_size = std::stoi(frame_buffer_size_arg);
 
-        if (frame_buffer_size < 1) {
+        if (config.frame_buffer_size < 1) {
           throw std::logic_error{"Frame buffer size must be at least 1"};
         }
       }
@@ -266,7 +306,7 @@ int main(int argc, char** argv) {
           throw std::logic_error{"Cannot parse time shift argument; must be a valid number in seconds, e.g. 1 or -0.333"};
         }
 
-        time_shift_ms = std::stod(time_shift_arg) * 1000.0;
+        config.time_shift_ms = std::stod(time_shift_arg) * 1000.0;
       }
       if (args["wheel-sensitivity"]) {
         const std::string wheel_sensitivity_arg = args["wheel-sensitivity"];
@@ -276,46 +316,63 @@ int main(int argc, char** argv) {
           throw std::logic_error{"Cannot parse mouse wheel sensitivity argument; must be a valid number, e.g. 1.3 or -1"};
         }
 
-        wheel_sensitivity = std::stod(wheel_sensitivity_arg);
+        config.wheel_sensitivity = std::stod(wheel_sensitivity_arg);
       }
       if (args["left-filters"]) {
-        left_video_filters = static_cast<const std::string&>(args["left-filters"]);
+        config.left.video_filters = static_cast<const std::string&>(args["left-filters"]);
       }
       if (args["right-filters"]) {
-        right_video_filters = static_cast<const std::string&>(args["right-filters"]);
+        config.right.video_filters = static_cast<const std::string&>(args["right-filters"]);
       }
       if (args["left-demuxer"]) {
-        left_demuxer = static_cast<const std::string&>(args["left-demuxer"]);
+        auto left_demuxer = static_cast<const std::string&>(args["left-demuxer"]);
+
+        config.left.demuxer = get_nth_token_or_empty(left_demuxer, ':', 0);
+        config.left.demuxer_options = create_demuxer_options(get_nth_token_or_empty(left_demuxer, ':', 1));
       }
       if (args["right-demuxer"]) {
-        right_demuxer = static_cast<const std::string&>(args["right-demuxer"]);
+        auto right_demuxer = static_cast<const std::string&>(args["right-demuxer"]);
+
+        config.right.demuxer = get_nth_token_or_empty(right_demuxer, ':', 0);
+        config.right.demuxer_options = create_demuxer_options(get_nth_token_or_empty(right_demuxer, ':', 1));
       }
       if (args["left-decoder"]) {
-        left_decoder = static_cast<const std::string&>(args["left-decoder"]);
+        auto left_decoder = static_cast<const std::string&>(args["left-decoder"]);
+
+        config.left.decoder = get_nth_token_or_empty(left_decoder, ':', 0);
+        config.left.decoder_options = create_codec_options(get_nth_token_or_empty(left_decoder, ':', 1));
       }
       if (args["right-decoder"]) {
-        right_decoder = static_cast<const std::string&>(args["right-decoder"]);
+        auto right_decoder = static_cast<const std::string&>(args["right-decoder"]);
+
+        config.right.decoder = get_nth_token_or_empty(right_decoder, ':', 0);
+        config.right.decoder_options = create_codec_options(get_nth_token_or_empty(right_decoder, ':', 1));
       }
       if (args["left-hwaccel"]) {
-        left_hw_accel_spec = static_cast<const std::string&>(args["left-hwaccel"]);
+        auto left_hw_accel_spec = static_cast<const std::string&>(args["left-hwaccel"]);
+
+        config.left.hw_accel_spec = string_join({get_nth_token_or_empty(left_hw_accel_spec, ':', 0), get_nth_token_or_empty(left_hw_accel_spec, ':', 1)}, ":");
+        config.left.hw_accel_options = create_hw_accel_options(get_nth_token_or_empty(left_hw_accel_spec, ':', 2));
       }
       if (args["right-hwaccel"]) {
-        right_hw_accel_spec = static_cast<const std::string&>(args["right-hwaccel"]);
+        auto right_hw_accel_spec = static_cast<const std::string&>(args["right-hwaccel"]);
+
+        config.right.hw_accel_spec = string_join({get_nth_token_or_empty(right_hw_accel_spec, ':', 0), get_nth_token_or_empty(right_hw_accel_spec, ':', 1)}, ":");
+        config.right.hw_accel_options = create_hw_accel_options(get_nth_token_or_empty(right_hw_accel_spec, ':', 2));
       }
 
-      std::string left_file_name = args.pos[0];
-      std::string right_file_name = args.pos[1];
+      config.left.file_name = args.pos[0];
+      config.right.file_name = args.pos[1];
 
-      if (left_file_name == REPEAT_FILE_NAME && right_file_name == REPEAT_FILE_NAME) {
+      if (config.left.file_name == REPEAT_FILE_NAME && config.right.file_name == REPEAT_FILE_NAME) {
         throw std::logic_error{"At least one actual video file must be supplied"};
-      } else if (left_file_name == REPEAT_FILE_NAME) {
-        left_file_name = right_file_name;
-      } else if (right_file_name == REPEAT_FILE_NAME) {
-        right_file_name = left_file_name;
+      } else if (config.left.file_name == REPEAT_FILE_NAME) {
+        config.left.file_name = config.right.file_name;
+      } else if (config.right.file_name == REPEAT_FILE_NAME) {
+        config.right.file_name = config.left.file_name;
       }
 
-      VideoCompare compare{display_number,     display_mode, args["verbose"], args["high-dpi"],   args["10-bpc"],  window_size,         auto_loop_mode, frame_buffer_size, time_shift_ms,       wheel_sensitivity,           left_file_name,
-                           left_video_filters, left_demuxer, left_decoder,    left_hw_accel_spec, right_file_name, right_video_filters, right_demuxer,  right_decoder,     right_hw_accel_spec, args["disable-auto-filters"]};
+      VideoCompare compare{config};
       compare();
     }
   } catch (const std::exception& e) {
