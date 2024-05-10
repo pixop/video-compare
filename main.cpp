@@ -131,7 +131,7 @@ const std::string get_nth_token_or_empty(const std::string& options_string, cons
   return tokens.size() > n ? tokens[n] : "";
 }
 
-AVDictionary* upsert_options_in_avdict(AVDictionary* dict, const std::string& options_string) {
+AVDictionary* upsert_avdict_options(AVDictionary* dict, const std::string& options_string) {
   auto options = string_split(options_string, ',');
 
   for (auto option : options) {
@@ -147,26 +147,12 @@ AVDictionary* upsert_options_in_avdict(AVDictionary* dict, const std::string& op
   return dict;
 }
 
-AVDictionary* create_demuxer_options(const std::string& options_string) {
+AVDictionary* create_default_demuxer_options() {
   AVDictionary* demuxer_options = nullptr;
   av_dict_set(&demuxer_options, "analyzeduration", "100000000", 0);
   av_dict_set(&demuxer_options, "probesize", "100000000", 0);
 
-  demuxer_options = upsert_options_in_avdict(demuxer_options, options_string);
-
   return demuxer_options;
-}
-
-AVDictionary* create_codec_options(const std::string& options_string) {
-  AVDictionary* codec_options = upsert_options_in_avdict(nullptr, options_string);
-
-  return codec_options;
-}
-
-AVDictionary* create_hw_accel_options(const std::string& options_string) {
-  AVDictionary* hw_accel_options = upsert_options_in_avdict(nullptr, options_string);
-
-  return hw_accel_options;
 }
 
 int main(int argc, char** argv) {
@@ -324,41 +310,45 @@ int main(int argc, char** argv) {
       if (args["right-filters"]) {
         config.right.video_filters = static_cast<const std::string&>(args["right-filters"]);
       }
+
+      config.left.demuxer_options = create_default_demuxer_options();
+      config.right.demuxer_options = create_default_demuxer_options();
+
       if (args["left-demuxer"]) {
         auto left_demuxer = static_cast<const std::string&>(args["left-demuxer"]);
 
         config.left.demuxer = get_nth_token_or_empty(left_demuxer, ':', 0);
-        config.left.demuxer_options = create_demuxer_options(get_nth_token_or_empty(left_demuxer, ':', 1));
+        config.left.demuxer_options = upsert_avdict_options(config.left.demuxer_options, get_nth_token_or_empty(left_demuxer, ':', 1));
       }
       if (args["right-demuxer"]) {
         auto right_demuxer = static_cast<const std::string&>(args["right-demuxer"]);
 
         config.right.demuxer = get_nth_token_or_empty(right_demuxer, ':', 0);
-        config.right.demuxer_options = create_demuxer_options(get_nth_token_or_empty(right_demuxer, ':', 1));
+        config.right.demuxer_options = upsert_avdict_options(config.right.demuxer_options, get_nth_token_or_empty(right_demuxer, ':', 1));
       }
       if (args["left-decoder"]) {
         auto left_decoder = static_cast<const std::string&>(args["left-decoder"]);
 
         config.left.decoder = get_nth_token_or_empty(left_decoder, ':', 0);
-        config.left.decoder_options = create_codec_options(get_nth_token_or_empty(left_decoder, ':', 1));
+        config.left.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(left_decoder, ':', 1));
       }
       if (args["right-decoder"]) {
         auto right_decoder = static_cast<const std::string&>(args["right-decoder"]);
 
         config.right.decoder = get_nth_token_or_empty(right_decoder, ':', 0);
-        config.right.decoder_options = create_codec_options(get_nth_token_or_empty(right_decoder, ':', 1));
+        config.right.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(right_decoder, ':', 1));
       }
       if (args["left-hwaccel"]) {
         auto left_hw_accel_spec = static_cast<const std::string&>(args["left-hwaccel"]);
 
         config.left.hw_accel_spec = string_join({get_nth_token_or_empty(left_hw_accel_spec, ':', 0), get_nth_token_or_empty(left_hw_accel_spec, ':', 1)}, ":");
-        config.left.hw_accel_options = create_hw_accel_options(get_nth_token_or_empty(left_hw_accel_spec, ':', 2));
+        config.left.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(left_hw_accel_spec, ':', 2));
       }
       if (args["right-hwaccel"]) {
         auto right_hw_accel_spec = static_cast<const std::string&>(args["right-hwaccel"]);
 
         config.right.hw_accel_spec = string_join({get_nth_token_or_empty(right_hw_accel_spec, ':', 0), get_nth_token_or_empty(right_hw_accel_spec, ':', 1)}, ":");
-        config.right.hw_accel_options = create_hw_accel_options(get_nth_token_or_empty(right_hw_accel_spec, ':', 2));
+        config.right.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(right_hw_accel_spec, ':', 2));
       }
 
       config.left.file_name = args.pos[0];
