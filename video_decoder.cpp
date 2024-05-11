@@ -4,7 +4,25 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
-VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, const AVCodecParameters* codec_parameters, AVDictionary* hwaccel_options, AVDictionary* codec_options) : hw_pixel_format_(AV_PIX_FMT_NONE), first_pts_(AV_NOPTS_VALUE), next_pts_(AV_NOPTS_VALUE) {
+bool is_one_or_true(const char* str) {
+  return strcmp(str, "1") == 0 || strcmp(str, "true") == 0 || strcmp(str, "t") == 0;
+}
+
+bool get_and_remove_bool_avdict_option(AVDictionary* options, const char* key) {
+  auto entry = av_dict_get(options, key, nullptr, 0);
+
+  if (entry != nullptr) {
+    auto value = is_one_or_true(entry->value);
+    av_dict_set(&options, key, nullptr, 0);
+
+    return value;
+  }
+
+  return false;
+}
+
+VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, const AVCodecParameters* codec_parameters, AVDictionary* hwaccel_options, AVDictionary* decoder_options)
+    : hw_pixel_format_(AV_PIX_FMT_NONE), first_pts_(AV_NOPTS_VALUE), next_pts_(AV_NOPTS_VALUE), trust_decoded_pts_(false) {
   if (decoder_name.empty()) {
     codec_ = avcodec_find_decoder(codec_parameters->codec_id);
   } else {
@@ -30,7 +48,7 @@ VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& h
       hw_accel_name_ = hw_accel_spec;
     } else {
       hw_accel_name_ = hw_accel_spec.substr(0, colon_pos);
-      auto device_name =  hw_accel_spec.substr(colon_pos + 1);
+      auto device_name = hw_accel_spec.substr(colon_pos + 1);
 
       if (!device_name.empty()) {
         device = device_name.c_str();
@@ -67,8 +85,16 @@ VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& h
     codec_context_->hw_device_ctx = hw_device_ctx;
   }
 
-  ffmpeg::check(avcodec_open2(codec_context_, codec_, &codec_options));
-  ffmpeg::check_dict_is_empty(codec_options, string_sprintf("Decoder %s", codec_->name));
+  // parse and remove any video-compare specific decoder options
+  trust_decoded_pts_ = get_and_remove_bool_avdict_option(decoder_options, "trust_dec_pts");
+
+  if (trust_decoded_pts_) {
+    std::cout << "Trusting decoded PTS; extrapolation logic disabled." << std::endl;
+  }
+
+  // open codec and check all options were consumed
+  ffmpeg::check(avcodec_open2(codec_context_, codec_, &decoder_options));
+  ffmpeg::check_dict_is_empty(decoder_options, string_sprintf("Decoder %s", codec_->name));
 }
 
 VideoDecoder::~VideoDecoder() {
@@ -107,7 +133,7 @@ bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
   }
   ffmpeg::check(ret);
 
-  const bool use_avframe_state = next_pts_ == AV_NOPTS_VALUE || frame->key_frame || frame->pts == first_pts_;
+  const bool use_avframe_state = trust_decoded_pts_ || next_pts_ == AV_NOPTS_VALUE || frame->key_frame || frame->pts == first_pts_;
   const int64_t avframe_pts = frame->pts != AV_NOPTS_VALUE ? frame->pts : frame->best_effort_timestamp;
 
   // use an increasing timestamp via pkt_duration between keyframes; otherwise, fall back to the best effort timestamp when PTS is not available

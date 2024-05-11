@@ -8,7 +8,7 @@ extern "C" {
 
 class VideoDecoder {
  public:
-  explicit VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, const AVCodecParameters* codec_parameters, AVDictionary* hwaccel_options, AVDictionary* codec_options);
+  explicit VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, const AVCodecParameters* codec_parameters, AVDictionary* hwaccel_options, AVDictionary* decoder_options);
   ~VideoDecoder();
 
   const AVCodec* codec() const;
@@ -43,4 +43,6 @@ class VideoDecoder {
   int64_t first_pts_;
   int64_t previous_pts_;
   int64_t next_pts_;
+
+  bool trust_decoded_pts_;
 };
