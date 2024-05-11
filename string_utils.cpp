@@ -2,8 +2,8 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <sstream>
 #include <numeric>
+#include <sstream>
 
 extern "C" {
 #include <libavutil/pixdesc.h>
@@ -14,7 +14,7 @@ std::string string_join(const std::vector<std::string>& strings, const std::stri
   return std::accumulate(strings.begin(), strings.end(), std::string(), [&delim](const std::string& x, const std::string& y) { return x.empty() ? y : x + delim + y; });
 }
 
-std::vector<std::string> string_split(const std::string &string, char delim) {
+std::vector<std::string> string_split(const std::string& string, char delim) {
   std::vector<std::string> tokens;
   std::string token;
   std::istringstream token_stream(string);

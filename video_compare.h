@@ -24,9 +24,9 @@ struct InputVideo {
   std::string demuxer;
   std::string decoder;
   std::string hw_accel_spec;
-  AVDictionary* demuxer_options{nullptr}; // mutated by Demuxer
-  AVDictionary* decoder_options{nullptr}; // mutated by VideoDecoder
-  AVDictionary* hw_accel_options{nullptr}; // mutated by VideoDecoder
+  AVDictionary* demuxer_options{nullptr};   // mutated by Demuxer
+  AVDictionary* decoder_options{nullptr};   // mutated by VideoDecoder
+  AVDictionary* hw_accel_options{nullptr};  // mutated by VideoDecoder
 };
 
 struct VideoCompareConfig {

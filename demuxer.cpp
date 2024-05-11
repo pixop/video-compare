@@ -3,7 +3,7 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
-Demuxer::Demuxer(const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* codec_options) {
+Demuxer::Demuxer(const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options) {
   const AVInputFormat* input_format = nullptr;
 
   if (!demuxer_name.empty()) {
@@ -20,9 +20,9 @@ Demuxer::Demuxer(const std::string& demuxer_name, const std::string& file_name, 
   video_stream_index_ = ffmpeg::check(file_name, av_find_best_stream(format_context_, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0));
 
   AVDictionary* stream_codec_options = nullptr;
-  av_dict_copy(&stream_codec_options, codec_options, 0);
+  av_dict_copy(&stream_codec_options, decoder_options, 0);
 
-  AVDictionary** opts_for_streams = (AVDictionary**) av_calloc(format_context_->nb_streams, sizeof(AVDictionary*));
+  AVDictionary** opts_for_streams = (AVDictionary**)av_calloc(format_context_->nb_streams, sizeof(AVDictionary*));
   opts_for_streams[video_stream_index_] = stream_codec_options;
 
   ffmpeg::check(file_name, avformat_find_stream_info(format_context_, opts_for_streams));
