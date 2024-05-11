@@ -8,7 +8,7 @@ bool is_one_or_true(const char* str) {
   return strcmp(str, "1") == 0 || strcmp(str, "true") == 0 || strcmp(str, "t") == 0;
 }
 
-bool get_and_remove_bool_avdict_option(AVDictionary* options, const char* key) {
+bool get_and_remove_bool_avdict_option(AVDictionary*& options, const char* key) {
   auto entry = av_dict_get(options, key, nullptr, 0);
 
   if (entry != nullptr) {
