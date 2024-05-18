@@ -216,6 +216,9 @@ Display::Display(const int display_number,
   small_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 16 * font_scale_), "font open");
   big_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 24 * font_scale_), "font open");
 
+  normal_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
+  pan_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZEALL);
+
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
   video_texture_ = check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height),
                              "video texture");
@@ -289,6 +292,9 @@ Display::~Display() {
 
   TTF_CloseFont(small_font_);
   TTF_CloseFont(big_font_);
+
+  SDL_FreeCursor(normal_mode_cursor_);
+  SDL_FreeCursor(pan_mode_cursor_);
 
   delete[] diff_buffer_;
 
@@ -1109,9 +1115,16 @@ void Display::input() {
         }
         break;
       case SDL_MOUSEBUTTONDOWN:
-        if (event_.button.button != SDL_BUTTON_RIGHT) {
+        if (event_.button.button == SDL_BUTTON_RIGHT) {
+          SDL_SetCursor(pan_mode_cursor_);
+        } else {
           seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
           seek_from_start_ = true;
+        }
+        break;
+      case SDL_MOUSEBUTTONUP:
+        if (event_.button.button == SDL_BUTTON_RIGHT) {
+          SDL_SetCursor(normal_mode_cursor_);
         }
         break;
       case SDL_KEYDOWN:
