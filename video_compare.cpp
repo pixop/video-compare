@@ -49,7 +49,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                      std::make_unique<VideoDecoder>(config.right.decoder, config.right.hw_accel_spec, demuxer_[1]->video_codec_parameters(), config.right.hw_accel_options, config.right.decoder_options)},
       video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get(), config.left.video_filters, demuxer_[1].get(), video_decoder_[1].get(), config.disable_auto_filters),
                       std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get(), config.right.video_filters, demuxer_[0].get(), video_decoder_[0].get(), config.disable_auto_filters)},
-      max_width_{(std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width()) + 7) & -8},
+      max_width_{(std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width()) + 15) & -16},
       max_height_{(std::max(video_filterer_[0]->dest_height(), video_filterer_[1]->dest_height()) + 3) & -4},
       shortest_duration_{std::min(demuxer_[0]->duration(), demuxer_[1]->duration()) * AV_TIME_TO_SEC},
       format_converter_{
