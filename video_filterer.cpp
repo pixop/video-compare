@@ -39,6 +39,8 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_d
     } else if (demuxer->rotation() == 180) {
       filters.push_back("hflip");
       filters.push_back("vflip");
+    } else if (demuxer->rotation() != 0) {
+      filters.push_back(string_sprintf("rotate=%d*PI/180", demuxer->rotation()));
     }
   }
 
