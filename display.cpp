@@ -375,9 +375,9 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
         p_diff[out_x + 2] = clamp_int_to_10_bpc(b_diff) << 6;
       }
 
-      p_left += pitches_left[0] / 2;
-      p_right += pitches_right[0] / 2;
-      p_diff += video_width_ * 3;
+      p_left += pitches_left[0] / sizeof(uint16_t);
+      p_right += pitches_right[0] / sizeof(uint16_t);
+      p_diff += diff_pitches_[0] / sizeof(uint16_t);
     }
   } else {
     uint8_t* p_left = planes_left[0] + split_x * 3;
@@ -405,7 +405,7 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 
       p_left += pitches_left[0];
       p_right += pitches_right[0];
-      p_diff += video_width_ * 3;
+      p_diff += diff_pitches_[0];
     }
   }
 }
@@ -724,7 +724,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
 
           update_textures(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, subtraction mode)");
         } else {
-          update_textures(&tex_render_quad_right, diff_planes_[0] + start_right * 3, pitches_right[0], "right update (subtraction mode)");
+          update_textures(&tex_render_quad_right, diff_planes_[0] + start_right * 3, diff_pitches_[0], "right update (subtraction mode)");
         }
       } else {
         if (use_10_bpc_) {
