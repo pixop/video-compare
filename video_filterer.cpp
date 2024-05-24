@@ -5,7 +5,7 @@
 #include "string_utils.h"
 
 VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters, const Demuxer* other_demuxer, const VideoDecoder* other_video_decoder, const bool disable_auto_filters)
-    : demuxer_(demuxer), video_decoder_(video_decoder), pixel_format_(video_decoder->codec_context()->pix_fmt) {
+    : demuxer_(demuxer), video_decoder_(video_decoder), width_(video_decoder->width()), height_(video_decoder->height()), pixel_format_(video_decoder->pixel_format()), color_space_(video_decoder->color_space()), color_range_(video_decoder->color_range()) {
   std::vector<std::string> filters;
 
   if (!disable_auto_filters) {
@@ -81,15 +81,17 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
   if ((outputs == nullptr) || (inputs == nullptr) || (filter_graph_ == nullptr)) {
     ret = AVERROR(ENOMEM);
   } else {
-    // buffer video source: the decoded frames go here
-    const AVFilter* buffersrc = avfilter_get_by_name("buffer");
+    const int sample_aspect_ratio_den = FFMAX(dec_ctx->sample_aspect_ratio.den, 1);
     const std::string args =
 #if (LIBAVFILTER_VERSION_INT < AV_VERSION_INT(10, 1, 100))
-        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d", dec_ctx->width, dec_ctx->height, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num, dec_ctx->sample_aspect_ratio.den);
+        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d", width_, height_, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num, sample_aspect_ratio_den);
 #else
-        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d", dec_ctx->width, dec_ctx->height, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num,
-                       dec_ctx->sample_aspect_ratio.den, dec_ctx->colorspace, dec_ctx->color_range);
+        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d", width_, height_, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num,
+                       sample_aspect_ratio_den, color_space_, color_range_);
 #endif
+
+    // buffer video source: the decoded frames go here
+    const AVFilter* buffersrc = avfilter_get_by_name("buffer");
 
     ret = avfilter_graph_create_filter(&buffersrc_ctx_, buffersrc, "in", args.c_str(), nullptr, filter_graph_);
     if (ret < 0) {
@@ -126,13 +128,37 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
 }
 
 bool VideoFilterer::send(AVFrame* decoded_frame) {
-  if (decoded_frame != nullptr && pixel_format_ != decoded_frame->format) {
-    if (decoded_frame->format == AV_PIX_FMT_NONE) {
-      throw ffmpeg::Error{"Decoded frame with invalid pixel format received"};
+  if (decoded_frame != nullptr) {
+    bool must_reinit = false;
+
+    if (width_ != decoded_frame->width) {
+      width_ = decoded_frame->width;
+      must_reinit = true;
+    }
+    if (height_ != decoded_frame->height) {
+      height_ = decoded_frame->height;
+      must_reinit = true;
+    }
+    if (pixel_format_ != decoded_frame->format) {
+      if (decoded_frame->format == AV_PIX_FMT_NONE) {
+        throw ffmpeg::Error{"Decoded frame with invalid pixel format received"};
+      }
+
+      pixel_format_ = static_cast<AVPixelFormat>(decoded_frame->format);
+      must_reinit = true;
+    }
+    if (color_space_ != decoded_frame->colorspace) {
+      color_space_ = static_cast<AVColorSpace>(decoded_frame->colorspace);
+      must_reinit = true;
+    }
+    if (color_range_ != decoded_frame->color_range) {
+      color_range_ = static_cast<AVColorRange>(decoded_frame->color_range);
+      must_reinit = true;
     }
 
-    pixel_format_ = static_cast<AVPixelFormat>(decoded_frame->format);
-    reinit();
+    if (must_reinit) {
+      reinit();
+    }
   }
 
   return av_buffersrc_add_frame_flags(buffersrc_ctx_, decoded_frame, AV_BUFFERSRC_FLAG_KEEP_REF) >= 0;

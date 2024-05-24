@@ -36,7 +36,12 @@ class VideoFilterer {
   const Demuxer* demuxer_;
   const VideoDecoder* video_decoder_;
   std::string filter_description_;
+
+  int width_;
+  int height_;
   AVPixelFormat pixel_format_;
+  AVColorSpace color_space_;
+  AVColorRange color_range_;
 
   AVFilterContext* buffersrc_ctx_;
   AVFilterContext* buffersink_ctx_;

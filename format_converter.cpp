@@ -55,12 +55,26 @@ AVPixelFormat FormatConverter::output_pixel_format() const {
 }
 
 void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
+  bool must_reinit = false;
+
+  if (src_width_ != static_cast<size_t>(src->width)) {
+    src_width_ = src->width;
+    must_reinit = true;
+  }
+  if (src_height_ != static_cast<size_t>(src->height)) {
+    src_height_ = src->height;
+    must_reinit = true;
+  }
   if (input_pixel_format_ != src->format) {
     if (src->format == AV_PIX_FMT_NONE) {
       throw ffmpeg::Error{"Format converter got a source frame with invalid pixel format"};
     }
 
     input_pixel_format_ = static_cast<AVPixelFormat>(src->format);
+    must_reinit = true;
+  }
+
+  if (must_reinit) {
     reinit();
   }
 
