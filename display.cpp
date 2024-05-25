@@ -14,6 +14,7 @@
 extern "C" {
 #include <libavfilter/avfilter.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 }
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -322,11 +323,12 @@ void Display::print_verbose_info() {
   std::cout << "SDL window size: " << window_width_ << "x" << window_height_ << std::endl;
 
   std::cout << "FFmpeg version: " << av_version_info() << std::endl;
-  std::cout << "libavutil version:   " << format_libav_version(avutil_version()) << std::endl;
-  std::cout << "libavcodec version:  " << format_libav_version(avcodec_version()) << std::endl;
-  std::cout << "libavformat version: " << format_libav_version(avformat_version()) << std::endl;
-  std::cout << "libavfilter version: " << format_libav_version(avfilter_version()) << std::endl;
-  std::cout << "libswscale version:  " << format_libav_version(swscale_version()) << std::endl;
+  std::cout << "libavutil version:     " << format_libav_version(avutil_version()) << std::endl;
+  std::cout << "libavcodec version:    " << format_libav_version(avcodec_version()) << std::endl;
+  std::cout << "libavformat version:   " << format_libav_version(avformat_version()) << std::endl;
+  std::cout << "libavfilter version:   " << format_libav_version(avfilter_version()) << std::endl;
+  std::cout << "libswscale version:    " << format_libav_version(swscale_version()) << std::endl;
+  std::cout << "libswresample version: " << format_libav_version(swresample_version()) << std::endl;
   std::cout << "libavcodec configuration: " << avcodec_configuration() << std::endl;
 }
 
