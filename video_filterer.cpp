@@ -5,7 +5,13 @@
 #include "string_utils.h"
 
 VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, const std::string& custom_video_filters, const Demuxer* other_demuxer, const VideoDecoder* other_video_decoder, const bool disable_auto_filters)
-    : demuxer_(demuxer), video_decoder_(video_decoder), width_(video_decoder->width()), height_(video_decoder->height()), pixel_format_(video_decoder->pixel_format()), color_space_(video_decoder->color_space()), color_range_(video_decoder->color_range()) {
+    : demuxer_(demuxer),
+      video_decoder_(video_decoder),
+      width_(video_decoder->width()),
+      height_(video_decoder->height()),
+      pixel_format_(video_decoder->pixel_format()),
+      color_space_(video_decoder->color_space()),
+      color_range_(video_decoder->color_range()) {
   std::vector<std::string> filters;
 
   if (!disable_auto_filters) {
@@ -88,8 +94,8 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
 #if (LIBAVFILTER_VERSION_INT < AV_VERSION_INT(10, 1, 100))
         string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d", width_, height_, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num, sample_aspect_ratio_den);
 #else
-        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d", width_, height_, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num,
-                       sample_aspect_ratio_den, color_space_, color_range_);
+        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d", width_, height_, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num, sample_aspect_ratio_den,
+                       color_space_, color_range_);
 #endif
 
     // buffer video source: the decoded frames go here

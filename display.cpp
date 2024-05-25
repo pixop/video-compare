@@ -13,8 +13,8 @@
 #include "string_utils.h"
 extern "C" {
 #include <libavfilter/avfilter.h>
-#include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
+#include <libswscale/swscale.h>
 }
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
