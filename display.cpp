@@ -313,23 +313,26 @@ Display::~Display() {
 void Display::print_verbose_info() {
   SDL_version sdl_linked_version;
   SDL_GetVersion(&sdl_linked_version);
-  std::cout << "SDL version: " << string_sprintf("%u.%u.%u", sdl_linked_version.major, sdl_linked_version.minor, sdl_linked_version.patch) << std::endl;
+  std::cout << "SDL version:           " << string_sprintf("%u.%u.%u", sdl_linked_version.major, sdl_linked_version.minor, sdl_linked_version.patch) << std::endl;
+
+  const SDL_version* sdl_ttf_linked_version = TTF_Linked_Version();
+  std::cout << "SDL_ttf version:       " << string_sprintf("%u.%u.%u", sdl_ttf_linked_version->major, sdl_ttf_linked_version->minor, sdl_ttf_linked_version->patch) << std::endl;
 
   SDL_RendererInfo info;
   SDL_GetRendererInfo(renderer_, &info);
-  std::cout << "SDL renderer: " << info.name << std::endl;
+  std::cout << "SDL renderer:          " << info.name << std::endl;
 
-  std::cout << "SDL GL drawable size: " << drawable_width_ << "x" << drawable_height_ << std::endl;
-  std::cout << "SDL window size: " << window_width_ << "x" << window_height_ << std::endl;
+  std::cout << "SDL GL drawable size:  " << drawable_width_ << "x" << drawable_height_ << std::endl;
+  std::cout << "SDL window size:       " << window_width_ << "x" << window_height_ << std::endl;
 
-  std::cout << "FFmpeg version: " << av_version_info() << std::endl;
+  std::cout << "FFmpeg version:        " << av_version_info() << std::endl;
   std::cout << "libavutil version:     " << format_libav_version(avutil_version()) << std::endl;
   std::cout << "libavcodec version:    " << format_libav_version(avcodec_version()) << std::endl;
   std::cout << "libavformat version:   " << format_libav_version(avformat_version()) << std::endl;
   std::cout << "libavfilter version:   " << format_libav_version(avfilter_version()) << std::endl;
   std::cout << "libswscale version:    " << format_libav_version(swscale_version()) << std::endl;
   std::cout << "libswresample version: " << format_libav_version(swresample_version()) << std::endl;
-  std::cout << "libavcodec configuration: " << avcodec_configuration() << std::endl;
+  std::cout << "libavcodec configuration: " << avcodec_configuration() << std::endl << std::endl;
 }
 
 void Display::convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi) {
