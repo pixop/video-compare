@@ -10,9 +10,8 @@ frame rates, scanning methods, color formats, container formats, codecs, or dura
 
 A movable slider enables easy viewing of the difference across any region of interest.
 
-Thanks to the versatility of FFmpeg, it is actually also possible to use `video-compare` to compare
-two images. The common PNG and JPEG formats have been successfully tested to work. Image sequences are 
-also supported.
+Thanks to FFmpeg's flexibility, `video-compare` can compare two images in popular formats like PNG and 
+JPEG, and also supports image sequences.
 
 ## Installation
 
