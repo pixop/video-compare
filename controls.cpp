@@ -18,6 +18,7 @@ static const std::vector<std::pair<std::string, std::string>> controls{{"H", "To
                                                                        {"D", "Move to the next frame in the buffer"},
                                                                        {"F", "Save both frames as PNG images in the current directory"},
                                                                        {"P", "Print mouse position and pixel value under cursor to console"},
+                                                                       {"M", "Print image similarity metrics to console"},
                                                                        {"Z", "Magnify area around cursor (result shown in lower left corner)"},
                                                                        {"C", "Magnify area around cursor (result shown in lower right corner)"},
                                                                        {"R", "Re-center and reset zoom to 100% (x1)"},

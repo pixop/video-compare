@@ -582,6 +582,114 @@ std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size
   return "RGB" + format_pixel(rgb) + ", YUV" + format_pixel(yuv);
 }
 
+float* Display::rgb_to_grayscale(const uint8_t* plane, const size_t pitch) {
+  float* grayscale_image = new float[video_width_ * video_height_];
+  float* p_out = grayscale_image;
+
+  auto to_grayscale = [](const float r, const float g, const float b, const float normalization_factor) -> float { return (r * 0.299f + g * 0.587f + b * 0.114f) * normalization_factor; };
+
+  if (use_10_bpc_) {
+    const uint16_t* p_in = reinterpret_cast<const uint16_t*>(plane);
+
+    for (int y = 0; y < video_height_; y++) {
+      for (int x = 0; x < video_width_; x++) {
+        const float r = p_in[x] >> 6;
+        const float g = p_in[x + 1] >> 6;
+        const float b = p_in[x + 2] >> 6;
+
+        *(p_out++) = to_grayscale(r, g, b, 1.f / 1023.f);
+      }
+
+      p_in += pitch / sizeof(uint16_t);
+    }
+  } else {
+    for (int y = 0; y < video_height_; y++) {
+      for (int x = 0; x < video_width_; x++) {
+        const float r = plane[x];
+        const float g = plane[x + 1];
+        const float b = plane[x + 2];
+
+        *(p_out++) = to_grayscale(r, g, b, 1.f / 255.f);
+      }
+
+      plane += pitch;
+    }
+  }
+
+  return grayscale_image;
+}
+
+float Display::compute_mean(const float* plane) {
+  float sum = 0;
+
+  for (int i = 0; i < (video_width_ * video_height_); i++) {
+    sum += *(plane++);
+  }
+
+  return sum / (video_width_ * video_height_);
+}
+
+void Display::compute_variance_and_covariance(const float* plane_1, const float* plane_2, const float mean1, const float mean2, float& variance1, float& variance2, float& covariance) {
+  float sumVar1 = 0, sumVar2 = 0, sumCovar = 0;
+
+  for (int i = 0; i < (video_width_ * video_height_); i++) {
+    float diff1 = *(plane_1++) - mean1;
+    float diff2 = *(plane_2++) - mean2;
+
+    sumVar1 += diff1 * diff1;
+    sumVar2 += diff2 * diff2;
+    sumCovar += diff1 * diff2;
+  }
+
+  const size_t count = video_width_ * video_height_;
+
+  variance1 = sumVar1 / count;
+  variance2 = sumVar2 / count;
+  covariance = sumCovar / count;
+}
+
+float Display::compute_ssim(const float* left_plane, const float* right_plane) {
+  const float L = 1;  // dynamic range
+  const float k1 = 0.01f;
+  const float k2 = 0.03f;
+  const float C1 = (k1 * L) * (k1 * L);
+  const float C2 = (k2 * L) * (k2 * L);
+
+  float mean1 = compute_mean(left_plane);
+  float mean2 = compute_mean(right_plane);
+
+  float variance1, variance2, covariance;
+  compute_variance_and_covariance(left_plane, right_plane, mean1, mean2, variance1, variance2, covariance);
+
+  float luminance = (2.f * mean1 * mean2 + C1) / (mean1 * mean1 + mean2 * mean2 + C1);
+  float contrast = (2.f * sqrt(variance1) * sqrt(variance2) + C2) / (variance1 + variance2 + C2);
+  float structure = (covariance + C2 / 2.f) / (sqrt(variance1) * sqrt(variance2) + C2 / 2.f);
+
+  return luminance * contrast * structure;
+}
+
+float Display::compute_mse(const float* left_plane, const float* right_plane) {
+  float mse = 0.0;
+
+  for (int i = 0; i < (video_width_ * video_height_); i++) {
+    const float diff = *(left_plane++) - *(right_plane++);
+
+    mse += diff * diff;
+  }
+
+  return mse / (video_width_ * video_height_);
+}
+
+float Display::compute_psnr(const float* left_plane, const float* right_plane) {
+  const float mse = compute_mse(left_plane, right_plane);
+
+  if (mse == 0) {
+    return std::numeric_limits<double>::infinity();
+  }
+
+  return 10 * std::log10f(1.f / mse);
+}
+
 void Display::render_help() {
   SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 3 / 2);
@@ -673,6 +781,19 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     }
 
     print_mouse_position_and_color_ = false;
+  }
+
+  // print image similarity metrics
+  if (print_image_similarity_metrics_) {
+    const float* left_gray = rgb_to_grayscale(planes_left[0], pitches_left[0]);
+    const float* right_gray = rgb_to_grayscale(planes_right[0], pitches_right[0]);
+
+    std::cout << string_sprintf("Metrics: [%.3f,%.3f], PSNR(%.3f), SSIM(%.5f)", ffmpeg::pts_in_secs(left_frame), ffmpeg::pts_in_secs(right_frame), compute_psnr(left_gray, right_gray), compute_ssim(left_gray, right_gray)) << std::endl;
+
+    delete left_gray;
+    delete right_gray;
+
+    print_image_similarity_metrics_ = false;
   }
 
   // clear everything
@@ -1211,6 +1332,9 @@ void Display::input() {
             break;
           case SDLK_p:
             print_mouse_position_and_color_ = true;
+            break;
+          case SDLK_m:
+            print_image_similarity_metrics_ = true;
             break;
           case SDLK_5:
           case SDLK_KP_5:

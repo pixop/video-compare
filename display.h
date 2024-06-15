@@ -88,6 +88,7 @@ class Display {
   bool seek_from_start_{false};
   bool save_image_frames_{false};
   bool print_mouse_position_and_color_{false};
+  bool print_image_similarity_metrics_{false};
   bool mouse_is_inside_window_{false};
   int playback_speed_level_{0};
   float playback_speed_factor_{1.0F};
@@ -177,6 +178,15 @@ class Display {
 
   std::string format_pixel(const std::array<int, 3>& rgb);
   std::string get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const int x, const int y);
+
+  float* rgb_to_grayscale(const uint8_t* plane, const size_t pitch);
+
+  float compute_mean(const float* plane);
+  void compute_variance_and_covariance(const float* plane_1, const float* plane_2, const float mean1, const float mean2, float& variance1, float& variance2, float& covariance);
+  float compute_ssim(const float* left_plane, const float* right_plane);
+
+  float compute_mse(const float* left_plane, const float* right_plane);
+  float compute_psnr(const float* left_plane, const float* right_plane);
 
   void render_help();
 
