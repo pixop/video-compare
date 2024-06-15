@@ -788,7 +788,9 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     const float* left_gray = rgb_to_grayscale(planes_left[0], pitches_left[0]);
     const float* right_gray = rgb_to_grayscale(planes_right[0], pitches_right[0]);
 
-    std::cout << string_sprintf("Metrics: [%.3f,%.3f], PSNR(%.3f), SSIM(%.5f)", ffmpeg::pts_in_secs(left_frame), ffmpeg::pts_in_secs(right_frame), compute_psnr(left_gray, right_gray), compute_ssim(left_gray, right_gray)) << std::endl;
+    std::cout << string_sprintf("Metrics: [%s|%s], PSNR(%.3f), SSIM(%.5f)", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(),
+                                compute_psnr(left_gray, right_gray), compute_ssim(left_gray, right_gray))
+              << std::endl;
 
     delete left_gray;
     delete right_gray;
