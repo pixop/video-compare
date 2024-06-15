@@ -684,7 +684,7 @@ float Display::compute_psnr(const float* left_plane, const float* right_plane) {
   const float mse = compute_mse(left_plane, right_plane);
 
   if (mse == 0) {
-    return std::numeric_limits<double>::infinity();
+    return std::numeric_limits<float>::infinity();
   }
 
   return 10 * std::log10f(1.f / mse);
@@ -967,7 +967,7 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     }
     if (mouse_is_inside_window_ && duration_ > 0) {
       // target seek position
-      double target_position = static_cast<float>(mouse_x_) / static_cast<float>(window_width_) * duration_;
+      float target_position = static_cast<float>(mouse_x_) / static_cast<float>(window_width_) * duration_;
 
       const std::string target_pos_str = format_position(target_position, true);
       text_surface = TTF_RenderText_Blended(small_font_, target_pos_str.c_str(), TARGET_COLOR);
