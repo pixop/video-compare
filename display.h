@@ -181,11 +181,9 @@ class Display {
 
   float* rgb_to_grayscale(const uint8_t* plane, const size_t pitch);
 
-  float compute_mean(const float* plane);
-  void compute_variance_and_covariance(const float* plane_1, const float* plane_2, const float mean1, const float mean2, float& variance1, float& variance2, float& covariance);
+  float compute_ssim_block(const float* left_plane, const float* right_plane, const int x_offset, const int y_offset, const int block_size);
   float compute_ssim(const float* left_plane, const float* right_plane);
 
-  float compute_mse(const float* left_plane, const float* right_plane);
   float compute_psnr(const float* left_plane, const float* right_plane);
 
   void render_help();

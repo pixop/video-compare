@@ -619,57 +619,81 @@ float* Display::rgb_to_grayscale(const uint8_t* plane, const size_t pitch) {
   return grayscale_image;
 }
 
-float Display::compute_mean(const float* plane) {
-  float sum = 0;
+float Display::compute_ssim_block(const float* left_plane, const float* right_plane, const int x_offset, const int y_offset, const int block_size) {
+  static const float k1 = 0.01f;
+  static const float k2 = 0.03f;
+  static const float c1 = k1 * k1;
+  static const float c2 = k2 * k2;
+  static const float c3 = c2 / 2.f;
 
-  for (int i = 0; i < (video_width_ * video_height_); i++) {
-    sum += *(plane++);
-  }
+  const size_t block_elements = block_size * block_size;
 
-  return sum / (video_width_ * video_height_);
-}
+  auto compute_mean = [&](const float* plane) {
+    float sum = 0;
 
-void Display::compute_variance_and_covariance(const float* plane_1, const float* plane_2, const float mean1, const float mean2, float& variance1, float& variance2, float& covariance) {
-  float sumVar1 = 0, sumVar2 = 0, sumCovar = 0;
+    for (int y = y_offset; y < (y_offset + block_size); y++) {
+      const float* row = plane + y * video_width_ + x_offset;
 
-  for (int i = 0; i < (video_width_ * video_height_); i++) {
-    float diff1 = *(plane_1++) - mean1;
-    float diff2 = *(plane_2++) - mean2;
+      for (int x = 0; x < block_size; x++) {
+        sum += *(row++);
+      }
+    }
 
-    sumVar1 += diff1 * diff1;
-    sumVar2 += diff2 * diff2;
-    sumCovar += diff1 * diff2;
-  }
-
-  const size_t count = video_width_ * video_height_;
-
-  variance1 = sumVar1 / count;
-  variance2 = sumVar2 / count;
-  covariance = sumCovar / count;
-}
-
-float Display::compute_ssim(const float* left_plane, const float* right_plane) {
-  const float L = 1;  // dynamic range
-  const float k1 = 0.01f;
-  const float k2 = 0.03f;
-  const float C1 = (k1 * L) * (k1 * L);
-  const float C2 = (k2 * L) * (k2 * L);
-  const float C3 = C2 / 2.f;
+    return sum / block_elements;
+  };
 
   float mean1 = compute_mean(left_plane);
   float mean2 = compute_mean(right_plane);
 
-  float variance1, variance2, covariance;
-  compute_variance_and_covariance(left_plane, right_plane, mean1, mean2, variance1, variance2, covariance);
+  // compute variance and convariance
+  float sum_var1 = 0, sum_var2 = 0, sum_covar = 0;
 
-  float luminance = (2.f * mean1 * mean2 + C1) / (mean1 * mean1 + mean2 * mean2 + C1);
-  float contrast = (2.f * sqrt(variance1) * sqrt(variance2) + C2) / (variance1 + variance2 + C2);
-  float structure = (covariance + C3) / (sqrt(variance1) * sqrt(variance2) + C3);
+  for (int y = y_offset; y < (y_offset + block_size); y++) {
+    const float* row1 = left_plane + y * video_width_ + x_offset;
+    const float* row2 = right_plane + y * video_width_ + x_offset;
+
+    for (int x = 0; x < block_size; x++) {
+      float diff1 = *(row1++) - mean1;
+      float diff2 = *(row2++) - mean2;
+
+      sum_var1 += diff1 * diff1;
+      sum_var2 += diff2 * diff2;
+      sum_covar += diff1 * diff2;
+    }
+  }
+
+  float variance1 = sum_var1 / block_elements;
+  float variance2 = sum_var2 / block_elements;
+  float covariance = sum_covar / block_elements;
+
+  float geomtric_mean_variance12 = sqrt(variance1 * variance2);
+
+  // compute SSIM metrics
+  float luminance = (2.f * mean1 * mean2 + c1) / (mean1 * mean1 + mean2 * mean2 + c1);
+  float contrast = (2.f * geomtric_mean_variance12 + c2) / (variance1 + variance2 + c2);
+  float structure = (covariance + c3) / (geomtric_mean_variance12 + c3);
 
   return luminance * contrast * structure;
 }
 
-float Display::compute_mse(const float* left_plane, const float* right_plane) {
+float Display::compute_ssim(const float* left_plane, const float* right_plane) {
+  static const int overlap = 4;
+  static const int block_size = 8;
+
+  float ssim_sum = 0.0;
+  int count = 0;
+
+  for (int y = 0; y < video_height_ - (block_size - 1); y += block_size - overlap) {
+    for (int x = 0; x < video_width_ - (block_size - 1); count++, x += block_size - overlap) {
+      ssim_sum += compute_ssim_block(left_plane, right_plane, x, y, block_size);
+    }
+  }
+
+  return ssim_sum / count;
+}
+
+float Display::compute_psnr(const float* left_plane, const float* right_plane) {
+  // compute MSE
   float mse = 0.0;
 
   for (int i = 0; i < (video_width_ * video_height_); i++) {
@@ -678,16 +702,13 @@ float Display::compute_mse(const float* left_plane, const float* right_plane) {
     mse += diff * diff;
   }
 
-  return mse / (video_width_ * video_height_);
-}
-
-float Display::compute_psnr(const float* left_plane, const float* right_plane) {
-  const float mse = compute_mse(left_plane, right_plane);
+  mse /= (video_width_ * video_height_);
 
   if (mse == 0) {
     return std::numeric_limits<float>::infinity();
   }
 
+  // compute PSNR
   return -10.f * std::log10f(mse);
 }
 
