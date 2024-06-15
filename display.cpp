@@ -592,7 +592,7 @@ float* Display::rgb_to_grayscale(const uint8_t* plane, const size_t pitch) {
     const uint16_t* p_in = reinterpret_cast<const uint16_t*>(plane);
 
     for (int y = 0; y < video_height_; y++) {
-      for (int x = 0; x < video_width_; x++) {
+      for (int x = 0; x < (video_width_ * 3); x += 3) {
         const float r = p_in[x] >> 6;
         const float g = p_in[x + 1] >> 6;
         const float b = p_in[x + 2] >> 6;
@@ -604,7 +604,7 @@ float* Display::rgb_to_grayscale(const uint8_t* plane, const size_t pitch) {
     }
   } else {
     for (int y = 0; y < video_height_; y++) {
-      for (int x = 0; x < video_width_; x++) {
+      for (int x = 0; x < (video_width_ * 3); x += 3) {
         const float r = plane[x];
         const float g = plane[x + 1];
         const float b = plane[x + 2];
@@ -654,6 +654,7 @@ float Display::compute_ssim(const float* left_plane, const float* right_plane) {
   const float k2 = 0.03f;
   const float C1 = (k1 * L) * (k1 * L);
   const float C2 = (k2 * L) * (k2 * L);
+  const float C3 = C2 / 2.f;
 
   float mean1 = compute_mean(left_plane);
   float mean2 = compute_mean(right_plane);
@@ -663,7 +664,7 @@ float Display::compute_ssim(const float* left_plane, const float* right_plane) {
 
   float luminance = (2.f * mean1 * mean2 + C1) / (mean1 * mean1 + mean2 * mean2 + C1);
   float contrast = (2.f * sqrt(variance1) * sqrt(variance2) + C2) / (variance1 + variance2 + C2);
-  float structure = (covariance + C2 / 2.f) / (sqrt(variance1) * sqrt(variance2) + C2 / 2.f);
+  float structure = (covariance + C3) / (sqrt(variance1) * sqrt(variance2) + C3);
 
   return luminance * contrast * structure;
 }
@@ -687,7 +688,7 @@ float Display::compute_psnr(const float* left_plane, const float* right_plane) {
     return std::numeric_limits<float>::infinity();
   }
 
-  return 10 * std::log10f(1.f / mse);
+  return -10.f * std::log10f(mse);
 }
 
 void Display::render_help() {
