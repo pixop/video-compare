@@ -620,13 +620,7 @@ float* Display::rgb_to_grayscale(const uint8_t* plane, const size_t pitch) {
 }
 
 float Display::compute_ssim_block(const float* left_plane, const float* right_plane, const int x_offset, const int y_offset, const int block_size) {
-  static const float k1 = 0.01f;
-  static const float k2 = 0.03f;
-  static const float c1 = k1 * k1;
-  static const float c2 = k2 * k2;
-  static const float c3 = c2 / 2.f;
-
-  const size_t block_elements = block_size * block_size;
+  const int block_elements = block_size * block_size;
 
   auto compute_mean = [&](const float* plane) {
     float sum = 0;
@@ -666,9 +660,15 @@ float Display::compute_ssim_block(const float* left_plane, const float* right_pl
   float variance2 = sum_var2 / block_elements;
   float covariance = sum_covar / block_elements;
 
-  float geomtric_mean_variance12 = sqrt(variance1 * variance2);
+  float geomtric_mean_variance12 = sqrtf(variance1 * variance2);
 
   // compute SSIM metrics
+  static constexpr float k1 = 0.01f;
+  static constexpr float k2 = 0.03f;
+  static constexpr float c1 = k1 * k1;
+  static constexpr float c2 = k2 * k2;
+  static constexpr float c3 = c2 / 2.f;
+
   float luminance = (2.f * mean1 * mean2 + c1) / (mean1 * mean1 + mean2 * mean2 + c1);
   float contrast = (2.f * geomtric_mean_variance12 + c2) / (variance1 + variance2 + c2);
   float structure = (covariance + c3) / (geomtric_mean_variance12 + c3);
@@ -677,8 +677,8 @@ float Display::compute_ssim_block(const float* left_plane, const float* right_pl
 }
 
 float Display::compute_ssim(const float* left_plane, const float* right_plane) {
-  static const int overlap = 4;
-  static const int block_size = 8;
+  static constexpr int overlap = 4;
+  static constexpr int block_size = 8;
 
   float ssim_sum = 0.0;
   int count = 0;
