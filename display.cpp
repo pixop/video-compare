@@ -709,7 +709,7 @@ float Display::compute_psnr(const float* left_plane, const float* right_plane) {
   }
 
   // compute PSNR
-  return -10.f * std::log10f(mse);
+  return -10.f * log10f(mse);
 }
 
 void Display::render_help() {
