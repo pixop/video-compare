@@ -2,6 +2,7 @@
 #include <libgen.h>
 #include <algorithm>
 #include <iomanip>
+#include <regex>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -85,6 +86,12 @@ std::string get_file_stem(const std::string& file_path) {
   return tmp;
 }
 
+std::string strip_ffmpeg_patterns(const std::string& input) {
+  static const std::regex pattern_regex(R"(%\d*d|\*|\?)");
+
+  return std::regex_replace(input, pattern_regex, "");
+};
+
 inline float round_3(float value) {
   return std::round(value * 1000.0F) / 1000.0F;
 }
@@ -146,8 +153,8 @@ Display::Display(const int display_number,
       video_height_{static_cast<int>(height)},
       duration_{duration},
       wheel_sensitivity_{wheel_sensitivity},
-      left_file_stem_{get_file_stem(left_file_name)},
-      right_file_stem_{get_file_stem(right_file_name)} {
+      left_file_stem_{strip_ffmpeg_patterns(get_file_stem(left_file_name))},
+      right_file_stem_{strip_ffmpeg_patterns(get_file_stem(right_file_name))} {
   const int auto_width = mode == Mode::hstack ? width * 2 : width;
   const int auto_height = mode == Mode::vstack ? height * 2 : height;
 
@@ -428,8 +435,8 @@ void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<
     }
   };
 
-  const std::string left_filename = string_sprintf("%s_%04d.png", left_file_stem_.c_str(), saved_image_number_);
-  const std::string right_filename = string_sprintf("%s_%04d.png", right_file_stem_.c_str(), saved_image_number_);
+  const std::string left_filename = string_sprintf("%s%s_%04d.png", left_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_left" : "", saved_image_number_);
+  const std::string right_filename = string_sprintf("%s%s_%04d.png", right_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_right" : "", saved_image_number_);
 
   std::thread save_left_frame_thread(write_png, planes_left, pitches_left, left_filename);
   std::thread save_right_frame_thread(write_png, planes_right, pitches_right, right_filename);
