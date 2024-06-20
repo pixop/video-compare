@@ -8,6 +8,7 @@
 #include "controls.h"
 #include "string_utils.h"
 #include "video_compare.h"
+#include "version.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -203,7 +204,7 @@ int main(int argc, char** argv) {
       find_matching_hw_accels(args["find-hwaccels"]);
     } else if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
-      usage << "video-compare 20240525-warsaw Copyright (c) 2018-2024 Jon Frydensbjerg, the video-compare community" << std::endl << std::endl;
+      usage << "video-compare " << VersionInfo::version << " " << VersionInfo::copyright << std::endl << std::endl;
       usage << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl << std::endl;
       argagg::fmt_ostream fmt(std::cerr);
       fmt << usage.str() << argparser;

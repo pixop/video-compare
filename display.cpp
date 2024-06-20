@@ -12,6 +12,7 @@
 #include "ffmpeg.h"
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
+#include "version.h"
 extern "C" {
 #include <libavfilter/avfilter.h>
 #include <libswresample/swresample.h>
@@ -122,7 +123,7 @@ std::string format_libav_version(unsigned version) {
   int major = (version >> 16) & 0xff;
   int minor = (version >> 8) & 0xff;
   int micro = version & 0xff;
-  return string_sprintf("%3u.%3u.%3u", major, minor, micro);
+  return string_sprintf("%2u.%2u.%3u", major, minor, micro);
 }
 
 SDL::SDL() {
@@ -198,10 +199,6 @@ Display::Display(const int display_number,
   SDL_GL_GetDrawableSize(window_, &drawable_width_, &drawable_height_);
   SDL_GetWindowSize(window_, &window_width_, &window_height_);
 
-  if (verbose) {
-    print_verbose_info();
-  }
-
   drawable_to_window_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
   drawable_to_window_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);
   video_to_window_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::hstack) ? 2.F : 1.F);
@@ -230,6 +227,10 @@ Display::Display(const int display_number,
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
   video_texture_ = check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height),
                              "video texture");
+
+  if (verbose) {
+    print_verbose_info();
+  }
 
   SDL_Surface* text_surface = TTF_RenderUTF8_Blended(small_font_, left_file_name.c_str(), TEXT_COLOR);
   left_text_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
@@ -318,6 +319,8 @@ Display::~Display() {
 }
 
 void Display::print_verbose_info() {
+  std::cout << "video-compare version: " << VersionInfo::version << std::endl;
+
   SDL_version sdl_linked_version;
   SDL_GetVersion(&sdl_linked_version);
   std::cout << "SDL version:           " << string_sprintf("%u.%u.%u", sdl_linked_version.major, sdl_linked_version.minor, sdl_linked_version.patch) << std::endl;
@@ -331,6 +334,17 @@ void Display::print_verbose_info() {
 
   std::cout << "SDL GL drawable size:  " << drawable_width_ << "x" << drawable_height_ << std::endl;
   std::cout << "SDL window size:       " << window_width_ << "x" << window_height_ << std::endl;
+
+  auto stringify_format_and_bpp = [&](Uint32 pixel_format) -> std::string {
+    return string_sprintf("%s (%d bpp)", SDL_GetPixelFormatName(pixel_format), SDL_BITSPERPIXEL(pixel_format));
+  };
+
+  Uint32 window_pixel_format = SDL_GetWindowPixelFormat(window_);
+  std::cout << "SDL window px format:  " << stringify_format_and_bpp(window_pixel_format) << std::endl;
+
+  Uint32 video_pixel_format;
+  SDL_QueryTexture(video_texture_, &video_pixel_format, nullptr, nullptr, nullptr);
+  std::cout << "SDL video px format:   " << stringify_format_and_bpp(video_pixel_format) << std::endl;
 
   std::cout << "FFmpeg version:        " << av_version_info() << std::endl;
   std::cout << "libavutil version:     " << format_libav_version(avutil_version()) << std::endl;
