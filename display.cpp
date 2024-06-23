@@ -2,8 +2,8 @@
 #include <libgen.h>
 #include <algorithm>
 #include <iomanip>
-#include <regex>
 #include <iostream>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -335,9 +335,7 @@ void Display::print_verbose_info() {
   std::cout << "SDL GL drawable size:  " << drawable_width_ << "x" << drawable_height_ << std::endl;
   std::cout << "SDL window size:       " << window_width_ << "x" << window_height_ << std::endl;
 
-  auto stringify_format_and_bpp = [&](Uint32 pixel_format) -> std::string {
-    return string_sprintf("%s (%d bpp)", SDL_GetPixelFormatName(pixel_format), SDL_BITSPERPIXEL(pixel_format));
-  };
+  auto stringify_format_and_bpp = [&](Uint32 pixel_format) -> std::string { return string_sprintf("%s (%d bpp)", SDL_GetPixelFormatName(pixel_format), SDL_BITSPERPIXEL(pixel_format)); };
 
   Uint32 window_pixel_format = SDL_GetWindowPixelFormat(window_);
   std::cout << "SDL window px format:  " << stringify_format_and_bpp(window_pixel_format) << std::endl;

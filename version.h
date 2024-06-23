@@ -2,7 +2,6 @@
 #include <string>
 
 struct VersionInfo {
-    static const std::string version;
-    static const std::string copyright;
+  static const std::string version;
+  static const std::string copyright;
 };
-

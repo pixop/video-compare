@@ -7,8 +7,8 @@
 #include "argagg.h"
 #include "controls.h"
 #include "string_utils.h"
-#include "video_compare.h"
 #include "version.h"
+#include "video_compare.h"
 
 #ifdef _WIN32
 #include <Windows.h>
