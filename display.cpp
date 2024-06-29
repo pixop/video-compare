@@ -10,6 +10,7 @@
 #include <thread>
 #include "controls.h"
 #include "ffmpeg.h"
+#include "png_saver.h"
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
 #include "version.h"
@@ -434,31 +435,49 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
   }
 }
 
-void Display::save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right) {
-  const auto write_png = [this](std::array<uint8_t*, 3> planes, std::array<size_t, 3> pitches, const std::string& filename) {
-    if (use_10_bpc_) {
-      if (stbi_write_png_16(filename.c_str(), video_width_, video_height_, 3, planes[0], pitches[0]) == 0) {
-        std::cerr << "Error saving video PNG image to file: " << filename << std::endl;
+void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_frame) {
+  std::atomic<bool> error_occurred(false);
+
+  const auto write_png = [this, &error_occurred](const AVFrame* frame, const std::string& filename) {
+    try {
+      // use FFmpeg PNG encoder if available in this libavcodec build, as it produces smaller files than stb
+      PngSaver::save(frame, filename);
+    } catch (const PngSaver::EncodingException& e) {
+      // fall back on stb implementation
+      if (use_10_bpc_) {
+        if (stbi_write_png_16(filename.c_str(), video_width_, video_height_, 3, frame->data[0], frame->linesize[0]) == 0) {
+          std::cerr << "Error saving video 16-bit PNG image to file using stb: " << filename << std::endl;
+          error_occurred = true;
+        }
+      } else {
+        if (stbi_write_png(filename.c_str(), video_width_, video_height_, 3, frame->data[0], frame->linesize[0]) == 0) {
+          std::cerr << "Error saving video 8-bit PNG image to file using stb: " << filename << std::endl;
+          error_occurred = true;
+        }
       }
-    } else {
-      if (stbi_write_png(filename.c_str(), video_width_, video_height_, 3, planes[0], pitches[0]) == 0) {
-        std::cerr << "Error saving video PNG image to file: " << filename << std::endl;
-      }
+    } catch (const PngSaver::IOException& e) {
+      std::cerr << "Error saving video PNG image to file using FFmpeg encoder: " << filename << std::endl;
+      error_occurred = true;
+    } catch (const std::runtime_error& e) {
+      std::cerr << "Unexpected while error saving PNG: " << e.what() << std::endl;
+      error_occurred = true;
     }
   };
 
   const std::string left_filename = string_sprintf("%s%s_%04d.png", left_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_left" : "", saved_image_number_);
   const std::string right_filename = string_sprintf("%s%s_%04d.png", right_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_right" : "", saved_image_number_);
 
-  std::thread save_left_frame_thread(write_png, planes_left, pitches_left, left_filename);
-  std::thread save_right_frame_thread(write_png, planes_right, pitches_right, right_filename);
+  std::thread save_left_frame_thread(write_png, left_frame, left_filename);
+  std::thread save_right_frame_thread(write_png, right_frame, right_filename);
 
   save_left_frame_thread.join();
   save_right_frame_thread.join();
 
-  std::cout << "Saved " << left_filename << " and " << right_filename << std::endl;
+  if (!error_occurred) {
+    std::cout << "Saved " << left_filename << " and " << right_filename << std::endl;
 
-  saved_image_number_++;
+    saved_image_number_++;
+  }
 }
 
 void Display::render_text(const int x, const int y, SDL_Texture* texture, const int texture_width, const int texture_height, const int border_extension, const bool left_adjust) {
@@ -749,18 +768,14 @@ void Display::render_help() {
   }
 }
 
-void Display::refresh(std::array<uint8_t*, 3> planes_left,
-                      std::array<size_t, 3> pitches_left,
-                      std::array<size_t, 2> original_dims_left,
-                      std::array<uint8_t*, 3> planes_right,
-                      std::array<size_t, 3> pitches_right,
-                      std::array<size_t, 2> original_dims_right,
-                      const AVFrame* left_frame,
-                      const AVFrame* right_frame,
-                      const std::string& current_total_browsable,
-                      const std::string& message) {
+void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message) {
+  std::array<uint8_t*, 3> planes_left{left_frame->data[0], left_frame->data[1], left_frame->data[2]};
+  std::array<uint8_t*, 3> planes_right{right_frame->data[0], right_frame->data[1], right_frame->data[2]};
+  std::array<size_t, 3> pitches_left{static_cast<size_t>(left_frame->linesize[0]), static_cast<size_t>(left_frame->linesize[1]), static_cast<size_t>(left_frame->linesize[2])};
+  std::array<size_t, 3> pitches_right{static_cast<size_t>(right_frame->linesize[0]), static_cast<size_t>(right_frame->linesize[1]), static_cast<size_t>(right_frame->linesize[2])};
+
   if (save_image_frames_) {
-    save_image_frames(planes_left, pitches_left, planes_right, pitches_right);
+    save_image_frames(left_frame, right_frame);
     save_image_frames_ = false;
   }
 
@@ -807,14 +822,14 @@ void Display::refresh(std::array<uint8_t*, 3> planes_left,
     const int pixel_video_y = mouse_video_y % video_height_;
 
     if (print_left_pixel) {
-      std::cout << "Left:  " << string_sprintf("[%4d,%4d]", pixel_video_x * original_dims_left[0] / video_width_, pixel_video_y * original_dims_left[1] / video_height_);
+      std::cout << "Left:  " << string_sprintf("[%4d,%4d]", pixel_video_x * left_frame->width / video_width_, pixel_video_y * left_frame->height / video_height_);
       std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_left[0], pitches_left[0], pixel_video_x, pixel_video_y);
     }
     if (print_right_pixel) {
       if (print_left_pixel) {
         std::cout << " - ";
       }
-      std::cout << "Right: " << string_sprintf("[%4d,%4d]", pixel_video_x * original_dims_right[0] / video_width_, pixel_video_y * original_dims_right[1] / video_height_);
+      std::cout << "Right: " << string_sprintf("[%4d,%4d]", pixel_video_x * right_frame->width / video_width_, pixel_video_y * right_frame->height / video_height_);
       std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_right[0], pitches_right[0], pixel_video_x, pixel_video_y);
     }
     if (print_left_pixel || print_right_pixel) {

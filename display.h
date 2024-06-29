@@ -154,7 +154,7 @@ class Display {
 
   void update_difference(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x);
 
-  void save_image_frames(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right);
+  void save_image_frames(const AVFrame* left_frame, const AVFrame* right_frame);
 
   inline int static round(const float value) { return static_cast<int>(std::round(value)); }
 
@@ -212,16 +212,7 @@ class Display {
   ~Display();
 
   // Copy frame to display
-  void refresh(std::array<uint8_t*, 3> planes_left,
-               std::array<size_t, 3> pitches_left,
-               std::array<size_t, 2> original_dims_left,
-               std::array<uint8_t*, 3> planes_right,
-               std::array<size_t, 3> pitches_right,
-               std::array<size_t, 2> original_dims_right,
-               const AVFrame* left_frame,
-               const AVFrame* right_frame,
-               const std::string& current_total_browsable,
-               const std::string& message);
+  void refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message);
 
   // Handle events
   void input();
