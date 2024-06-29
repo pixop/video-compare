@@ -65,6 +65,33 @@ void print_controls() {
   }
 }
 
+void find_matching_video_filters(const std::string& search_string) {
+  const AVFilter* filter = nullptr;
+  void* i = 0;
+
+  std::cout << "Filters:" << std::endl << std::endl;
+
+  while ((filter = av_filter_iterate(&i))) {
+#if (LIBAVFILTER_VERSION_INT < AV_VERSION_INT(8, 24, 100))
+    if (avfilter_pad_count(filter->inputs) >= 1 && avfilter_pad_count(filter->outputs) >= 1) {
+#else
+    if (avfilter_filter_pad_count(filter, 0) >= 1 && avfilter_filter_pad_count(filter, 1) >= 1) {
+#endif
+      if (avfilter_pad_get_type(filter->inputs, 0) == AVMEDIA_TYPE_VIDEO && avfilter_pad_get_type(filter->outputs, 0) == AVMEDIA_TYPE_VIDEO) {
+        std::string filter_name(filter->name);
+        std::string filter_description(filter->description);
+
+        auto name_it = string_ci_find(filter_name, search_string);
+        auto description_it = string_ci_find(filter_description, search_string);
+
+        if (name_it != filter_name.end() || description_it != filter_description.end()) {
+          std::cout << string_sprintf(" %-20s %s", filter_name.c_str(), filter_description.c_str()) << std::endl;
+        }
+      }
+    }
+  }
+}
+
 void find_matching_video_demuxers(const std::string& search_string) {
   const AVInputFormat* demuxer = nullptr;
   void* i = 0;
@@ -89,8 +116,9 @@ void find_matching_video_decoders(const std::string& search_string) {
   void* i = 0;
 
   std::cout << "Decoders:" << std::endl;
-  std::cout << " A. = Backed by hardware implementation" << std::endl;
-  std::cout << " .Y = Potentially backed by a hardware implementation, but not necessarily" << std::endl << std::endl;
+  std::cout << " A.. = Backed by hardware implementation" << std::endl;
+  std::cout << " .Y. = Potentially backed by a hardware implementation, but not necessarily" << std::endl;
+  std::cout << " ..X = Decoder is experimental" << std::endl << std::endl;
 
   while ((codec = av_codec_iterate(&i))) {
     if (codec->type == AVMEDIA_TYPE_VIDEO && av_codec_is_decoder(codec)) {
@@ -103,6 +131,7 @@ void find_matching_video_decoders(const std::string& search_string) {
       if (name_it != codec_name.end() || long_name_it != codec_long_name.end()) {
         std::string capability = (codec->capabilities & AV_CODEC_CAP_HARDWARE) ? "A" : ".";
         capability += (codec->capabilities & AV_CODEC_CAP_HYBRID) ? "Y" : ".";
+        capability += (codec->capabilities & AV_CODEC_CAP_EXPERIMENTAL) ? "X" : ".";
 
         std::cout << string_sprintf(" %s %-18s %s", capability.c_str(), codec_name.c_str(), codec_long_name.c_str()) << std::endl;
       }
@@ -180,6 +209,7 @@ int main(int argc, char** argv) {
                               {"wheel-sensitivity", {"-s", "--wheel-sensitivity"}, "mouse wheel sensitivity (e.g. 0.5, -1 or 1.7), default is 1; negative values invert the input direction", 1},
                               {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
+                              {"find-filters", {"--find-filters"}, "find FFmpeg video filters matching the provided search term (e.g. 'scale', 'libvmaf' or 'dnn'; use \"\" to list all)", 1},
                               {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name, specified as [type?][:options?] (e.g. 'rawvideo:pixel_format=rgb24,video_size=320x240,framerate=10')", 1},
                               {"right-demuxer", {"--right-demuxer"}, "right FFmpeg video demuxer name, specified as [type?][:options?]", 1},
                               {"find-demuxers", {"--find-demuxers"}, "find FFmpeg video demuxers matching the provided search term (e.g. 'matroska', 'mp4', 'vapoursynth' or 'pipe'; use \"\" to list all)", 1},
@@ -196,6 +226,8 @@ int main(int argc, char** argv) {
 
     if (args["show-controls"]) {
       print_controls();
+    } else if (args["find-filters"]) {
+      find_matching_video_filters(args["find-filters"]);
     } else if (args["find-demuxers"]) {
       find_matching_video_demuxers(args["find-demuxers"]);
     } else if (args["find-decoders"]) {
