@@ -1,5 +1,6 @@
 #include "display.h"
 #include <libgen.h>
+#include <atomic>
 #include <algorithm>
 #include <iomanip>
 #include <iostream>

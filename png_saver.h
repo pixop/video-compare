@@ -1,5 +1,7 @@
 #pragma once
 #include <string>
+#include <stdexcept>
+#include <memory>
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/frame.h>
