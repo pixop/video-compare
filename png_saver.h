@@ -1,7 +1,7 @@
 #pragma once
-#include <string>
-#include <stdexcept>
 #include <memory>
+#include <stdexcept>
+#include <string>
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/frame.h>
@@ -50,6 +50,9 @@ class PngSaver {
   using AVFramePtr = std::unique_ptr<AVFrame, AVFrameDeleter>;
   using AVCodecContextPtr = std::unique_ptr<AVCodecContext, AVCodecContextDeleter>;
   using AVPacketPtr = std::unique_ptr<AVPacket, AVPacketDeleter>;
+
+  static void save_with_ffmpeg(const AVFrame* frame, const std::string& filename);
+  static void save_with_stb(const AVFrame* frame, const std::string& filename);
 
   static AVFrame* convert(const AVFrame* frame, const AVPixelFormat output_format);
 };

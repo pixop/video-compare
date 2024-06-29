@@ -1,7 +1,7 @@
 #include "display.h"
 #include <libgen.h>
-#include <atomic>
 #include <algorithm>
+#include <atomic>
 #include <iomanip>
 #include <iostream>
 #include <regex>
@@ -20,9 +20,6 @@ extern "C" {
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
-
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
 
 static const SDL_Color BACKGROUND_COLOR = {54, 69, 79, 0};
 static const SDL_Color LOOP_OFF_LABEL_COLOR = {0, 0, 0, 0};
@@ -441,23 +438,9 @@ void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_
 
   const auto write_png = [this, &error_occurred](const AVFrame* frame, const std::string& filename) {
     try {
-      // use FFmpeg PNG encoder if available in this libavcodec build, as it produces smaller files than stb
       PngSaver::save(frame, filename);
-    } catch (const PngSaver::EncodingException& e) {
-      // fall back on stb implementation
-      if (use_10_bpc_) {
-        if (stbi_write_png_16(filename.c_str(), video_width_, video_height_, 3, frame->data[0], frame->linesize[0]) == 0) {
-          std::cerr << "Error saving video 16-bit PNG image to file using stb: " << filename << std::endl;
-          error_occurred = true;
-        }
-      } else {
-        if (stbi_write_png(filename.c_str(), video_width_, video_height_, 3, frame->data[0], frame->linesize[0]) == 0) {
-          std::cerr << "Error saving video 8-bit PNG image to file using stb: " << filename << std::endl;
-          error_occurred = true;
-        }
-      }
     } catch (const PngSaver::IOException& e) {
-      std::cerr << "Error saving video PNG image to file using FFmpeg encoder: " << filename << std::endl;
+      std::cerr << "Error saving video PNG image to file: " << filename << std::endl;
       error_occurred = true;
     } catch (const std::runtime_error& e) {
       std::cerr << "Unexpected while error saving PNG: " << e.what() << std::endl;

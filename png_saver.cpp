@@ -1,12 +1,24 @@
 #include "png_saver.h"
 #include <fstream>
-#include <iostream>
 extern "C" {
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
 }
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 void PngSaver::save(const AVFrame* frame, const std::string& filename) {
+  try {
+    // use FFmpeg PNG encoder if available in this libavcodec build, as it is faster and generally produces smaller files than stb
+    save_with_ffmpeg(frame, filename);
+  } catch (const PngSaver::EncodingException& e) {
+    // fall back on stb implementation
+    save_with_stb(frame, filename);
+  }
+}
+
+void PngSaver::save_with_ffmpeg(const AVFrame* frame, const std::string& filename) {
   const AVFrame* frame_to_save = frame;
 
   // Convert AV_PIX_FMT_RGB48LE to AV_PIX_FMT_RGB48BE
@@ -53,12 +65,26 @@ void PngSaver::save(const AVFrame* frame, const std::string& filename) {
   try {
     std::ofstream file(filename, std::ios::out | std::ios::binary);
     if (!file.is_open()) {
-      throw IOException("Could not open file " + filename);
+      throw IOException("Could not open file: " + filename);
     }
     file.write(reinterpret_cast<const char*>(packet->data), packet->size);
     file.close();
   } catch (const std::ios_base::failure& e) {
     throw IOException("IO error while writing file " + filename + ": " + e.what());
+  }
+}
+
+void PngSaver::save_with_stb(const AVFrame* frame, const std::string& filename) {
+  if (frame->format == AV_PIX_FMT_RGB24) {
+    if (stbi_write_png(filename.c_str(), frame->width, frame->height, 3, frame->data[0], frame->linesize[0]) == 0) {
+      throw IOException("Error while writing PNG via stb: " + filename);
+    }
+  } else if (frame->format == AV_PIX_FMT_RGB48LE) {
+    if (stbi_write_png_16(filename.c_str(), frame->width, frame->height, 3, frame->data[0], frame->linesize[0]) == 0) {
+      throw IOException("Error while writing PNG via stb: " + filename);
+    }
+  } else {
+    throw EncodingException("Pixel format not supported by stb");
   }
 }
 
