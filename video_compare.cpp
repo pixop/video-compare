@@ -623,11 +623,7 @@ void VideoCompare::video() {
           const auto& left_frames_ref = !display_->get_swap_left_right() ? left_frames : right_frames;
           const auto& right_frames_ref = !display_->get_swap_left_right() ? right_frames : left_frames;
 
-          display_->refresh({left_frames_ref[frame_offset]->data[0], left_frames_ref[frame_offset]->data[1], left_frames_ref[frame_offset]->data[2]},
-                            {static_cast<size_t>(left_frames_ref[frame_offset]->linesize[0]), static_cast<size_t>(left_frames_ref[frame_offset]->linesize[1]), static_cast<size_t>(left_frames_ref[frame_offset]->linesize[2])},
-                            {video_decoder_[left_index]->width(), video_decoder_[left_index]->height()}, {right_frames_ref[frame_offset]->data[0], right_frames_ref[frame_offset]->data[1], right_frames_ref[frame_offset]->data[2]},
-                            {static_cast<size_t>(right_frames_ref[frame_offset]->linesize[0]), static_cast<size_t>(right_frames_ref[frame_offset]->linesize[1]), static_cast<size_t>(right_frames_ref[frame_offset]->linesize[2])},
-                            {video_decoder_[right_index]->width(), video_decoder_[right_index]->height()}, left_frames_ref[frame_offset].get(), right_frames_ref[frame_offset].get(), current_total_browsable, message);
+          display_->refresh(left_frames_ref[frame_offset].get(), right_frames_ref[frame_offset].get(), current_total_browsable, message);
 
           refresh_time_deque.push_back(-refresh_timer.us_until_target());
 
