@@ -83,4 +83,8 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
             src->data, src->linesize, 0, src_height_,
             // Destination
             dst->data, dst->linesize);
+
+  dst->format = output_pixel_format();
+  dst->width = dest_width();
+  dst->height = dest_height();
 }
