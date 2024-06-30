@@ -2,13 +2,11 @@
 
 [![GitHub release](https://img.shields.io/github/release/pixop/video-compare)](https://github.com/pixop/video-compare/releases)
 
-`video-compare` is a versatile split-screen video comparison tool written in C++14, utilizing FFmpeg libraries and SDL2. It allows users to visually compare the impact of codecs, resizing algorithms, and other modifications on two video files played in sync.
+`video-compare` is a split-screen video comparison tool written in C++14, utilizing FFmpeg libraries and SDL2. It allows users to visually compare the impact of codecs, resizing algorithms, and other modifications on two video files played in sync. The tool provides interactive navigation and playback controls, along with various analysis tools and customizable display options.
 
-Designed with flexibility in mind, `video-compare` supports videos of varying codecs, resolutions, frame rates, color formats, and scanning types.
+Designed with versatility in mind, `video-compare` supports the comparison of videos with differing codecs, resolutions, frame rates, color formats, and scanning types.
 
-The tool provides interactive navigation and playback controls, along with various analysis tools and customizable display options.
-
-Leveraging the power of FFmpeg, two images or image sequences can also be compared.
+Thanks to FFmpeg's flexibility, two images or image sequences can also be compared.
 
 ## Installation
 
