@@ -87,4 +87,6 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
   dst->format = output_pixel_format();
   dst->width = dest_width();
   dst->height = dest_height();
+  dst->colorspace = src->colorspace;
+  dst->color_range = src->color_range;
 }
