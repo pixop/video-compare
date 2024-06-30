@@ -320,6 +320,12 @@ Display::~Display() {
 
 void Display::print_verbose_info() {
   std::cout << "video-compare version: " << VersionInfo::version << std::endl;
+  std::cout << "Video size:            " << video_width_ << "x" << video_height_ << std::endl;
+  std::cout << "Video duration:        " << format_duration(duration_) << std::endl;
+  std::cout << "Display mode:          " << modeToString(mode_) << std::endl;
+  std::cout << "High-DPI allowed:      " << std::boolalpha << high_dpi_allowed_ << std::endl;
+  std::cout << "Use 10 bpc:            " << std::boolalpha << use_10_bpc_ << std::endl;
+  std::cout << "Mouse whl sensitivity: " << wheel_sensitivity_ << std::endl;
 
   SDL_version sdl_linked_version;
   SDL_GetVersion(&sdl_linked_version);

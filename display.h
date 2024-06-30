@@ -51,6 +51,19 @@ class Display {
   enum Mode { split, vstack, hstack };
   enum Loop { off, forwardonly, pingpong };
 
+  std::string modeToString(const Mode& mode) {
+    switch (mode) {
+      case split:
+        return "split";
+      case vstack:
+        return "vstack";
+      case hstack:
+        return "hstack";
+      default:
+        return "unknown";
+    }
+  }
+
  private:
   const Mode mode_;
   const bool high_dpi_allowed_;
