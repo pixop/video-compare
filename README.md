@@ -4,7 +4,7 @@
 
 Split-screen video comparison tool written in C++14, utilizing FFmpeg libraries and SDL2. It provides interactive navigation and playback controls, along with various analysis tools and customizable display options.
 
-`video-compare` can be used to visually compare the impact of codecs, resizing algorithms, and other modifications on two video files played in sync. The tools is versatile, allowing the videos of differing resolutions, frame rates, scanning methods, color formats, container formats, codecs, or durations.
+`video-compare` can be used to visually compare the impact of codecs, resizing algorithms, and other modifications on two video files played in sync. The tool is versatile, allowing videos of differing resolutions, frame rates, scanning methods, color formats, container formats, codecs, or durations.
 
 Thanks to FFmpeg's flexibility, video-compare is also capable of comparing images or image sequences.
 
