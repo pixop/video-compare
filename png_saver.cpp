@@ -52,13 +52,11 @@ void PngSaver::save_with_ffmpeg(const AVFrame* frame, const std::string& filenam
     throw EncodingException("Could not allocate packet");
   }
 
-  int ret = avcodec_send_frame(codec_ctx.get(), frame_to_save);
-  if (ret < 0) {
+  if (avcodec_send_frame(codec_ctx.get(), frame_to_save) < 0) {
     throw EncodingException("Error sending a frame for encoding");
   }
 
-  ret = avcodec_receive_packet(codec_ctx.get(), packet.get());
-  if (ret < 0) {
+  if (avcodec_receive_packet(codec_ctx.get(), packet.get()) < 0) {
     throw EncodingException("Error during encoding");
   }
 
