@@ -3,9 +3,11 @@
 
 namespace ffmpeg {
 std::string error_string(const int error_code) {
-  constexpr size_t size{128};
+  constexpr size_t size{256};
   std::array<char, size> buffer;
+
   av_make_error_string(buffer.data(), size, error_code);
+
   return std::string(buffer.data());
 }
 
