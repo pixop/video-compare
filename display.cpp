@@ -15,6 +15,7 @@
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
 #include "version.h"
+#include "vmaf_calculator.h"
 extern "C" {
 #include <libavfilter/avfilter.h>
 #include <libswresample/swresample.h>
@@ -828,8 +829,8 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
     const float* left_gray = rgb_to_grayscale(planes_left[0], pitches_left[0]);
     const float* right_gray = rgb_to_grayscale(planes_right[0], pitches_right[0]);
 
-    std::cout << string_sprintf("Metrics: [%s|%s], PSNR(%.3f), SSIM(%.5f)", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(),
-                                compute_psnr(left_gray, right_gray), compute_ssim(left_gray, right_gray))
+    std::cout << string_sprintf("Metrics: [%s|%s], PSNR(%.3f), SSIM(%.5f), VMAF(%s)", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(),
+                                compute_psnr(left_gray, right_gray), compute_ssim(left_gray, right_gray), VMAFCalculator::instance().compute(left_frame, right_frame).c_str())
               << std::endl;
 
     delete left_gray;

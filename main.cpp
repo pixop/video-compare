@@ -9,6 +9,7 @@
 #include "string_utils.h"
 #include "version.h"
 #include "video_compare.h"
+#include "vmaf_calculator.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -219,6 +220,7 @@ int main(int argc, char** argv) {
                               {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128')", 1},
                               {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'cuda', 'cuda:1' or 'vulkan')", 1},
                               {"find-hwaccels", {"--find-hwaccels"}, "find FFmpeg video hardware acceleration types matching the provided search term (e.g. 'videotoolbox' or 'vulkan'; use \"\" to list all)", 1},
+                              {"libvmaf-options", {"--libvmaf-options"}, "libvmaf FFmpeg filter options (e.g. 'model=version=vmaf_4k_v0.6.1' or 'model=version=vmaf_v0.6.1\\\\:name=hd|version=vmaf_4k_v0.6.1\\\\:name=4k')", 1},
                               {"disable-auto-filters", {"--no-auto-filters"}, "disable the default behaviour of automatically injecting filters for deinterlacing, frame rate harmonization, and rotation", 0}}};
 
     argagg::parser_results args;
@@ -393,6 +395,10 @@ int main(int argc, char** argv) {
         config.left.file_name = config.right.file_name;
       } else if (config.right.file_name == REPEAT_FILE_NAME) {
         config.right.file_name = config.left.file_name;
+      }
+
+      if (args["libvmaf-options"]) {
+        VMAFCalculator::instance().set_libvmaf_options(args["libvmaf-options"]);
       }
 
       VideoCompare compare{config};
