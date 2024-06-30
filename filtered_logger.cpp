@@ -60,9 +60,9 @@ std::string FilteredLogger::format_message(const char* fmt, va_list vl) {
 
   std::vector<char> temp_buffer(needed_size);
 
-  const size_t result = vsnprintf(temp_buffer.data(), temp_buffer.size(), fmt, vl);
+  const int result = vsnprintf(temp_buffer.data(), temp_buffer.size(), fmt, vl);
 
-  if (result < 0 || result >= temp_buffer.size()) {
+  if (result < 0 || result >= static_cast<int>(temp_buffer.size())) {
     return "";
   }
 
