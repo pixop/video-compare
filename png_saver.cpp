@@ -19,6 +19,11 @@ void PngSaver::save(const AVFrame* frame, const std::string& filename) {
 }
 
 void PngSaver::save_with_ffmpeg(const AVFrame* frame, const std::string& filename) {
+  const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_PNG);
+  if (!codec) {
+    throw EncodingException("Codec not found");
+  }
+
   const AVFrame* frame_to_save = frame;
 
   // Convert AV_PIX_FMT_RGB48LE to AV_PIX_FMT_RGB48BE
@@ -29,10 +34,6 @@ void PngSaver::save_with_ffmpeg(const AVFrame* frame, const std::string& filenam
     frame_to_save = converted_frame.get();
   }
 
-  const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_PNG);
-  if (!codec) {
-    throw EncodingException("Codec not found");
-  }
   AVCodecContextPtr codec_ctx(avcodec_alloc_context3(codec));
   if (!codec_ctx) {
     throw EncodingException("Could not allocate video codec context");
