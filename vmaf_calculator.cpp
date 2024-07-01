@@ -29,6 +29,8 @@ std::string VMAFCalculator::compute(const AVFrame* reference_frame, const AVFram
 
   if (!disabled_) {
     try {
+      FilteredLogger::instance().reset();
+
       run_libvmaf_filter(reference_frame, distorted_frame);
 
       std::vector<std::string> vmaf_scores;
@@ -50,8 +52,6 @@ std::string VMAFCalculator::compute(const AVFrame* reference_frame, const AVFram
         std::cerr << "Failed to extract at least one VMAF score, disabling VMAF computation." << std::endl;
         disabled_ = true;
       }
-
-      FilteredLogger::instance().reset();
     } catch (const std::exception& e) {
       std::cerr << "Failed to run libvmaf FFmpeg filter, disabling VMAF computation." << std::endl;
       disabled_ = true;
@@ -116,6 +116,14 @@ void VMAFCalculator::run_libvmaf_filter(const AVFrame* ref_frame, const AVFrame*
 
   if (av_buffersrc_add_frame(buffersrc_ctx_dist, const_cast<AVFrame*>(dist_frame)) < 0) {
     throw std::runtime_error("Error feeding distorted frame");
+  }
+
+  if (av_buffersrc_close(buffersrc_ctx_ref, 0, AV_BUFFERSRC_FLAG_PUSH) < 0) {
+      throw std::runtime_error("Error closing reference buffer source");
+  }
+
+  if (av_buffersrc_close(buffersrc_ctx_dist, 0, AV_BUFFERSRC_FLAG_PUSH) < 0) {
+      throw std::runtime_error("Error closing distorted buffer source");
   }
 
   AVFrameRAII filtered_frame;
