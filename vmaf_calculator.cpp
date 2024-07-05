@@ -119,11 +119,11 @@ void VMAFCalculator::run_libvmaf_filter(const AVFrame* ref_frame, const AVFrame*
   }
 
   if (av_buffersrc_close(buffersrc_ctx_ref, 0, AV_BUFFERSRC_FLAG_PUSH) < 0) {
-      throw std::runtime_error("Error closing reference buffer source");
+    throw std::runtime_error("Error closing reference buffer source");
   }
 
   if (av_buffersrc_close(buffersrc_ctx_dist, 0, AV_BUFFERSRC_FLAG_PUSH) < 0) {
-      throw std::runtime_error("Error closing distorted buffer source");
+    throw std::runtime_error("Error closing distorted buffer source");
   }
 
   AVFrameRAII filtered_frame;
