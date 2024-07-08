@@ -112,6 +112,35 @@ void find_matching_video_demuxers(const std::string& search_string) {
   }
 }
 
+void find_matching_protocols(const std::string& search_string) {
+    const char* protocol = nullptr;
+    void* i = 0;
+
+    std::cout << "Input protocols:" << std::endl << std::endl;
+
+    while ((protocol = avio_enum_protocols(&i, 0))) {
+        std::string protocol_name(protocol);
+
+        auto name_it = string_ci_find(protocol_name, search_string);
+
+        if (name_it != protocol_name.end()) {
+            std::cout << string_sprintf(" %s", protocol_name.c_str()) << std::endl;
+        }
+    }
+
+    std::cout << std::endl << "Output protocols:" << std::endl << std::endl;
+
+    while ((protocol = avio_enum_protocols(&i, 1))) {
+        std::string protocol_name(protocol);
+
+        auto name_it = string_ci_find(protocol_name, search_string);
+
+        if (name_it != protocol_name.end()) {
+            std::cout << string_sprintf(" %s", protocol_name.c_str()) << std::endl;
+        }
+    }
+}
+
 void find_matching_video_decoders(const std::string& search_string) {
   const AVCodec* codec = nullptr;
   void* i = 0;
@@ -210,16 +239,17 @@ int main(int argc, char** argv) {
                               {"wheel-sensitivity", {"-s", "--wheel-sensitivity"}, "mouse wheel sensitivity (e.g. 0.5, -1 or 1.7), default is 1; negative values invert the input direction", 1},
                               {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
-                              {"find-filters", {"--find-filters"}, "find FFmpeg video filters matching the provided search term (e.g. 'scale', 'libvmaf' or 'dnn'; use \"\" to list all)", 1},
+                              {"find-filters", {"--find-filters"}, "find FFmpeg video filters that match the provided search term (e.g. 'scale', 'libvmaf' or 'dnn'; use \"\" to list all)", 1},
+                              {"find-protocols", {"--find-protocols"}, "find FFmpeg input and output protocols that match the provided search term (e.g. 'ipfs', 'srt', or 'rtmp'; use \"\" to list all)", 1},
                               {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name, specified as [type?][:options?] (e.g. 'rawvideo:pixel_format=rgb24,video_size=320x240,framerate=10')", 1},
                               {"right-demuxer", {"--right-demuxer"}, "right FFmpeg video demuxer name, specified as [type?][:options?]", 1},
-                              {"find-demuxers", {"--find-demuxers"}, "find FFmpeg video demuxers matching the provided search term (e.g. 'matroska', 'mp4', 'vapoursynth' or 'pipe'; use \"\" to list all)", 1},
+                              {"find-demuxers", {"--find-demuxers"}, "find FFmpeg video demuxers that match the provided search term (e.g. 'matroska', 'mp4', 'vapoursynth' or 'pipe'; use \"\" to list all)", 1},
                               {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name, specified as [type?][:options?] (e.g. ':strict=unofficial', ':strict=-2' or 'vvc:strict=experimental')", 1},
                               {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name, specified as [type?][:options?] (e.g. ':strict=-2,trust_dec_pts=1' or 'h264:trust_dec_pts=1')", 1},
-                              {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders matching the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1},
+                              {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders that match the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1},
                               {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128')", 1},
                               {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'cuda', 'cuda:1' or 'vulkan')", 1},
-                              {"find-hwaccels", {"--find-hwaccels"}, "find FFmpeg video hardware acceleration types matching the provided search term (e.g. 'videotoolbox' or 'vulkan'; use \"\" to list all)", 1},
+                              {"find-hwaccels", {"--find-hwaccels"}, "find FFmpeg video hardware acceleration types that match the provided search term (e.g. 'videotoolbox' or 'vulkan'; use \"\" to list all)", 1},
                               {"libvmaf-options", {"--libvmaf-options"}, "libvmaf FFmpeg filter options (e.g. 'model=version=vmaf_4k_v0.6.1' or 'model=version=vmaf_v0.6.1\\\\:name=hd|version=vmaf_4k_v0.6.1\\\\:name=4k')", 1},
                               {"disable-auto-filters", {"--no-auto-filters"}, "disable the default behaviour of automatically injecting filters for deinterlacing, frame rate harmonization, and rotation", 0}}};
 
@@ -232,6 +262,8 @@ int main(int argc, char** argv) {
       find_matching_video_filters(args["find-filters"]);
     } else if (args["find-demuxers"]) {
       find_matching_video_demuxers(args["find-demuxers"]);
+    } else if (args["find-protocols"]) {
+      find_matching_protocols(args["find-protocols"]);
     } else if (args["find-decoders"]) {
       find_matching_video_decoders(args["find-decoders"]);
     } else if (args["find-hwaccels"]) {
