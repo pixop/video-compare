@@ -113,32 +113,32 @@ void find_matching_video_demuxers(const std::string& search_string) {
 }
 
 void find_matching_protocols(const std::string& search_string) {
-    const char* protocol = nullptr;
-    void* i = 0;
+  const char* protocol = nullptr;
+  void* i = 0;
 
-    std::cout << "Input protocols:" << std::endl << std::endl;
+  std::cout << "Input protocols:" << std::endl << std::endl;
 
-    while ((protocol = avio_enum_protocols(&i, 0))) {
-        std::string protocol_name(protocol);
+  while ((protocol = avio_enum_protocols(&i, 0))) {
+    std::string protocol_name(protocol);
 
-        auto name_it = string_ci_find(protocol_name, search_string);
+    auto name_it = string_ci_find(protocol_name, search_string);
 
-        if (name_it != protocol_name.end()) {
-            std::cout << string_sprintf(" %s", protocol_name.c_str()) << std::endl;
-        }
+    if (name_it != protocol_name.end()) {
+      std::cout << string_sprintf(" %s", protocol_name.c_str()) << std::endl;
     }
+  }
 
-    std::cout << std::endl << "Output protocols:" << std::endl << std::endl;
+  std::cout << std::endl << "Output protocols:" << std::endl << std::endl;
 
-    while ((protocol = avio_enum_protocols(&i, 1))) {
-        std::string protocol_name(protocol);
+  while ((protocol = avio_enum_protocols(&i, 1))) {
+    std::string protocol_name(protocol);
 
-        auto name_it = string_ci_find(protocol_name, search_string);
+    auto name_it = string_ci_find(protocol_name, search_string);
 
-        if (name_it != protocol_name.end()) {
-            std::cout << string_sprintf(" %s", protocol_name.c_str()) << std::endl;
-        }
+    if (name_it != protocol_name.end()) {
+      std::cout << string_sprintf(" %s", protocol_name.c_str()) << std::endl;
     }
+  }
 }
 
 void find_matching_video_decoders(const std::string& search_string) {
