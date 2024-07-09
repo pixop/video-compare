@@ -1,6 +1,7 @@
 #define SDL_MAIN_HANDLED
 #include <algorithm>
 #include <iostream>
+#include <map>
 #include <regex>
 #include <stdexcept>
 #include <vector>
@@ -115,8 +116,11 @@ void find_matching_video_demuxers(const std::string& search_string) {
 void find_matching_protocols(const std::string& search_string) {
   const char* protocol = nullptr;
   void* i = 0;
+  std::map<std::string, std::string> protocol_flags;
 
-  std::cout << "Input protocols:" << std::endl << std::endl;
+  std::cout << "Protocols:" << std::endl;
+  std::cout << " I. = Input" << std::endl;
+  std::cout << " .O = Output" << std::endl << std::endl;
 
   while ((protocol = avio_enum_protocols(&i, 0))) {
     std::string protocol_name(protocol);
@@ -124,11 +128,11 @@ void find_matching_protocols(const std::string& search_string) {
     auto name_it = string_ci_find(protocol_name, search_string);
 
     if (name_it != protocol_name.end()) {
-      std::cout << string_sprintf(" %s", protocol_name.c_str()) << std::endl;
+      protocol_flags[protocol_name] = "I.";
     }
   }
 
-  std::cout << std::endl << "Output protocols:" << std::endl << std::endl;
+  i = 0;
 
   while ((protocol = avio_enum_protocols(&i, 1))) {
     std::string protocol_name(protocol);
@@ -136,8 +140,16 @@ void find_matching_protocols(const std::string& search_string) {
     auto name_it = string_ci_find(protocol_name, search_string);
 
     if (name_it != protocol_name.end()) {
-      std::cout << string_sprintf(" %s", protocol_name.c_str()) << std::endl;
+      if (protocol_flags.find(protocol_name) != protocol_flags.end()) {
+        protocol_flags[protocol_name] = "IO";
+      } else {
+        protocol_flags[protocol_name] = ".O";
+      }
     }
+  }
+
+  for (const auto& entry : protocol_flags) {
+    std::cout << string_sprintf(" %s %s", entry.second.c_str(), entry.first.c_str()) << std::endl;
   }
 }
 
