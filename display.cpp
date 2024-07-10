@@ -320,7 +320,7 @@ Display::~Display() {
 }
 
 void Display::print_verbose_info() {
-  std::cout << "video-compare version: " << VersionInfo::version << std::endl;
+  std::cout << "Main program version:  " << VersionInfo::version << std::endl;
   std::cout << "Video size:            " << video_width_ << "x" << video_height_ << std::endl;
   std::cout << "Video duration:        " << format_duration(duration_) << std::endl;
   std::cout << "Display mode:          " << modeToString(mode_) << std::endl;
