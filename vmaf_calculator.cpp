@@ -62,6 +62,10 @@ std::string VMAFCalculator::compute(const AVFrame* reference_frame, const AVFram
 }
 
 void VMAFCalculator::run_libvmaf_filter(const AVFrame* ref_frame, const AVFrame* dist_frame) {
+  if (!avfilter_get_by_name("libvmaf")) {
+    throw std::runtime_error("libvmaf filter not found");
+  }
+
   auto format_filter_args = [](const AVFrame* frame) {
     return
 #if (LIBAVFILTER_VERSION_INT < AV_VERSION_INT(10, 1, 100))
