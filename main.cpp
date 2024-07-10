@@ -1,7 +1,6 @@
 #define SDL_MAIN_HANDLED
 #include <algorithm>
 #include <iostream>
-#include <map>
 #include <regex>
 #include <stdexcept>
 #include <vector>
@@ -113,14 +112,11 @@ void find_matching_video_demuxers(const std::string& search_string) {
   }
 }
 
-void find_matching_protocols(const std::string& search_string) {
+void find_matching_input_protocols(const std::string& search_string) {
   const char* protocol = nullptr;
   void* i = 0;
-  std::map<std::string, std::string> protocol_flags;
 
-  std::cout << "Protocols:" << std::endl;
-  std::cout << " I. = Input" << std::endl;
-  std::cout << " .O = Output" << std::endl << std::endl;
+  std::cout << "Input protocols:" << std::endl << std::endl;
 
   while ((protocol = avio_enum_protocols(&i, 0))) {
     std::string protocol_name(protocol);
@@ -128,28 +124,8 @@ void find_matching_protocols(const std::string& search_string) {
     auto name_it = string_ci_find(protocol_name, search_string);
 
     if (name_it != protocol_name.end()) {
-      protocol_flags[protocol_name] = "I.";
+      std::cout << string_sprintf(" %s", protocol_name.c_str()) << std::endl;
     }
-  }
-
-  i = 0;
-
-  while ((protocol = avio_enum_protocols(&i, 1))) {
-    std::string protocol_name(protocol);
-
-    auto name_it = string_ci_find(protocol_name, search_string);
-
-    if (name_it != protocol_name.end()) {
-      if (protocol_flags.find(protocol_name) != protocol_flags.end()) {
-        protocol_flags[protocol_name] = "IO";
-      } else {
-        protocol_flags[protocol_name] = ".O";
-      }
-    }
-  }
-
-  for (const auto& entry : protocol_flags) {
-    std::cout << string_sprintf(" %s %s", entry.second.c_str(), entry.first.c_str()) << std::endl;
   }
 }
 
@@ -252,7 +228,7 @@ int main(int argc, char** argv) {
                               {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
                               {"find-filters", {"--find-filters"}, "find FFmpeg video filters that match the provided search term (e.g. 'scale', 'libvmaf' or 'dnn'; use \"\" to list all)", 1},
-                              {"find-protocols", {"--find-protocols"}, "find FFmpeg input and output protocols that match the provided search term (e.g. 'ipfs', 'srt', or 'rtmp'; use \"\" to list all)", 1},
+                              {"find-protocols", {"--find-protocols"}, "find FFmpeg input protocols that match the provided search term (e.g. 'ipfs', 'srt', or 'rtmp'; use \"\" to list all)", 1},
                               {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name, specified as [type?][:options?] (e.g. 'rawvideo:pixel_format=rgb24,video_size=320x240,framerate=10')", 1},
                               {"right-demuxer", {"--right-demuxer"}, "right FFmpeg video demuxer name, specified as [type?][:options?]", 1},
                               {"find-demuxers", {"--find-demuxers"}, "find FFmpeg video demuxers that match the provided search term (e.g. 'matroska', 'mp4', 'vapoursynth' or 'pipe'; use \"\" to list all)", 1},
@@ -275,7 +251,7 @@ int main(int argc, char** argv) {
     } else if (args["find-demuxers"]) {
       find_matching_video_demuxers(args["find-demuxers"]);
     } else if (args["find-protocols"]) {
-      find_matching_protocols(args["find-protocols"]);
+      find_matching_input_protocols(args["find-protocols"]);
     } else if (args["find-decoders"]) {
       find_matching_video_decoders(args["find-decoders"]);
     } else if (args["find-hwaccels"]) {
