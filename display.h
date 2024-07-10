@@ -65,6 +65,7 @@ class Display {
   }
 
  private:
+  const int display_number_;
   const Mode mode_;
   const bool high_dpi_allowed_;
   const bool use_10_bpc_;

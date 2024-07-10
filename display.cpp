@@ -147,7 +147,8 @@ Display::Display(const int display_number,
                  const float wheel_sensitivity,
                  const std::string& left_file_name,
                  const std::string& right_file_name)
-    : mode_{mode},
+    : display_number_{display_number},
+      mode_{mode},
       high_dpi_allowed_{high_dpi_allowed},
       use_10_bpc_{use_10_bpc},
       video_width_{static_cast<int>(width)},
@@ -337,6 +338,10 @@ void Display::print_verbose_info() {
   SDL_RendererInfo info;
   SDL_GetRendererInfo(renderer_, &info);
   std::cout << "SDL renderer:          " << info.name << std::endl;
+
+  SDL_DisplayMode current;
+  SDL_GetCurrentDisplayMode(display_number_, &current);
+  std::cout << "SDL display size:      " << current.w << "x" << current.h << std::endl;
 
   std::cout << "SDL GL drawable size:  " << drawable_width_ << "x" << drawable_height_ << std::endl;
   std::cout << "SDL window size:       " << window_width_ << "x" << window_height_ << std::endl;
