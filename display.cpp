@@ -339,9 +339,11 @@ void Display::print_verbose_info() {
   SDL_GetRendererInfo(renderer_, &info);
   std::cout << "SDL renderer:          " << info.name << std::endl;
 
-  SDL_DisplayMode current;
-  SDL_GetCurrentDisplayMode(display_number_, &current);
-  std::cout << "SDL display size:      " << current.w << "x" << current.h << std::endl;
+  std::cout << "SDL display number:    " << display_number_ << std::endl;
+
+  SDL_DisplayMode desktop_display_mode;
+  SDL_GetDesktopDisplayMode(display_number_, &desktop_display_mode);
+  std::cout << "SDL desktop size:      " << desktop_display_mode.w << "x" << desktop_display_mode.h << std::endl;
 
   std::cout << "SDL GL drawable size:  " << drawable_width_ << "x" << drawable_height_ << std::endl;
   std::cout << "SDL window size:       " << window_width_ << "x" << window_height_ << std::endl;
