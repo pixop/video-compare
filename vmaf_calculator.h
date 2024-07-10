@@ -20,12 +20,12 @@ class VMAFCalculator {
 
   void set_libvmaf_options(const std::string& options);
 
-  std::string compute(const AVFrame* reference_frame, const AVFrame* distorted_frame);
+  std::string compute(const AVFrame* distorted_frame, const AVFrame* reference_frame);
 
  private:
   VMAFCalculator();
 
-  void run_libvmaf_filter(const AVFrame* ref_frame, const AVFrame* dist_frame);
+  void run_libvmaf_filter(const AVFrame* distorted_frame, const AVFrame* reference_frame);
 
  private:
   class AVFilterGraphRAII {
