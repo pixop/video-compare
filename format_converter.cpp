@@ -2,8 +2,36 @@
 #include <iostream>
 #include "ffmpeg.h"
 
-FormatConverter::FormatConverter(size_t src_width, size_t src_height, size_t dest_width, size_t dest_height, AVPixelFormat input_pixel_format, AVPixelFormat output_pixel_format)
-    : src_width_{src_width}, src_height_{src_height}, input_pixel_format_{input_pixel_format}, dest_width_{dest_width}, dest_height_{dest_height}, output_pixel_format_{output_pixel_format} {
+static constexpr int FIXED_1_0 = (1 << 16);
+
+inline int get_sws_colorspace(const AVColorSpace color_space)
+{
+  switch (color_space) {
+    case AVCOL_SPC_BT709:
+      return SWS_CS_ITU709;
+    case AVCOL_SPC_FCC:
+      return SWS_CS_FCC;
+    case AVCOL_SPC_SMPTE170M:
+      return SWS_CS_SMPTE170M;
+    case AVCOL_SPC_SMPTE240M:
+      return SWS_CS_SMPTE240M;
+    case AVCOL_SPC_BT2020_CL:
+    case AVCOL_SPC_BT2020_NCL:
+      return SWS_CS_BT2020;
+    default:
+      break;
+  }
+
+  return SWS_CS_ITU601;
+}
+
+inline int get_sws_range(const AVColorRange color_range)
+{
+  return color_range == AVCOL_RANGE_JPEG ? 1 : 0;
+}
+
+FormatConverter::FormatConverter(size_t src_width, size_t src_height, size_t dest_width, size_t dest_height, AVPixelFormat src_pixel_format, AVPixelFormat dest_pixel_format, AVColorSpace src_color_space, AVColorRange src_color_range)
+    : src_width_{src_width}, src_height_{src_height}, src_pixel_format_{src_pixel_format}, dest_width_{dest_width}, dest_height_{dest_height}, dest_pixel_format_{dest_pixel_format}, src_color_space_{src_color_space}, src_color_range_{src_color_range} {
   init();
 }
 
@@ -14,11 +42,19 @@ FormatConverter::~FormatConverter() {
 void FormatConverter::init() {
   conversion_context_ = sws_getContext(
       // Source
-      src_width(), src_height(), input_pixel_format(),
+      src_width(), src_height(), src_pixel_format(),
       // Destination
-      dest_width(), dest_height(), output_pixel_format(),
+      dest_width(), dest_height(), dest_pixel_format(),
       // Filters
       SWS_BICUBIC, nullptr, nullptr, nullptr);
+
+  // set colorspace details
+  const int sws_color_space = get_sws_colorspace(src_color_space_);
+  const int *coeffs = sws_getCoefficients(sws_color_space);
+
+  const int sws_color_range = get_sws_range(src_color_range_);
+
+  sws_setColorspaceDetails(conversion_context_, coeffs, sws_color_range, coeffs, sws_color_range, 0, FIXED_1_0, FIXED_1_0);
 }
 
 void FormatConverter::free() {
@@ -38,8 +74,8 @@ size_t FormatConverter::src_height() const {
   return src_height_;
 }
 
-AVPixelFormat FormatConverter::input_pixel_format() const {
-  return input_pixel_format_;
+AVPixelFormat FormatConverter::src_pixel_format() const {
+  return src_pixel_format_;
 }
 
 size_t FormatConverter::dest_width() const {
@@ -50,8 +86,8 @@ size_t FormatConverter::dest_height() const {
   return dest_height_;
 }
 
-AVPixelFormat FormatConverter::output_pixel_format() const {
-  return output_pixel_format_;
+AVPixelFormat FormatConverter::dest_pixel_format() const {
+  return dest_pixel_format_;
 }
 
 void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
@@ -65,12 +101,20 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
     src_height_ = src->height;
     must_reinit = true;
   }
-  if (input_pixel_format_ != src->format) {
+  if (src_pixel_format_ != src->format) {
     if (src->format == AV_PIX_FMT_NONE) {
       throw ffmpeg::Error{"Format converter got a source frame with invalid pixel format"};
     }
 
-    input_pixel_format_ = static_cast<AVPixelFormat>(src->format);
+    src_pixel_format_ = static_cast<AVPixelFormat>(src->format);
+    must_reinit = true;
+  }
+  if (src_color_space_ != src->colorspace) {
+    src_color_space_ = src->colorspace;
+    must_reinit = true;
+  }
+  if (src_color_range_ != src->color_range) {
+    src_color_range_ = src->color_range;
     must_reinit = true;
   }
 
@@ -84,7 +128,7 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
             // Destination
             dst->data, dst->linesize);
 
-  dst->format = output_pixel_format();
+  dst->format = dest_pixel_format();
   dst->width = dest_width();
   dst->height = dest_height();
   dst->colorspace = src->colorspace;

@@ -53,8 +53,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       max_height_{std::max(video_filterer_[0]->dest_height(), video_filterer_[1]->dest_height())},
       shortest_duration_{std::min(demuxer_[0]->duration(), demuxer_[1]->duration()) * AV_TIME_TO_SEC},
       format_converter_{
-          std::make_unique<FormatConverter>(video_filterer_[0]->dest_width(), video_filterer_[0]->dest_height(), max_width_, max_height_, video_filterer_[0]->dest_pixel_format(), config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24),
-          std::make_unique<FormatConverter>(video_filterer_[1]->dest_width(), video_filterer_[1]->dest_height(), max_width_, max_height_, video_filterer_[1]->dest_pixel_format(), config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24)},
+          std::make_unique<FormatConverter>(video_filterer_[0]->dest_width(), video_filterer_[0]->dest_height(), max_width_, max_height_, video_filterer_[0]->dest_pixel_format(), config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24, video_decoder_[0]->color_space(), video_decoder_[0]->color_range()),
+          std::make_unique<FormatConverter>(video_filterer_[1]->dest_width(), video_filterer_[1]->dest_height(), max_width_, max_height_, video_filterer_[1]->dest_pixel_format(), config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24, video_decoder_[1]->color_space(), video_decoder_[1]->color_range())},
       display_{std::make_unique<Display>(config.display_number,
                                          config.display_mode,
                                          config.verbose,
@@ -259,7 +259,7 @@ bool VideoCompare::filter_decoded_frame(const int video_idx, AVFrame* frame_deco
     if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
       throw std::runtime_error("Copying filtered frame properties");
     }
-    if (av_image_alloc(frame_converted->data, frame_converted->linesize, format_converter_[video_idx]->dest_width(), format_converter_[video_idx]->dest_height(), format_converter_[video_idx]->output_pixel_format(), 64) < 0) {
+    if (av_image_alloc(frame_converted->data, frame_converted->linesize, format_converter_[video_idx]->dest_width(), format_converter_[video_idx]->dest_height(), format_converter_[video_idx]->dest_pixel_format(), 64) < 0) {
       throw std::runtime_error("Allocating converted picture");
     }
     (*format_converter_[video_idx])(frame_filtered.get(), frame_converted.get());
