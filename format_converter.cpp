@@ -4,8 +4,7 @@
 
 static constexpr int FIXED_1_0 = (1 << 16);
 
-inline int get_sws_colorspace(const AVColorSpace color_space)
-{
+inline int get_sws_colorspace(const AVColorSpace color_space) {
   switch (color_space) {
     case AVCOL_SPC_BT709:
       return SWS_CS_ITU709;
@@ -25,13 +24,19 @@ inline int get_sws_colorspace(const AVColorSpace color_space)
   return SWS_CS_ITU601;
 }
 
-inline int get_sws_range(const AVColorRange color_range)
-{
+inline int get_sws_range(const AVColorRange color_range) {
   return color_range == AVCOL_RANGE_JPEG ? 1 : 0;
 }
 
 FormatConverter::FormatConverter(size_t src_width, size_t src_height, size_t dest_width, size_t dest_height, AVPixelFormat src_pixel_format, AVPixelFormat dest_pixel_format, AVColorSpace src_color_space, AVColorRange src_color_range)
-    : src_width_{src_width}, src_height_{src_height}, src_pixel_format_{src_pixel_format}, dest_width_{dest_width}, dest_height_{dest_height}, dest_pixel_format_{dest_pixel_format}, src_color_space_{src_color_space}, src_color_range_{src_color_range} {
+    : src_width_{src_width},
+      src_height_{src_height},
+      src_pixel_format_{src_pixel_format},
+      dest_width_{dest_width},
+      dest_height_{dest_height},
+      dest_pixel_format_{dest_pixel_format},
+      src_color_space_{src_color_space},
+      src_color_range_{src_color_range} {
   init();
 }
 
@@ -50,11 +55,10 @@ void FormatConverter::init() {
 
   // set colorspace details
   const int sws_color_space = get_sws_colorspace(src_color_space_);
-  const int *coeffs = sws_getCoefficients(sws_color_space);
-
   const int sws_color_range = get_sws_range(src_color_range_);
+  const int* yuv2rgb_coeffs = sws_getCoefficients(sws_color_space);
 
-  sws_setColorspaceDetails(conversion_context_, coeffs, sws_color_range, coeffs, sws_color_range, 0, FIXED_1_0, FIXED_1_0);
+  sws_setColorspaceDetails(conversion_context_, yuv2rgb_coeffs, sws_color_range, yuv2rgb_coeffs, sws_color_range, 0, FIXED_1_0, FIXED_1_0);
 }
 
 void FormatConverter::free() {
