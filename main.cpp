@@ -241,7 +241,7 @@ int main(int argc, char** argv) {
                               {"find-hwaccels", {"--find-hwaccels"}, "find FFmpeg video hardware acceleration types that match the provided search term (e.g. 'videotoolbox' or 'vulkan'; use \"\" to list all)", 1},
                               {"left-peak-nits", {"--left-peak-nits"}, "left video peak luminance in nits (e.g. 400, 850 or 1000), default is 100 for SDR; enables basic color-conversion (if mode is unset)", 1},
                               {"right-peak-nits", {"--right-peak-nits"}, "right video peak luminance in nits", 1},
-                              {"boost-luminance", {"--boost-luminance"}, "boost luminance factor (e.g. 2.0, 3.0 or 5.5), default is 1; enables basic color-conversion (if mode is unset)", 1},
+                              {"boost-luminance", {"--boost-luminance"}, "boost luminance factor (e.g. 1.6, 3 or 5.5), default is 1; enables basic color-conversion (if mode is unset)", 1},
                               {"libvmaf-options", {"--libvmaf-options"}, "libvmaf FFmpeg filter options (e.g. 'model=version=vmaf_4k_v0.6.1' or 'model=version=vmaf_v0.6.1\\\\:name=hd|version=vmaf_4k_v0.6.1\\\\:name=4k')", 1},
                               {"disable-auto-filters", {"--no-auto-filters"}, "disable the default behaviour of automatically injecting filters for deinterlacing, frame rate harmonization, and rotation", 0}}};
 
