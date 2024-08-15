@@ -45,10 +45,10 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       time_shift_ms_(config.time_shift_ms),
       demuxer_{std::make_unique<Demuxer>(config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options),
                std::make_unique<Demuxer>(config.right.demuxer, config.right.file_name, config.right.demuxer_options, config.right.decoder_options)},
-      video_decoder_{std::make_unique<VideoDecoder>(config.left.decoder, config.left.hw_accel_spec, demuxer_[0]->video_codec_parameters(), config.left.hw_accel_options, config.left.decoder_options),
-                     std::make_unique<VideoDecoder>(config.right.decoder, config.right.hw_accel_spec, demuxer_[1]->video_codec_parameters(), config.right.hw_accel_options, config.right.decoder_options)},
-      video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get(), config.left.video_filters, demuxer_[1].get(), video_decoder_[1].get(), config.disable_auto_filters),
-                      std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get(), config.right.video_filters, demuxer_[0].get(), video_decoder_[0].get(), config.disable_auto_filters)},
+      video_decoder_{std::make_unique<VideoDecoder>(config.left.decoder, config.left.hw_accel_spec, demuxer_[0]->video_codec_parameters(), config.left.peak_luminance_nits, config.left.hw_accel_options, config.left.decoder_options),
+                     std::make_unique<VideoDecoder>(config.right.decoder, config.right.hw_accel_spec, demuxer_[1]->video_codec_parameters(), config.right.peak_luminance_nits, config.right.hw_accel_options, config.right.decoder_options)},
+      video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(), video_decoder_[0].get(), config.left.peak_luminance_nits, config.left.video_filters, demuxer_[1].get(), video_decoder_[1].get(), config.right.peak_luminance_nits, config.adapt_colorspace_mode, config.boost_luminance, config.disable_auto_filters),
+                      std::make_unique<VideoFilterer>(demuxer_[1].get(), video_decoder_[1].get(), config.right.peak_luminance_nits, config.right.video_filters, demuxer_[0].get(), video_decoder_[0].get(), config.left.peak_luminance_nits, config.adapt_colorspace_mode, config.boost_luminance, config.disable_auto_filters)},
       max_width_{std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width())},
       max_height_{std::max(video_filterer_[0]->dest_height(), video_filterer_[1]->dest_height())},
       shortest_duration_{std::min(demuxer_[0]->duration(), demuxer_[1]->duration()) * AV_TIME_TO_SEC},
@@ -126,8 +126,8 @@ void VideoCompare::thread_demultiplex_right() {
 void VideoCompare::demultiplex(const int video_idx) {
   try {
     while (!packet_queue_[video_idx]->is_finished()) {
-      if (seeking_ && readyToSeek_[1][video_idx]) {
-        readyToSeek_[0][video_idx] = true;
+      if (seeking_ && ready_to_seek_[1][video_idx]) {
+        ready_to_seek_[0][video_idx] = true;
 
         std::chrono::milliseconds sleep(10);
         std::this_thread::sleep_for(sleep);
@@ -201,7 +201,7 @@ void VideoCompare::decode_video(const int video_idx) {
       if (seeking_) {
         video_decoder_[video_idx]->flush();
 
-        readyToSeek_[1][video_idx] = true;
+        ready_to_seek_[1][video_idx] = true;
 
         std::chrono::milliseconds sleep(10);
         std::this_thread::sleep_for(sleep);
@@ -354,10 +354,10 @@ void VideoCompare::video() {
           right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
 
           // TODO: fix concurrency issues
-          readyToSeek_[0][0] = false;
-          readyToSeek_[0][1] = false;
-          readyToSeek_[1][0] = false;
-          readyToSeek_[1][1] = false;
+          ready_to_seek_[0][0] = false;
+          ready_to_seek_[0][1] = false;
+          ready_to_seek_[1][0] = false;
+          ready_to_seek_[1][1] = false;
           seeking_ = true;
 
           // ensure that we did not reach EOF while waiting for the demuxer to become ready
@@ -366,10 +366,10 @@ void VideoCompare::video() {
           while ((can_seek = (!packet_queue_[0]->is_finished() && !packet_queue_[1]->is_finished()))) {
             bool all_empty = true;
 
-            all_empty = all_empty && readyToSeek_[0][0];
-            all_empty = all_empty && readyToSeek_[0][1];
-            all_empty = all_empty && readyToSeek_[1][0];
-            all_empty = all_empty && readyToSeek_[1][1];
+            all_empty = all_empty && ready_to_seek_[0][0];
+            all_empty = all_empty && ready_to_seek_[0][1];
+            all_empty = all_empty && ready_to_seek_[1][0];
+            all_empty = all_empty && ready_to_seek_[1][1];
 
             if (all_empty) {
               break;

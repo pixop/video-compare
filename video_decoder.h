@@ -4,11 +4,12 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavutil/mastering_display_metadata.h>
 }
 
 class VideoDecoder {
  public:
-  explicit VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, const AVCodecParameters* codec_parameters, AVDictionary* hwaccel_options, AVDictionary* decoder_options);
+  explicit VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, const AVCodecParameters* codec_parameters, const unsigned peak_luminance_nits, AVDictionary* hwaccel_options, AVDictionary* decoder_options);
   ~VideoDecoder();
 
   const AVCodec* codec() const;
@@ -19,6 +20,8 @@ class VideoDecoder {
 
   bool send(AVPacket* packet);
   bool receive(AVFrame* frame, Demuxer* demuxer);
+  void check_content_light_level(const AVFrame* frame);
+
   void flush();
   bool swap_dimensions() const;
   unsigned width() const;
@@ -45,4 +48,7 @@ class VideoDecoder {
   int64_t next_pts_;
 
   bool trust_decoded_pts_;
+
+  unsigned peak_luminance_nits_;
+  bool disable_metadata_maxcll_check_{false};
 };

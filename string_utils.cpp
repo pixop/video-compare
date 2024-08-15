@@ -49,16 +49,22 @@ std::string format_duration(const float duration) {
   return duration > 0 ? format_position(duration, false) : "unknown duration";
 }
 
+std::string to_lower_case(const std::string& str) {
+  std::string tmp;
+
+  std::transform(str.begin(), str.end(), std::back_inserter(tmp), ::tolower);
+
+  return tmp;
+}
+
 inline bool ci_compare_char(char a, char b) {
-  return (::toupper(a) == b);
+  return (::tolower(a) == b);
 }
 
 std::string::const_iterator string_ci_find(std::string& str, const std::string& query) {
-  std::string tmp;
+  const std::string lower_case_query = to_lower_case(query);
 
-  std::transform(query.cbegin(), query.cend(), std::back_inserter(tmp), ::toupper);
-
-  return (search(str.cbegin(), str.cend(), tmp.cbegin(), tmp.cend(), ci_compare_char));
+  return (search(str.cbegin(), str.cend(), lower_case_query.cbegin(), lower_case_query.cend(), ci_compare_char));
 }
 
 std::string stringify_frame_rate(const AVRational frame_rate, const AVFieldOrder field_order) noexcept {

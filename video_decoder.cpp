@@ -21,8 +21,8 @@ bool get_and_remove_bool_avdict_option(AVDictionary*& options, const char* key) 
   return false;
 }
 
-VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, const AVCodecParameters* codec_parameters, AVDictionary* hwaccel_options, AVDictionary* decoder_options)
-    : hw_pixel_format_(AV_PIX_FMT_NONE), first_pts_(AV_NOPTS_VALUE), next_pts_(AV_NOPTS_VALUE), trust_decoded_pts_(false) {
+VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, const AVCodecParameters* codec_parameters, const unsigned peak_luminance_nits, AVDictionary* hwaccel_options, AVDictionary* decoder_options)
+    : hw_pixel_format_(AV_PIX_FMT_NONE), first_pts_(AV_NOPTS_VALUE), next_pts_(AV_NOPTS_VALUE), trust_decoded_pts_(false), peak_luminance_nits_(peak_luminance_nits) {
   if (decoder_name.empty()) {
     codec_ = avcodec_find_decoder(codec_parameters->codec_id);
   } else {
@@ -159,7 +159,29 @@ bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
   previous_pts_ = avframe_pts;
   next_pts_ = frame->pts + ffmpeg::frame_duration(frame);
 
+  // check MaxCLL against expected light level
+  check_content_light_level(frame);
+
   return true;
+}
+
+void VideoDecoder::check_content_light_level(const AVFrame* frame) {
+  if (disable_metadata_maxcll_check_) {
+    return;
+  }
+
+  AVFrameSideData* frame_side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+
+  if (frame_side_data != nullptr && frame_side_data->size >= sizeof(AVContentLightMetadata)) {
+    AVContentLightMetadata *cll_metadata = (AVContentLightMetadata *) frame_side_data->data;
+
+    unsigned metadata_max_cll = cll_metadata->MaxCLL;
+
+    if (peak_luminance_nits_ != metadata_max_cll) {
+        std::cout << string_sprintf("Warning: Frame metadata MaxCLL of '%d' differs from the provided value '%d', disabling check.", peak_luminance_nits_, metadata_max_cll) << std::endl;
+        disable_metadata_maxcll_check_ = true;
+    }
+  }
 }
 
 void VideoDecoder::flush() {
