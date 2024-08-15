@@ -19,7 +19,7 @@ struct InputVideo {
   AVDictionary* decoder_options{nullptr};   // mutated by VideoDecoder
   AVDictionary* hw_accel_options{nullptr};  // mutated by VideoDecoder
 
-  unsigned peak_luminance_nits{100}; // [cd / m^2]
+  unsigned peak_luminance_nits{100};  // [cd / m^2]
 };
 
 struct VideoCompareConfig {

@@ -1,11 +1,20 @@
 #include "video_filterer.h"
+#include <cmath>
 #include <iostream>
 #include <string>
-#include <cmath>
 #include "ffmpeg.h"
 #include "string_utils.h"
 
-VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, int peak_luminance_nits, const std::string& custom_video_filters, const Demuxer* other_demuxer, const VideoDecoder* other_video_decoder, int other_peak_luminance_nits, const ColorspaceAdaption colorspace_adaption, const float boost_luminance, const bool disable_auto_filters)
+VideoFilterer::VideoFilterer(const Demuxer* demuxer,
+                             const VideoDecoder* video_decoder,
+                             int peak_luminance_nits,
+                             const std::string& custom_video_filters,
+                             const Demuxer* other_demuxer,
+                             const VideoDecoder* other_video_decoder,
+                             int other_peak_luminance_nits,
+                             const ColorspaceAdaption colorspace_adaption,
+                             const float boost_luminance,
+                             const bool disable_auto_filters)
     : demuxer_(demuxer),
       video_decoder_(video_decoder),
       width_(video_decoder->width()),
@@ -54,7 +63,7 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_d
   // color space adaption
   if (colorspace_adaption != ColorspaceAdaption::off) {
     const std::string display_primaries = "bt709";
-    const std::string display_trc = "iec61966-2-1"; // sRGB
+    const std::string display_trc = "iec61966-2-1";  // sRGB
 
     std::vector<std::string> errors;
 

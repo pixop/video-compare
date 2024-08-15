@@ -10,7 +10,16 @@ extern "C" {
 
 class VideoFilterer {
  public:
-  VideoFilterer(const Demuxer* demuxer, const VideoDecoder* video_decoder, int peak_luminance_nits, const std::string& custom_video_filters, const Demuxer* other_demuxer, const VideoDecoder* other_video_decoder, int other_peak_luminance_nits, const ColorspaceAdaption colorspace_adaption, const float boost_luminance, const bool disable_auto_filters);
+  VideoFilterer(const Demuxer* demuxer,
+                const VideoDecoder* video_decoder,
+                int peak_luminance_nits,
+                const std::string& custom_video_filters,
+                const Demuxer* other_demuxer,
+                const VideoDecoder* other_video_decoder,
+                int other_peak_luminance_nits,
+                const ColorspaceAdaption colorspace_adaption,
+                const float boost_luminance,
+                const bool disable_auto_filters);
   ~VideoFilterer();
 
   void init();
