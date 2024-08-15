@@ -173,7 +173,7 @@ void VideoDecoder::check_content_light_level(const AVFrame* frame) {
   AVFrameSideData* frame_side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
 
   if (frame_side_data != nullptr && frame_side_data->size >= sizeof(AVContentLightMetadata)) {
-    AVContentLightMetadata* cll_metadata = (AVContentLightMetadata*)frame_side_data->data;
+    AVContentLightMetadata* cll_metadata = reinterpret_cast<AVContentLightMetadata*>(frame_side_data->data);
 
     unsigned metadata_max_cll = cll_metadata->MaxCLL;
 
