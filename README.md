@@ -117,6 +117,15 @@ Set the hardware acceleration type for the left video:
 
     video-compare --left-hwaccel videotoolbox video1.mp4 video2.mp4
 
+Convert the color space of both videos for an sRGB SDR display:
+
+    video-compare --right-peak-nits 850 sdr_video.mp4 hdr_video.mp4
+
+Map HDR video for an sRGB SDR display, and tone-match the luminance of the SDR video to simulate the
+relative difference in appearance between the two videos on an actual HDR display:
+
+    video-compare -p tmatch --left-peak-nits 500 hdr_video.mp4 sdr_video.mp4
+
 Perform simpler comparison of a video with itself using double underscore (`__`) as a placeholder. This
 enables tasks such as comparing the video with a time-shifted version of itself or testing various sets
 of filters, without the need to enter the same, potentially long path twice:
