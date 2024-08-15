@@ -173,13 +173,13 @@ void VideoDecoder::check_content_light_level(const AVFrame* frame) {
   AVFrameSideData* frame_side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
 
   if (frame_side_data != nullptr && frame_side_data->size >= sizeof(AVContentLightMetadata)) {
-    AVContentLightMetadata *cll_metadata = (AVContentLightMetadata *) frame_side_data->data;
+    AVContentLightMetadata* cll_metadata = (AVContentLightMetadata*)frame_side_data->data;
 
     unsigned metadata_max_cll = cll_metadata->MaxCLL;
 
     if (peak_luminance_nits_ != metadata_max_cll) {
-        std::cout << string_sprintf("Warning: Frame metadata MaxCLL of '%d' differs from the provided value '%d', disabling check.", peak_luminance_nits_, metadata_max_cll) << std::endl;
-        disable_metadata_maxcll_check_ = true;
+      std::cout << string_sprintf("Warning: Frame metadata MaxCLL value of %d differs from expected peak luminance %d, disabling check.", metadata_max_cll, peak_luminance_nits_) << std::endl;
+      disable_metadata_maxcll_check_ = true;
     }
   }
 }
