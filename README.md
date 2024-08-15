@@ -117,7 +117,7 @@ Set the hardware acceleration type for the left video:
 
     video-compare --left-hwaccel videotoolbox video1.mp4 video2.mp4
 
-Convert the color space of both videos for an sRGB SDR display:
+Convert the color space of both the SDR video and the HDR video for an sRGB SDR display:
 
     video-compare --right-peak-nits 850 sdr_video.mp4 hdr_video.mp4
 
