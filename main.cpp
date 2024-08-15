@@ -436,7 +436,7 @@ int main(int argc, char** argv) {
             throw std::logic_error{location + " peak nits must be at least 1"};
           }
           if (result > 10000) {
-            throw std::logic_error{location + " peak nits must be less than 10000"};
+            throw std::logic_error{location + " peak nits must not be more than 10000"};
           }
           return result;
         };
