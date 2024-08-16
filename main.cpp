@@ -222,10 +222,10 @@ int main(int argc, char** argv) {
                               {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
                               {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
                               {"auto-loop-mode", {"-a", "--auto-loop-mode"}, "auto-loop playback when buffer fills, 'off' for continuous streaming (default), 'on' for forward-only mode, 'pp' for ping-pong mode", 1},
-                              {"adapt-csp-mode", {"-p", "--adapt-csp-mode"}, "adapt video to an sRGB display, 'off' for no conversion (default), 'on' for basic color conversion, 'tmatch' for HDR tone-matching mode", 1},
                               {"frame-buffer-size", {"-f", "--frame-buffer-size"}, "frame buffer size (e.g. 10, 70 or 150), default is 50", 1},
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
                               {"wheel-sensitivity", {"-s", "--wheel-sensitivity"}, "mouse wheel sensitivity (e.g. 0.5, -1 or 1.7), default is 1; negative values invert the input direction", 1},
+                              {"tone-map-mode", {"-o", "--tone-map-mode"}, "adapt tones to an sRGB display, 'off' for no conversion (default), 'on' for full-range tone mapping, 'rel' for relative tone comparison", 1},
                               {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
                               {"find-filters", {"--find-filters"}, "find FFmpeg video filters that match the provided search term (e.g. 'scale', 'libvmaf' or 'dnn'; use \"\" to list all)", 1},
@@ -239,9 +239,9 @@ int main(int argc, char** argv) {
                               {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128')", 1},
                               {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'cuda', 'cuda:1' or 'vulkan')", 1},
                               {"find-hwaccels", {"--find-hwaccels"}, "find FFmpeg video hardware acceleration types that match the provided search term (e.g. 'videotoolbox' or 'vulkan'; use \"\" to list all)", 1},
-                              {"left-peak-nits", {"--left-peak-nits"}, "left video peak luminance in nits (e.g. 850 or 1000), default is 100 for SDR; basic color conversion is enabled if --adapt-csp-mode is not set", 1},
-                              {"right-peak-nits", {"--right-peak-nits"}, "right video peak luminance in nits", 1},
-                              {"boost-luminance", {"--boost-luminance"}, "adjust luminance using a multiplication factor (e.g. 0.6 or 3), default is 1; basic color conversion is enabled if --adapt-csp-mode is not set", 1},
+                              {"left-peak-nits", {"--left-peak-nits"}, "left video peak luminance in nits (e.g. 850 or 1000), default is 100 for SDR; tone mapping is enabled if --tone-map-mode is not set", 1},
+                              {"right-peak-nits", {"--right-peak-nits"}, "right video peak luminance in nits; see --left-peak-nits", 1},
+                              {"boost-tone", {"--boost-tone"}, "adjust tone-mapping strength using a multiplication factor (e.g. 0.6 or 3), default is 1; tone mapping is enabled if --tone-map-mode is not set", 1},
                               {"libvmaf-options", {"--libvmaf-options"}, "libvmaf FFmpeg filter options (e.g. 'model=version=vmaf_4k_v0.6.1' or 'model=version=vmaf_v0.6.1\\\\:name=hd|version=vmaf_4k_v0.6.1\\\\:name=4k')", 1},
                               {"disable-auto-filters", {"--no-auto-filters"}, "disable the default behaviour of automatically injecting filters for deinterlacing, frame rate harmonization, and rotation", 0}}};
 
@@ -329,19 +329,6 @@ int main(int argc, char** argv) {
           throw std::logic_error{"Cannot parse auto loop mode argument (valid options: off, on, pp)"};
         }
       }
-      if (args["adapt-csp-mode"]) {
-        const std::string adapt_colorspace_mode_arg = args["adapt-csp-mode"];
-
-        if (adapt_colorspace_mode_arg == "off") {
-          config.adapt_colorspace_mode = ColorspaceAdaption::off;
-        } else if (adapt_colorspace_mode_arg == "on") {
-          config.adapt_colorspace_mode = ColorspaceAdaption::basic;
-        } else if (adapt_colorspace_mode_arg == "tmatch") {
-          config.adapt_colorspace_mode = ColorspaceAdaption::tonematch;
-        } else {
-          throw std::logic_error{"Cannot parse adapt colorspace mode argument (valid options: off, on, tmatch)"};
-        }
-      }
       if (args["frame-buffer-size"]) {
         const std::string frame_buffer_size_arg = args["frame-buffer-size"];
         const std::regex frame_buffer_size_re("(\\d*)");
@@ -375,6 +362,19 @@ int main(int argc, char** argv) {
         }
 
         config.wheel_sensitivity = std::stod(wheel_sensitivity_arg);
+      }
+      if (args["tone-map-mode"]) {
+        const std::string tone_mapping_mode_arg = args["tone-map-mode"];
+
+        if (tone_mapping_mode_arg == "off") {
+          config.tone_mapping_mode = ToneMapping::off;
+        } else if (tone_mapping_mode_arg == "on") {
+          config.tone_mapping_mode = ToneMapping::fullrange;
+        } else if (tone_mapping_mode_arg == "rel") {
+          config.tone_mapping_mode = ToneMapping::relative;
+        } else {
+          throw std::logic_error{"Cannot parse tone mapping mode argument (valid options: off, on, rel)"};
+        }
       }
       if (args["left-filters"]) {
         config.left.video_filters = static_cast<const std::string&>(args["left-filters"]);
@@ -448,24 +448,24 @@ int main(int argc, char** argv) {
           config.right.peak_luminance_nits = parse_peak_nits(args["right-peak-nits"], "Right");
         }
 
-        // enable basic color-conversion if option wasn't specified
-        if (!args["adapt-csp-mode"]) {
-          config.adapt_colorspace_mode = ColorspaceAdaption::basic;
+        // enable tone mapping if option wasn't specified
+        if (!args["tone-map-mode"]) {
+          config.tone_mapping_mode = ToneMapping::fullrange;
         }
       }
-      if (args["boost-luminance"]) {
-        const std::string boost_luminance_arg = args["boost-luminance"];
-        const std::regex boost_luminance_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
+      if (args["boost-tone"]) {
+        const std::string boost_tone_arg = args["boost-tone"];
+        const std::regex boost_tone_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
 
-        if (!std::regex_match(boost_luminance_arg, boost_luminance_re)) {
+        if (!std::regex_match(boost_tone_arg, boost_tone_re)) {
           throw std::logic_error{"Cannot parse boost luminance argument; must be a valid number, e.g. 1.3 or 3.0"};
         }
 
-        config.boost_luminance = std::stod(boost_luminance_arg);
+        config.boost_tone = std::stod(boost_tone_arg);
 
-        // enable basic color-conversion if option wasn't specified
-        if (!args["adapt-csp-mode"]) {
-          config.adapt_colorspace_mode = ColorspaceAdaption::basic;
+        // enable tone mapping if option wasn't specified
+        if (!args["tone-map-mode"]) {
+          config.tone_mapping_mode = ToneMapping::fullrange;
         }
       }
 

@@ -17,8 +17,8 @@ class VideoFilterer {
                 const Demuxer* other_demuxer,
                 const VideoDecoder* other_video_decoder,
                 int other_peak_luminance_nits,
-                const ColorspaceAdaption colorspace_adaption,
-                const float boost_luminance,
+                const ToneMapping tone_mapping_mode,
+                const float boost_tone,
                 const bool disable_auto_filters);
   ~VideoFilterer();
 

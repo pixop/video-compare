@@ -12,8 +12,8 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
                              const Demuxer* other_demuxer,
                              const VideoDecoder* other_video_decoder,
                              int other_peak_luminance_nits,
-                             const ColorspaceAdaption colorspace_adaption,
-                             const float boost_luminance,
+                             const ToneMapping tone_mapping_mode,
+                             const float boost_tone,
                              const bool disable_auto_filters)
     : demuxer_(demuxer),
       video_decoder_(video_decoder),
@@ -61,20 +61,20 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
   }
 
   // color space adaption
-  if (colorspace_adaption != ColorspaceAdaption::off) {
+  if (tone_mapping_mode != ToneMapping::off) {
     const std::string display_primaries = "bt709";
     const std::string display_trc = "iec61966-2-1";  // sRGB
 
     std::vector<std::string> errors;
 
     if (video_decoder->color_space() == AVCOL_SPC_UNSPECIFIED) {
-      errors.push_back("color space unspecified");
+      errors.push_back("color space metadata missing");
     }
     if (video_decoder->color_primaries() == AVCOL_PRI_UNSPECIFIED) {
-      errors.push_back("color primaries unspecified");
+      errors.push_back("color primaries metadata missing");
     }
     if (video_decoder->color_trc() == AVCOL_TRC_UNSPECIFIED) {
-      errors.push_back("transfer characteristics unspecified");
+      errors.push_back("transfer characteristics metadata missing");
     }
     if (!avfilter_get_by_name("zscale")) {
       errors.push_back("zscale filter missing");
@@ -83,18 +83,18 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
     if (errors.empty()) {
       filters.push_back("format=rgb48");
 
-      float tm_adjustment = (colorspace_adaption == ColorspaceAdaption::tonematch && peak_luminance_nits < other_peak_luminance_nits) ? static_cast<double>(peak_luminance_nits) / other_peak_luminance_nits : 1.0;
-      tm_adjustment *= boost_luminance;
+      float tone_adjustment = (tone_mapping_mode == ToneMapping::relative && peak_luminance_nits < other_peak_luminance_nits) ? static_cast<double>(peak_luminance_nits) / other_peak_luminance_nits : 1.0;
+      tone_adjustment *= boost_tone;
 
-      if (std::fabs(tm_adjustment - 1.0F) > 1e-5) {
+      if (std::fabs(tone_adjustment - 1.0F) > 1e-5) {
         filters.push_back(string_sprintf("zscale=t=linear:npl=%d", peak_luminance_nits));
-        filters.push_back(string_sprintf("tonemap=clip:param=%.5f", tm_adjustment));
+        filters.push_back(string_sprintf("tonemap=clip:param=%.5f", tone_adjustment));
         filters.push_back(string_sprintf("zscale=p=%s:t=%s", display_primaries.c_str(), display_trc.c_str()));
       } else {
         filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%d", display_primaries.c_str(), display_trc.c_str(), peak_luminance_nits));
       }
     } else {
-      std::cout << string_sprintf("Cannot adapt color space: %s", string_join(errors, ", ").c_str()) << std::endl;
+      std::cout << string_sprintf("Warning: Cannot add tone mapping filters: %s", string_join(errors, ", ").c_str()) << std::endl;
     }
   }
 

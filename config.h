@@ -5,7 +5,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
-enum ColorspaceAdaption { off, basic, tonematch };
+enum ToneMapping { off, fullrange, relative };
 
 struct InputVideo {
   std::string file_name;
@@ -34,8 +34,8 @@ struct VideoCompareConfig {
   Display::Mode display_mode{Display::Mode::split};
   Display::Loop auto_loop_mode{Display::Loop::off};
 
-  ColorspaceAdaption adapt_colorspace_mode{ColorspaceAdaption::off};
-  float boost_luminance{1};
+  ToneMapping tone_mapping_mode{ToneMapping::off};
+  float boost_tone{1};
 
   size_t frame_buffer_size{50};
 
