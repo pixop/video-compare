@@ -65,31 +65,34 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
     const std::string display_primaries = "bt709";
     const std::string display_trc = "iec61966-2-1";  // sRGB
 
-    std::vector<std::string> notes, warnings, setparams_options;
+    std::vector<std::string> warnings;
 
-    if (video_decoder->color_space() == AVCOL_SPC_UNSPECIFIED) {
-      notes.push_back("color space metadata missing");
-      setparams_options.push_back("colorspace=bt709");
-    }
-    if (video_decoder->color_primaries() == AVCOL_PRI_UNSPECIFIED) {
-      notes.push_back("color primaries metadata missing");
-      setparams_options.push_back("color_primaries=bt709");
-    }
-    if (video_decoder->color_trc() == AVCOL_TRC_UNSPECIFIED) {
-      notes.push_back("transfer characteristics metadata missing");
-      setparams_options.push_back("color_trc=bt709");
-    }
     if (!avfilter_get_by_name("zscale")) {
       warnings.push_back("zscale filter missing in libavfilter build");
     }
 
-    if (!notes.empty()) {
-      std::cout << string_sprintf("Note: %s; assuming Rec. 709", string_join(notes, ", ").c_str()) << std::endl;
-
-      filters.push_back(string_sprintf("setparams=%s", string_join(setparams_options, ":").c_str()));
-    }
-
     if (warnings.empty()) {
+      std::vector<std::string> notes, setparams_options;
+
+      if (video_decoder->color_space() == AVCOL_SPC_UNSPECIFIED) {
+        notes.push_back("color space metadata missing");
+        setparams_options.push_back("colorspace=bt709");
+      }
+      if (video_decoder->color_primaries() == AVCOL_PRI_UNSPECIFIED) {
+        notes.push_back("color primaries metadata missing");
+        setparams_options.push_back("color_primaries=bt709");
+      }
+      if (video_decoder->color_trc() == AVCOL_TRC_UNSPECIFIED) {
+        notes.push_back("transfer characteristics metadata missing");
+        setparams_options.push_back("color_trc=bt709");
+      }
+
+      if (!notes.empty()) {
+        std::cout << string_sprintf("Note: %s; assuming Rec. 709. Manually setting these properties using decoder options is recommended.", string_join(notes, ", ").c_str()) << std::endl;
+
+        filters.push_back(string_sprintf("setparams=%s", string_join(setparams_options, ":").c_str()));
+      }
+
       filters.push_back("format=rgb48");
 
       float tone_adjustment = (tone_mapping_mode == ToneMapping::relative && peak_luminance_nits < other_peak_luminance_nits) ? static_cast<double>(peak_luminance_nits) / other_peak_luminance_nits : 1.0;
