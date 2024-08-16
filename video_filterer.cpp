@@ -5,6 +5,8 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
+constexpr char VIDEO_FILTER_GROUP_DELIMITER = '|';
+
 VideoFilterer::VideoFilterer(const Demuxer* demuxer,
                              const VideoDecoder* video_decoder,
                              int peak_luminance_nits,
@@ -23,13 +25,13 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
       color_space_(video_decoder->color_space()),
       color_range_(video_decoder->color_range()) {
   std::vector<std::string> filters;
-  std::string custom_pre_filters, custom_post_filters;
 
   // up to two filter groups are allowed ("pre" and "post"), if only a single group is specified it is assigned to the "post" group
-  auto custom_filter_groups = string_split(custom_video_filters, '|');
-  const bool ends_with_pipe = custom_video_filters.back() == '|';
+  const std::vector<std::string> custom_filter_groups = string_split(custom_video_filters, VIDEO_FILTER_GROUP_DELIMITER);
 
-  if (custom_filter_groups.size() == 2 || (custom_filter_groups.size() == 1 && ends_with_pipe)) {
+  std::string custom_pre_filters, custom_post_filters;
+
+  if (custom_filter_groups.size() == 2 || (custom_filter_groups.size() == 1 && custom_video_filters.back() == VIDEO_FILTER_GROUP_DELIMITER)) {
     custom_pre_filters = custom_filter_groups[0];
 
     if (custom_filter_groups.size() > 1) {
@@ -41,7 +43,7 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
     throw std::runtime_error("No more than 2 filter groups supported");
   }
 
-  // custom pre-filtering can be used to e.g. override the color space, primaries and trc settings in case of incorrect metadata before any tone-mapping is performed
+  // custom pre-filtering can for example be used to override the color space, primaries and trc settings in case of incorrect metadata before any tone-mapping is performed
   // for example: 'setparams=colorspace=bt709|' (if not post-filtering is desired)
   if (!custom_pre_filters.empty()) {
     filters.push_back(custom_pre_filters);
