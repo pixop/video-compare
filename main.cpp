@@ -225,7 +225,10 @@ int main(int argc, char** argv) {
                               {"frame-buffer-size", {"-f", "--frame-buffer-size"}, "frame buffer size (e.g. 10, 70 or 150), default is 50", 1},
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
                               {"wheel-sensitivity", {"-s", "--wheel-sensitivity"}, "mouse wheel sensitivity (e.g. 0.5, -1 or 1.7), default is 1; negative values invert the input direction", 1},
-                              {"tone-map-mode", {"-o", "--tone-map-mode"}, "adapt tones to an sRGB display, 'off' for no conversion (default), 'on' for full-range tone mapping, 'rel' for relative tone comparison", 1},
+                              {"tone-map-mode", {"-T", "--tone-map-mode"}, "adapt tones to an sRGB display, 'off' for no conversion (default), 'on' for full-range tone mapping, 'rel' for relative tone comparison", 1},
+                              {"left-peak-nits", {"-L", "--left-peak-nits"}, "left video peak luminance in nits (e.g. 850 or 1000), default is 100 for SDR; tone mapping is enabled if --tone-map-mode is not set", 1},
+                              {"right-peak-nits", {"-R", "--right-peak-nits"}, "right video peak luminance in nits; see --left-peak-nits", 1},
+                              {"boost-tone", {"-B", "--boost-tone"}, "adjust tone-mapping strength using a multiplication factor (e.g. 0.6 or 3), default is 1; tone mapping is enabled if --tone-map-mode is not set", 1},
                               {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
                               {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
                               {"find-filters", {"--find-filters"}, "find FFmpeg video filters that match the provided search term (e.g. 'scale', 'libvmaf' or 'dnn'; use \"\" to list all)", 1},
@@ -239,9 +242,6 @@ int main(int argc, char** argv) {
                               {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128')", 1},
                               {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'cuda', 'cuda:1' or 'vulkan')", 1},
                               {"find-hwaccels", {"--find-hwaccels"}, "find FFmpeg video hardware acceleration types that match the provided search term (e.g. 'videotoolbox' or 'vulkan'; use \"\" to list all)", 1},
-                              {"left-peak-nits", {"--left-peak-nits"}, "left video peak luminance in nits (e.g. 850 or 1000), default is 100 for SDR; tone mapping is enabled if --tone-map-mode is not set", 1},
-                              {"right-peak-nits", {"--right-peak-nits"}, "right video peak luminance in nits; see --left-peak-nits", 1},
-                              {"boost-tone", {"--boost-tone"}, "adjust tone-mapping strength using a multiplication factor (e.g. 0.6 or 3), default is 1; tone mapping is enabled if --tone-map-mode is not set", 1},
                               {"libvmaf-options", {"--libvmaf-options"}, "libvmaf FFmpeg filter options (e.g. 'model=version=vmaf_4k_v0.6.1' or 'model=version=vmaf_v0.6.1\\\\:name=hd|version=vmaf_4k_v0.6.1\\\\:name=4k')", 1},
                               {"disable-auto-filters", {"--no-auto-filters"}, "disable the default behaviour of automatically injecting filters for deinterlacing, frame rate harmonization, and rotation", 0}}};
 
