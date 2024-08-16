@@ -23,6 +23,29 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
       color_space_(video_decoder->color_space()),
       color_range_(video_decoder->color_range()) {
   std::vector<std::string> filters;
+  std::string custom_pre_filters, custom_post_filters;
+
+  // up to two filter groups are allowed ("pre" and "post"), if only a single group is specified it is assigned to the "post" group
+  auto custom_filter_groups = string_split(custom_video_filters, '|');
+  const bool ends_with_pipe = custom_video_filters.back() == '|';
+
+  if (custom_filter_groups.size() == 2 || (custom_filter_groups.size() == 1 && ends_with_pipe)) {
+    custom_pre_filters = custom_filter_groups[0];
+
+    if (custom_filter_groups.size() > 1) {
+      custom_post_filters = custom_filter_groups[1];
+    }
+  } else if (custom_filter_groups.size() == 1) {
+    custom_post_filters = custom_filter_groups[0];
+  } else if (custom_filter_groups.size() > 2) {
+    throw std::runtime_error("No more than 2 filter groups supported");
+  }
+
+  // custom pre-filtering can be used to e.g. override the color space, primaries and trc settings in case of incorrect metadata before any tone-mapping is performed
+  // for example: 'setparams=colorspace=bt709|' (if not post-filtering is desired)
+  if (!custom_pre_filters.empty()) {
+    filters.push_back(custom_pre_filters);
+  }
 
   if (!disable_auto_filters) {
     const bool this_is_interlaced = video_decoder->codec_context()->field_order != AV_FIELD_PROGRESSIVE && video_decoder->codec_context()->field_order != AV_FIELD_UNKNOWN;
@@ -110,8 +133,8 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
     }
   }
 
-  if (!custom_video_filters.empty()) {
-    filters.push_back(custom_video_filters);
+  if (!custom_post_filters.empty()) {
+    filters.push_back(custom_post_filters);
   } else if (filters.empty()) {
     filters.push_back("copy");
   }
