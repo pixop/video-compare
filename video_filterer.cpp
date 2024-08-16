@@ -65,22 +65,31 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
     const std::string display_primaries = "bt709";
     const std::string display_trc = "iec61966-2-1";  // sRGB
 
-    std::vector<std::string> errors;
+    std::vector<std::string> notes, warnings, setparams_options;
 
     if (video_decoder->color_space() == AVCOL_SPC_UNSPECIFIED) {
-      errors.push_back("color space metadata missing");
+      notes.push_back("color space metadata missing");
+      setparams_options.push_back("colorspace=bt709");
     }
     if (video_decoder->color_primaries() == AVCOL_PRI_UNSPECIFIED) {
-      errors.push_back("color primaries metadata missing");
+      notes.push_back("color primaries metadata missing");
+      setparams_options.push_back("color_primaries=bt709");
     }
     if (video_decoder->color_trc() == AVCOL_TRC_UNSPECIFIED) {
-      errors.push_back("transfer characteristics metadata missing");
+      notes.push_back("transfer characteristics metadata missing");
+      setparams_options.push_back("color_trc=bt709");
     }
     if (!avfilter_get_by_name("zscale")) {
-      errors.push_back("zscale filter missing");
+      warnings.push_back("zscale filter missing in libavfilter build");
     }
 
-    if (errors.empty()) {
+    if (!notes.empty()) {
+      std::cout << string_sprintf("Note: %s; assuming Rec. 709", string_join(notes, ", ").c_str()) << std::endl;
+
+      filters.push_back(string_sprintf("setparams=%s", string_join(setparams_options, ":").c_str()));
+    }
+
+    if (warnings.empty()) {
       filters.push_back("format=rgb48");
 
       float tone_adjustment = (tone_mapping_mode == ToneMapping::relative && peak_luminance_nits < other_peak_luminance_nits) ? static_cast<double>(peak_luminance_nits) / other_peak_luminance_nits : 1.0;
@@ -94,7 +103,7 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
         filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%d", display_primaries.c_str(), display_trc.c_str(), peak_luminance_nits));
       }
     } else {
-      std::cout << string_sprintf("Warning: Cannot add tone mapping filters: %s", string_join(errors, ", ").c_str()) << std::endl;
+      std::cout << string_sprintf("Warning: Cannot add tone mapping filters: %s", string_join(warnings, ", ").c_str()) << std::endl;
     }
   }
 
