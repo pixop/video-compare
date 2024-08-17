@@ -113,7 +113,8 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
       }
 
       if (!notes.empty()) {
-        std::cout << string_sprintf("Note: Metadata missing for %s; assuming Rec. 709 (bt709). Manually setting missing properties to their correct values using decoder options is recommended.", string_join(notes, ", ").c_str()) << std::endl;
+        std::cout << string_sprintf("Note: Metadata missing for %s; assuming Rec. 709 (bt709). Manually setting missing properties to their correct values using decoder options is recommended.", string_join(notes, ", ").c_str())
+                  << std::endl;
 
         filters.push_back(string_sprintf("setparams=%s", string_join(setparams_options, ":").c_str()));
       }
