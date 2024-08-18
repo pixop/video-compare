@@ -121,7 +121,7 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
 
       filters.push_back("format=rgb48");
 
-      float tone_adjustment = (tone_mapping_mode == ToneMapping::relative && peak_luminance_nits < other_peak_luminance_nits) ? static_cast<double>(peak_luminance_nits) / other_peak_luminance_nits : 1.0;
+      float tone_adjustment = (tone_mapping_mode == ToneMapping::relative && peak_luminance_nits < other_peak_luminance_nits) ? static_cast<float>(peak_luminance_nits) / other_peak_luminance_nits : 1.0F;
       tone_adjustment *= boost_tone;
 
       if (std::fabs(tone_adjustment - 1.0F) > 1e-5) {
