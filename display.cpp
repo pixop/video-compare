@@ -449,7 +449,7 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 }
 
 void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_frame) {
-  std::atomic<bool> error_occurred(false);
+  std::atomic_bool error_occurred(false);
 
   const auto write_png = [this, &error_occurred](const AVFrame* frame, const std::string& filename) {
     try {
