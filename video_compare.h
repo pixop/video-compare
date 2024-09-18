@@ -20,15 +20,16 @@ extern "C" {
 using PacketQueue = Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>>;
 using FrameQueue = Queue<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>>;
 
+enum Side {
+  LEFT = 0,
+  RIGHT = 1
+};
+
 class ReadyToSeek {
 public:
-  enum Thread {
+  enum ProcessorThread {
     DEMULTIPLEXER = 0,
     DECODER = 1
-  };
-  enum Side {
-    LEFT = 0,
-    RIGHT = 1
   };
 
   ReadyToSeek() {
@@ -43,12 +44,12 @@ public:
     ready_to_seek_[DECODER][RIGHT] = false;
   }
 
-  void set(int i, int j) {
+  void set(ProcessorThread i, Side j) {
     std::lock_guard<std::mutex> lock(mutex_);
     ready_to_seek_[i][j] = true;
   }
 
-  bool get(int i, int j) {
+  bool get(ProcessorThread i, Side j) {
     std::lock_guard<std::mutex> lock(mutex_);
     return ready_to_seek_[i][j];
   }
@@ -61,7 +62,7 @@ public:
 
 private:
   std::mutex mutex_;
-  std::array<std::array<bool, 2>, 2> ready_to_seek_;
+  std::array<std::array<bool, sizeof(ProcessorThread)>, sizeof(Side)> ready_to_seek_;
 };
 
 class VideoCompare {
@@ -72,13 +73,13 @@ class VideoCompare {
  private:
   void thread_demultiplex_left();
   void thread_demultiplex_right();
-  void demultiplex(int video_idx);
+  void demultiplex(const Side side);
 
   void thread_decode_video_left();
   void thread_decode_video_right();
-  void decode_video(int video_idx);
-  bool process_packet(int video_idx, AVPacket* packet, AVFrame* frame_decoded, AVFrame* sw_frame_decoded = nullptr);
-  bool filter_decoded_frame(int video_idx, AVFrame* frame_decoded);
+  void decode_video(const Side side);
+  bool process_packet(const Side side, AVPacket* packet, AVFrame* frame_decoded, AVFrame* sw_frame_decoded = nullptr);
+  bool filter_decoded_frame(const Side side, AVFrame* frame_decoded);
   void video();
 
  private:
@@ -88,19 +89,19 @@ class VideoCompare {
   const size_t frame_buffer_size_;
   const double time_shift_ms_;
 
-  std::unique_ptr<Demuxer> demuxer_[2];
-  std::unique_ptr<VideoDecoder> video_decoder_[2];
-  std::unique_ptr<VideoFilterer> video_filterer_[2];
+  std::unique_ptr<Demuxer> demuxer_[sizeof(Side)];
+  std::unique_ptr<VideoDecoder> video_decoder_[sizeof(Side)];
+  std::unique_ptr<VideoFilterer> video_filterer_[sizeof(Side)];
 
   size_t max_width_;
   size_t max_height_;
   double shortest_duration_;
 
-  std::unique_ptr<FormatConverter> format_converter_[2];
+  std::unique_ptr<FormatConverter> format_converter_[sizeof(Side)];
   std::unique_ptr<Display> display_;
   std::unique_ptr<Timer> timer_;
-  std::unique_ptr<PacketQueue> packet_queue_[2];
-  std::unique_ptr<FrameQueue> frame_queue_[2];
+  std::unique_ptr<PacketQueue> packet_queue_[sizeof(Side)];
+  std::unique_ptr<FrameQueue> frame_queue_[sizeof(Side)];
 
   std::vector<std::thread> stages_;
 

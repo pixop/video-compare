@@ -45,47 +45,47 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       time_shift_ms_(config.time_shift_ms),
       demuxer_{std::make_unique<Demuxer>(config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options),
                std::make_unique<Demuxer>(config.right.demuxer, config.right.file_name, config.right.demuxer_options, config.right.decoder_options)},
-      video_decoder_{std::make_unique<VideoDecoder>(config.left.decoder, config.left.hw_accel_spec, demuxer_[0]->video_codec_parameters(), config.left.peak_luminance_nits, config.left.hw_accel_options, config.left.decoder_options),
-                     std::make_unique<VideoDecoder>(config.right.decoder, config.right.hw_accel_spec, demuxer_[1]->video_codec_parameters(), config.right.peak_luminance_nits, config.right.hw_accel_options, config.right.decoder_options)},
-      video_filterer_{std::make_unique<VideoFilterer>(demuxer_[0].get(),
-                                                      video_decoder_[0].get(),
+      video_decoder_{std::make_unique<VideoDecoder>(config.left.decoder, config.left.hw_accel_spec, demuxer_[LEFT]->video_codec_parameters(), config.left.peak_luminance_nits, config.left.hw_accel_options, config.left.decoder_options),
+                     std::make_unique<VideoDecoder>(config.right.decoder, config.right.hw_accel_spec, demuxer_[RIGHT]->video_codec_parameters(), config.right.peak_luminance_nits, config.right.hw_accel_options, config.right.decoder_options)},
+      video_filterer_{std::make_unique<VideoFilterer>(demuxer_[LEFT].get(),
+                                                      video_decoder_[LEFT].get(),
                                                       config.left.peak_luminance_nits,
                                                       config.left.video_filters,
-                                                      demuxer_[1].get(),
-                                                      video_decoder_[1].get(),
+                                                      demuxer_[RIGHT].get(),
+                                                      video_decoder_[RIGHT].get(),
                                                       config.right.peak_luminance_nits,
                                                       config.tone_mapping_mode,
                                                       config.boost_tone,
                                                       config.disable_auto_filters),
-                      std::make_unique<VideoFilterer>(demuxer_[1].get(),
-                                                      video_decoder_[1].get(),
+                      std::make_unique<VideoFilterer>(demuxer_[RIGHT].get(),
+                                                      video_decoder_[RIGHT].get(),
                                                       config.right.peak_luminance_nits,
                                                       config.right.video_filters,
-                                                      demuxer_[0].get(),
-                                                      video_decoder_[0].get(),
+                                                      demuxer_[LEFT].get(),
+                                                      video_decoder_[LEFT].get(),
                                                       config.left.peak_luminance_nits,
                                                       config.tone_mapping_mode,
                                                       config.boost_tone,
                                                       config.disable_auto_filters)},
-      max_width_{std::max(video_filterer_[0]->dest_width(), video_filterer_[1]->dest_width())},
-      max_height_{std::max(video_filterer_[0]->dest_height(), video_filterer_[1]->dest_height())},
-      shortest_duration_{std::min(demuxer_[0]->duration(), demuxer_[1]->duration()) * AV_TIME_TO_SEC},
-      format_converter_{std::make_unique<FormatConverter>(video_filterer_[0]->dest_width(),
-                                                          video_filterer_[0]->dest_height(),
+      max_width_{std::max(video_filterer_[LEFT]->dest_width(), video_filterer_[RIGHT]->dest_width())},
+      max_height_{std::max(video_filterer_[LEFT]->dest_height(), video_filterer_[RIGHT]->dest_height())},
+      shortest_duration_{std::min(demuxer_[LEFT]->duration(), demuxer_[RIGHT]->duration()) * AV_TIME_TO_SEC},
+      format_converter_{std::make_unique<FormatConverter>(video_filterer_[LEFT]->dest_width(),
+                                                          video_filterer_[LEFT]->dest_height(),
                                                           max_width_,
                                                           max_height_,
-                                                          video_filterer_[0]->dest_pixel_format(),
+                                                          video_filterer_[LEFT]->dest_pixel_format(),
                                                           config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24,
-                                                          video_decoder_[0]->color_space(),
-                                                          video_decoder_[0]->color_range()),
-                        std::make_unique<FormatConverter>(video_filterer_[1]->dest_width(),
-                                                          video_filterer_[1]->dest_height(),
+                                                          video_decoder_[LEFT]->color_space(),
+                                                          video_decoder_[LEFT]->color_range()),
+                        std::make_unique<FormatConverter>(video_filterer_[RIGHT]->dest_width(),
+                                                          video_filterer_[RIGHT]->dest_height(),
                                                           max_width_,
                                                           max_height_,
-                                                          video_filterer_[1]->dest_pixel_format(),
+                                                          video_filterer_[RIGHT]->dest_pixel_format(),
                                                           config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24,
-                                                          video_decoder_[1]->color_space(),
-                                                          video_decoder_[1]->color_range())},
+                                                          video_decoder_[RIGHT]->color_space(),
+                                                          video_decoder_[RIGHT]->color_range())},
       display_{std::make_unique<Display>(config.display_number,
                                          config.display_mode,
                                          config.verbose,
@@ -134,18 +134,18 @@ void VideoCompare::operator()() {
 }
 
 void VideoCompare::thread_demultiplex_left() {
-  demultiplex(0);
+  demultiplex(LEFT);
 }
 
 void VideoCompare::thread_demultiplex_right() {
-  demultiplex(1);
+  demultiplex(RIGHT);
 }
 
-void VideoCompare::demultiplex(const int video_idx) {
+void VideoCompare::demultiplex(const Side side) {
   try {
-    while (!packet_queue_[video_idx]->is_finished()) {
-      if (seeking_ && ready_to_seek_.get(ReadyToSeek::DECODER, video_idx)) {
-        ready_to_seek_.set(ReadyToSeek::DEMULTIPLEXER, video_idx);
+    while (!packet_queue_[side]->is_finished()) {
+      if (seeking_ && ready_to_seek_.get(ReadyToSeek::DECODER, side)) {
+        ready_to_seek_.set(ReadyToSeek::DEMULTIPLEXER, side);
 
         std::chrono::milliseconds sleep(10);
         std::this_thread::sleep_for(sleep);
@@ -161,36 +161,36 @@ void VideoCompare::demultiplex(const int video_idx) {
       packet->data = nullptr;
 
       // Read frame into AVPacket
-      if (!(*demuxer_[video_idx])(*packet)) {
-        packet_queue_[video_idx]->finished();
+      if (!(*demuxer_[side])(*packet)) {
+        packet_queue_[side]->finished();
         break;
       }
 
       // Move into queue if first video stream
-      if (packet->stream_index == demuxer_[video_idx]->video_stream_index()) {
-        if (!packet_queue_[video_idx]->push(std::move(packet))) {
+      if (packet->stream_index == demuxer_[side]->video_stream_index()) {
+        if (!packet_queue_[side]->push(std::move(packet))) {
           break;
         }
       }
     }
   } catch (...) {
     exception_ = std::current_exception();
-    frame_queue_[video_idx]->quit();
-    packet_queue_[video_idx]->quit();
+    frame_queue_[side]->quit();
+    packet_queue_[side]->quit();
   }
 }
 
 void VideoCompare::thread_decode_video_left() {
-  decode_video(0);
+  decode_video(LEFT);
 }
 
 void VideoCompare::thread_decode_video_right() {
-  decode_video(1);
+  decode_video(RIGHT);
 }
 
-void VideoCompare::decode_video(const int video_idx) {
+void VideoCompare::decode_video(const Side side) {
   try {
-    while (!frame_queue_[video_idx]->is_finished()) {
+    while (!frame_queue_[side]->is_finished()) {
       // Create AVFrames and AVPacket
       std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
       std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> sw_frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
@@ -200,26 +200,26 @@ void VideoCompare::decode_video(const int video_idx) {
                                                                        }};
 
       // Read packet from queue
-      if (!packet_queue_[video_idx]->pop(packet)) {
+      if (!packet_queue_[side]->pop(packet)) {
         // Flush remaining frames cached in the decoder
-        while (process_packet(video_idx, packet.get(), frame_decoded.get(), sw_frame_decoded.get())) {
+        while (process_packet(side, packet.get(), frame_decoded.get(), sw_frame_decoded.get())) {
           ;
         }
 
         // Close the filter source
-        video_filterer_[video_idx]->close_src();
+        video_filterer_[side]->close_src();
 
         // Flush the filter graph
-        filter_decoded_frame(video_idx, nullptr);
+        filter_decoded_frame(side, nullptr);
 
-        frame_queue_[video_idx]->finished();
+        frame_queue_[side]->finished();
         break;
       }
 
       if (seeking_) {
-        video_decoder_[video_idx]->flush();
+        video_decoder_[side]->flush();
 
-        ready_to_seek_.set(ReadyToSeek::DECODER, video_idx);
+        ready_to_seek_.set(ReadyToSeek::DECODER, side);
 
         std::chrono::milliseconds sleep(10);
         std::this_thread::sleep_for(sleep);
@@ -227,25 +227,25 @@ void VideoCompare::decode_video(const int video_idx) {
       }
 
       // If the packet didn't send, receive more frames and try again
-      while (!process_packet(video_idx, packet.get(), frame_decoded.get(), sw_frame_decoded.get()) && !seeking_) {
+      while (!process_packet(side, packet.get(), frame_decoded.get(), sw_frame_decoded.get()) && !seeking_) {
         ;
       }
     }
   } catch (...) {
     exception_ = std::current_exception();
-    frame_queue_[video_idx]->quit();
-    packet_queue_[video_idx]->quit();
+    frame_queue_[side]->quit();
+    packet_queue_[side]->quit();
   }
 }
 
-bool VideoCompare::process_packet(const int video_idx, AVPacket* packet, AVFrame* frame_decoded, AVFrame* sw_frame_decoded) {
-  bool sent = video_decoder_[video_idx]->send(packet);
+bool VideoCompare::process_packet(const Side side, AVPacket* packet, AVFrame* frame_decoded, AVFrame* sw_frame_decoded) {
+  bool sent = video_decoder_[side]->send(packet);
 
   // If a whole frame has been decoded, adjust time stamps and add to queue
-  while (video_decoder_[video_idx]->receive(frame_decoded, demuxer_[video_idx].get())) {
+  while (video_decoder_[side]->receive(frame_decoded, demuxer_[side].get())) {
     AVFrame* frame_for_filtering;
 
-    if (frame_decoded->format == video_decoder_[video_idx]->hw_pixel_format()) {
+    if (frame_decoded->format == video_decoder_[side]->hw_pixel_format()) {
       // transfer data from GPU to CPU
       if (av_hwframe_transfer_data(sw_frame_decoded, frame_decoded, 0) < 0) {
         throw std::runtime_error("Error transferring frame from GPU to CPU");
@@ -259,7 +259,7 @@ bool VideoCompare::process_packet(const int video_idx, AVPacket* packet, AVFrame
       frame_for_filtering = frame_decoded;
     }
 
-    if (!filter_decoded_frame(video_idx, frame_for_filtering)) {
+    if (!filter_decoded_frame(side, frame_for_filtering)) {
       return sent;
     }
   }
@@ -267,9 +267,9 @@ bool VideoCompare::process_packet(const int video_idx, AVPacket* packet, AVFrame
   return sent;
 }
 
-bool VideoCompare::filter_decoded_frame(const int video_idx, AVFrame* frame_decoded) {
+bool VideoCompare::filter_decoded_frame(const Side side, AVFrame* frame_decoded) {
   // send decoded frame to filterer
-  if (!video_filterer_[video_idx]->send(frame_decoded)) {
+  if (!video_filterer_[side]->send(frame_decoded)) {
     throw std::runtime_error("Error while feeding the filter graph");
   }
 
@@ -277,7 +277,7 @@ bool VideoCompare::filter_decoded_frame(const int video_idx, AVFrame* frame_deco
 
   while (true) {
     // get next filtered frame
-    if (!video_filterer_[video_idx]->receive(frame_filtered.get())) {
+    if (!video_filterer_[side]->receive(frame_filtered.get())) {
       break;
     }
 
@@ -290,12 +290,12 @@ bool VideoCompare::filter_decoded_frame(const int video_idx, AVFrame* frame_deco
     if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
       throw std::runtime_error("Copying filtered frame properties");
     }
-    if (av_image_alloc(frame_converted->data, frame_converted->linesize, format_converter_[video_idx]->dest_width(), format_converter_[video_idx]->dest_height(), format_converter_[video_idx]->dest_pixel_format(), 64) < 0) {
+    if (av_image_alloc(frame_converted->data, frame_converted->linesize, format_converter_[side]->dest_width(), format_converter_[side]->dest_height(), format_converter_[side]->dest_pixel_format(), 64) < 0) {
       throw std::runtime_error("Allocating converted picture");
     }
-    (*format_converter_[video_idx])(frame_filtered.get(), frame_converted.get());
+    (*format_converter_[side])(frame_filtered.get(), frame_converted.get());
 
-    if (!frame_queue_[video_idx]->push(std::move(frame_converted))) {
+    if (!frame_queue_[side]->push(std::move(frame_converted))) {
       return false;
     }
   }
@@ -320,7 +320,7 @@ void VideoCompare::video() {
     int64_t left_decoded_picture_number = 0;
     int64_t left_previous_decoded_picture_number = -1;
     int64_t delta_left_pts = 0;
-    float left_start_time = demuxer_[0]->start_time() * AV_TIME_TO_SEC;
+    float left_start_time = demuxer_[LEFT]->start_time() * AV_TIME_TO_SEC;
     int64_t left_first_pts = 0;
 
     if (left_start_time > 0) {
@@ -331,7 +331,7 @@ void VideoCompare::video() {
     int64_t right_decoded_picture_number = 0;
     int64_t right_previous_decoded_picture_number = -1;
     int64_t delta_right_pts = 0;
-    float right_start_time = demuxer_[1]->start_time() * AV_TIME_TO_SEC;
+    float right_start_time = demuxer_[RIGHT]->start_time() * AV_TIME_TO_SEC;
     int64_t right_first_pts = 0;
 
     if (right_start_time > 0) {
@@ -365,7 +365,7 @@ void VideoCompare::video() {
       if ((display_->get_seek_relative() != 0.0F) || (display_->get_shift_right_frames() != 0)) {
         total_right_time_shifted += display_->get_shift_right_frames();
 
-        if (packet_queue_[0]->is_finished() || packet_queue_[1]->is_finished()) {
+        if (packet_queue_[LEFT]->is_finished() || packet_queue_[RIGHT]->is_finished()) {
           message = "Unable to perform seek (end of file reached)";
         } else {
           // compute effective time shift
@@ -377,21 +377,21 @@ void VideoCompare::video() {
           // ensure that we did not reach EOF while waiting for the demuxer to become ready
           bool can_seek;
 
-          while ((can_seek = (!packet_queue_[0]->is_finished() && !packet_queue_[1]->is_finished()))) {
+          while ((can_seek = (!packet_queue_[LEFT]->is_finished() && !packet_queue_[RIGHT]->is_finished()))) {
             if (ready_to_seek_.all_are_empty()) {
               break;
             }
-            frame_queue_[0]->empty();
-            frame_queue_[1]->empty();
+            frame_queue_[LEFT]->empty();
+            frame_queue_[RIGHT]->empty();
           }
 
           if (can_seek) {
-            packet_queue_[0]->empty();
-            packet_queue_[1]->empty();
-            frame_queue_[0]->empty();
-            frame_queue_[1]->empty();
-            video_filterer_[0]->reinit();
-            video_filterer_[1]->reinit();
+            packet_queue_[LEFT]->empty();
+            packet_queue_[RIGHT]->empty();
+            frame_queue_[LEFT]->empty();
+            frame_queue_[RIGHT]->empty();
+            video_filterer_[LEFT]->reinit();
+            video_filterer_[RIGHT]->reinit();
 
             float next_left_position, next_right_position;
 
@@ -416,17 +416,17 @@ void VideoCompare::video() {
 #ifdef _DEBUG
             std::cout << "SEEK: next_left_position=" << (int)(next_left_position * 1000) << ", next_right_position=" << (int)(next_right_position * 1000) << ", backward=" << backward << std::endl;
 #endif
-            if ((!demuxer_[0]->seek(next_left_position, backward) && !backward) || (!demuxer_[1]->seek(next_right_position, backward) && !backward)) {
+            if ((!demuxer_[LEFT]->seek(next_left_position, backward) && !backward) || (!demuxer_[RIGHT]->seek(next_right_position, backward) && !backward)) {
               // restore position if unable to perform forward seek
               message = "Unable to seek past end of file";
 
-              demuxer_[0]->seek(left_position, true);
-              demuxer_[1]->seek(right_position, true);
+              demuxer_[LEFT]->seek(left_position, true);
+              demuxer_[RIGHT]->seek(right_position, true);
             };
 
             seeking_ = false;
 
-            frame_queue_[0]->pop(frame_left);
+            frame_queue_[LEFT]->pop(frame_left);
             left_pts = frame_left->pts;
             left_previous_decoded_picture_number = -1;
             left_decoded_picture_number = 1;
@@ -438,7 +438,7 @@ void VideoCompare::video() {
               right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
             }
 
-            frame_queue_[1]->pop(frame_right);
+            frame_queue_[RIGHT]->pop(frame_right);
             right_pts = frame_right->pts - right_time_shift;
             right_previous_decoded_picture_number = -1;
             right_decoded_picture_number = 1;
@@ -449,8 +449,8 @@ void VideoCompare::video() {
             message = "Unable to perform seek (end of file reached)";
 
             // flag both demuxer queues as finished to ensure a clean exit
-            packet_queue_[0]->finished();
-            packet_queue_[1]->finished();
+            packet_queue_[LEFT]->finished();
+            packet_queue_[RIGHT]->finished();
           }
         }
       }
@@ -482,14 +482,14 @@ void VideoCompare::video() {
         if (is_behind(left_pts, right_pts, min_delta)) {
           adjusting = true;
 
-          if (frame_queue_[0]->pop(frame_left)) {
+          if (frame_queue_[LEFT]->pop(frame_left)) {
             left_decoded_picture_number++;
           }
         }
         if (is_behind(right_pts, left_pts, min_delta)) {
           adjusting = true;
 
-          if (frame_queue_[1]->pop(frame_right)) {
+          if (frame_queue_[RIGHT]->pop(frame_right)) {
             right_decoded_picture_number++;
           }
         }
@@ -497,7 +497,7 @@ void VideoCompare::video() {
         // handle regular playback only
         if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
           if (!adjusting && fetch_next_frame) {
-            if (!frame_queue_[0]->pop(frame_left) || !frame_queue_[1]->pop(frame_right)) {
+            if (!frame_queue_[LEFT]->pop(frame_left) || !frame_queue_[RIGHT]->pop(frame_right)) {
               frame_left = nullptr;
               frame_right = nullptr;
 
@@ -607,7 +607,7 @@ void VideoCompare::video() {
       }
 
       const bool no_activity = !skip_update && !adjusting && !store_frames;
-      const bool end_of_file = no_activity && (frame_queue_[0]->is_finished() || frame_queue_[1]->is_finished());
+      const bool end_of_file = no_activity && (frame_queue_[LEFT]->is_finished() || frame_queue_[RIGHT]->is_finished());
       const bool buffer_is_full = left_frames.size() == frame_buffer_size_ && right_frames.size() == frame_buffer_size_;
 
       const int max_left_frame_index = static_cast<int>(left_frames.size()) - 1;
@@ -691,8 +691,8 @@ void VideoCompare::video() {
     exception_ = std::current_exception();
   }
 
-  frame_queue_[0]->quit();
-  packet_queue_[0]->quit();
-  frame_queue_[1]->quit();
-  packet_queue_[1]->quit();
+  frame_queue_[LEFT]->quit();
+  packet_queue_[LEFT]->quit();
+  frame_queue_[RIGHT]->quit();
+  packet_queue_[RIGHT]->quit();
 }
