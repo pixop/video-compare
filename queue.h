@@ -32,7 +32,7 @@ class Queue {
   // The queue has finished accepting input
   bool is_finished();
   void finished();
-  // The queue will cannot be pushed or popped
+  // The queue cannot be pushed or popped
   void quit();
 
   void empty();
