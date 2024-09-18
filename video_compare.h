@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -18,6 +19,50 @@ extern "C" {
 
 using PacketQueue = Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>>;
 using FrameQueue = Queue<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>>;
+
+class ReadyToSeek {
+public:
+  enum Thread {
+    DEMULTIPLEXER = 0,
+    DECODER = 1
+  };
+  enum Side {
+    LEFT = 0,
+    RIGHT = 1
+  };
+
+  ReadyToSeek() {
+    reset();
+  }
+
+  void reset() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ready_to_seek_[DEMULTIPLEXER][LEFT] = false;
+    ready_to_seek_[DEMULTIPLEXER][RIGHT] = false;
+    ready_to_seek_[DECODER][LEFT] = false;
+    ready_to_seek_[DECODER][RIGHT] = false;
+  }
+
+  void set(int i, int j) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ready_to_seek_[i][j] = true;
+  }
+
+  bool get(int i, int j) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return ready_to_seek_[i][j];
+  }
+
+  bool all_are_empty() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return ready_to_seek_[DEMULTIPLEXER][LEFT] && ready_to_seek_[DEMULTIPLEXER][RIGHT] && 
+           ready_to_seek_[DECODER][LEFT] && ready_to_seek_[DECODER][RIGHT];
+  }
+
+private:
+  std::mutex mutex_;
+  std::array<std::array<bool, 2>, 2> ready_to_seek_;
+};
 
 class VideoCompare {
  public:
@@ -61,6 +106,6 @@ class VideoCompare {
 
   std::exception_ptr exception_{};
 
-  volatile bool seeking_{false};
-  volatile bool ready_to_seek_[2][2];
+  std::atomic_bool seeking_{false};
+  ReadyToSeek ready_to_seek_;
 };

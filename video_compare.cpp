@@ -144,8 +144,8 @@ void VideoCompare::thread_demultiplex_right() {
 void VideoCompare::demultiplex(const int video_idx) {
   try {
     while (!packet_queue_[video_idx]->is_finished()) {
-      if (seeking_ && ready_to_seek_[1][video_idx]) {
-        ready_to_seek_[0][video_idx] = true;
+      if (seeking_ && ready_to_seek_.get(ReadyToSeek::DECODER, video_idx)) {
+        ready_to_seek_.set(ReadyToSeek::DEMULTIPLEXER, video_idx);
 
         std::chrono::milliseconds sleep(10);
         std::this_thread::sleep_for(sleep);
@@ -219,7 +219,7 @@ void VideoCompare::decode_video(const int video_idx) {
       if (seeking_) {
         video_decoder_[video_idx]->flush();
 
-        ready_to_seek_[1][video_idx] = true;
+        ready_to_seek_.set(ReadyToSeek::DECODER, video_idx);
 
         std::chrono::milliseconds sleep(10);
         std::this_thread::sleep_for(sleep);
@@ -371,25 +371,14 @@ void VideoCompare::video() {
           // compute effective time shift
           right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
 
-          // TODO: fix concurrency issues
-          ready_to_seek_[0][0] = false;
-          ready_to_seek_[0][1] = false;
-          ready_to_seek_[1][0] = false;
-          ready_to_seek_[1][1] = false;
+          ready_to_seek_.reset();
           seeking_ = true;
 
           // ensure that we did not reach EOF while waiting for the demuxer to become ready
           bool can_seek;
 
           while ((can_seek = (!packet_queue_[0]->is_finished() && !packet_queue_[1]->is_finished()))) {
-            bool all_empty = true;
-
-            all_empty = all_empty && ready_to_seek_[0][0];
-            all_empty = all_empty && ready_to_seek_[0][1];
-            all_empty = all_empty && ready_to_seek_[1][0];
-            all_empty = all_empty && ready_to_seek_[1][1];
-
-            if (all_empty) {
+            if (ready_to_seek_.all_are_empty()) {
               break;
             }
             frame_queue_[0]->empty();
