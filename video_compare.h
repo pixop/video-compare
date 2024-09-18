@@ -44,12 +44,12 @@ public:
     ready_to_seek_[DECODER][RIGHT] = false;
   }
 
-  void set(ProcessorThread i, Side j) {
+  void set(const ProcessorThread i, const Side j) {
     std::lock_guard<std::mutex> lock(mutex_);
     ready_to_seek_[i][j] = true;
   }
 
-  bool get(ProcessorThread i, Side j) {
+  bool get(const ProcessorThread i, const Side j) {
     std::lock_guard<std::mutex> lock(mutex_);
     return ready_to_seek_[i][j];
   }
