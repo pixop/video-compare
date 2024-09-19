@@ -21,15 +21,17 @@ using PacketQueue = Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*
 using FrameQueue = Queue<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>>;
 
 enum Side {
-  LEFT = 0,
-  RIGHT = 1
+  LEFT,
+  RIGHT,
+  Count
 };
 
 class ReadyToSeek {
 public:
   enum ProcessorThread {
-    DEMULTIPLEXER = 0,
-    DECODER = 1
+    DEMULTIPLEXER,
+    DECODER,
+    Count
   };
 
   ReadyToSeek() {
@@ -62,7 +64,7 @@ public:
 
 private:
   std::mutex mutex_;
-  std::array<std::array<bool, sizeof(ProcessorThread)>, sizeof(Side)> ready_to_seek_;
+  std::array<std::array<bool, ProcessorThread::Count>, Side::Count> ready_to_seek_;
 };
 
 class VideoCompare {
@@ -78,9 +80,13 @@ class VideoCompare {
   void thread_decode_video_left();
   void thread_decode_video_right();
   void decode_video(const Side side);
+
+  void sleep_for_ms(const int ms);
+
   bool process_packet(const Side side, AVPacket* packet, AVFrame* frame_decoded, AVFrame* sw_frame_decoded = nullptr);
   bool filter_decoded_frame(const Side side, AVFrame* frame_decoded);
-  void video();
+
+  void compare();
 
  private:
   static const size_t QUEUE_SIZE;
@@ -89,19 +95,19 @@ class VideoCompare {
   const size_t frame_buffer_size_;
   const double time_shift_ms_;
 
-  std::unique_ptr<Demuxer> demuxer_[sizeof(Side)];
-  std::unique_ptr<VideoDecoder> video_decoder_[sizeof(Side)];
-  std::unique_ptr<VideoFilterer> video_filterer_[sizeof(Side)];
+  std::unique_ptr<Demuxer> demuxer_[Side::Count];
+  std::unique_ptr<VideoDecoder> video_decoder_[Side::Count];
+  std::unique_ptr<VideoFilterer> video_filterer_[Side::Count];
 
   size_t max_width_;
   size_t max_height_;
   double shortest_duration_;
 
-  std::unique_ptr<FormatConverter> format_converter_[sizeof(Side)];
+  std::unique_ptr<FormatConverter> format_converter_[Side::Count];
   std::unique_ptr<Display> display_;
   std::unique_ptr<Timer> timer_;
-  std::unique_ptr<PacketQueue> packet_queue_[sizeof(Side)];
-  std::unique_ptr<FrameQueue> frame_queue_[sizeof(Side)];
+  std::unique_ptr<PacketQueue> packet_queue_[Side::Count];
+  std::unique_ptr<FrameQueue> frame_queue_[Side::Count];
 
   std::vector<std::thread> stages_;
 

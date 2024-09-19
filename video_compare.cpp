@@ -122,7 +122,8 @@ void VideoCompare::operator()() {
   stages_.emplace_back(&VideoCompare::thread_demultiplex_right, this);
   stages_.emplace_back(&VideoCompare::thread_decode_video_left, this);
   stages_.emplace_back(&VideoCompare::thread_decode_video_right, this);
-  video();
+
+  compare();
 
   for (auto& stage : stages_) {
     stage.join();
@@ -141,14 +142,24 @@ void VideoCompare::thread_demultiplex_right() {
   demultiplex(RIGHT);
 }
 
+void VideoCompare::sleep_for_ms(const int ms) {
+  std::chrono::milliseconds sleep(ms);
+  std::this_thread::sleep_for(sleep);
+}
+
 void VideoCompare::demultiplex(const Side side) {
   try {
-    while (!packet_queue_[side]->is_finished()) {
+    while (!display_->get_quit()) {
+      // Wait for decoder to drain
       if (seeking_ && ready_to_seek_.get(ReadyToSeek::DECODER, side)) {
         ready_to_seek_.set(ReadyToSeek::DEMULTIPLEXER, side);
 
-        std::chrono::milliseconds sleep(10);
-        std::this_thread::sleep_for(sleep);
+        sleep_for_ms(10);
+        continue;
+      }
+      // Sleep if we are finished for now
+      if (packet_queue_[side]->is_finished()) {
+        sleep_for_ms(10);
         continue;
       }
 
@@ -162,8 +173,9 @@ void VideoCompare::demultiplex(const Side side) {
 
       // Read frame into AVPacket
       if (!(*demuxer_[side])(*packet)) {
+        // Enter wait state
         packet_queue_[side]->finished();
-        break;
+        continue;
       }
 
       // Move into queue if first video stream
@@ -190,7 +202,23 @@ void VideoCompare::thread_decode_video_right() {
 
 void VideoCompare::decode_video(const Side side) {
   try {
-    while (!frame_queue_[side]->is_finished()) {
+    while (!display_->get_quit()) {
+      auto flush_and_signal = [&]() {
+        video_decoder_[side]->flush();
+
+        ready_to_seek_.set(ReadyToSeek::DECODER, side);
+      };
+
+      // Sleep if we are finished for now
+      if (frame_queue_[side]->is_finished()) {
+        if (seeking_) {
+          flush_and_signal();
+        }
+
+        sleep_for_ms(10);
+        continue;
+      }
+
       // Create AVFrames and AVPacket
       std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
       std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> sw_frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
@@ -212,17 +240,15 @@ void VideoCompare::decode_video(const Side side) {
         // Flush the filter graph
         filter_decoded_frame(side, nullptr);
 
+        // Enter wait state
         frame_queue_[side]->finished();
-        break;
+        continue;
       }
 
       if (seeking_) {
-        video_decoder_[side]->flush();
+        flush_and_signal();
 
-        ready_to_seek_.set(ReadyToSeek::DECODER, side);
-
-        std::chrono::milliseconds sleep(10);
-        std::this_thread::sleep_for(sleep);
+        sleep_for_ms(10);
         continue;
       }
 
@@ -246,7 +272,7 @@ bool VideoCompare::process_packet(const Side side, AVPacket* packet, AVFrame* fr
     AVFrame* frame_for_filtering;
 
     if (frame_decoded->format == video_decoder_[side]->hw_pixel_format()) {
-      // transfer data from GPU to CPU
+      // Transfer data from GPU to CPU
       if (av_hwframe_transfer_data(sw_frame_decoded, frame_decoded, 0) < 0) {
         throw std::runtime_error("Error transferring frame from GPU to CPU");
       }
@@ -303,7 +329,7 @@ bool VideoCompare::filter_decoded_frame(const Side side, AVFrame* frame_decoded)
   return true;
 }
 
-void VideoCompare::video() {
+void VideoCompare::compare() {
   try {
 #ifdef _DEBUG
     std::string previous_state;
@@ -362,96 +388,111 @@ void VideoCompare::video() {
 
       forward_navigate_frames += display_->get_frame_navigation_delta();
 
+      bool force_skip_update = false;
+
       if ((display_->get_seek_relative() != 0.0F) || (display_->get_shift_right_frames() != 0)) {
         total_right_time_shifted += display_->get_shift_right_frames();
 
-        if (packet_queue_[LEFT]->is_finished() || packet_queue_[RIGHT]->is_finished()) {
-          message = "Unable to perform seek (end of file reached)";
+        // compute effective time shift
+        right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
+
+        ready_to_seek_.reset();
+        seeking_ = true;
+
+        // drain packet and frame queues
+        frame_queue_[LEFT]->empty();
+        frame_queue_[RIGHT]->empty();
+
+        while (!ready_to_seek_.all_are_empty()) {
+          sleep_for_ms(10);
+        }
+
+        auto finished_and_drain_queues = [&](const Side side) {
+          packet_queue_[side]->finished();
+          frame_queue_[side]->finished();
+
+          packet_queue_[side]->empty();
+          frame_queue_[side]->empty();
+        };
+
+        finished_and_drain_queues(LEFT);
+        finished_and_drain_queues(RIGHT);
+
+        // reinit filter graphs
+        video_filterer_[LEFT]->reinit();
+        video_filterer_[RIGHT]->reinit();
+
+        float next_left_position, next_right_position;
+
+        const float left_position = left_pts * AV_TIME_TO_SEC + left_start_time;
+        const float right_position = left_pts * AV_TIME_TO_SEC + right_start_time;
+
+        if (display_->get_seek_from_start()) {
+          // seek from start based on the shortest stream duration in seconds
+          next_left_position = shortest_duration_ * display_->get_seek_relative() + left_start_time;
+          next_right_position = shortest_duration_ * display_->get_seek_relative() + right_start_time;
         } else {
-          // compute effective time shift
-          right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
+          next_left_position = left_position + display_->get_seek_relative();
+          next_right_position = right_position + display_->get_seek_relative();
 
-          ready_to_seek_.reset();
-          seeking_ = true;
-
-          // ensure that we did not reach EOF while waiting for the demuxer to become ready
-          bool can_seek;
-
-          while ((can_seek = (!packet_queue_[LEFT]->is_finished() && !packet_queue_[RIGHT]->is_finished()))) {
-            if (ready_to_seek_.all_are_empty()) {
-              break;
-            }
-            frame_queue_[LEFT]->empty();
-            frame_queue_[RIGHT]->empty();
+          if (right_time_shift < 0) {
+            next_right_position += (right_time_shift + delta_right_pts) * AV_TIME_TO_SEC;
           }
+        }
 
-          if (can_seek) {
-            packet_queue_[LEFT]->empty();
-            packet_queue_[RIGHT]->empty();
-            frame_queue_[LEFT]->empty();
-            frame_queue_[RIGHT]->empty();
-            video_filterer_[LEFT]->reinit();
-            video_filterer_[RIGHT]->reinit();
-
-            float next_left_position, next_right_position;
-
-            const float left_position = left_pts * AV_TIME_TO_SEC + left_start_time;
-            const float right_position = left_pts * AV_TIME_TO_SEC + right_start_time;
-
-            if (display_->get_seek_from_start()) {
-              // seek from start based on the shortest stream duration in seconds
-              next_left_position = shortest_duration_ * display_->get_seek_relative() + left_start_time;
-              next_right_position = shortest_duration_ * display_->get_seek_relative() + right_start_time;
-            } else {
-              next_left_position = left_position + display_->get_seek_relative();
-              next_right_position = right_position + display_->get_seek_relative();
-
-              if (right_time_shift < 0) {
-                next_right_position += (right_time_shift + delta_right_pts) * AV_TIME_TO_SEC;
-              }
-            }
-
-            bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
+        bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
 
 #ifdef _DEBUG
-            std::cout << "SEEK: next_left_position=" << (int)(next_left_position * 1000) << ", next_right_position=" << (int)(next_right_position * 1000) << ", backward=" << backward << std::endl;
+        std::cout << "SEEK: next_left_position=" << (int)(next_left_position * 1000) << ", next_right_position=" << (int)(next_right_position * 1000) << ", backward=" << backward << std::endl;
 #endif
-            if ((!demuxer_[LEFT]->seek(next_left_position, backward) && !backward) || (!demuxer_[RIGHT]->seek(next_right_position, backward) && !backward)) {
-              // restore position if unable to perform forward seek
-              message = "Unable to seek past end of file";
+        if ((!demuxer_[LEFT]->seek(next_left_position, backward) && !backward) || (!demuxer_[RIGHT]->seek(next_right_position, backward) && !backward)) {
+          // restore position if unable to perform forward seek
+          message = "Unable to seek past end of file";
 
-              demuxer_[LEFT]->seek(left_position, true);
-              demuxer_[RIGHT]->seek(right_position, true);
-            };
+          demuxer_[LEFT]->seek(left_position, true);
+          demuxer_[RIGHT]->seek(right_position, true);
+        };
 
-            seeking_ = false;
+        seeking_ = false;
 
-            frame_queue_[LEFT]->pop(frame_left);
-            left_pts = frame_left->pts;
-            left_previous_decoded_picture_number = -1;
-            left_decoded_picture_number = 1;
+        // allow packet and frame queues to receive data again
+        auto reset_queues = [&](const Side side) {
+          packet_queue_[side]->reset();
+          frame_queue_[side]->reset();
+        };
 
-            // round away from zero to nearest 2 ms
-            if (right_time_shift > 0) {
-              right_time_shift = ((right_time_shift / 1000) + 2) * 1000;
-            } else if (right_time_shift < 0) {
-              right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
-            }
+        reset_queues(LEFT);
+        reset_queues(RIGHT);
 
-            frame_queue_[RIGHT]->pop(frame_right);
-            right_pts = frame_right->pts - right_time_shift;
-            right_previous_decoded_picture_number = -1;
-            right_decoded_picture_number = 1;
+        frame_queue_[LEFT]->pop(frame_left);
 
-            left_frames.clear();
-            right_frames.clear();
-          } else {
-            message = "Unable to perform seek (end of file reached)";
+        if (frame_left != nullptr) {
+          left_pts = frame_left->pts;
+          left_previous_decoded_picture_number = -1;
+          left_decoded_picture_number = 1;
 
-            // flag both demuxer queues as finished to ensure a clean exit
-            packet_queue_[LEFT]->finished();
-            packet_queue_[RIGHT]->finished();
-          }
+          left_frames.clear();
+
+          force_skip_update = true;
+        }
+
+        // round away from zero to nearest 2 ms
+        if (right_time_shift > 0) {
+          right_time_shift = ((right_time_shift / 1000) + 2) * 1000;
+        } else if (right_time_shift < 0) {
+          right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
+        }
+
+        frame_queue_[RIGHT]->pop(frame_right);
+
+        if (frame_right != nullptr) {
+          right_pts = frame_right->pts - right_time_shift;
+          right_previous_decoded_picture_number = -1;
+          right_decoded_picture_number = 1;
+
+          right_frames.clear();
+
+          force_skip_update = true;
         }
       }
 
@@ -459,7 +500,7 @@ void VideoCompare::video() {
       bool adjusting = false;
 
       // keep showing currently displayed frame for another iteration?
-      const bool skip_update = (timer_->us_until_target() - refresh_time_deque.average()) > 0;
+      const bool skip_update = force_skip_update || (timer_->us_until_target() - refresh_time_deque.average()) > 0;
       const bool fetch_next_frame = display_->get_play() || (forward_navigate_frames > 0);
 
       if (display_->get_quit() || (exception_ != nullptr)) {
