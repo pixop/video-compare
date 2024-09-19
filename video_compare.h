@@ -36,13 +36,9 @@ class ReadyToSeek {
     }
   }
 
-  bool get(const ProcessorThread i, const Side j) const {
-    return load(ready_to_seek_[i][j]);
-  }
+  bool get(const ProcessorThread i, const Side j) const { return load(ready_to_seek_[i][j]); }
 
-  void set(const ProcessorThread i, const Side j) {
-    store(ready_to_seek_[i][j], true);
-  }
+  void set(const ProcessorThread i, const Side j) { store(ready_to_seek_[i][j], true); }
 
   bool all_are_empty() const {
     for (const auto& thread_array : ready_to_seek_) {
@@ -57,18 +53,13 @@ class ReadyToSeek {
   }
 
  private:
-  static inline bool load(const std::atomic_bool& atomic_flag) {
-    return atomic_flag.load(std::memory_order_relaxed);
-  }
+  static inline bool load(const std::atomic_bool& atomic_flag) { return atomic_flag.load(std::memory_order_relaxed); }
 
-  static inline void store(std::atomic_bool& atomic_flag, const bool value) {
-    atomic_flag.store(value, std::memory_order_relaxed);
-  }
+  static inline void store(std::atomic_bool& atomic_flag, const bool value) { atomic_flag.store(value, std::memory_order_relaxed); }
 
  private:
   std::array<std::array<std::atomic_bool, Side::Count>, ProcessorThread::Count> ready_to_seek_;
 };
-
 
 class VideoCompare {
  public:
