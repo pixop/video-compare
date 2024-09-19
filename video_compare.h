@@ -29,7 +29,6 @@ class ReadyToSeek {
   ReadyToSeek() { reset(); }
 
   void reset() {
-    std::lock_guard<std::mutex> lock(mutex_);
     ready_to_seek_[DEMULTIPLEXER][LEFT] = false;
     ready_to_seek_[DEMULTIPLEXER][RIGHT] = false;
     ready_to_seek_[DECODER][LEFT] = false;
@@ -37,24 +36,24 @@ class ReadyToSeek {
   }
 
   void set(const ProcessorThread i, const Side j) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    ready_to_seek_[i][j] = true;
+    ready_to_seek_[i][j].store(true, std::memory_order_relaxed);
   }
 
   bool get(const ProcessorThread i, const Side j) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return ready_to_seek_[i][j];
+    return ready_to_seek_[i][j].load(std::memory_order_relaxed);
   }
 
   bool all_are_empty() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return ready_to_seek_[DEMULTIPLEXER][LEFT] && ready_to_seek_[DEMULTIPLEXER][RIGHT] && ready_to_seek_[DECODER][LEFT] && ready_to_seek_[DECODER][RIGHT];
+    return ready_to_seek_[DEMULTIPLEXER][LEFT].load(std::memory_order_relaxed) &&
+           ready_to_seek_[DEMULTIPLEXER][RIGHT].load(std::memory_order_relaxed) &&
+           ready_to_seek_[DECODER][LEFT].load(std::memory_order_relaxed) &&
+           ready_to_seek_[DECODER][RIGHT].load(std::memory_order_relaxed);
   }
 
  private:
-  std::mutex mutex_;
-  std::array<std::array<bool, ProcessorThread::Count>, Side::Count> ready_to_seek_;
+  std::array<std::array<std::atomic_bool, Side::Count>, ProcessorThread::Count> ready_to_seek_;
 };
+
 
 class VideoCompare {
  public:
