@@ -19,9 +19,8 @@ class Queue {
   std::condition_variable full_;
   std::condition_variable empty_;
 
-  // Exit
   std::atomic_bool quit_{false};
-  std::atomic_bool finished_{false};
+  std::atomic_bool stopped_{false};
 
  public:
   explicit Queue(size_t size_max);
@@ -29,11 +28,11 @@ class Queue {
   bool push(T&& data);
   bool pop(T& data);
 
-  void reset();
+  void restart();
+  void stop();
 
-  // The queue has finished accepting input
-  bool is_finished();
-  void finished();
+  // The queue has stopped accepting input
+  bool is_stopped();
   // The queue cannot be pushed or popped
   void quit();
 
@@ -43,14 +42,14 @@ class Queue {
 
 template <class T>
 Queue<T>::Queue(size_t size_max) : size_max_{size_max} {
-  reset();
+  restart();
 }
 
 template <class T>
 bool Queue<T>::push(T&& data) {
   std::unique_lock<std::mutex> lock(mutex_);
 
-  while (!quit_ && !finished_) {
+  while (!quit_ && !stopped_) {
     if (queue_.size() < size_max_) {
       queue_.push(std::move(data));
 
@@ -75,7 +74,7 @@ bool Queue<T>::pop(T& data) {
       full_.notify_all();
       return true;
     }
-    if (queue_.empty() && finished_) {
+    if (queue_.empty() && stopped_) {
       return false;
     }
     empty_.wait(lock);
@@ -85,21 +84,25 @@ bool Queue<T>::pop(T& data) {
 }
 
 template <class T>
-void Queue<T>::reset() {
-  finished_ = false;
+void Queue<T>::restart() {
+  std::unique_lock<std::mutex> lock(mutex_);
+
+  stopped_ = false;
   empty_.notify_all();
   full_.notify_all();
 }
 
 template <class T>
-bool Queue<T>::is_finished() {
-  return finished_;
+void Queue<T>::stop() {
+  std::unique_lock<std::mutex> lock(mutex_);
+
+  stopped_ = true;
+  empty_.notify_all();
 }
 
 template <class T>
-void Queue<T>::finished() {
-  finished_ = true;
-  empty_.notify_all();
+bool Queue<T>::is_stopped() {
+  return stopped_;
 }
 
 template <class T>

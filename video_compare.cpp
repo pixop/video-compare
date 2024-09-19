@@ -159,7 +159,7 @@ void VideoCompare::demultiplex(const Side side) {
         continue;
       }
       // Sleep if we are finished for now
-      if (packet_queue_[side]->is_finished()) {
+      if (packet_queue_[side]->is_stopped()) {
         sleep_for_ms(10);
         continue;
       }
@@ -174,8 +174,8 @@ void VideoCompare::demultiplex(const Side side) {
 
       // Read frame into AVPacket
       if (!(*demuxer_[side])(*packet)) {
-        // Enter wait state
-        packet_queue_[side]->finished();
+        // Enter wait state if EOF
+        packet_queue_[side]->stop();
         continue;
       }
 
@@ -211,7 +211,7 @@ void VideoCompare::decode_video(const Side side) {
       };
 
       // Sleep if we are finished for now
-      if (frame_queue_[side]->is_finished()) {
+      if (frame_queue_[side]->is_stopped()) {
         if (seeking_) {
           flush_and_signal();
         }
@@ -242,7 +242,7 @@ void VideoCompare::decode_video(const Side side) {
         filter_decoded_frame(side, nullptr);
 
         // Enter wait state
-        frame_queue_[side]->finished();
+        frame_queue_[side]->stop();
         continue;
       }
 
@@ -409,8 +409,8 @@ void VideoCompare::compare() {
         }
 
         auto drain_queues = [&](const Side side) {
-          packet_queue_[side]->finished();
-          frame_queue_[side]->finished();
+          packet_queue_[side]->stop();
+          frame_queue_[side]->stop();
 
           packet_queue_[side]->empty();
           frame_queue_[side]->empty();
@@ -458,8 +458,8 @@ void VideoCompare::compare() {
 
         // allow packet and frame queues to receive data again
         auto reset_queues = [&](const Side side) {
-          packet_queue_[side]->reset();
-          frame_queue_[side]->reset();
+          packet_queue_[side]->restart();
+          frame_queue_[side]->restart();
         };
 
         reset_queues(LEFT);
@@ -648,7 +648,7 @@ void VideoCompare::compare() {
       }
 
       const bool no_activity = !skip_update && !adjusting && !store_frames;
-      const bool end_of_file = no_activity && (frame_queue_[LEFT]->is_finished() || frame_queue_[RIGHT]->is_finished());
+      const bool end_of_file = no_activity && (frame_queue_[LEFT]->is_stopped() || frame_queue_[RIGHT]->is_stopped());
       const bool buffer_is_full = left_frames.size() == frame_buffer_size_ && right_frames.size() == frame_buffer_size_;
 
       const int max_left_frame_index = static_cast<int>(left_frames.size()) - 1;
