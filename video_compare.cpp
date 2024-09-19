@@ -389,7 +389,7 @@ void VideoCompare::compare() {
 
       forward_navigate_frames += display_->get_frame_navigation_delta();
 
-      bool force_skip_update = false;
+      bool skip_update = false;
 
       if ((display_->get_seek_relative() != 0.0F) || (display_->get_shift_right_frames() != 0)) {
         total_right_time_shifted += display_->get_shift_right_frames();
@@ -473,8 +473,6 @@ void VideoCompare::compare() {
           left_decoded_picture_number = 1;
 
           left_frames.clear();
-
-          force_skip_update = true;
         }
 
         // round away from zero to nearest 2 ms
@@ -492,16 +490,17 @@ void VideoCompare::compare() {
           right_decoded_picture_number = 1;
 
           right_frames.clear();
-
-          force_skip_update = true;
         }
+
+        // don't sync until the next iteration to prevent freezing when comparing an image
+        skip_update = true;
       }
 
       bool store_frames = false;
       bool adjusting = false;
 
       // keep showing currently displayed frame for another iteration?
-      const bool skip_update = force_skip_update || (timer_->us_until_target() - refresh_time_deque.average()) > 0;
+      skip_update = skip_update || (timer_->us_until_target() - refresh_time_deque.average()) > 0;
       const bool fetch_next_frame = display_->get_play() || (forward_navigate_frames > 0);
 
       if (display_->get_quit() || (exception_ != nullptr)) {
