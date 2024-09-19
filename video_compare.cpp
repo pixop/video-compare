@@ -347,8 +347,8 @@ void VideoCompare::compare() {
     int64_t left_decoded_picture_number = 0;
     int64_t left_previous_decoded_picture_number = -1;
     int64_t delta_left_pts = 0;
-    float left_start_time = demuxer_[LEFT]->start_time() * AV_TIME_TO_SEC;
     int64_t left_first_pts = 0;
+    const float left_start_time = demuxer_[LEFT]->start_time() * AV_TIME_TO_SEC;
 
     if (left_start_time > 0) {
       std::cout << "Note: The left video has a start time of " << format_position(left_start_time, true) << " - timestamps will be shifted so they start at zero!" << std::endl;
@@ -358,8 +358,8 @@ void VideoCompare::compare() {
     int64_t right_decoded_picture_number = 0;
     int64_t right_previous_decoded_picture_number = -1;
     int64_t delta_right_pts = 0;
-    float right_start_time = demuxer_[RIGHT]->start_time() * AV_TIME_TO_SEC;
     int64_t right_first_pts = 0;
+    const float right_start_time = demuxer_[RIGHT]->start_time() * AV_TIME_TO_SEC;
 
     if (right_start_time > 0) {
       std::cout << "Note: The right video has a start time of " << format_position(right_start_time, true) << " - timestamps will be shifted so they start at zero!" << std::endl;
@@ -408,7 +408,7 @@ void VideoCompare::compare() {
           sleep_for_ms(10);
         }
 
-        auto finished_and_drain_queues = [&](const Side side) {
+        auto drain_queues = [&](const Side side) {
           packet_queue_[side]->finished();
           frame_queue_[side]->finished();
 
@@ -416,8 +416,8 @@ void VideoCompare::compare() {
           frame_queue_[side]->empty();
         };
 
-        finished_and_drain_queues(LEFT);
-        finished_and_drain_queues(RIGHT);
+        drain_queues(LEFT);
+        drain_queues(RIGHT);
 
         // reinit filter graphs
         video_filterer_[LEFT]->reinit();
