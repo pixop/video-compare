@@ -20,23 +20,13 @@ extern "C" {
 using PacketQueue = Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>>;
 using FrameQueue = Queue<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>>;
 
-enum Side {
-  LEFT,
-  RIGHT,
-  Count
-};
+enum Side { LEFT, RIGHT, Count };
 
 class ReadyToSeek {
-public:
-  enum ProcessorThread {
-    DEMULTIPLEXER,
-    DECODER,
-    Count
-  };
+ public:
+  enum ProcessorThread { DEMULTIPLEXER, DECODER, Count };
 
-  ReadyToSeek() {
-    reset();
-  }
+  ReadyToSeek() { reset(); }
 
   void reset() {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -58,11 +48,10 @@ public:
 
   bool all_are_empty() {
     std::lock_guard<std::mutex> lock(mutex_);
-    return ready_to_seek_[DEMULTIPLEXER][LEFT] && ready_to_seek_[DEMULTIPLEXER][RIGHT] && 
-           ready_to_seek_[DECODER][LEFT] && ready_to_seek_[DECODER][RIGHT];
+    return ready_to_seek_[DEMULTIPLEXER][LEFT] && ready_to_seek_[DEMULTIPLEXER][RIGHT] && ready_to_seek_[DECODER][LEFT] && ready_to_seek_[DECODER][RIGHT];
   }
 
-private:
+ private:
   std::mutex mutex_;
   std::array<std::array<bool, ProcessorThread::Count>, Side::Count> ready_to_seek_;
 };

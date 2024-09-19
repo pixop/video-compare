@@ -45,8 +45,9 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       time_shift_ms_(config.time_shift_ms),
       demuxer_{std::make_unique<Demuxer>(config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options),
                std::make_unique<Demuxer>(config.right.demuxer, config.right.file_name, config.right.demuxer_options, config.right.decoder_options)},
-      video_decoder_{std::make_unique<VideoDecoder>(config.left.decoder, config.left.hw_accel_spec, demuxer_[LEFT]->video_codec_parameters(), config.left.peak_luminance_nits, config.left.hw_accel_options, config.left.decoder_options),
-                     std::make_unique<VideoDecoder>(config.right.decoder, config.right.hw_accel_spec, demuxer_[RIGHT]->video_codec_parameters(), config.right.peak_luminance_nits, config.right.hw_accel_options, config.right.decoder_options)},
+      video_decoder_{
+          std::make_unique<VideoDecoder>(config.left.decoder, config.left.hw_accel_spec, demuxer_[LEFT]->video_codec_parameters(), config.left.peak_luminance_nits, config.left.hw_accel_options, config.left.decoder_options),
+          std::make_unique<VideoDecoder>(config.right.decoder, config.right.hw_accel_spec, demuxer_[RIGHT]->video_codec_parameters(), config.right.peak_luminance_nits, config.right.hw_accel_options, config.right.decoder_options)},
       video_filterer_{std::make_unique<VideoFilterer>(demuxer_[LEFT].get(),
                                                       video_decoder_[LEFT].get(),
                                                       config.left.peak_luminance_nits,
