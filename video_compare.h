@@ -29,25 +29,40 @@ class ReadyToSeek {
   ReadyToSeek() { reset(); }
 
   void reset() {
-    ready_to_seek_[DEMULTIPLEXER][LEFT] = false;
-    ready_to_seek_[DEMULTIPLEXER][RIGHT] = false;
-    ready_to_seek_[DECODER][LEFT] = false;
-    ready_to_seek_[DECODER][RIGHT] = false;
+    for (auto& thread_array : ready_to_seek_) {
+      for (auto& flag : thread_array) {
+        store(flag, false);
+      }
+    }
+  }
+
+  bool get(const ProcessorThread i, const Side j) const {
+    return load(ready_to_seek_[i][j]);
   }
 
   void set(const ProcessorThread i, const Side j) {
-    ready_to_seek_[i][j].store(true, std::memory_order_relaxed);
+    store(ready_to_seek_[i][j], true);
   }
 
-  bool get(const ProcessorThread i, const Side j) {
-    return ready_to_seek_[i][j].load(std::memory_order_relaxed);
+  bool all_are_empty() const {
+    for (const auto& thread_array : ready_to_seek_) {
+      for (const auto& flag : thread_array) {
+        if (!load(flag)) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 
-  bool all_are_empty() {
-    return ready_to_seek_[DEMULTIPLEXER][LEFT].load(std::memory_order_relaxed) &&
-           ready_to_seek_[DEMULTIPLEXER][RIGHT].load(std::memory_order_relaxed) &&
-           ready_to_seek_[DECODER][LEFT].load(std::memory_order_relaxed) &&
-           ready_to_seek_[DECODER][RIGHT].load(std::memory_order_relaxed);
+ private:
+  static inline bool load(const std::atomic_bool& atomic_flag) {
+    return atomic_flag.load(std::memory_order_relaxed);
+  }
+
+  static inline void store(std::atomic_bool& atomic_flag, const bool value) {
+    atomic_flag.store(value, std::memory_order_relaxed);
   }
 
  private:
