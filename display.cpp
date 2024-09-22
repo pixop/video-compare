@@ -817,14 +817,30 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
         print_right_pixel = print_left_pixel;
     }
 
-    const int pixel_video_x = mouse_video_x % video_width_;
-    const int pixel_video_y = mouse_video_y % video_height_;
-
     if (print_left_pixel || print_right_pixel) {
-      std::cout << "Left:  " << string_sprintf("[%4d,%4d]", pixel_video_x * left_frame->width / video_width_, pixel_video_y * left_frame->height / video_height_);
+      const int pixel_video_x = mouse_video_x % video_width_;
+      const int pixel_video_y = mouse_video_y % video_height_;
+
+      auto get_original_dimensions = [&](const AVFrame* frame) -> std::pair<int, int> {
+        auto get_metadata_value = [](const AVFrame* frame, const std::string& key, const int default_value) -> int {
+          const AVDictionaryEntry* entry = av_dict_get(frame->metadata, key.c_str(), nullptr, 0);
+
+          return entry ? std::atoi(entry->value) : default_value;
+        };
+
+        const int original_width = get_metadata_value(frame, "original_width", frame->width);
+        const int original_height = get_metadata_value(frame, "original_height", frame->height);
+
+        return std::make_pair(original_width, original_height);
+      };
+
+      auto original_left_dims = get_original_dimensions(left_frame);
+      auto original_right_dims = get_original_dimensions(right_frame);
+
+      std::cout << "Left:  " << string_sprintf("[%4d,%4d]", pixel_video_x * original_left_dims.first / video_width_, pixel_video_y * original_left_dims.second / video_height_);
       std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_left[0], pitches_left[0], pixel_video_x, pixel_video_y);
       std::cout << " - ";
-      std::cout << "Right: " << string_sprintf("[%4d,%4d]", pixel_video_x * right_frame->width / video_width_, pixel_video_y * right_frame->height / video_height_);
+      std::cout << "Right: " << string_sprintf("[%4d,%4d]", pixel_video_x * original_right_dims.first / video_width_, pixel_video_y * original_right_dims.second / video_height_);
       std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_right[0], pitches_right[0], pixel_video_x, pixel_video_y);
       std::cout << std::endl;
     }

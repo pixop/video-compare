@@ -126,6 +126,10 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
     reinit();
   }
 
+  // store the pre-scaling width and height as metadata
+  av_dict_set(&dst->metadata, "original_width", std::to_string(src->width).c_str(), 0);
+  av_dict_set(&dst->metadata, "original_height", std::to_string(src->height).c_str(), 0);
+
   sws_scale(conversion_context_,
             // Source
             src->data, src->linesize, 0, src_height_,
