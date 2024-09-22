@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include <memory>
+#include <shared_mutex>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -64,27 +65,26 @@ class ReadyToSeek {
 class ExceptionHolder {
 public:
   void store_current_exception() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::unique_lock<std::shared_timed_mutex> lock(mutex_);
     exception_ = std::current_exception();
   }
 
   bool has_exception() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::shared_lock<std::shared_timed_mutex> lock(mutex_);
     return exception_ != nullptr;
   }
 
   void rethrow_stored_exception() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::shared_lock<std::shared_timed_mutex> lock(mutex_);
     if (exception_) {
       std::rethrow_exception(exception_);
     }
   }
 
 private:
-  mutable std::mutex mutex_;
+  mutable std::shared_timed_mutex mutex_;
   std::exception_ptr exception_{nullptr};
 };
-
 
 class VideoCompare {
  public:
