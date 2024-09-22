@@ -102,20 +102,20 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       timer_{std::make_unique<Timer>()},
       packet_queue_{std::make_unique<PacketQueue>(QUEUE_SIZE), std::make_unique<PacketQueue>(QUEUE_SIZE)},
       frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
-  auto dump_video_info = [&](const std::string& label, const int index, const std::string& file_name) {
-    const std::string dimensions = string_sprintf("%dx%d", video_decoder_[index]->width(), video_decoder_[index]->height());
+  auto dump_video_info = [&](const std::string& label, const Side side, const std::string& file_name) {
+    const std::string dimensions = string_sprintf("%dx%d", video_decoder_[side]->width(), video_decoder_[side]->height());
     const std::string pixel_format_and_color_space =
-        stringify_pixel_format(video_decoder_[index]->pixel_format(), video_decoder_[index]->color_range(), video_decoder_[index]->color_space(), video_decoder_[index]->color_primaries(), video_decoder_[index]->color_trc());
+        stringify_pixel_format(video_decoder_[side]->pixel_format(), video_decoder_[side]->color_range(), video_decoder_[side]->color_space(), video_decoder_[side]->color_primaries(), video_decoder_[side]->color_trc());
 
-    std::cout << string_sprintf("%s %9s, %s, %s, %s, %s, %s, %s, %s, %s, %s", label.c_str(), dimensions.c_str(), format_duration(demuxer_[index]->duration() * AV_TIME_TO_SEC).c_str(),
-                                stringify_frame_rate(demuxer_[index]->guess_frame_rate(), video_decoder_[index]->codec_context()->field_order).c_str(), stringify_decoder(video_decoder_[index].get()).c_str(),
-                                pixel_format_and_color_space.c_str(), demuxer_[index]->format_name().c_str(), file_name.c_str(), stringify_file_size(demuxer_[index]->file_size(), 2).c_str(),
-                                stringify_bit_rate(demuxer_[index]->bit_rate(), 1).c_str(), video_filterer_[index]->filter_description().c_str())
+    std::cout << string_sprintf("%s %9s, %s, %s, %s, %s, %s, %s, %s, %s, %s", label.c_str(), dimensions.c_str(), format_duration(demuxer_[side]->duration() * AV_TIME_TO_SEC).c_str(),
+                                stringify_frame_rate(demuxer_[side]->guess_frame_rate(), video_decoder_[side]->codec_context()->field_order).c_str(), stringify_decoder(video_decoder_[side].get()).c_str(),
+                                pixel_format_and_color_space.c_str(), demuxer_[side]->format_name().c_str(), file_name.c_str(), stringify_file_size(demuxer_[side]->file_size(), 2).c_str(),
+                                stringify_bit_rate(demuxer_[side]->bit_rate(), 1).c_str(), video_filterer_[side]->filter_description().c_str())
               << std::endl;
   };
 
-  dump_video_info("Left video: ", 0, config.left.file_name.c_str());
-  dump_video_info("Right video:", 1, config.right.file_name.c_str());
+  dump_video_info("Left video: ", LEFT, config.left.file_name.c_str());
+  dump_video_info("Right video:", RIGHT, config.right.file_name.c_str());
 }
 
 void VideoCompare::operator()() {
@@ -679,8 +679,6 @@ void VideoCompare::compare() {
           // refresh display
           refresh_timer.update();
 
-          const int left_index = !display_->get_swap_left_right() ? 0 : 1;
-          const int right_index = 1 - left_index;
           const auto& left_frames_ref = !display_->get_swap_left_right() ? left_frames : right_frames;
           const auto& right_frames_ref = !display_->get_swap_left_right() ? right_frames : left_frames;
 
