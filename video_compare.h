@@ -61,6 +61,31 @@ class ReadyToSeek {
   std::array<std::array<std::atomic_bool, Side::Count>, ProcessorThread::Count> ready_to_seek_;
 };
 
+class ExceptionHolder {
+public:
+  void store_current_exception() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    exception_ = std::current_exception();
+  }
+
+  bool has_exception() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return exception_ != nullptr;
+  }
+
+  void rethrow_stored_exception() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (exception_) {
+      std::rethrow_exception(exception_);
+    }
+  }
+
+private:
+  mutable std::mutex mutex_;
+  std::exception_ptr exception_{nullptr};
+};
+
+
 class VideoCompare {
  public:
   VideoCompare(const VideoCompareConfig& config);
@@ -105,7 +130,7 @@ class VideoCompare {
 
   std::vector<std::thread> stages_;
 
-  std::exception_ptr exception_{};
+  ExceptionHolder exception_holder_;
 
   std::atomic_bool seeking_{false};
   ReadyToSeek ready_to_seek_;

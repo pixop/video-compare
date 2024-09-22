@@ -130,9 +130,7 @@ void VideoCompare::operator()() {
     stage.join();
   }
 
-  if (exception_) {
-    std::rethrow_exception(exception_);
-  }
+  exception_holder_.rethrow_stored_exception();
 }
 
 void VideoCompare::thread_demultiplex_left() {
@@ -187,7 +185,7 @@ void VideoCompare::demultiplex(const Side side) {
       }
     }
   } catch (...) {
-    exception_ = std::current_exception();
+    exception_holder_.rethrow_stored_exception();
     frame_queue_[side]->quit();
     packet_queue_[side]->quit();
   }
@@ -259,7 +257,7 @@ void VideoCompare::decode_video(const Side side) {
       }
     }
   } catch (...) {
-    exception_ = std::current_exception();
+    exception_holder_.rethrow_stored_exception();
     frame_queue_[side]->quit();
     packet_queue_[side]->quit();
   }
@@ -383,6 +381,10 @@ void VideoCompare::compare() {
 
       display_->input();
 
+      if (display_->get_quit() || exception_holder_.has_exception()) {
+        break;
+      }
+
       if (display_->get_tick_playback()) {
         timer_->reset();
       }
@@ -503,67 +505,63 @@ void VideoCompare::compare() {
       skip_update = skip_update || (timer_->us_until_target() - refresh_time_deque.average()) > 0;
       const bool fetch_next_frame = display_->get_play() || (forward_navigate_frames > 0);
 
-      if (display_->get_quit() || (exception_ != nullptr)) {
-        break;
-      } else {
-        // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
-        const int64_t min_delta = compute_min_delta(delta_left_pts, delta_right_pts);
+      // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
+      const int64_t min_delta = compute_min_delta(delta_left_pts, delta_right_pts);
 
 #ifdef _DEBUG
-        const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, right_time_shift=%5d", left_pts / 1000, is_behind(left_pts, right_pts, min_delta),
-                                                         (right_pts + right_time_shift) / 1000, is_behind(right_pts, left_pts, min_delta), min_delta / 1000, right_time_shift / 1000);
+      const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, right_time_shift=%5d", left_pts / 1000, is_behind(left_pts, right_pts, min_delta),
+                                                        (right_pts + right_time_shift) / 1000, is_behind(right_pts, left_pts, min_delta), min_delta / 1000, right_time_shift / 1000);
 
-        if (current_state != previous_state) {
-          std::cout << current_state << std::endl;
-        }
+      if (current_state != previous_state) {
+        std::cout << current_state << std::endl;
+      }
 
-        previous_state = current_state;
+      previous_state = current_state;
 #endif
 
-        if (is_behind(left_pts, right_pts, min_delta)) {
-          adjusting = true;
+      if (is_behind(left_pts, right_pts, min_delta)) {
+        adjusting = true;
 
-          if (frame_queue_[LEFT]->pop(frame_left)) {
+        if (frame_queue_[LEFT]->pop(frame_left)) {
+          left_decoded_picture_number++;
+        }
+      }
+      if (is_behind(right_pts, left_pts, min_delta)) {
+        adjusting = true;
+
+        if (frame_queue_[RIGHT]->pop(frame_right)) {
+          right_decoded_picture_number++;
+        }
+      }
+
+      // handle regular playback only
+      if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
+        if (!adjusting && fetch_next_frame) {
+          if (!frame_queue_[LEFT]->pop(frame_left) || !frame_queue_[RIGHT]->pop(frame_right)) {
+            frame_left = nullptr;
+            frame_right = nullptr;
+
+            timer_->update();
+          } else {
             left_decoded_picture_number++;
-          }
-        }
-        if (is_behind(right_pts, left_pts, min_delta)) {
-          adjusting = true;
-
-          if (frame_queue_[RIGHT]->pop(frame_right)) {
             right_decoded_picture_number++;
-          }
-        }
 
-        // handle regular playback only
-        if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
-          if (!adjusting && fetch_next_frame) {
-            if (!frame_queue_[LEFT]->pop(frame_left) || !frame_queue_[RIGHT]->pop(frame_right)) {
-              frame_left = nullptr;
-              frame_right = nullptr;
+            store_frames = true;
+
+            // update timer for regular playback
+            if (frame_number > 0) {
+              const int64_t play_frame_delay = compute_frame_delay(frame_left->pts - left_pts, frame_right->pts - right_pts - right_time_shift);
+
+              timer_->shift_target(play_frame_delay / display_->get_playback_speed_factor());
+            } else {
+              left_first_pts = frame_left->pts;
+              right_first_pts = frame_right->pts;
 
               timer_->update();
-            } else {
-              left_decoded_picture_number++;
-              right_decoded_picture_number++;
-
-              store_frames = true;
-
-              // update timer for regular playback
-              if (frame_number > 0) {
-                const int64_t play_frame_delay = compute_frame_delay(frame_left->pts - left_pts, frame_right->pts - right_pts - right_time_shift);
-
-                timer_->shift_target(play_frame_delay / display_->get_playback_speed_factor());
-              } else {
-                left_first_pts = frame_left->pts;
-                right_first_pts = frame_right->pts;
-
-                timer_->update();
-              }
             }
-          } else {
-            timer_->reset();
           }
+        } else {
+          timer_->reset();
         }
       }
 
@@ -727,7 +725,7 @@ void VideoCompare::compare() {
       }
     }
   } catch (...) {
-    exception_ = std::current_exception();
+    exception_holder_.store_current_exception();
   }
 
   frame_queue_[LEFT]->quit();

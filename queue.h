@@ -107,6 +107,8 @@ bool Queue<T>::is_stopped() {
 
 template <class T>
 void Queue<T>::quit() {
+  std::unique_lock<std::mutex> lock(mutex_);
+
   quit_ = true;
   empty_.notify_all();
   full_.notify_all();
