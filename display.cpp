@@ -801,7 +801,7 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
   const int mouse_video_y = std::floor((static_cast<float>(mouse_y_) * video_to_window_height_factor_ - zoom_rect_start.y()) * static_cast<float>(video_height_) / zoom_rect_size.y());
 
   // print pixel position in original video coordinates and RGB+YUV color value
-  if (print_mouse_position_and_color_ && mouse_is_inside_window_) {
+  if (print_mouse_position_and_color_) {
     const bool print_left_pixel = mouse_video_x >= 0 && mouse_video_x < video_width_ && mouse_video_y >= 0 && mouse_video_y < video_height_;
 
     bool print_right_pixel;
@@ -820,18 +820,12 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
     const int pixel_video_x = mouse_video_x % video_width_;
     const int pixel_video_y = mouse_video_y % video_height_;
 
-    if (print_left_pixel) {
+    if (print_left_pixel || print_right_pixel) {
       std::cout << "Left:  " << string_sprintf("[%4d,%4d]", pixel_video_x * left_frame->width / video_width_, pixel_video_y * left_frame->height / video_height_);
       std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_left[0], pitches_left[0], pixel_video_x, pixel_video_y);
-    }
-    if (print_right_pixel) {
-      if (print_left_pixel) {
-        std::cout << " - ";
-      }
+      std::cout << " - ";
       std::cout << "Right: " << string_sprintf("[%4d,%4d]", pixel_video_x * right_frame->width / video_width_, pixel_video_y * right_frame->height / video_height_);
       std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_right[0], pitches_right[0], pixel_video_x, pixel_video_y);
-    }
-    if (print_left_pixel || print_right_pixel) {
       std::cout << std::endl;
     }
 
@@ -1388,7 +1382,7 @@ void Display::input() {
             save_image_frames_ = true;
             break;
           case SDLK_p:
-            print_mouse_position_and_color_ = true;
+            print_mouse_position_and_color_ = mouse_is_inside_window_;
             break;
           case SDLK_m:
             print_image_similarity_metrics_ = true;
