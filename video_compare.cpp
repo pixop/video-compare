@@ -148,7 +148,7 @@ void VideoCompare::sleep_for_ms(const int ms) {
 
 void VideoCompare::demultiplex(const Side side) {
   try {
-    while (!display_->get_quit()) {
+    while (keep_running()) {
       // Wait for decoder to drain
       if (seeking_ && ready_to_seek_.get(ReadyToSeek::DECODER, side)) {
         ready_to_seek_.set(ReadyToSeek::DEMULTIPLEXER, side);
@@ -201,7 +201,7 @@ void VideoCompare::thread_decode_video_right() {
 
 void VideoCompare::decode_video(const Side side) {
   try {
-    while (!display_->get_quit()) {
+    while (keep_running()) {
       auto flush_and_signal = [&]() {
         video_decoder_[side]->flush();
 
@@ -328,6 +328,10 @@ bool VideoCompare::filter_decoded_frame(const Side side, AVFrame* frame_decoded)
   return true;
 }
 
+bool VideoCompare::keep_running() {
+  return !display_->get_quit() && !exception_holder_.has_exception();
+}
+
 void VideoCompare::compare() {
   try {
 #ifdef _DEBUG
@@ -381,7 +385,7 @@ void VideoCompare::compare() {
 
       display_->input();
 
-      if (display_->get_quit() || exception_holder_.has_exception()) {
+      if (!keep_running()) {
         break;
       }
 

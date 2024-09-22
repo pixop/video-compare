@@ -105,6 +105,8 @@ class VideoCompare {
   bool process_packet(const Side side, AVPacket* packet, AVFrame* frame_decoded, AVFrame* sw_frame_decoded = nullptr);
   bool filter_decoded_frame(const Side side, AVFrame* frame_decoded);
 
+  bool keep_running();
+
   void compare();
 
  private:
