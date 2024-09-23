@@ -15,6 +15,7 @@
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
 #include "version.h"
+#include "video_compare_icon.h"
 #include "vmaf_calculator.h"
 extern "C" {
 #include <libavfilter/avfilter.h>
@@ -190,6 +191,12 @@ Display::Display(const int display_number,
   window_ = check_sdl(SDL_CreateWindow("video-compare", SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number), SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number), high_dpi_allowed_ ? window_width / 2 : window_width,
                                        high_dpi_allowed_ ? window_height / 2 : window_height, high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
                       "window");
+
+  SDL_RWops* embedded_icon = SDL_RWFromConstMem(VIDEO_COMPARE_ICON_BMP, VIDEO_COMPARE_ICON_BMP_LEN);
+  SDL_Surface* icon_surface = check_sdl(SDL_LoadBMP_RW(embedded_icon, 1), "load icon");
+
+  SDL_SetWindowIcon(window_, icon_surface);
+  SDL_FreeSurface(icon_surface);
 
   renderer_ = check_sdl(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "renderer");
 
