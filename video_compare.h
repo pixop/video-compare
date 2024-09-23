@@ -63,7 +63,7 @@ class ReadyToSeek {
 };
 
 class ExceptionHolder {
-public:
+ public:
   void store_current_exception() {
     std::unique_lock<std::shared_timed_mutex> lock(mutex_);
     exception_ = std::current_exception();
@@ -81,7 +81,7 @@ public:
     }
   }
 
-private:
+ private:
   mutable std::shared_timed_mutex mutex_;
   std::exception_ptr exception_{nullptr};
 };
