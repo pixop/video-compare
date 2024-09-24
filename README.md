@@ -1,4 +1,4 @@
-# <img src="https://github.com/user-attachments/assets/96563fb8-bf1b-4e82-a3d3-948ea0046e8b" alt="Logo" width="32"> video-compare</img>
+# <img src="https://github.com/user-attachments/assets/96563fb8-bf1b-4e82-a3d3-948ea0046e8b" alt="Logo" width="32"/>&nbsp; video-compare
 
 [![GitHub release](https://img.shields.io/github/release/pixop/video-compare)](https://github.com/pixop/video-compare/releases)
 
