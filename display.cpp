@@ -168,6 +168,9 @@ Display::Display(const int display_number,
   int window_width;
   int window_height;
 
+  constexpr int min_width = 4;
+  constexpr int min_height = 1;
+
   if (!fit_window_to_usable_bounds) {
     if (std::get<0>(window_size) < 0 && std::get<1>(window_size) < 0) {
       window_width = auto_width;
@@ -196,8 +199,12 @@ Display::Display(const int display_number,
     SDL_Rect bounds;
     check_sdl(SDL_GetDisplayUsableBounds(display_number, &bounds) == 0, "get display usable bounds");
 
-    const int usable_width = std::max(bounds.w - 10, 4); // account for window frame
-    const int usable_height = std::max(bounds.h - 32, 1);  // account for window bar and frame
+    // account for window frame and title bar
+    constexpr int border_width = 10;
+    constexpr int border_height = 32;
+
+    const int usable_width = std::max(bounds.w - border_width, min_width);
+    const int usable_height = std::max(bounds.h - border_height, min_height);
 
     const float aspect_ratio = static_cast<float>(auto_width) / static_cast<float>(auto_height);
     const float usable_aspect_ratio = static_cast<float>(usable_width) / static_cast<float>(usable_height);
@@ -210,15 +217,15 @@ Display::Display(const int display_number,
       window_height = static_cast<int>(window_width / aspect_ratio);
     }
 
-    window_x = bounds.x + (usable_width - window_width) / 2;
-    window_y = bounds.y + (usable_height - window_height) / 2;
+    window_x = bounds.x + (usable_width - window_width + border_width) / 2;
+    window_y = bounds.y + (usable_height - window_height + border_height) / 2;
   }
 
-  if (window_width < 4) {
-    throw std::runtime_error{"Window width cannot be less than 4"};
+  if (window_width < min_width) {
+    throw std::runtime_error{"Window width cannot be less than " + std::to_string(min_width)};
   }
-  if (window_height < 1) {
-    throw std::runtime_error{"Window height cannot be less than 1"};
+  if (window_height < min_height) {
+    throw std::runtime_error{"Window height cannot be less than " + std::to_string(min_height)};
   }
 
   const int create_window_flags = SDL_WINDOW_SHOWN;
