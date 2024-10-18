@@ -139,6 +139,7 @@ SDL::~SDL() {
 Display::Display(const int display_number,
                  const Mode mode,
                  const bool verbose,
+                 const bool fit_window_to_usable_bounds,
                  const bool high_dpi_allowed,
                  const bool use_10_bpc,
                  const std::tuple<int, int> window_size,
@@ -150,6 +151,7 @@ Display::Display(const int display_number,
                  const std::string& right_file_name)
     : display_number_{display_number},
       mode_{mode},
+      fit_window_to_usable_bounds_{fit_window_to_usable_bounds},
       high_dpi_allowed_{high_dpi_allowed},
       use_10_bpc_{use_10_bpc},
       video_width_{static_cast<int>(width)},
@@ -161,24 +163,57 @@ Display::Display(const int display_number,
   const int auto_width = mode == Mode::hstack ? width * 2 : width;
   const int auto_height = mode == Mode::vstack ? height * 2 : height;
 
+  int window_x;
+  int window_y;
   int window_width;
   int window_height;
 
-  if (std::get<0>(window_size) < 0 && std::get<1>(window_size) < 0) {
-    window_width = auto_width;
-    window_height = auto_height;
-  } else {
-    if (std::get<0>(window_size) < 0) {
-      window_height = std::get<1>(window_size);
-      window_width = static_cast<float>(auto_width) / static_cast<float>(auto_height) * window_height;
-    } else if (std::get<1>(window_size) < 0) {
-      window_width = std::get<0>(window_size);
-      window_height = static_cast<float>(auto_height) / static_cast<float>(auto_width) * window_width;
+  if (!fit_window_to_usable_bounds) {
+    if (std::get<0>(window_size) < 0 && std::get<1>(window_size) < 0) {
+      window_width = auto_width;
+      window_height = auto_height;
     } else {
-      window_width = std::get<0>(window_size);
-      window_height = std::get<1>(window_size);
+      if (std::get<0>(window_size) < 0) {
+        window_height = std::get<1>(window_size);
+        window_width = static_cast<float>(auto_width) / static_cast<float>(auto_height) * window_height;
+      } else if (std::get<1>(window_size) < 0) {
+        window_width = std::get<0>(window_size);
+        window_height = static_cast<float>(auto_height) / static_cast<float>(auto_width) * window_width;
+      } else {
+        window_width = std::get<0>(window_size);
+        window_height = std::get<1>(window_size);
+      }
     }
+
+    window_x = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number);
+    window_y = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number);
+
+    if (high_dpi_allowed_) {
+      window_width /= 2;
+      window_height /= 2;
+    }
+  } else {
+    SDL_Rect bounds;
+    check_sdl(SDL_GetDisplayUsableBounds(display_number, &bounds) == 0, "get display usable bounds");
+
+    const int usable_width = bounds.w;
+    const int usable_height = std::max(bounds.h - 32, 0);  // account for window bar
+
+    const float aspect_ratio = static_cast<float>(auto_width) / static_cast<float>(auto_height);
+    const float usable_aspect_ratio = static_cast<float>(usable_width) / static_cast<float>(usable_height);
+
+    if (usable_aspect_ratio > aspect_ratio) {
+      window_height = usable_height;
+      window_width = static_cast<int>(window_height * aspect_ratio);
+    } else {
+      window_width = usable_width;
+      window_height = static_cast<int>(window_width / aspect_ratio);
+    }
+
+    window_x = bounds.x + (usable_width - window_width) / 2;
+    window_y = bounds.y + (usable_height - window_height) / 2;
   }
+
   if (window_width < 4) {
     throw std::runtime_error{"Window width cannot be less than 4"};
   }
@@ -188,11 +223,9 @@ Display::Display(const int display_number,
 
   const int create_window_flags = SDL_WINDOW_SHOWN;
 
-  window_ = check_sdl(SDL_CreateWindow("video-compare", SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number), SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number), high_dpi_allowed_ ? window_width / 2 : window_width,
-                                       high_dpi_allowed_ ? window_height / 2 : window_height, high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
-                      "window");
+  window_ = check_sdl(SDL_CreateWindow("video-compare", window_x, window_y, window_width, window_height, high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags), "window");
 
-  SDL_RWops* embedded_icon = SDL_RWFromConstMem(VIDEO_COMPARE_ICON_BMP, VIDEO_COMPARE_ICON_BMP_LEN);
+  SDL_RWops* embedded_icon = check_sdl(SDL_RWFromConstMem(VIDEO_COMPARE_ICON_BMP, VIDEO_COMPARE_ICON_BMP_LEN), "get pointer to icon");
   SDL_Surface* icon_surface = check_sdl(SDL_LoadBMP_RW(embedded_icon, 1), "load icon");
 
   SDL_SetWindowIcon(window_, icon_surface);
@@ -225,7 +258,7 @@ Display::Display(const int display_number,
     max_text_width_ = drawable_width_ - double_border_extension_ - line1_y_;
   }
 
-  SDL_RWops* embedded_font = SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN);
+  SDL_RWops* embedded_font = check_sdl(SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN), "get pointer to font");
   small_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 16 * font_scale_), "font open");
   big_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 24 * font_scale_), "font open");
 
@@ -331,6 +364,7 @@ void Display::print_verbose_info() {
   std::cout << "Video size:            " << video_width_ << "x" << video_height_ << std::endl;
   std::cout << "Video duration:        " << format_duration(duration_) << std::endl;
   std::cout << "Display mode:          " << modeToString(mode_) << std::endl;
+  std::cout << "Fit to usable bounds:  " << std::boolalpha << fit_window_to_usable_bounds_ << std::endl;
   std::cout << "High-DPI allowed:      " << std::boolalpha << high_dpi_allowed_ << std::endl;
   std::cout << "Use 10 bpc:            " << std::boolalpha << use_10_bpc_ << std::endl;
   std::cout << "Mouse whl sensitivity: " << wheel_sensitivity_ << std::endl;

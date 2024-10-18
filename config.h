@@ -24,6 +24,7 @@ struct InputVideo {
 
 struct VideoCompareConfig {
   bool verbose{false};
+  bool fit_window_to_usable_bounds{false};
   bool high_dpi_allowed{false};
   bool use_10_bpc{false};
   bool disable_auto_filters{false};

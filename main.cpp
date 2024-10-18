@@ -221,6 +221,7 @@ int main(int argc, char** argv) {
                               {"display-number", {"-n", "--display-number"}, "open main window on specific display (e.g. 0, 1 or 2), default is 0", 1},
                               {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
                               {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
+                              {"window-fit-display", {"-W", "--window-fit-display"}, "calculate the window size to fit within the usable display bounds while maintaining the video aspect ratio", 0},
                               {"auto-loop-mode", {"-a", "--auto-loop-mode"}, "auto-loop playback when buffer fills, 'off' for continuous streaming (default), 'on' for forward-only mode, 'pp' for ping-pong mode", 1},
                               {"frame-buffer-size", {"-f", "--frame-buffer-size"}, "frame buffer size (e.g. 10, 70 or 150), default is 50", 1},
                               {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
@@ -274,6 +275,7 @@ int main(int argc, char** argv) {
       }
 
       config.verbose = args["verbose"];
+      config.fit_window_to_usable_bounds = args["window-fit-display"];
       config.high_dpi_allowed = args["high-dpi"];
       config.use_10_bpc = args["10-bpc"];
       config.disable_auto_filters = args["disable-auto-filters"];
@@ -302,6 +304,10 @@ int main(int argc, char** argv) {
         }
       }
       if (args["window-size"]) {
+        if (config.fit_window_to_usable_bounds) {
+          throw std::logic_error{"Cannot be specified together with --window-fit-display"};
+        }
+
         const std::string window_size_arg = args["window-size"];
         const std::regex window_size_re("(\\d*)x(\\d*)");
 

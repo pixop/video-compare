@@ -67,6 +67,7 @@ class Display {
  private:
   const int display_number_;
   const Mode mode_;
+  const bool fit_window_to_usable_bounds_;
   const bool high_dpi_allowed_;
   const bool use_10_bpc_;
   const int video_width_;
@@ -211,15 +212,16 @@ class Display {
   void update_playback_speed(const int playback_speed_level);
 
  public:
-  Display(int display_number,
-          Mode mode,
-          bool verbose,
-          bool high_dpi_allowed,
-          bool use_10_bpc,
-          std::tuple<int, int> window_size,
-          unsigned width,
-          unsigned height,
-          double duration,
+  Display(const int display_number,
+          const Mode mode,
+          const bool verbose,
+          const bool fit_window_to_usable_bounds,
+          const bool high_dpi_allowed,
+          const bool use_10_bpc,
+          const std::tuple<int, int> window_size,
+          const unsigned width,
+          const unsigned height,
+          const double duration,
           const float wheel_sensitivity,
           const std::string& left_file_name,
           const std::string& right_file_name);

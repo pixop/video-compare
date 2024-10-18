@@ -90,6 +90,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       display_{std::make_unique<Display>(config.display_number,
                                          config.display_mode,
                                          config.verbose,
+                                         config.fit_window_to_usable_bounds,
                                          config.high_dpi_allowed,
                                          config.use_10_bpc,
                                          config.window_size,
