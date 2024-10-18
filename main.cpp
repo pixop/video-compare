@@ -305,7 +305,7 @@ int main(int argc, char** argv) {
       }
       if (args["window-size"]) {
         if (config.fit_window_to_usable_bounds) {
-          throw std::logic_error{"Cannot be specified together with --window-fit-display"};
+          throw std::logic_error{"Options --window-size and --window-fit-display cannot be used together"};
         }
 
         const std::string window_size_arg = args["window-size"];
