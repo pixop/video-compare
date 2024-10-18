@@ -196,8 +196,8 @@ Display::Display(const int display_number,
     SDL_Rect bounds;
     check_sdl(SDL_GetDisplayUsableBounds(display_number, &bounds) == 0, "get display usable bounds");
 
-    const int usable_width = bounds.w;
-    const int usable_height = std::max(bounds.h - 32, 0);  // account for window bar
+    const int usable_width = std::max(bounds.w - 10, 4); // account for window frame
+    const int usable_height = std::max(bounds.h - 32, 1);  // account for window bar and frame
 
     const float aspect_ratio = static_cast<float>(auto_width) / static_cast<float>(auto_height);
     const float usable_aspect_ratio = static_cast<float>(usable_width) / static_cast<float>(usable_height);
