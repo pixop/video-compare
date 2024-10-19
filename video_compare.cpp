@@ -203,16 +203,14 @@ void VideoCompare::thread_decode_video_right() {
 void VideoCompare::decode_video(const Side side) {
   try {
     while (keep_running()) {
-      auto flush_and_signal = [&]() {
-        video_decoder_[side]->flush();
-
-        ready_to_seek_.set(ReadyToSeek::DECODER, side);
-      };
-
       // Sleep if we are finished for now
       if (frame_queue_[side]->is_stopped()) {
         if (seeking_) {
-          flush_and_signal();
+          // Flush the decoder
+          video_decoder_[side]->flush();
+
+          // Seeks are now OK
+          ready_to_seek_.set(ReadyToSeek::DECODER, side);
         }
 
         sleep_for_ms(10);
@@ -245,15 +243,8 @@ void VideoCompare::decode_video(const Side side) {
         continue;
       }
 
-      if (seeking_) {
-        flush_and_signal();
-
-        sleep_for_ms(10);
-        continue;
-      }
-
       // If the packet didn't send, receive more frames and try again
-      while (!process_packet(side, packet.get(), frame_decoded.get(), sw_frame_decoded.get()) && !seeking_) {
+      while (!seeking_ && !process_packet(side, packet.get(), frame_decoded.get(), sw_frame_decoded.get())) {
         ;
       }
     }
