@@ -224,6 +224,25 @@ AVRational VideoDecoder::time_base() const {
   return codec_context_->time_base;
 }
 
+AVRational VideoDecoder::sample_aspect_ratio() const {
+  return codec_context_->sample_aspect_ratio;
+}
+
+AVRational VideoDecoder::display_aspect_ratio() const {
+  const AVRational sar = sample_aspect_ratio();
+
+  AVRational dar;
+  av_reduce(&dar.num, &dar.den, width() * static_cast<int64_t>(sample_aspect_ratio().num), height() * static_cast<int64_t>(sample_aspect_ratio().den), 1024 * 1024);
+
+  return dar;
+}
+
+bool VideoDecoder::is_anamorphic() const {
+  const AVRational sar = sample_aspect_ratio();
+
+  return sar.num && (sar.num != sar.den);
+}
+
 int64_t VideoDecoder::next_pts() const {
   return next_pts_;
 }

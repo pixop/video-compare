@@ -34,6 +34,10 @@ class VideoDecoder {
   AVColorTransferCharacteristic color_trc() const;
   AVRational time_base() const;
 
+  AVRational sample_aspect_ratio() const;
+  AVRational display_aspect_ratio() const;
+  bool is_anamorphic() const;
+
   int64_t next_pts() const;
 
  private:
