@@ -232,7 +232,7 @@ AVRational VideoDecoder::display_aspect_ratio() const {
   const AVRational sar = sample_aspect_ratio();
 
   AVRational dar;
-  av_reduce(&dar.num, &dar.den, width() * static_cast<int64_t>(sample_aspect_ratio().num), height() * static_cast<int64_t>(sample_aspect_ratio().den), 1024 * 1024);
+  av_reduce(&dar.num, &dar.den, width() * static_cast<int64_t>(sar.num), height() * static_cast<int64_t>(sar.den), 1024 * 1024);
 
   return dar;
 }
