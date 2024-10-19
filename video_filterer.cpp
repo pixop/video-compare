@@ -50,6 +50,7 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
   }
 
   if (!disable_auto_filters) {
+    // deinterlacing
     const bool this_is_interlaced = video_decoder->codec_context()->field_order != AV_FIELD_PROGRESSIVE && video_decoder->codec_context()->field_order != AV_FIELD_UNKNOWN;
     const bool other_is_interlaced = other_video_decoder->codec_context()->field_order != AV_FIELD_PROGRESSIVE && other_video_decoder->codec_context()->field_order != AV_FIELD_UNKNOWN;
 
@@ -65,6 +66,17 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
     }
     if (other_is_interlaced) {
       other_frame_rate_dbl *= 2.0;
+    }
+
+    // stretch to display aspect ratio
+    if (video_decoder->is_anamorphic()) {
+      const AVRational sample_aspect_ratio = video_decoder->sample_aspect_ratio();
+
+      if (sample_aspect_ratio.num > sample_aspect_ratio.den) {
+        filters.push_back("scale=iw*sar:ih");
+      } else {
+        filters.push_back("scale=iw:ih/sar");
+      }
     }
 
     // harmonize the frame rate to the most frames per second
