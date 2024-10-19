@@ -41,7 +41,7 @@ class ReadyToSeek {
 
   void set(const ProcessorThread i, const Side j) { store(ready_to_seek_[i][j], true); }
 
-  bool all_are_empty() const {
+  bool all_are_idle() const {
     for (const auto& thread_array : ready_to_seek_) {
       for (const auto& flag : thread_array) {
         if (!load(flag)) {

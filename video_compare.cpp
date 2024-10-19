@@ -402,7 +402,7 @@ void VideoCompare::compare() {
         frame_queue_[LEFT]->empty();
         frame_queue_[RIGHT]->empty();
 
-        while (!ready_to_seek_.all_are_empty()) {
+        while (!ready_to_seek_.all_are_idle()) {
           sleep_for_ms(10);
         }
 
