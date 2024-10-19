@@ -420,6 +420,9 @@ void VideoCompare::compare() {
           sleep_for_ms(10);
         }
 
+        frame_queue_[LEFT]->empty();
+        frame_queue_[RIGHT]->empty();
+
         // reinit filter graphs
         video_filterer_[LEFT]->reinit();
         video_filterer_[RIGHT]->reinit();
