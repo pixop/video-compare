@@ -108,7 +108,15 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
     const std::string pixel_format_and_color_space =
         stringify_pixel_format(video_decoder_[side]->pixel_format(), video_decoder_[side]->color_range(), video_decoder_[side]->color_space(), video_decoder_[side]->color_primaries(), video_decoder_[side]->color_trc());
 
-    std::cout << string_sprintf("%s %9s, %s, %s, %s, %s, %s, %s, %s, %s, %s", label.c_str(), dimensions.c_str(), format_duration(demuxer_[side]->duration() * AV_TIME_TO_SEC).c_str(),
+    std::string aspect_ratio;
+
+    if (video_decoder_[side]->is_anamorphic()) {
+      const AVRational display_aspect_ratio = video_decoder_[side]->display_aspect_ratio();
+
+      aspect_ratio = string_sprintf(" [DAR %d:%d]", display_aspect_ratio.num, display_aspect_ratio.den);
+    }
+
+    std::cout << string_sprintf("%s %9s%s, %s, %s, %s, %s, %s, %s, %s, %s, %s", label.c_str(), dimensions.c_str(), aspect_ratio.c_str(), format_duration(demuxer_[side]->duration() * AV_TIME_TO_SEC).c_str(),
                                 stringify_frame_rate(demuxer_[side]->guess_frame_rate(), video_decoder_[side]->codec_context()->field_order).c_str(), stringify_decoder(video_decoder_[side].get()).c_str(),
                                 pixel_format_and_color_space.c_str(), demuxer_[side]->format_name().c_str(), file_name.c_str(), stringify_file_size(demuxer_[side]->file_size(), 2).c_str(),
                                 stringify_bit_rate(demuxer_[side]->bit_rate(), 1).c_str(), video_filterer_[side]->filter_description().c_str())
