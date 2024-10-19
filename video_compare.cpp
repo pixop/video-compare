@@ -405,23 +405,26 @@ void VideoCompare::compare() {
         seeking_ = true;
 
         // drain packet and frame queues
-        auto stop_packet_queue = [&](const Side side) {
+        auto stop_and_empty_packet_queue = [&](const Side side) {
           packet_queue_[side]->stop();
           packet_queue_[side]->empty();
         };
 
-        stop_packet_queue(LEFT);
-        stop_packet_queue(RIGHT);
+        stop_and_empty_packet_queue(LEFT);
+        stop_and_empty_packet_queue(RIGHT);
 
-        while (!ready_to_seek_.all_are_idle()) {
+        auto empty_frame_queues = [&]() {
           frame_queue_[LEFT]->empty();
           frame_queue_[RIGHT]->empty();
+        };
 
+        while (!ready_to_seek_.all_are_idle()) {
+          empty_frame_queues();
           sleep_for_ms(10);
         }
 
-        frame_queue_[LEFT]->empty();
-        frame_queue_[RIGHT]->empty();
+        // empty the frame queues one last time
+        empty_frame_queues();
 
         // reinit filter graphs
         video_filterer_[LEFT]->reinit();
