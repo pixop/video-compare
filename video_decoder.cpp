@@ -134,7 +134,7 @@ bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
   ffmpeg::check(ret);
 
   const bool use_avframe_state = trust_decoded_pts_ || next_pts_ == AV_NOPTS_VALUE || frame->key_frame || frame->pts == first_pts_;
-  const int64_t avframe_pts = frame->pts != AV_NOPTS_VALUE ? frame->pts : frame->best_effort_timestamp;
+  const int64_t avframe_pts = frame->pts != AV_NOPTS_VALUE ? frame->pts : (frame->best_effort_timestamp != AV_NOPTS_VALUE ? frame->best_effort_timestamp : 0);
 
   // use an increasing timestamp via pkt_duration between keyframes; otherwise, fall back to the best effort timestamp when PTS is not available
   frame->pts = (use_avframe_state || (next_pts_ + 1) == avframe_pts) ? avframe_pts : next_pts_;
