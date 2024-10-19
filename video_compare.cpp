@@ -188,9 +188,7 @@ void VideoCompare::demultiplex(const Side side) {
 
       // Move into queue if first video stream
       if (packet->stream_index == demuxer_[side]->video_stream_index()) {
-        if (!packet_queue_[side]->push(std::move(packet))) {
-          break;
-        }
+        packet_queue_[side]->push(std::move(packet));
       }
     }
   } catch (...) {
@@ -407,23 +405,20 @@ void VideoCompare::compare() {
         seeking_ = true;
 
         // drain packet and frame queues
+        auto stop_packet_queue = [&](const Side side) {
+          packet_queue_[side]->stop();
+          packet_queue_[side]->empty();
+        };
+
+        stop_packet_queue(LEFT);
+        stop_packet_queue(RIGHT);
+
         while (!ready_to_seek_.all_are_idle()) {
           frame_queue_[LEFT]->empty();
           frame_queue_[RIGHT]->empty();
 
           sleep_for_ms(10);
         }
-
-        auto drain_queues = [&](const Side side) {
-          packet_queue_[side]->stop();
-          frame_queue_[side]->stop();
-
-          packet_queue_[side]->empty();
-          frame_queue_[side]->empty();
-        };
-
-        drain_queues(LEFT);
-        drain_queues(RIGHT);
 
         // reinit filter graphs
         video_filterer_[LEFT]->reinit();
