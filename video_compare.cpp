@@ -407,10 +407,10 @@ void VideoCompare::compare() {
         seeking_ = true;
 
         // drain packet and frame queues
-        frame_queue_[LEFT]->empty();
-        frame_queue_[RIGHT]->empty();
-
         while (!ready_to_seek_.all_are_idle()) {
+          frame_queue_[LEFT]->empty();
+          frame_queue_[RIGHT]->empty();
+
           sleep_for_ms(10);
         }
 
