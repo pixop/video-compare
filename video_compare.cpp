@@ -39,8 +39,13 @@ static inline int64_t compute_frame_delay(const int64_t left_pts, const int64_t 
   return std::max(left_pts, right_pts);
 }
 
+static inline int64_t time_ms_to_av_time(const double time_ms) {
+  return time_ms * MILLISEC_TO_AV_TIME;
+}
+
 VideoCompare::VideoCompare(const VideoCompareConfig& config)
-    : auto_loop_mode_(config.auto_loop_mode),
+    : same_video_both_sides_(config.left.file_name == config.right.file_name),
+      auto_loop_mode_(config.auto_loop_mode),
       frame_buffer_size_(config.frame_buffer_size),
       time_shift_ms_(config.time_shift_ms),
       demuxer_{std::make_unique<Demuxer>(config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options),
@@ -102,6 +107,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                          config.right.file_name)},
       timer_{std::make_unique<Timer>()},
       packet_queue_{std::make_unique<PacketQueue>(QUEUE_SIZE), std::make_unique<PacketQueue>(QUEUE_SIZE)},
+      decoded_frame_queue_{std::make_unique<DecodedFrameQueue>(QUEUE_SIZE), std::make_unique<DecodedFrameQueue>(QUEUE_SIZE)},
       frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
   auto dump_video_info = [&](const std::string& label, const Side side, const std::string& file_name) {
     const std::string dimensions = string_sprintf("%dx%d", video_decoder_[side]->width(), video_decoder_[side]->height());
@@ -125,6 +131,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 
   dump_video_info("Left video: ", LEFT, config.left.file_name.c_str());
   dump_video_info("Right video:", RIGHT, config.right.file_name.c_str());
+
+  update_decoder_mode(time_ms_to_av_time(time_shift_ms_));
 }
 
 void VideoCompare::operator()() {
@@ -132,6 +140,8 @@ void VideoCompare::operator()() {
   stages_.emplace_back(&VideoCompare::thread_demultiplex_right, this);
   stages_.emplace_back(&VideoCompare::thread_decode_video_left, this);
   stages_.emplace_back(&VideoCompare::thread_decode_video_right, this);
+  stages_.emplace_back(&VideoCompare::thread_filter_left, this);
+  stages_.emplace_back(&VideoCompare::thread_filter_right, this);
 
   compare();
 
@@ -166,7 +176,7 @@ void VideoCompare::demultiplex(const Side side) {
         continue;
       }
       // Sleep if we are finished for now
-      if (packet_queue_[side]->is_stopped()) {
+      if (packet_queue_[side]->is_stopped() || (side == RIGHT && single_decoder_mode_)) {
         sleep_for_ms(10);
         continue;
       }
@@ -193,8 +203,7 @@ void VideoCompare::demultiplex(const Side side) {
     }
   } catch (...) {
     exception_holder_.rethrow_stored_exception();
-    frame_queue_[side]->quit();
-    packet_queue_[side]->quit();
+    quit_queues(side);
   }
 }
 
@@ -210,7 +219,7 @@ void VideoCompare::decode_video(const Side side) {
   try {
     while (keep_running()) {
       // Sleep if we are finished for now
-      if (frame_queue_[side]->is_stopped()) {
+      if (decoded_frame_queue_[side]->is_stopped() || (side == RIGHT && single_decoder_mode_)) {
         if (seeking_) {
           // Flush the decoder
           video_decoder_[side]->flush();
@@ -224,8 +233,6 @@ void VideoCompare::decode_video(const Side side) {
       }
 
       // Create AVFrames and AVPacket
-      std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
-      std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> sw_frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
       std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet{nullptr, [](AVPacket* p) {
                                                                          av_packet_unref(p);
                                                                          delete p;
@@ -234,46 +241,51 @@ void VideoCompare::decode_video(const Side side) {
       // Read packet from queue
       if (!packet_queue_[side]->pop(packet)) {
         // Flush remaining frames cached in the decoder
-        while (process_packet(side, packet.get(), frame_decoded.get(), sw_frame_decoded.get())) {
+        while (process_packet(side, packet.get())) {
           ;
         }
 
-        // Close the filter source
-        video_filterer_[side]->close_src();
-
-        // Flush the filter graph
-        filter_decoded_frame(side, nullptr);
-
         // Enter wait state
-        frame_queue_[side]->stop();
+        decoded_frame_queue_[side]->stop();
+
+        if (single_decoder_mode_) {
+          decoded_frame_queue_[RIGHT]->stop();
+        }
         continue;
       }
 
       // If the packet didn't send, receive more frames and try again
-      while (!seeking_ && !process_packet(side, packet.get(), frame_decoded.get(), sw_frame_decoded.get())) {
+      while (!seeking_ && !process_packet(side, packet.get())) {
         ;
       }
     }
   } catch (...) {
     exception_holder_.rethrow_stored_exception();
-    frame_queue_[side]->quit();
-    packet_queue_[side]->quit();
+    quit_queues(side);
   }
 }
 
-bool VideoCompare::process_packet(const Side side, AVPacket* packet, AVFrame* frame_decoded, AVFrame* sw_frame_decoded) {
+bool VideoCompare::process_packet(const Side side, AVPacket* packet) {
   bool sent = video_decoder_[side]->send(packet);
 
-  // If a whole frame has been decoded, adjust time stamps and add to queue
-  while (video_decoder_[side]->receive(frame_decoded, demuxer_[side].get())) {
-    AVFrame* frame_for_filtering;
+  while (true) {
+    std::shared_ptr<AVFrame> frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
+
+    // If a whole frame has been decoded, adjust time stamps and add to queue
+    if (!video_decoder_[side]->receive(frame_decoded.get(), demuxer_[side].get())) {
+      break;
+    }
+
+    std::shared_ptr<AVFrame> frame_for_filtering;
 
     if (frame_decoded->format == video_decoder_[side]->hw_pixel_format()) {
+      std::shared_ptr<AVFrame> sw_frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
+
       // Transfer data from GPU to CPU
-      if (av_hwframe_transfer_data(sw_frame_decoded, frame_decoded, 0) < 0) {
+      if (av_hwframe_transfer_data(sw_frame_decoded.get(), frame_decoded.get(), 0) < 0) {
         throw std::runtime_error("Error transferring frame from GPU to CPU");
       }
-      if (av_frame_copy_props(sw_frame_decoded, frame_decoded) < 0) {
+      if (av_frame_copy_props(sw_frame_decoded.get(), frame_decoded.get()) < 0) {
         throw std::runtime_error("Copying SW frame properties");
       }
 
@@ -282,17 +294,63 @@ bool VideoCompare::process_packet(const Side side, AVPacket* packet, AVFrame* fr
       frame_for_filtering = frame_decoded;
     }
 
-    if (!filter_decoded_frame(side, frame_for_filtering)) {
+    if (!decoded_frame_queue_[side]->push(frame_for_filtering)) {
       return sent;
+    }
+
+    // Send the decoded frame to the right filterer, as well, if in single decoder mode
+    if (single_decoder_mode_) {
+      decoded_frame_queue_[RIGHT]->push(frame_for_filtering);
     }
   }
 
   return sent;
 }
 
-bool VideoCompare::filter_decoded_frame(const Side side, AVFrame* frame_decoded) {
+void VideoCompare::thread_filter_left() {
+  filter_video(LEFT);
+}
+
+void VideoCompare::thread_filter_right() {
+  filter_video(RIGHT);
+}
+
+void VideoCompare::filter_video(const Side side) {
+  try {
+    while (keep_running()) {
+      if (frame_queue_[side]->is_stopped()) {
+        if (seeking_) {
+          ready_to_seek_.set(ReadyToSeek::FILTERER, side);
+        }
+
+        sleep_for_ms(10);
+        continue;
+      }
+
+      std::shared_ptr<AVFrame> frame_to_filter;
+
+      if (decoded_frame_queue_[side]->pop(frame_to_filter)) {
+        filter_decoded_frame(side, frame_to_filter);
+      } else if (decoded_frame_queue_[side]->is_stopped() || seeking_) {
+        // Close the filter source
+        video_filterer_[side]->close_src();
+
+        // Flush the filter graph
+        filter_decoded_frame(side, nullptr);
+
+        // Stop filtering
+        frame_queue_[side]->stop();
+      }
+    }
+  } catch (...) {
+    exception_holder_.rethrow_stored_exception();
+    quit_queues(side);
+  }
+}
+
+bool VideoCompare::filter_decoded_frame(const Side side, std::shared_ptr<AVFrame> frame_decoded) {
   // send decoded frame to filterer
-  if (!video_filterer_[side]->send(frame_decoded)) {
+  if (!video_filterer_[side]->send(frame_decoded.get())) {
     throw std::runtime_error("Error while feeding the filter graph");
   }
 
@@ -326,8 +384,45 @@ bool VideoCompare::filter_decoded_frame(const Side side, AVFrame* frame_decoded)
   return true;
 }
 
-bool VideoCompare::keep_running() {
+bool VideoCompare::keep_running() const {
   return !display_->get_quit() && !exception_holder_.has_exception();
+}
+
+void VideoCompare::quit_queues(const Side side) {
+  frame_queue_[side]->quit();
+  decoded_frame_queue_[side]->quit();
+  packet_queue_[side]->quit();
+}
+
+void VideoCompare::update_decoder_mode(const int right_time_shift) {
+  single_decoder_mode_ = same_video_both_sides_ && (abs(right_time_shift) < 500);
+}
+
+void VideoCompare::dump_debug_info(const int frame_number, const int right_time_shift, const int average_refresh_time) {
+  auto dump_queue_side = [&](const std::string& name, const std::string side_name, const Side side, const auto& queue) {
+    std::cout << side_name << " " << name << ": size=" << queue[side]->size() << ", is_stopped=" << queue[side]->is_stopped() << ", quit=" << queue[side]->is_quit() << std::endl;
+  };
+
+  auto dump_queues = [&](const std::string& name, const auto& queue) {
+    dump_queue_side(name, "Left", LEFT, queue);
+    dump_queue_side(name, "Right", RIGHT, queue);
+  };
+
+  std::cout << "FRAME: " << frame_number << std::endl;
+  std::cout << "keep_running()=" << keep_running() << std::endl;
+  std::cout << "has_exception()=" << exception_holder_.has_exception() << std::endl;
+  std::cout << "seeking=" << seeking_ << std::endl;
+  std::cout << "right_time_shift=" << right_time_shift << std::endl;
+  std::cout << "single_decoder_mode=" << single_decoder_mode_ << std::endl;
+  std::cout << "average_refresh_time=" << average_refresh_time << std::endl;
+
+  dump_queues("packet demuxer", packet_queue_);
+  dump_queues("decoder", decoded_frame_queue_);
+  dump_queues("filterer", frame_queue_);
+
+  std::cout << "all_are_idle()=" << ready_to_seek_.all_are_idle() << std::endl;
+
+  std::cout << "--------------------------------------------------" << std::endl;
 }
 
 void VideoCompare::compare() {
@@ -371,7 +466,7 @@ void VideoCompare::compare() {
     Timer refresh_timer;
     sorted_flat_deque<int32_t> refresh_time_deque(8);
 
-    int64_t right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME;
+    int64_t right_time_shift = time_ms_to_av_time(time_shift_ms_);
     int total_right_time_shifted = 0;
 
     int forward_navigate_frames = 0;
@@ -387,6 +482,12 @@ void VideoCompare::compare() {
         break;
       }
 
+#ifdef _DEBUG
+      if ((frame_number % 100) == 0) {
+        dump_debug_info(frame_number, right_time_shift, refresh_time_deque.average());
+      }
+#endif
+
       if (display_->get_tick_playback()) {
         timer_->reset();
       }
@@ -399,7 +500,7 @@ void VideoCompare::compare() {
         total_right_time_shifted += display_->get_shift_right_frames();
 
         // compute effective time shift
-        right_time_shift = time_shift_ms_ * MILLISEC_TO_AV_TIME + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
+        right_time_shift = time_ms_to_av_time(time_shift_ms_) + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
 
         ready_to_seek_.reset();
         seeking_ = true;
@@ -414,6 +515,8 @@ void VideoCompare::compare() {
         stop_and_empty_packet_queue(RIGHT);
 
         auto empty_frame_queues = [&]() {
+          decoded_frame_queue_[LEFT]->empty();
+          decoded_frame_queue_[RIGHT]->empty();
           frame_queue_[LEFT]->empty();
           frame_queue_[RIGHT]->empty();
         };
@@ -421,6 +524,9 @@ void VideoCompare::compare() {
         while (!ready_to_seek_.all_are_idle()) {
           empty_frame_queues();
           sleep_for_ms(10);
+#ifdef _DEBUG
+          dump_debug_info(frame_number, right_time_shift, refresh_time_deque.average());
+#endif
         }
 
         // empty the frame queues one last time
@@ -429,6 +535,8 @@ void VideoCompare::compare() {
         // reinit filter graphs
         video_filterer_[LEFT]->reinit();
         video_filterer_[RIGHT]->reinit();
+
+        update_decoder_mode(right_time_shift);
 
         float next_left_position, next_right_position;
 
@@ -466,6 +574,7 @@ void VideoCompare::compare() {
         // allow packet and frame queues to receive data again
         auto reset_queues = [&](const Side side) {
           packet_queue_[side]->restart();
+          decoded_frame_queue_[side]->restart();
           frame_queue_[side]->restart();
         };
 
@@ -733,8 +842,6 @@ void VideoCompare::compare() {
     exception_holder_.store_current_exception();
   }
 
-  frame_queue_[LEFT]->quit();
-  packet_queue_[LEFT]->quit();
-  frame_queue_[RIGHT]->quit();
-  packet_queue_[RIGHT]->quit();
+  quit_queues(LEFT);
+  quit_queues(RIGHT);
 }

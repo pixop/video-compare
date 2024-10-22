@@ -26,18 +26,24 @@ class Queue {
   explicit Queue(size_t size_max);
 
   bool push(T&& data);
+  bool push(const T& data);
   bool pop(T& data);
 
   void restart();
   void stop();
+  void quit();
 
   // The queue has stopped accepting input
   bool is_stopped();
-  // The queue cannot be pushed or popped
-  void quit();
+  bool is_quit();
 
   bool is_empty();
   void empty();
+  int size();
+
+private:
+  template <typename U>
+  bool push_impl(U&& data);
 };
 
 template <class T>
@@ -47,11 +53,22 @@ Queue<T>::Queue(size_t size_max) : size_max_{size_max} {
 
 template <class T>
 bool Queue<T>::push(T&& data) {
+  return push_impl(std::move(data));
+}
+
+template <class T>
+bool Queue<T>::push(const T& data) {
+  return push_impl(data);
+}
+
+template <class T>
+template <typename U>
+bool Queue<T>::push_impl(U&& data) {
   std::unique_lock<std::mutex> lock(mutex_);
 
   while (!quit_ && !stopped_) {
     if (queue_.size() < size_max_) {
-      queue_.push(std::move(data));
+      queue_.push(std::forward<U>(data));
 
       empty_.notify_all();
       return true;
@@ -106,6 +123,11 @@ bool Queue<T>::is_stopped() {
 }
 
 template <class T>
+bool Queue<T>::is_quit() {
+  return quit_;
+}
+
+template <class T>
 void Queue<T>::quit() {
   std::unique_lock<std::mutex> lock(mutex_);
 
@@ -128,4 +150,9 @@ void Queue<T>::empty() {
   }
 
   full_.notify_all();
+}
+
+template <class T>
+int Queue<T>::size() {
+  return queue_.size();
 }

@@ -19,13 +19,14 @@ extern "C" {
 }
 
 using PacketQueue = Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>>;
+using DecodedFrameQueue = Queue<std::shared_ptr<AVFrame>>;
 using FrameQueue = Queue<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>>;
 
 enum Side { LEFT, RIGHT, Count };
 
 class ReadyToSeek {
  public:
-  enum ProcessorThread { DEMULTIPLEXER, DECODER, Count };
+  enum ProcessorThread { DEMULTIPLEXER, DECODER, FILTERER, Count };
 
   ReadyToSeek() { reset(); }
 
@@ -94,23 +95,34 @@ class VideoCompare {
  private:
   void thread_demultiplex_left();
   void thread_demultiplex_right();
+  void sleep_for_ms(const int ms);
   void demultiplex(const Side side);
 
   void thread_decode_video_left();
   void thread_decode_video_right();
   void decode_video(const Side side);
 
-  void sleep_for_ms(const int ms);
+  bool process_packet(const Side side, AVPacket* packet);
 
-  bool process_packet(const Side side, AVPacket* packet, AVFrame* frame_decoded, AVFrame* sw_frame_decoded = nullptr);
-  bool filter_decoded_frame(const Side side, AVFrame* frame_decoded);
+  void thread_filter_left();
+  void thread_filter_right();
+  void filter_video(const Side side);
 
-  bool keep_running();
+  bool filter_decoded_frame(const Side side, std::shared_ptr<AVFrame> frame_decoded);
+
+  bool keep_running() const;
+  void quit_queues(const Side side);
+
+  void update_decoder_mode(const int right_time_shift);
+
+  void dump_debug_info(const int frame_number, const int right_time_shift, const int average_refresh_time);
 
   void compare();
 
  private:
   static const size_t QUEUE_SIZE;
+
+  bool same_video_both_sides_;
 
   Display::Loop auto_loop_mode_;
   const size_t frame_buffer_size_;
@@ -128,6 +140,7 @@ class VideoCompare {
   std::unique_ptr<Display> display_;
   std::unique_ptr<Timer> timer_;
   std::unique_ptr<PacketQueue> packet_queue_[Side::Count];
+  std::shared_ptr<DecodedFrameQueue> decoded_frame_queue_[Side::Count];
   std::unique_ptr<FrameQueue> frame_queue_[Side::Count];
 
   std::vector<std::thread> stages_;
@@ -135,5 +148,6 @@ class VideoCompare {
   ExceptionHolder exception_holder_;
 
   std::atomic_bool seeking_{false};
+  std::atomic_bool single_decoder_mode_{false};
   ReadyToSeek ready_to_seek_;
 };
