@@ -41,7 +41,7 @@ class Queue {
   void empty();
   int size();
 
-private:
+ private:
   template <typename U>
   bool push_impl(U&& data);
 };
