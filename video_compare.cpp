@@ -53,7 +53,7 @@ static bool compare_av_dictionaries(AVDictionary* dict1, AVDictionary* dict2) {
   AVDictionaryEntry* entry1 = nullptr;
   AVDictionaryEntry* entry2 = nullptr;
 
-  while ((entry1 = av_dict_get(dict1, "", entry1, 0))) {
+  while ((entry1 = av_dict_get(dict1, "", entry1, AV_DICT_IGNORE_SUFFIX))) {
     entry2 = av_dict_get(dict2, entry1->key, nullptr, 0);
     if (!entry2 || std::string(entry1->value) != std::string(entry2->value)) {
       return false;
