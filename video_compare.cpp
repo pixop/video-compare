@@ -43,8 +43,34 @@ static inline int64_t time_ms_to_av_time(const double time_ms) {
   return time_ms * MILLISEC_TO_AV_TIME;
 }
 
+static const int64_t NEAR_ZERO_TIME_SHIFT_THRESHOLD = time_ms_to_av_time(0.5);
+
+static bool compare_av_dictionaries(AVDictionary* dict1, AVDictionary* dict2) {
+  if (av_dict_count(dict1) != av_dict_count(dict2)) {
+    return false;
+  }
+
+  AVDictionaryEntry* entry1 = nullptr;
+  AVDictionaryEntry* entry2 = nullptr;
+
+  while ((entry1 = av_dict_get(dict1, "", entry1, 0))) {
+    entry2 = av_dict_get(dict2, entry1->key, nullptr, 0);
+    if (!entry2 || std::string(entry1->value) != std::string(entry2->value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool produces_same_decoded_video(const VideoCompareConfig& config) {
+  return (config.left.file_name == config.right.file_name) && (config.left.demuxer == config.right.demuxer) && (config.left.decoder == config.right.decoder) && (config.left.hw_accel_spec == config.right.hw_accel_spec) &&
+         compare_av_dictionaries(config.left.demuxer_options, config.right.demuxer_options) && compare_av_dictionaries(config.left.decoder_options, config.right.decoder_options) &&
+         compare_av_dictionaries(config.left.hw_accel_options, config.right.hw_accel_options);
+}
+
 VideoCompare::VideoCompare(const VideoCompareConfig& config)
-    : same_video_both_sides_(config.left.file_name == config.right.file_name),
+    : same_decoded_video_both_sides_(produces_same_decoded_video(config)),
       auto_loop_mode_(config.auto_loop_mode),
       frame_buffer_size_(config.frame_buffer_size),
       time_shift_ms_(config.time_shift_ms),
@@ -395,7 +421,7 @@ void VideoCompare::quit_queues(const Side side) {
 }
 
 void VideoCompare::update_decoder_mode(const int right_time_shift) {
-  single_decoder_mode_ = same_video_both_sides_ && (abs(right_time_shift) < 500);
+  single_decoder_mode_ = same_decoded_video_both_sides_ && (abs(right_time_shift) < NEAR_ZERO_TIME_SHIFT_THRESHOLD);
 }
 
 void VideoCompare::dump_debug_info(const int frame_number, const int right_time_shift, const int average_refresh_time) {

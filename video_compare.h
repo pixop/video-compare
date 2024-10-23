@@ -122,7 +122,7 @@ class VideoCompare {
  private:
   static const size_t QUEUE_SIZE;
 
-  bool same_video_both_sides_;
+  bool same_decoded_video_both_sides_;
 
   Display::Loop auto_loop_mode_;
   const size_t frame_buffer_size_;
