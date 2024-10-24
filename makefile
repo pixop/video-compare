@@ -5,8 +5,8 @@ CXXFLAGS = -g3 -Ofast -std=c++14 -D__STDC_CONSTANT_MACROS \
 
 ifeq ($(findstring CYGWIN_NT-10.0, $(shell uname)), CYGWIN_NT-10.0)
   CXX = x86_64-w64-mingw32-g++
-  CXXFLAGS += -Iffmpeg-7.0.2-full_build-shared/include/ -ISDL2-devel-2.28.5-mingw/SDL2-2.28.5/x86_64-w64-mingw32/include/
-  LDLIBS = -Lffmpeg-7.0.2-full_build-shared/lib/ -LSDL2-devel-2.28.5-mingw/SDL2-2.28.5/x86_64-w64-mingw32/lib/
+  CXXFLAGS += -Iffmpeg-7.1-full_build-shared/include/ -ISDL2-devel-2.30.8-mingw/SDL2-2.30.8/x86_64-w64-mingw32/include/
+  LDLIBS = -Lffmpeg-7.1-full_build-shared/lib/ -LSDL2-devel-2.30.8-mingw/SDL2-2.30.8/x86_64-w64-mingw32/lib/
 else
   CXX = g++
   LDLIBS = -pthread
