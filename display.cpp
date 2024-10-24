@@ -218,7 +218,7 @@ Display::Display(const int display_number,
     }
 
     window_x = bounds.x + (usable_width - window_width + border_width) / 2;
-    window_y = bounds.y + (usable_height - window_height + border_height) / 2;
+    window_y = bounds.y + (usable_height - window_height - border_width) / 2 + border_height;
   }
 
   if (window_width < min_width) {
@@ -235,7 +235,15 @@ Display::Display(const int display_number,
   SDL_RWops* embedded_icon = check_sdl(SDL_RWFromConstMem(VIDEO_COMPARE_ICON_BMP, VIDEO_COMPARE_ICON_BMP_LEN), "get pointer to icon");
   SDL_Surface* icon_surface = check_sdl(SDL_LoadBMP_RW(embedded_icon, 1), "load icon");
 
+#ifdef _WIN32
+  SDL_Surface* resized_icon_surface = SDL_CreateRGBSurface(0, 64, 64, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+  SDL_BlitScaled(icon_surface, nullptr, resized_icon_surface, nullptr);
+  SDL_SetWindowIcon(window_, resized_icon_surface);
+  SDL_FreeSurface(resized_icon_surface);
+#else
   SDL_SetWindowIcon(window_, icon_surface);
+#endif
+
   SDL_FreeSurface(icon_surface);
 
   renderer_ = check_sdl(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "renderer");
