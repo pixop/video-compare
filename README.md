@@ -81,9 +81,8 @@ video onto a low resolution display:
 
     video-compare -w 1280x720 video1.mp4 video2.mp4
 
-Size the window based on the usable bounds of the display while maintaining the video’s aspect ratio. This option
-automatically scales the video to fit within the display's usable area, accommodating elements like taskbars or
-OS menus without overlapping. Ideal for maximizing the viewing area while keeping the video dimensions
+Size the window to fit the usable display bounds while maintaining the video’s aspect ratio. This option adjusts
+for elements like taskbars or OS menus. Ideal for maximizing the viewing area while keeping the video dimensions
 proportional to the screen:
 
     video-compare -W video1.mp4 video2.mp4
