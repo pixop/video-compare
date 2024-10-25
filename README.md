@@ -81,6 +81,13 @@ video onto a low resolution display:
 
     video-compare -w 1280x720 video1.mp4 video2.mp4
 
+Size the window based on the usable bounds of the display while maintaining the video’s aspect ratio. This option
+automatically scales the video to fit within the display's usable area, accommodating elements like taskbars or
+OS menus without overlapping. Ideal for maximizing the viewing area while keeping the video dimensions
+proportional to the screen:
+
+    video-compare -W video1.mp4 video2.mp4
+
 Automatic in-buffer loop playback, triggered when the buffer fills or end-of-file is reached, streamlines
 video analysis by eliminating the need for manual replay initiation (bidirectional "ping-pong" mode, `pp`, is
 also available):
