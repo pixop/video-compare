@@ -26,6 +26,7 @@ download_ffmpeg() {
     fi
 
     echo "Copying DLLs from $EXTRACTED_DIR/bin/ to the current directory..."
+    chmod +x "$EXTRACTED_DIR/bin/"*
     cp "$EXTRACTED_DIR/bin/"*.dll .
     rm "ffmpeg-release-full-shared.7z"
     echo "FFmpeg full shared build downloaded and extracted successfully."
@@ -82,6 +83,7 @@ download_sdl_library() {
     DLL_PATH="$WIN32_X64_DIR/$FILE_NAME.dll"
     if [ -f "$DLL_PATH" ]; then
         echo "Copying $FILE_NAME.dll to the current directory..."
+        chmod +x "$DLL_PATH"
         cp "$DLL_PATH" .
     else
         echo "$FILE_NAME.dll not found in $DLL_PATH"
@@ -96,14 +98,14 @@ case "$1" in
     ffmpeg)
         download_ffmpeg
         ;;
-    sdl)
+    sdl2)
         download_sdl_library "SDL" "SDL2"
         ;;
-    sdl_ttf)
+    sdl2_ttf)
         download_sdl_library "SDL_ttf" "SDL2_ttf"
         ;;
     *)
-        echo "Usage: $0 {ffmpeg|sdl|sdl_ttf}"
+        echo "Usage: $0 {ffmpeg|sdl2|sdl2_ttf}"
         exit 1
         ;;
 esac
