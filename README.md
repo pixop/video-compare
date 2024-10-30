@@ -157,6 +157,7 @@ see all supported options.
 - Page up: Seek 600 seconds forward
 - J: Reduce playback speed
 - L: Increase playback speed
+- U: Toggle nearest-neighbor/bilinear filtering
 - S: Swap left and right video
 - A: Move to the previous frame in the buffer
 - D: Move to the next frame in the buffer
