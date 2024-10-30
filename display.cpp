@@ -281,8 +281,16 @@ Display::Display(const int display_number,
   pan_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZEALL);
 
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
-  video_texture_ = check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height),
-                             "video texture");
+
+  auto create_video_texture = [&](const std::string& scale_quality) {
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, scale_quality.c_str());
+
+    return check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::hstack ? width * 2 : width, mode == Mode::vstack ? height * 2 : height),
+                     "video texture " + scale_quality);
+  };
+
+  video_texture_linear_ = create_video_texture("linear");
+  video_texture_nn_ = create_video_texture("nearest");
 
   if (verbose) {
     print_verbose_info();
@@ -343,7 +351,8 @@ Display::Display(const int display_number,
 }
 
 Display::~Display() {
-  SDL_DestroyTexture(video_texture_);
+  SDL_DestroyTexture(video_texture_linear_);
+  SDL_DestroyTexture(video_texture_nn_);
   SDL_DestroyTexture(left_text_texture_);
   SDL_DestroyTexture(right_text_texture_);
 
@@ -411,7 +420,7 @@ void Display::print_verbose_info() {
   std::cout << "SDL window px format:  " << stringify_format_and_bpp(window_pixel_format) << std::endl;
 
   Uint32 video_pixel_format;
-  SDL_QueryTexture(video_texture_, &video_pixel_format, nullptr, nullptr, nullptr);
+  SDL_QueryTexture(video_texture_linear_, &video_pixel_format, nullptr, nullptr, nullptr);
   std::cout << "SDL video px format:   " << stringify_format_and_bpp(video_pixel_format) << std::endl;
 
   std::cout << "FFmpeg version:        " << av_version_info() << std::endl;
@@ -616,8 +625,12 @@ void Display::render_progress_dots(const float position, const float progress, c
   }
 }
 
-void Display::update_textures(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& message) {
-  check_sdl(SDL_UpdateTexture(video_texture_, rect, pixels, pitch) == 0, "video texture - " + message);
+SDL_Texture* Display::get_video_texture() const {
+  return use_bilinear_upsampler_ ? video_texture_linear_ : video_texture_nn_;
+}
+
+void Display::update_texture(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& message) {
+  check_sdl(SDL_UpdateTexture(get_video_texture(), rect, pixels, pitch) == 0, "video texture - " + message);
 }
 
 int Display::round_and_clamp(const float value) {
@@ -949,12 +962,12 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
       if (use_10_bpc_) {
         convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
 
-        update_textures(&tex_render_quad_left, left_planes_[0], pitches_left[0], "left update (10 bpc, video mode)");
+        update_texture(&tex_render_quad_left, left_planes_[0], pitches_left[0], "left update (10 bpc, video mode)");
       } else {
-        update_textures(&tex_render_quad_left, planes_left[0], pitches_left[0], "left update (video mode)");
+        update_texture(&tex_render_quad_left, planes_left[0], pitches_left[0], "left update (video mode)");
       }
 
-      check_sdl(SDL_RenderCopyF(renderer_, video_texture_, &tex_render_quad_left, &screen_render_quad_left) == 0, "left video texture render copy");
+      check_sdl(SDL_RenderCopyF(renderer_, get_video_texture(), &tex_render_quad_left, &screen_render_quad_left) == 0, "left video texture render copy");
     }
     if (show_right_ && ((split_x < video_width_) || mode_ != Mode::split)) {
       const int start_right = (mode_ == Mode::split) ? std::max(split_x, 0) : 0;
@@ -971,21 +984,21 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
         if (use_10_bpc_) {
           convert_to_packed_10_bpc(diff_planes_, diff_pitches_, right_planes_, pitches_right, roi);
 
-          update_textures(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, subtraction mode)");
+          update_texture(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, subtraction mode)");
         } else {
-          update_textures(&tex_render_quad_right, diff_planes_[0] + start_right * 3, diff_pitches_[0], "right update (subtraction mode)");
+          update_texture(&tex_render_quad_right, diff_planes_[0] + start_right * 3, diff_pitches_[0], "right update (subtraction mode)");
         }
       } else {
         if (use_10_bpc_) {
           convert_to_packed_10_bpc(planes_right, pitches_right, right_planes_, pitches_right, roi);
 
-          update_textures(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, video mode)");
+          update_texture(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, video mode)");
         } else {
-          update_textures(&tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0], "right update (video mode)");
+          update_texture(&tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0], "right update (video mode)");
         }
       }
 
-      check_sdl(SDL_RenderCopyF(renderer_, video_texture_, &tex_render_quad_right, &screen_render_quad_right) == 0, "right video texture render copy");
+      check_sdl(SDL_RenderCopyF(renderer_, get_video_texture(), &tex_render_quad_right, &screen_render_quad_right) == 0, "right video texture render copy");
     }
   }
 
@@ -1433,6 +1446,9 @@ void Display::input() {
             } else {
               frame_buffer_offset_delta_--;
             }
+            break;
+          case SDLK_u:
+            use_bilinear_upsampler_ = !use_bilinear_upsampler_;
             break;
           case SDLK_s: {
             swap_left_right_ = !swap_left_right_;

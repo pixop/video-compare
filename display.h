@@ -95,6 +95,7 @@ class Display {
   bool show_left_{true};
   bool show_right_{true};
   bool show_hud_{true};
+  bool use_bilinear_upsampler_{false};
   bool subtraction_mode_{false};
   float seek_relative_{0.0F};
   int frame_buffer_offset_delta_{0};
@@ -148,7 +149,8 @@ class Display {
 
   SDL_Window* window_;
   SDL_Renderer* renderer_;
-  SDL_Texture* video_texture_;
+  SDL_Texture* video_texture_linear_;
+  SDL_Texture* video_texture_nn_;
 
   SDL_Event event_;
   int mouse_x_;
@@ -184,7 +186,8 @@ class Display {
 
   void render_progress_dots(const float position, const float progress, const bool is_top);
 
-  void update_textures(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& message);
+  SDL_Texture* get_video_texture() const;
+  void update_texture(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& message);
 
   int round_and_clamp(const float value);
 
