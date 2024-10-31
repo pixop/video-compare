@@ -747,9 +747,9 @@ std::string Display::format_pixel(const std::array<int, 3>& pixel) {
 }
 
 std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const AVFrame* frame, const int x, const int y) {
-  auto rgb_format = static_cast<const AVPixelFormat>(frame->format);
-  auto color_space = static_cast<const AVColorSpace>(get_metadata_int_value(frame, "original_color_space", AVCOL_SPC_BT709));
-  auto color_range = static_cast<const AVColorRange>(get_metadata_int_value(frame, "original_color_range", AVCOL_RANGE_MPEG));
+  auto rgb_format = static_cast<AVPixelFormat>(frame->format);
+  auto color_space = static_cast<AVColorSpace>(get_metadata_int_value(frame, "original_color_space", AVCOL_SPC_BT709));
+  auto color_range = static_cast<AVColorRange>(get_metadata_int_value(frame, "original_color_range", AVCOL_RANGE_MPEG));
 
   const std::array<int, 3> rgb = get_rgb_pixel(rgb_plane, pitch, x, y);
   const std::array<int, 3> yuv = convert_rgb_to_yuv(rgb, rgb_format, color_space, color_range);
