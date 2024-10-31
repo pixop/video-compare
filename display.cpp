@@ -704,7 +704,7 @@ const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rg
   auto rgb_pixel_frame = allocate_frame(rgb_format);
   auto yuv_pixel_frame = allocate_frame(yuv_format);
 
-  if (rgb_pixel_frame == nullptr || yuv_pixel_frame == nullptr) {
+  if (rgb_pixel_frame.get() == nullptr || yuv_pixel_frame.get() == nullptr) {
     return {-1, -1, -1};
   }
 
