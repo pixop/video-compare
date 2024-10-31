@@ -668,10 +668,7 @@ const std::array<int, 3> Display::get_rgb_pixel(uint8_t* rgb_plane, const size_t
   return {r, g, b};
 }
 
-const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rgb, const AVColorSpace color_space, const AVColorRange color_range) {
-  const AVPixelFormat rgb_format = use_10_bpc_ ? AV_PIX_FMT_RGB48 : AV_PIX_FMT_RGB24;
-  const AVPixelFormat yuv_format = use_10_bpc_ ? AV_PIX_FMT_YUV444P10 : AV_PIX_FMT_YUV444P;
-
+const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rgb, const AVPixelFormat rgb_format, const AVColorSpace color_space, const AVColorRange color_range) {
   auto frame_deleter = [](AVFrame* frame) {
     if (frame == nullptr) {
       av_freep(&frame->data[0]);
@@ -701,6 +698,8 @@ const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rg
 
     return AVFramePtr(raw_frame, frame_deleter);
   };
+
+  const AVPixelFormat yuv_format = use_10_bpc_ ? AV_PIX_FMT_YUV444P10 : AV_PIX_FMT_YUV444P;
 
   auto rgb_pixel_frame = allocate_frame(rgb_format);
   auto yuv_pixel_frame = allocate_frame(yuv_format);
@@ -748,11 +747,12 @@ std::string Display::format_pixel(const std::array<int, 3>& pixel) {
 }
 
 std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const AVFrame* frame, const int x, const int y) {
-  const std::array<int, 3> rgb = get_rgb_pixel(rgb_plane, pitch, x, y);
-
+  auto rgb_format = static_cast<const AVPixelFormat>(frame->format);
   auto color_space = static_cast<const AVColorSpace>(get_metadata_int_value(frame, "original_color_space", AVCOL_SPC_BT709));
   auto color_range = static_cast<const AVColorRange>(get_metadata_int_value(frame, "original_color_range", AVCOL_RANGE_MPEG));
-  const std::array<int, 3> yuv = convert_rgb_to_yuv(rgb, color_space, color_range);
+
+  const std::array<int, 3> rgb = get_rgb_pixel(rgb_plane, pitch, x, y);
+  const std::array<int, 3> yuv = convert_rgb_to_yuv(rgb, rgb_format, color_space, color_range);
 
   return "RGB" + format_pixel(rgb) + ", YUV" + format_pixel(yuv);
 }
