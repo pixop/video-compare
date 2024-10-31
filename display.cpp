@@ -10,8 +10,8 @@
 #include <string>
 #include <thread>
 #include "controls.h"
-#include "format_converter.h"
 #include "ffmpeg.h"
+#include "format_converter.h"
 #include "png_saver.h"
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
@@ -19,8 +19,8 @@
 #include "video_compare_icon.h"
 #include "vmaf_calculator.h"
 extern "C" {
-#include <libavutil/imgutils.h>
 #include <libavfilter/avfilter.h>
+#include <libavutil/imgutils.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
@@ -669,20 +669,11 @@ const std::array<int, 3> Display::get_rgb_pixel(uint8_t* rgb_plane, const size_t
 }
 
 const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rgb, const AVPixelFormat rgb_format, const AVColorSpace color_space, const AVColorRange color_range) {
-  auto frame_deleter = [](AVFrame* frame) {
-    if (frame == nullptr) {
-      av_freep(&frame->data[0]);
-      av_frame_free(&frame);
-    }
-  };
-
-  using AVFramePtr = std::unique_ptr<AVFrame, decltype(frame_deleter)>;
-
-  auto allocate_frame = [&](const AVPixelFormat format) -> AVFramePtr {
+  auto allocate_frame = [&](const AVPixelFormat format) {
     AVFrame* raw_frame = av_frame_alloc();
 
     if (raw_frame == nullptr) {
-      return AVFramePtr(nullptr, frame_deleter);
+      throw ffmpeg::Error("Couldn't allocate frame");
     }
 
     raw_frame->format = format;
@@ -691,12 +682,9 @@ const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rg
     raw_frame->colorspace = color_space;
     raw_frame->color_range = color_range;
 
-    if (av_image_alloc(raw_frame->data, raw_frame->linesize, raw_frame->width, raw_frame->height, format, 64) < 0) {
-      av_frame_free(&raw_frame);
-      return AVFramePtr(nullptr, frame_deleter);
-    }
+    ffmpeg::check(av_image_alloc(raw_frame->data, raw_frame->linesize, raw_frame->width, raw_frame->height, format, 64));
 
-    return AVFramePtr(raw_frame, frame_deleter);
+    return raw_frame;
   };
 
   const AVPixelFormat yuv_format = use_10_bpc_ ? AV_PIX_FMT_YUV444P10 : AV_PIX_FMT_YUV444P;
@@ -704,15 +692,11 @@ const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rg
   auto rgb_pixel_frame = allocate_frame(rgb_format);
   auto yuv_pixel_frame = allocate_frame(yuv_format);
 
-  if (rgb_pixel_frame.get() == nullptr || yuv_pixel_frame.get() == nullptr) {
-    return {-1, -1, -1};
-  }
-
   if (use_10_bpc_) {
     uint16_t* rgb_data = reinterpret_cast<uint16_t*>(rgb_pixel_frame->data[0]);
 
     auto extend_10_to_16_bit = [](const int value) {
-      return (value * 1025) >> 4; // 1023->65535
+      return (value * 1025) >> 4;  // 1023->65535
     };
 
     rgb_data[0] = extend_10_to_16_bit(rgb[0]);
@@ -727,7 +711,7 @@ const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rg
   }
 
   FormatConverter rgb_to_yuv_converter(1, 1, 1, 1, rgb_format, yuv_format, color_space, color_range);
-  rgb_to_yuv_converter(rgb_pixel_frame.get(), yuv_pixel_frame.get());
+  rgb_to_yuv_converter(rgb_pixel_frame, yuv_pixel_frame);
 
   if (use_10_bpc_) {
     auto y_data = reinterpret_cast<const uint16_t*>(yuv_pixel_frame->data[0]);
