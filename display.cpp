@@ -10,6 +10,7 @@
 #include <string>
 #include <thread>
 #include "controls.h"
+#include "format_converter.h"
 #include "ffmpeg.h"
 #include "png_saver.h"
 #include "source_code_pro_regular_ttf.h"
@@ -18,6 +19,7 @@
 #include "video_compare_icon.h"
 #include "vmaf_calculator.h"
 extern "C" {
+#include <libavutil/imgutils.h>
 #include <libavfilter/avfilter.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
@@ -126,6 +128,12 @@ std::string format_libav_version(unsigned version) {
   int micro = version & 0xff;
   return string_sprintf("%2u.%2u.%3u", major, minor, micro);
 }
+
+auto get_metadata_int_value = [](const AVFrame* frame, const std::string& key, const int default_value) -> int {
+  const AVDictionaryEntry* entry = av_dict_get(frame->metadata, key.c_str(), nullptr, 0);
+
+  return entry ? std::atoi(entry->value) : default_value;
+};
 
 SDL::SDL() {
   check_sdl(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) == 0, "SDL init");
@@ -660,19 +668,77 @@ const std::array<int, 3> Display::get_rgb_pixel(uint8_t* rgb_plane, const size_t
   return {r, g, b};
 }
 
-const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rgb) {
-  const float scale = use_10_bpc_ ? 4.f : 1.f;
+const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rgb, const AVColorSpace color_space, const AVColorRange color_range) {
+  const AVPixelFormat rgb_format = use_10_bpc_ ? AV_PIX_FMT_RGB48 : AV_PIX_FMT_RGB24;
+  const AVPixelFormat yuv_format = use_10_bpc_ ? AV_PIX_FMT_YUV444P10 : AV_PIX_FMT_YUV444P;
 
-  const float r = rgb[0] / (256.f * scale);
-  const float g = rgb[1] / (256.f * scale);
-  const float b = rgb[2] / (256.f * scale);
+  auto frame_deleter = [](AVFrame* frame) {
+    if (frame == nullptr) {
+      av_freep(&frame->data[0]);
+      av_frame_free(&frame);
+    }
+  };
 
-  // https://en.wikipedia.org/wiki/YCbCr#ITU-R_BT.601_conversion
-  const float y = scale * (16.f + 65.738f * r + 129.057f * g + 25.064f * b);
-  const float cr = scale * (128.f - 37.945f * r - 74.494f * g + 112.439f * b);
-  const float cb = scale * (128.f + 112.439f * r - 94.154f * g - 18.285f * b);
+  using AVFramePtr = std::unique_ptr<AVFrame, decltype(frame_deleter)>;
 
-  return {round_and_clamp(y), round_and_clamp(cr), round_and_clamp(cb)};
+  auto allocate_frame = [&](const AVPixelFormat format) -> AVFramePtr {
+    AVFrame* raw_frame = av_frame_alloc();
+
+    if (raw_frame == nullptr) {
+      return AVFramePtr(nullptr, frame_deleter);
+    }
+
+    raw_frame->format = format;
+    raw_frame->width = 1;
+    raw_frame->height = 1;
+    raw_frame->colorspace = color_space;
+    raw_frame->color_range = color_range;
+
+    if (av_image_alloc(raw_frame->data, raw_frame->linesize, raw_frame->width, raw_frame->height, format, 64) < 0) {
+      av_frame_free(&raw_frame);
+      return AVFramePtr(nullptr, frame_deleter);
+    }
+
+    return AVFramePtr(raw_frame, frame_deleter);
+  };
+
+  auto rgb_pixel_frame = allocate_frame(rgb_format);
+  auto yuv_pixel_frame = allocate_frame(yuv_format);
+
+  if (rgb_pixel_frame == nullptr || yuv_pixel_frame == nullptr) {
+    return {-1, -1, -1};
+  }
+
+  if (use_10_bpc_) {
+    uint16_t* rgb_data = reinterpret_cast<uint16_t*>(rgb_pixel_frame->data[0]);
+
+    auto extend_10_to_16_bit = [](const int value) {
+      return (value * 1025) >> 4; // 1023->65535
+    };
+
+    rgb_data[0] = extend_10_to_16_bit(rgb[0]);
+    rgb_data[1] = extend_10_to_16_bit(rgb[1]);
+    rgb_data[2] = extend_10_to_16_bit(rgb[2]);
+  } else {
+    uint8_t* rgb_data = reinterpret_cast<uint8_t*>(rgb_pixel_frame->data[0]);
+
+    rgb_data[0] = rgb[0];
+    rgb_data[1] = rgb[1];
+    rgb_data[2] = rgb[2];
+  }
+
+  FormatConverter rgb_to_yuv_converter(1, 1, 1, 1, rgb_format, yuv_format, color_space, color_range);
+  rgb_to_yuv_converter(rgb_pixel_frame.get(), yuv_pixel_frame.get());
+
+  if (use_10_bpc_) {
+    auto y_data = reinterpret_cast<const uint16_t*>(yuv_pixel_frame->data[0]);
+    auto u_data = reinterpret_cast<const uint16_t*>(yuv_pixel_frame->data[1]);
+    auto v_data = reinterpret_cast<const uint16_t*>(yuv_pixel_frame->data[2]);
+
+    return {y_data[0], u_data[0], v_data[0]};
+  } else {
+    return {yuv_pixel_frame->data[0][0], yuv_pixel_frame->data[1][0], yuv_pixel_frame->data[2][0]};
+  }
 }
 
 std::string Display::format_pixel(const std::array<int, 3>& pixel) {
@@ -681,9 +747,12 @@ std::string Display::format_pixel(const std::array<int, 3>& pixel) {
   return use_10_bpc_ ? string_sprintf("(%4d,%4d,%4d#%s)", pixel[0], pixel[1], pixel[2], hex_pixel.c_str()) : string_sprintf("(%3d,%3d,%3d#%s)", pixel[0], pixel[1], pixel[2], hex_pixel.c_str());
 }
 
-std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const int x, const int y) {
+std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const AVFrame* frame, const int x, const int y) {
   const std::array<int, 3> rgb = get_rgb_pixel(rgb_plane, pitch, x, y);
-  const std::array<int, 3> yuv = convert_rgb_to_yuv(rgb);
+
+  auto color_space = static_cast<const AVColorSpace>(get_metadata_int_value(frame, "original_color_space", AVCOL_SPC_BT709));
+  auto color_range = static_cast<const AVColorRange>(get_metadata_int_value(frame, "original_color_range", AVCOL_RANGE_MPEG));
+  const std::array<int, 3> yuv = convert_rgb_to_yuv(rgb, color_space, color_range);
 
   return "RGB" + format_pixel(rgb) + ", YUV" + format_pixel(yuv);
 }
@@ -891,14 +960,8 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
       const int pixel_video_y = mouse_video_y % video_height_;
 
       auto get_original_dimensions = [&](const AVFrame* frame) -> std::pair<int, int> {
-        auto get_metadata_value = [](const AVFrame* frame, const std::string& key, const int default_value) -> int {
-          const AVDictionaryEntry* entry = av_dict_get(frame->metadata, key.c_str(), nullptr, 0);
-
-          return entry ? std::atoi(entry->value) : default_value;
-        };
-
-        const int original_width = get_metadata_value(frame, "original_width", frame->width);
-        const int original_height = get_metadata_value(frame, "original_height", frame->height);
+        const int original_width = get_metadata_int_value(frame, "original_width", frame->width);
+        const int original_height = get_metadata_int_value(frame, "original_height", frame->height);
 
         return std::make_pair(original_width, original_height);
       };
@@ -907,10 +970,10 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
       auto original_right_dims = get_original_dimensions(right_frame);
 
       std::cout << "Left:  " << string_sprintf("[%4d,%4d]", pixel_video_x * original_left_dims.first / video_width_, pixel_video_y * original_left_dims.second / video_height_);
-      std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_left[0], pitches_left[0], pixel_video_x, pixel_video_y);
+      std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_left[0], pitches_left[0], left_frame, pixel_video_x, pixel_video_y);
       std::cout << " - ";
       std::cout << "Right: " << string_sprintf("[%4d,%4d]", pixel_video_x * original_right_dims.first / video_width_, pixel_video_y * original_right_dims.second / video_height_);
-      std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_right[0], pitches_right[0], pixel_video_x, pixel_video_y);
+      std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_right[0], pitches_right[0], right_frame, pixel_video_x, pixel_video_y);
       std::cout << std::endl;
     }
 

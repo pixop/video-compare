@@ -192,10 +192,10 @@ class Display {
   int round_and_clamp(const float value);
 
   const std::array<int, 3> get_rgb_pixel(uint8_t* rgb_plane, const size_t pitch, const int x, const int y);
-  const std::array<int, 3> convert_rgb_to_yuv(const std::array<int, 3> rgb);
+  const std::array<int, 3> convert_rgb_to_yuv(const std::array<int, 3> rgb, const AVColorSpace color_space, const AVColorRange color_range);
 
   std::string format_pixel(const std::array<int, 3>& rgb);
-  std::string get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const int x, const int y);
+  std::string get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const AVFrame* frame, const int x, const int y);
 
   float* rgb_to_grayscale(const uint8_t* plane, const size_t pitch);
 
