@@ -95,7 +95,7 @@ class Display {
   bool show_left_{true};
   bool show_right_{true};
   bool show_hud_{true};
-  bool use_bilinear_upsampler_{false};
+  bool use_bilinear_texture_filtering_{false};
   bool subtraction_mode_{false};
   float seek_relative_{0.0F};
   int frame_buffer_offset_delta_{0};

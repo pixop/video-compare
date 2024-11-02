@@ -634,7 +634,7 @@ void Display::render_progress_dots(const float position, const float progress, c
 }
 
 SDL_Texture* Display::get_video_texture() const {
-  return use_bilinear_upsampler_ ? video_texture_linear_ : video_texture_nn_;
+  return use_bilinear_texture_filtering_ ? video_texture_linear_ : video_texture_nn_;
 }
 
 void Display::update_texture(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& message) {
@@ -1500,8 +1500,8 @@ void Display::input() {
               frame_buffer_offset_delta_--;
             }
             break;
-          case SDLK_u:
-            use_bilinear_upsampler_ = !use_bilinear_upsampler_;
+          case SDLK_t:
+            use_bilinear_texture_filtering_ = !use_bilinear_texture_filtering_;
             break;
           case SDLK_s: {
             swap_left_right_ = !swap_left_right_;

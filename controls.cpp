@@ -13,7 +13,7 @@ static const std::vector<std::pair<std::string, std::string>> controls{{"H", "To
                                                                        {"Page up", "Seek 600 seconds forward"},
                                                                        {"J", "Reduce playback speed"},
                                                                        {"L", "Increase playback speed"},
-                                                                       {"U", "Toggle nearest-neighbor/bilinear filtering"},
+                                                                       {"T", "Toggle nearest-neighbor/bilinear video texture filtering"},
                                                                        {"S", "Swap left and right video"},
                                                                        {"A", "Move to the previous frame in the buffer"},
                                                                        {"D", "Move to the next frame in the buffer"},
