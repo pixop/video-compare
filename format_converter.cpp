@@ -128,8 +128,6 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
 
   av_dict_set(&dst->metadata, "original_width", std::to_string(src->width).c_str(), 0);
   av_dict_set(&dst->metadata, "original_height", std::to_string(src->height).c_str(), 0);
-  av_dict_set(&dst->metadata, "original_color_space", std::to_string(src->colorspace).c_str(), 0);
-  av_dict_set(&dst->metadata, "original_color_range", std::to_string(src->color_range).c_str(), 0);
 
   sws_scale(conversion_context_,
             // Source
