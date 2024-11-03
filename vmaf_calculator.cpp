@@ -100,7 +100,9 @@ void VMAFCalculator::run_libvmaf_filter(const AVFrame* distorted_frame, const AV
   std::string yuv_pixel_format = distorted_frame->format == AV_PIX_FMT_RGB24 ? "yuv444p" : "yuv444p16le";
   std::string libvmaf_filter_options = libvmaf_options_.empty() ? "" : string_sprintf("=%s", libvmaf_options_.c_str());
 
-  std::string filter_description = string_sprintf("[in_dist]format=%s[in_dist_yuv],[in_ref]format=%s[in_ref_yuv],[in_dist_yuv][in_ref_yuv]libvmaf%s[out]", yuv_pixel_format.c_str(), yuv_pixel_format.c_str(), libvmaf_filter_options.c_str());
+  std::string filter_description =
+      string_sprintf("[in_dist]setparams=colorspace=%d:range=%d,format=%s[in_dist_yuv],[in_ref]setparams=colorspace=%d:range=%d,format=%s[in_ref_yuv],[in_dist_yuv][in_ref_yuv]libvmaf%s[out]", distorted_frame->colorspace,
+                     distorted_frame->color_range, yuv_pixel_format.c_str(), reference_frame->colorspace, reference_frame->color_range, yuv_pixel_format.c_str(), libvmaf_filter_options.c_str());
 
   AVFilterInOutRAII outputs_ref(av_strdup("in_ref"), buffersrc_ctx_ref, nullptr, false);
   AVFilterInOutRAII outputs_dist(av_strdup("in_dist"), buffersrc_ctx_dist, outputs_ref.get());
