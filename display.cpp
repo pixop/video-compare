@@ -73,19 +73,25 @@ inline uint16_t clamp_int_to_10_bpc(int value) {
 
 // Credits to Kemin Zhou for this approach which does not require Boost or C++17
 // https://stackoverflow.com/questions/4430780/how-can-i-extract-the-file-name-and-extension-from-a-path-in-c
-std::string get_file_stem(const std::string& file_path) {
+std::string get_file_name_and_extension(const std::string& file_path) {
   char* buff = new char[file_path.size() + 1];
   strcpy(buff, file_path.c_str());
 
-  std::string tmp = std::string(basename(buff));
+  const std::string result = std::string(basename(buff));
+
+  delete[] buff;
+
+  return result;
+}
+
+std::string get_file_stem(const std::string& file_path) {
+  std::string tmp = get_file_name_and_extension(file_path);
 
   const std::string::size_type i = tmp.rfind('.');
 
   if (i != std::string::npos) {
     tmp = tmp.substr(0, i);
   }
-
-  delete[] buff;
 
   return tmp;
 }
@@ -237,8 +243,9 @@ Display::Display(const int display_number,
   }
 
   const int create_window_flags = SDL_WINDOW_SHOWN;
-
-  window_ = check_sdl(SDL_CreateWindow("video-compare", window_x, window_y, window_width, window_height, high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags), "window");
+  window_ = check_sdl(SDL_CreateWindow(string_sprintf("%s  —  %s", get_file_name_and_extension(left_file_name).c_str(), get_file_name_and_extension(right_file_name).c_str()).c_str(), window_x, window_y, window_width, window_height,
+                                       high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
+                      "window");
 
   SDL_RWops* embedded_icon = check_sdl(SDL_RWFromConstMem(VIDEO_COMPARE_ICON_BMP, VIDEO_COMPARE_ICON_BMP_LEN), "get pointer to icon");
   SDL_Surface* icon_surface = check_sdl(SDL_LoadBMP_RW(embedded_icon, 1), "load icon");
