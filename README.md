@@ -249,3 +249,19 @@ To get video-compare to appear in the `Send To` field you will need to open the 
 you can access by typing `shell:sendto` in Run (Windows + R), then simply make a shortcut to `video-compare.exe`.
 
 Thanks to [couleurm](https://github.com/couleurm) for the sharing this tip and creating the screen recording above.
+
+### More frontend Options for Windows Users
+
+For Windows users, there are several frontend options to complement the command-line functionality of `video-compare`. Here are some
+[additional options](https://github.com/pixop/video-compare/issues/81) shared by the community:
+
+1. **Beyond Compare** Integration: Launch `video-compare` directly from the interface.
+
+2. **Total Commander** Integration: Add a toolbar button to open selected videos.
+
+3. **VideoCompareGUI** Utility: A [standalone graphical utility](https://github.com/TetzkatLipHoka/VideoCompareGUI) that simplifies launching `video-compare`.
+
+## Contributing
+
+Interested in contributing to `video-compare`? We're always looking for ways to improve and expand the tool. Your feedback and
+contributions are appreciated.
