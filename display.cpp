@@ -233,6 +233,9 @@ Display::Display(const int display_number,
 
     window_x = bounds.x + (usable_width - window_width + border_width) / 2;
     window_y = bounds.y + (usable_height - window_height + border_height) / 2 + border_width;
+#ifdef __linux__
+    window_y -= 2 * border_width + 4;
+#endif
   }
 
   if (window_width < min_width) {
