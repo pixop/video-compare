@@ -243,7 +243,7 @@ Display::Display(const int display_number,
   }
 
   const int create_window_flags = SDL_WINDOW_SHOWN;
-  window_ = check_sdl(SDL_CreateWindow(string_sprintf("%s  —  %s", get_file_name_and_extension(left_file_name).c_str(), get_file_name_and_extension(right_file_name).c_str()).c_str(), window_x, window_y, window_width, window_height,
+  window_ = check_sdl(SDL_CreateWindow(string_sprintf("%s  |  %s", get_file_name_and_extension(left_file_name).c_str(), get_file_name_and_extension(right_file_name).c_str()).c_str(), window_x, window_y, window_width, window_height,
                                        high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
                       "window");
 
