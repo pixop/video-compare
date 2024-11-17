@@ -215,7 +215,7 @@ Display::Display(const int display_number,
 
     // account for window frame and title bar
     constexpr int border_width = 10;
-    constexpr int border_height = 32;
+    constexpr int border_height = 34;
 
     const int usable_width = std::max(bounds.w - border_width, min_width);
     const int usable_height = std::max(bounds.h - border_height, min_height);
@@ -232,7 +232,7 @@ Display::Display(const int display_number,
     }
 
     window_x = bounds.x + (usable_width - window_width + border_width) / 2;
-    window_y = bounds.y + (usable_height - window_height - border_width) / 2 + border_height;
+    window_y = bounds.y + (usable_height - window_height + border_height) / 2 + border_width;
   }
 
   if (window_width < min_width) {
