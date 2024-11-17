@@ -258,7 +258,7 @@ For Windows users, the community has shared several frontend options to compleme
 
 2. **Total Commander** Integration: Add a toolbar button to open selected videos.
 
-3. **VideoCompareGUI** Utility: A [standalone graphical utility](https://github.com/TetzkatLipHoka/VideoCompareGUI) that simplifies launching `video-compare`.
+3. **[VideoCompareGUI](https://github.com/TetzkatLipHoka/VideoCompareGUI)**: A standalone graphical utility that simplifies launching `video-compare`.
 
 For more details, check out the [open thread](https://github.com/pixop/video-compare/issues/81).
 
