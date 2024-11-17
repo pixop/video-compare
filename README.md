@@ -252,14 +252,15 @@ Thanks to [couleurm](https://github.com/couleurm) for the sharing this tip and c
 
 ### More frontend Options for Windows Users
 
-For Windows users, there are several frontend options to complement the command-line functionality of `video-compare`. Here are some
-[additional options](https://github.com/pixop/video-compare/issues/81) shared by the community:
+For Windows users, the community has shared several frontend options to complement the command-line functionality of `video-compare`:
 
 1. **Beyond Compare** Integration: Launch `video-compare` directly from the interface.
 
 2. **Total Commander** Integration: Add a toolbar button to open selected videos.
 
 3. **VideoCompareGUI** Utility: A [standalone graphical utility](https://github.com/TetzkatLipHoka/VideoCompareGUI) that simplifies launching `video-compare`.
+
+For more details, check out the [open thread](https://github.com/pixop/video-compare/issues/81).
 
 ## Contributing
 
