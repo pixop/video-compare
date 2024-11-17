@@ -260,7 +260,7 @@ For Windows users, the community has shared several frontend options to compleme
 
 3. **[VideoCompareGUI](https://github.com/TetzkatLipHoka/VideoCompareGUI)**: A standalone graphical utility that simplifies launching `video-compare`.
 
-For more details, check out the [open thread](https://github.com/pixop/video-compare/issues/81).
+For details, check out the [open thread](https://github.com/pixop/video-compare/issues/81).
 
 ## Contributing
 
