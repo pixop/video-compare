@@ -252,7 +252,7 @@ Thanks to [couleurm](https://github.com/couleurm) for the sharing this tip and c
 
 ### More frontend options for Windows users
 
-For Windows users, the community has shared several frontend options to complement the command-line functionality of `video-compare`:
+For Windows users, the community has shared several frontend options to complement the command-line functionality:
 
 1. **Beyond Compare** Integration: Launch `video-compare` directly from the interface.
 
@@ -260,9 +260,8 @@ For Windows users, the community has shared several frontend options to compleme
 
 3. **[VideoCompareGUI](https://github.com/TetzkatLipHoka/VideoCompareGUI)**: A standalone graphical utility that simplifies launching `video-compare`.
 
-For details, check out the [open thread](https://github.com/pixop/video-compare/issues/81).
+For details, check out the [open GitHub issue thread](https://github.com/pixop/video-compare/issues/81).
 
 ## Contributing
 
-Interested in contributing to `video-compare`? We're always looking for ways to improve and expand the tool. Your feedback and
-contributions are appreciated.
+We're always looking for ways to improve and expand the tool. Your feedback and contributions are appreciated.
