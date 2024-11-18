@@ -250,7 +250,7 @@ you can access by typing `shell:sendto` in Run (Windows + R), then simply make a
 
 Thanks to [couleurm](https://github.com/couleurm) for the sharing this tip and creating the screen recording above.
 
-### More frontend Options for Windows Users
+### More frontend options for Windows users
 
 For Windows users, the community has shared several frontend options to complement the command-line functionality of `video-compare`:
 
