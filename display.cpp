@@ -215,7 +215,11 @@ Display::Display(const int display_number,
 
     // account for window frame and title bar
     constexpr int border_width = 10;
+#ifdef __linux__
+    constexpr int border_height = 40;
+#else
     constexpr int border_height = 34;
+#endif
 
     const int usable_width = std::max(bounds.w - border_width, min_width);
     const int usable_height = std::max(bounds.h - border_height, min_height);
