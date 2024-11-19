@@ -150,7 +150,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       timer_{std::make_unique<Timer>()},
       packet_queue_{std::make_unique<PacketQueue>(QUEUE_SIZE), std::make_unique<PacketQueue>(QUEUE_SIZE)},
       decoded_frame_queue_{std::make_unique<DecodedFrameQueue>(QUEUE_SIZE), std::make_unique<DecodedFrameQueue>(QUEUE_SIZE)},
-      filtered_frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
+      filtered_frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)},
+      converted_frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
   auto dump_video_info = [&](const std::string& label, const Side side, const std::string& file_name) {
     const std::string dimensions = string_sprintf("%dx%d", video_decoder_[side]->width(), video_decoder_[side]->height());
     const std::string pixel_format_and_color_space =
@@ -184,6 +185,8 @@ void VideoCompare::operator()() {
   stages_.emplace_back(&VideoCompare::thread_decode_video_right, this);
   stages_.emplace_back(&VideoCompare::thread_filter_left, this);
   stages_.emplace_back(&VideoCompare::thread_filter_right, this);
+  stages_.emplace_back(&VideoCompare::thread_format_converter_left, this);
+  stages_.emplace_back(&VideoCompare::thread_format_converter_right, this);
 
   compare();
 
@@ -383,37 +386,72 @@ void VideoCompare::filter_video(const Side side) {
   }
 }
 
-bool VideoCompare::filter_decoded_frame(const Side side, AVFrameSharedPtr frame_decoded) {
+void VideoCompare::filter_decoded_frame(const Side side, AVFrameSharedPtr frame_decoded) {
   // send decoded frame to filterer
   if (!video_filterer_[side]->send(frame_decoded.get())) {
     throw std::runtime_error("Error while feeding the filter graph");
   }
 
-  AVFrameUniquePtr frame_filtered{av_frame_alloc(), avframe_deleter};
-
   while (true) {
+    AVFrameUniquePtr frame_filtered{av_frame_alloc(), avframe_deleter};
+
     // get next filtered frame
     if (!video_filterer_[side]->receive(frame_filtered.get())) {
       break;
     }
 
-    // scale and convert pixel format before pushing to frame queue for displaying
-    AVFrameUniquePtr frame_converted{av_frame_alloc(), avframe_and_data_deleter};
-
-    if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
-      throw std::runtime_error("Copying filtered frame properties");
-    }
-    if (av_image_alloc(frame_converted->data, frame_converted->linesize, format_converter_[side]->dest_width(), format_converter_[side]->dest_height(), format_converter_[side]->dest_pixel_format(), 64) < 0) {
-      throw std::runtime_error("Allocating converted picture");
-    }
-    (*format_converter_[side])(frame_filtered.get(), frame_converted.get());
-
-    if (!filtered_frame_queue_[side]->push(std::move(frame_converted))) {
-      return false;
+    if (!filtered_frame_queue_[side]->push(std::move(frame_filtered))) {
+      return;
     }
   }
 
-  return true;
+  return;
+}
+
+void VideoCompare::thread_format_converter_left() {
+  format_convert_video(LEFT);
+}
+
+void VideoCompare::thread_format_converter_right() {
+  format_convert_video(RIGHT);
+}
+
+void VideoCompare::format_convert_video(const Side side) {
+  try {
+    while (keep_running()) {
+      if (converted_frame_queue_[side]->is_stopped()) {
+        if (seeking_) {
+          ready_to_seek_.set(ReadyToSeek::CONVERTER, side);
+        }
+
+        sleep_for_ms(10);
+        continue;
+      }
+
+      AVFrameUniquePtr frame_filtered{av_frame_alloc(), avframe_deleter};
+
+      if (filtered_frame_queue_[side]->pop(frame_filtered)) {
+        // scale and convert pixel format before pushing to frame queue for displaying
+        AVFrameUniquePtr frame_converted{av_frame_alloc(), avframe_and_data_deleter};
+
+        if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
+          throw std::runtime_error("Copying filtered frame properties");
+        }
+        if (av_image_alloc(frame_converted->data, frame_converted->linesize, format_converter_[side]->dest_width(), format_converter_[side]->dest_height(), format_converter_[side]->dest_pixel_format(), 64) < 0) {
+          throw std::runtime_error("Allocating converted picture");
+        }
+        (*format_converter_[side])(frame_filtered.get(), frame_converted.get());
+
+        converted_frame_queue_[side]->push(std::move(frame_converted));
+      } else if (filtered_frame_queue_[side]->is_stopped() || seeking_) {
+        // Stop filtering
+        converted_frame_queue_[side]->stop();
+      }
+    }
+  } catch (...) {
+    exception_holder_.rethrow_stored_exception();
+    quit_queues(side);
+  }
 }
 
 bool VideoCompare::keep_running() const {
@@ -421,6 +459,7 @@ bool VideoCompare::keep_running() const {
 }
 
 void VideoCompare::quit_queues(const Side side) {
+  converted_frame_queue_[side]->quit();
   filtered_frame_queue_[side]->quit();
   decoded_frame_queue_[side]->quit();
   packet_queue_[side]->quit();
@@ -451,6 +490,7 @@ void VideoCompare::dump_debug_info(const int frame_number, const int right_time_
   dump_queues("packet demuxer", packet_queue_);
   dump_queues("decoder", decoded_frame_queue_);
   dump_queues("filterer", filtered_frame_queue_);
+  dump_queues("format converter", converted_frame_queue_);
 
   std::cout << "all_are_idle()=" << ready_to_seek_.all_are_idle() << std::endl;
 
@@ -548,6 +588,8 @@ void VideoCompare::compare() {
           decoded_frame_queue_[RIGHT]->empty();
           filtered_frame_queue_[LEFT]->empty();
           filtered_frame_queue_[RIGHT]->empty();
+          converted_frame_queue_[LEFT]->empty();
+          converted_frame_queue_[RIGHT]->empty();
         };
 
         while (!ready_to_seek_.all_are_idle()) {
@@ -606,13 +648,14 @@ void VideoCompare::compare() {
           packet_queue_[side]->restart();
           decoded_frame_queue_[side]->restart();
           filtered_frame_queue_[side]->restart();
+          converted_frame_queue_[side]->restart();
         };
 
         reset_queues(LEFT);
         reset_queues(RIGHT);
 
         auto pop_and_reset = [&](SideState& side_state, const int64_t& time_shift) {
-          filtered_frame_queue_[side_state.side_]->pop(side_state.frame_);
+          converted_frame_queue_[side_state.side_]->pop(side_state.frame_);
 
           if (side_state.frame_ != nullptr) {
             side_state.pts_ = side_state.frame_->pts - time_shift;
@@ -659,7 +702,7 @@ void VideoCompare::compare() {
       previous_state = current_state;
 #endif
       auto pop_frame = [&](SideState& side_state) {
-        const bool result = filtered_frame_queue_[side_state.side_]->pop(side_state.frame_);
+        const bool result = converted_frame_queue_[side_state.side_]->pop(side_state.frame_);
 
         if (result) {
           side_state.decoded_picture_number_++;
@@ -765,7 +808,7 @@ void VideoCompare::compare() {
       manage_frame_buffer(right);
 
       const bool no_activity = !skip_update && !adjusting && !store_frames;
-      const bool end_of_file = no_activity && (filtered_frame_queue_[LEFT]->is_stopped() || filtered_frame_queue_[RIGHT]->is_stopped());
+      const bool end_of_file = no_activity && (converted_frame_queue_[LEFT]->is_stopped() || converted_frame_queue_[RIGHT]->is_stopped());
       const bool buffer_is_full = left.frames_.size() == frame_buffer_size_ && right.frames_.size() == frame_buffer_size_;
 
       const int max_left_frame_index = static_cast<int>(left.frames_.size()) - 1;

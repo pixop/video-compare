@@ -30,7 +30,7 @@ enum Side { LEFT, RIGHT, Count };
 
 class ReadyToSeek {
  public:
-  enum ProcessorThread { DEMULTIPLEXER, DECODER, FILTERER, Count };
+  enum ProcessorThread { DEMULTIPLEXER, DECODER, FILTERER, CONVERTER, Count };
 
   ReadyToSeek() { reset(); }
 
@@ -112,7 +112,11 @@ class VideoCompare {
   void thread_filter_right();
   void filter_video(const Side side);
 
-  bool filter_decoded_frame(const Side side, AVFrameSharedPtr frame_decoded);
+  void filter_decoded_frame(const Side side, AVFrameSharedPtr frame_decoded);
+
+  void thread_format_converter_left();
+  void thread_format_converter_right();
+  void format_convert_video(const Side side);
 
   bool keep_running() const;
   void quit_queues(const Side side);
@@ -144,6 +148,7 @@ class VideoCompare {
   std::unique_ptr<PacketQueue> packet_queue_[Side::Count];
   std::shared_ptr<DecodedFrameQueue> decoded_frame_queue_[Side::Count];
   std::unique_ptr<FrameQueue> filtered_frame_queue_[Side::Count];
+  std::unique_ptr<FrameQueue> converted_frame_queue_[Side::Count];
 
   std::vector<std::thread> stages_;
 
