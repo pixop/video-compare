@@ -158,6 +158,7 @@ see all supported options.
 - J: Reduce playback speed
 - L: Increase playback speed
 - T: Toggle nearest-neighbor/bilinear video texture filtering
+- Y: Toggle fast/high-quality format conversion filtering
 - S: Swap left and right video
 - A: Move to the previous frame in the buffer
 - D: Move to the next frame in the buffer
