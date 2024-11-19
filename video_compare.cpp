@@ -12,7 +12,19 @@ extern "C" {
 #include <libavutil/time.h>
 }
 
-const size_t VideoCompare::QUEUE_SIZE{5};
+static constexpr size_t QUEUE_SIZE = 5;
+
+static auto avpacket_deleter = [](AVPacket* packet) {
+  av_packet_unref(packet);
+  delete packet;
+};
+
+static auto avframe_deleter = [](AVFrame* frame) { av_frame_free(&frame); };
+
+static auto avframe_and_data_deleter = [](AVFrame* frame) {
+  av_freep(&frame->data[0]);
+  avframe_deleter(frame);
+};
 
 static inline bool is_behind(int64_t frame1_pts, int64_t frame2_pts, int64_t delta_pts) {
   const float t1 = static_cast<float>(frame1_pts) * AV_TIME_TO_SEC;
@@ -69,6 +81,10 @@ static bool produces_same_decoded_video(const VideoCompareConfig& config) {
          compare_av_dictionaries(config.left.hw_accel_options, config.right.hw_accel_options);
 }
 
+static inline AVPixelFormat determine_pixel_format(const VideoCompareConfig& config) {
+  return config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24;
+}
+
 VideoCompare::VideoCompare(const VideoCompareConfig& config)
     : same_decoded_video_both_sides_(produces_same_decoded_video(config)),
       auto_loop_mode_(config.auto_loop_mode),
@@ -107,7 +123,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                           max_width_,
                                                           max_height_,
                                                           video_filterer_[LEFT]->dest_pixel_format(),
-                                                          config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24,
+                                                          determine_pixel_format(config),
                                                           video_decoder_[LEFT]->color_space(),
                                                           video_decoder_[LEFT]->color_range()),
                         std::make_unique<FormatConverter>(video_filterer_[RIGHT]->dest_width(),
@@ -115,7 +131,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                           max_width_,
                                                           max_height_,
                                                           video_filterer_[RIGHT]->dest_pixel_format(),
-                                                          config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24,
+                                                          determine_pixel_format(config),
                                                           video_decoder_[RIGHT]->color_space(),
                                                           video_decoder_[RIGHT]->color_range())},
       display_{std::make_unique<Display>(config.display_number,
@@ -134,7 +150,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       timer_{std::make_unique<Timer>()},
       packet_queue_{std::make_unique<PacketQueue>(QUEUE_SIZE), std::make_unique<PacketQueue>(QUEUE_SIZE)},
       decoded_frame_queue_{std::make_unique<DecodedFrameQueue>(QUEUE_SIZE), std::make_unique<DecodedFrameQueue>(QUEUE_SIZE)},
-      frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
+      filtered_frame_queue_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
   auto dump_video_info = [&](const std::string& label, const Side side, const std::string& file_name) {
     const std::string dimensions = string_sprintf("%dx%d", video_decoder_[side]->width(), video_decoder_[side]->height());
     const std::string pixel_format_and_color_space =
@@ -208,10 +224,7 @@ void VideoCompare::demultiplex(const Side side) {
       }
 
       // Create AVPacket
-      std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet{new AVPacket, [](AVPacket* p) {
-                                                                         av_packet_unref(p);
-                                                                         delete p;
-                                                                       }};
+      AVPacketUniquePtr packet{new AVPacket, avpacket_deleter};
       av_init_packet(packet.get());
       packet->data = nullptr;
 
@@ -258,11 +271,7 @@ void VideoCompare::decode_video(const Side side) {
         continue;
       }
 
-      // Create AVFrames and AVPacket
-      std::unique_ptr<AVPacket, std::function<void(AVPacket*)>> packet{nullptr, [](AVPacket* p) {
-                                                                         av_packet_unref(p);
-                                                                         delete p;
-                                                                       }};
+      AVPacketUniquePtr packet{nullptr, avpacket_deleter};
 
       // Read packet from queue
       if (!packet_queue_[side]->pop(packet)) {
@@ -295,17 +304,17 @@ bool VideoCompare::process_packet(const Side side, AVPacket* packet) {
   bool sent = video_decoder_[side]->send(packet);
 
   while (true) {
-    std::shared_ptr<AVFrame> frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
+    AVFrameSharedPtr frame_decoded{av_frame_alloc(), avframe_deleter};
 
     // If a whole frame has been decoded, adjust time stamps and add to queue
     if (!video_decoder_[side]->receive(frame_decoded.get(), demuxer_[side].get())) {
       break;
     }
 
-    std::shared_ptr<AVFrame> frame_for_filtering;
+    AVFrameSharedPtr frame_for_filtering;
 
     if (frame_decoded->format == video_decoder_[side]->hw_pixel_format()) {
-      std::shared_ptr<AVFrame> sw_frame_decoded{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
+      AVFrameSharedPtr sw_frame_decoded{av_frame_alloc(), avframe_deleter};
 
       // Transfer data from GPU to CPU
       if (av_hwframe_transfer_data(sw_frame_decoded.get(), frame_decoded.get(), 0) < 0) {
@@ -344,7 +353,7 @@ void VideoCompare::thread_filter_right() {
 void VideoCompare::filter_video(const Side side) {
   try {
     while (keep_running()) {
-      if (frame_queue_[side]->is_stopped()) {
+      if (filtered_frame_queue_[side]->is_stopped()) {
         if (seeking_) {
           ready_to_seek_.set(ReadyToSeek::FILTERER, side);
         }
@@ -353,7 +362,7 @@ void VideoCompare::filter_video(const Side side) {
         continue;
       }
 
-      std::shared_ptr<AVFrame> frame_to_filter;
+      AVFrameSharedPtr frame_to_filter;
 
       if (decoded_frame_queue_[side]->pop(frame_to_filter)) {
         filter_decoded_frame(side, frame_to_filter);
@@ -365,7 +374,7 @@ void VideoCompare::filter_video(const Side side) {
         filter_decoded_frame(side, nullptr);
 
         // Stop filtering
-        frame_queue_[side]->stop();
+        filtered_frame_queue_[side]->stop();
       }
     }
   } catch (...) {
@@ -374,13 +383,13 @@ void VideoCompare::filter_video(const Side side) {
   }
 }
 
-bool VideoCompare::filter_decoded_frame(const Side side, std::shared_ptr<AVFrame> frame_decoded) {
+bool VideoCompare::filter_decoded_frame(const Side side, AVFrameSharedPtr frame_decoded) {
   // send decoded frame to filterer
   if (!video_filterer_[side]->send(frame_decoded.get())) {
     throw std::runtime_error("Error while feeding the filter graph");
   }
 
-  std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_filtered{av_frame_alloc(), [](AVFrame* f) { av_frame_free(&f); }};
+  AVFrameUniquePtr frame_filtered{av_frame_alloc(), avframe_deleter};
 
   while (true) {
     // get next filtered frame
@@ -389,10 +398,7 @@ bool VideoCompare::filter_decoded_frame(const Side side, std::shared_ptr<AVFrame
     }
 
     // scale and convert pixel format before pushing to frame queue for displaying
-    std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_converted{av_frame_alloc(), [](AVFrame* f) {
-                                                                              av_freep(&f->data[0]);
-                                                                              av_frame_free(&f);
-                                                                            }};
+    AVFrameUniquePtr frame_converted{av_frame_alloc(), avframe_and_data_deleter};
 
     if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
       throw std::runtime_error("Copying filtered frame properties");
@@ -402,7 +408,7 @@ bool VideoCompare::filter_decoded_frame(const Side side, std::shared_ptr<AVFrame
     }
     (*format_converter_[side])(frame_filtered.get(), frame_converted.get());
 
-    if (!frame_queue_[side]->push(std::move(frame_converted))) {
+    if (!filtered_frame_queue_[side]->push(std::move(frame_converted))) {
       return false;
     }
   }
@@ -415,7 +421,7 @@ bool VideoCompare::keep_running() const {
 }
 
 void VideoCompare::quit_queues(const Side side) {
-  frame_queue_[side]->quit();
+  filtered_frame_queue_[side]->quit();
   decoded_frame_queue_[side]->quit();
   packet_queue_[side]->quit();
 }
@@ -444,12 +450,36 @@ void VideoCompare::dump_debug_info(const int frame_number, const int right_time_
 
   dump_queues("packet demuxer", packet_queue_);
   dump_queues("decoder", decoded_frame_queue_);
-  dump_queues("filterer", frame_queue_);
+  dump_queues("filterer", filtered_frame_queue_);
 
   std::cout << "all_are_idle()=" << ready_to_seek_.all_are_idle() << std::endl;
 
   std::cout << "--------------------------------------------------" << std::endl;
 }
+
+struct SideState {
+  SideState(const Side side, const std::string side_desc, const Demuxer* demuxer) : side_(side), side_desc_(std::move(side_desc)), start_time_(demuxer->start_time() * AV_TIME_TO_SEC), frame_duration_deque_(8) {
+    if (start_time_ > 0) {
+      std::cout << "Note: The " + side_desc + " video has a start time of " << format_position(start_time_, true) << " - timestamps will be shifted so they start at zero!" << std::endl;
+    }
+  }
+
+  const Side side_;
+  const std::string side_desc_;
+
+  const float start_time_;
+
+  std::deque<AVFrameUniquePtr> frames_;
+  AVFrameUniquePtr frame_{nullptr, avframe_deleter};
+
+  int64_t first_pts_ = 0;
+  int64_t pts_ = 0;
+  int64_t delta_pts_ = 0;
+  int64_t previous_decoded_picture_number_ = -1;
+  int64_t decoded_picture_number_ = 0;
+
+  sorted_flat_deque<int32_t> frame_duration_deque_;
+};
 
 void VideoCompare::compare() {
   try {
@@ -457,40 +487,10 @@ void VideoCompare::compare() {
     std::string previous_state;
 #endif
 
-    std::deque<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>> left_frames;
-    std::deque<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>> right_frames;
+    SideState left(LEFT, "left", demuxer_[LEFT].get());
+    SideState right(RIGHT, "right", demuxer_[RIGHT].get());
+
     int frame_offset = 0;
-
-    std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_left{nullptr, [](AVFrame* f) { av_frame_free(&f); }};
-    std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> frame_right{nullptr, [](AVFrame* f) { av_frame_free(&f); }};
-
-    int64_t left_pts = 0;
-    int64_t left_decoded_picture_number = 0;
-    int64_t left_previous_decoded_picture_number = -1;
-    int64_t delta_left_pts = 0;
-    int64_t left_first_pts = 0;
-    const float left_start_time = demuxer_[LEFT]->start_time() * AV_TIME_TO_SEC;
-
-    if (left_start_time > 0) {
-      std::cout << "Note: The left video has a start time of " << format_position(left_start_time, true) << " - timestamps will be shifted so they start at zero!" << std::endl;
-    }
-
-    int64_t right_pts = 0;
-    int64_t right_decoded_picture_number = 0;
-    int64_t right_previous_decoded_picture_number = -1;
-    int64_t delta_right_pts = 0;
-    int64_t right_first_pts = 0;
-    const float right_start_time = demuxer_[RIGHT]->start_time() * AV_TIME_TO_SEC;
-
-    if (right_start_time > 0) {
-      std::cout << "Note: The right video has a start time of " << format_position(right_start_time, true) << " - timestamps will be shifted so they start at zero!" << std::endl;
-    }
-
-    sorted_flat_deque<int32_t> left_deque(8);
-    sorted_flat_deque<int32_t> right_deque(8);
-
-    Timer refresh_timer;
-    sorted_flat_deque<int32_t> refresh_time_deque(8);
 
     int64_t right_time_shift = time_ms_to_av_time(time_shift_ms_);
     int total_right_time_shifted = 0;
@@ -498,6 +498,9 @@ void VideoCompare::compare() {
     int forward_navigate_frames = 0;
 
     bool auto_loop_triggered = false;
+
+    Timer refresh_timer;
+    sorted_flat_deque<int32_t> refresh_time_deque(8);
 
     for (uint64_t frame_number = 0;; ++frame_number) {
       std::string message;
@@ -526,7 +529,7 @@ void VideoCompare::compare() {
         total_right_time_shifted += display_->get_shift_right_frames();
 
         // compute effective time shift
-        right_time_shift = time_ms_to_av_time(time_shift_ms_) + total_right_time_shifted * (delta_right_pts > 0 ? delta_right_pts : 10000);
+        right_time_shift = time_ms_to_av_time(time_shift_ms_) + total_right_time_shifted * (right.delta_pts_ > 0 ? right.delta_pts_ : 10000);
 
         ready_to_seek_.reset();
         seeking_ = true;
@@ -543,8 +546,8 @@ void VideoCompare::compare() {
         auto empty_frame_queues = [&]() {
           decoded_frame_queue_[LEFT]->empty();
           decoded_frame_queue_[RIGHT]->empty();
-          frame_queue_[LEFT]->empty();
-          frame_queue_[RIGHT]->empty();
+          filtered_frame_queue_[LEFT]->empty();
+          filtered_frame_queue_[RIGHT]->empty();
         };
 
         while (!ready_to_seek_.all_are_idle()) {
@@ -566,19 +569,20 @@ void VideoCompare::compare() {
 
         float next_left_position, next_right_position;
 
-        const float left_position = left_pts * AV_TIME_TO_SEC + left_start_time;
-        const float right_position = left_pts * AV_TIME_TO_SEC + right_start_time;
+        // the left video is the "master"
+        const float left_position = left.pts_ * AV_TIME_TO_SEC + left.start_time_;
+        const float right_position = left.pts_ * AV_TIME_TO_SEC + right.start_time_;
 
         if (display_->get_seek_from_start()) {
           // seek from start based on the shortest stream duration in seconds
-          next_left_position = shortest_duration_ * display_->get_seek_relative() + left_start_time;
-          next_right_position = shortest_duration_ * display_->get_seek_relative() + right_start_time;
+          next_left_position = shortest_duration_ * display_->get_seek_relative() + left.start_time_;
+          next_right_position = shortest_duration_ * display_->get_seek_relative() + right.start_time_;
         } else {
           next_left_position = left_position + display_->get_seek_relative();
           next_right_position = right_position + display_->get_seek_relative();
 
           if (right_time_shift < 0) {
-            next_right_position += (right_time_shift + delta_right_pts) * AV_TIME_TO_SEC;
+            next_right_position += (right_time_shift + right.delta_pts_) * AV_TIME_TO_SEC;
           }
         }
 
@@ -601,21 +605,25 @@ void VideoCompare::compare() {
         auto reset_queues = [&](const Side side) {
           packet_queue_[side]->restart();
           decoded_frame_queue_[side]->restart();
-          frame_queue_[side]->restart();
+          filtered_frame_queue_[side]->restart();
         };
 
         reset_queues(LEFT);
         reset_queues(RIGHT);
 
-        frame_queue_[LEFT]->pop(frame_left);
+        auto pop_and_reset = [&](SideState& side_state, const int64_t& time_shift) {
+          filtered_frame_queue_[side_state.side_]->pop(side_state.frame_);
 
-        if (frame_left != nullptr) {
-          left_pts = frame_left->pts;
-          left_previous_decoded_picture_number = -1;
-          left_decoded_picture_number = 1;
+          if (side_state.frame_ != nullptr) {
+            side_state.pts_ = side_state.frame_->pts - time_shift;
+            side_state.previous_decoded_picture_number_ = -1;
+            side_state.decoded_picture_number_ = 1;
 
-          left_frames.clear();
-        }
+            side_state.frames_.clear();
+          }
+        };
+
+        pop_and_reset(left, 0);
 
         // round away from zero to nearest 2 ms
         if (right_time_shift > 0) {
@@ -624,17 +632,9 @@ void VideoCompare::compare() {
           right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
         }
 
-        frame_queue_[RIGHT]->pop(frame_right);
+        pop_and_reset(right, right_time_shift);
 
-        if (frame_right != nullptr) {
-          right_pts = frame_right->pts - right_time_shift;
-          right_previous_decoded_picture_number = -1;
-          right_decoded_picture_number = 1;
-
-          right_frames.clear();
-        }
-
-        // don't sync until the next iteration to prevent freezing when comparing an image
+        // don't sync until the next iteration to prevent freezing when comparing a single image
         skip_update = true;
       }
 
@@ -646,11 +646,11 @@ void VideoCompare::compare() {
       const bool fetch_next_frame = display_->get_play() || (forward_navigate_frames > 0);
 
       // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
-      const int64_t min_delta = compute_min_delta(delta_left_pts, delta_right_pts);
+      const int64_t min_delta = compute_min_delta(left.delta_pts_, right.delta_pts_);
 
 #ifdef _DEBUG
-      const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, right_time_shift=%5d", left_pts / 1000, is_behind(left_pts, right_pts, min_delta),
-                                                       (right_pts + right_time_shift) / 1000, is_behind(right_pts, left_pts, min_delta), min_delta / 1000, right_time_shift / 1000);
+      const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, right_time_shift=%5d", left.pts_ / 1000, is_behind(left.pts_, right.pts_, min_delta),
+                                                       (right.pts_ + right_time_shift) / 1000, is_behind(right.pts_, left.pts_, min_delta), min_delta / 1000, right_time_shift / 1000);
 
       if (current_state != previous_state) {
         std::cout << current_state << std::endl;
@@ -658,44 +658,45 @@ void VideoCompare::compare() {
 
       previous_state = current_state;
 #endif
+      auto pop_frame_and_increment = [&](SideState& side_state) {
+        const bool result = filtered_frame_queue_[side_state.side_]->pop(side_state.frame_);
 
-      if (is_behind(left_pts, right_pts, min_delta)) {
-        adjusting = true;
-
-        if (frame_queue_[LEFT]->pop(frame_left)) {
-          left_decoded_picture_number++;
+        if (result) {
+          side_state.decoded_picture_number_++;
         }
-      }
-      if (is_behind(right_pts, left_pts, min_delta)) {
-        adjusting = true;
 
-        if (frame_queue_[RIGHT]->pop(frame_right)) {
-          right_decoded_picture_number++;
+        return result;
+      };
+      auto sync_frame_queue = [&](SideState& side_state, const SideState& other_side) {
+        if (is_behind(side_state.pts_, other_side.pts_, min_delta)) {
+          adjusting = true;
+
+          pop_frame_and_increment(side_state);
         }
-      }
+      };
+
+      sync_frame_queue(left, right);
+      sync_frame_queue(right, left);
 
       // handle regular playback only
       if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
         if (!adjusting && fetch_next_frame) {
-          if (!frame_queue_[LEFT]->pop(frame_left) || !frame_queue_[RIGHT]->pop(frame_right)) {
-            frame_left = nullptr;
-            frame_right = nullptr;
+          if (!pop_frame_and_increment(left) || !pop_frame_and_increment(right)) {
+            left.frame_ = nullptr;
+            right.frame_ = nullptr;
 
             timer_->update();
           } else {
-            left_decoded_picture_number++;
-            right_decoded_picture_number++;
-
             store_frames = true;
 
             // update timer for regular playback
             if (frame_number > 0) {
-              const int64_t play_frame_delay = compute_frame_delay(frame_left->pts - left_pts, frame_right->pts - right_pts - right_time_shift);
+              const int64_t play_frame_delay = compute_frame_delay(left.frame_->pts - left.pts_, right.frame_->pts - right.pts_ - right_time_shift);
 
               timer_->shift_target(play_frame_delay / display_->get_playback_speed_factor());
             } else {
-              left_first_pts = frame_left->pts;
-              right_first_pts = frame_right->pts;
+              left.first_pts_ = left.frame_->pts;
+              right.first_pts_ = right.frame_->pts;
 
               timer_->update();
             }
@@ -710,93 +711,71 @@ void VideoCompare::compare() {
         forward_navigate_frames--;
       }
 
-      // 1. Update the duration of the last frame to its exact value once the next frame has been decoded
-      // 2. Compute the average PTS delta in a rolling-window fashion
-      // 3. Assume the duration of the current frame is approximately the value of the previous step
-      if (frame_left != nullptr) {
-        if ((left_decoded_picture_number - left_previous_decoded_picture_number) == 1) {
-          const int64_t last_duration = frame_left->pts - left_pts;
+      auto update_frame_timing = [](SideState& side_state, const int64_t& time_shift) {
+        if (side_state.frame_ != nullptr) {
+          // determine time-shifted PTS (note: new_pts only differs from frame->pts on the right side)
+          const int64_t new_pts = side_state.frame_->pts - time_shift;
 
-          left_deque.push_back(last_duration);
-          delta_left_pts = left_deque.average();
-        }
-        if (delta_left_pts > 0) {
-          ffmpeg::frame_duration(frame_left.get()) = delta_left_pts;
-
-          if (!left_frames.empty() && left_frames.back()->pts == left_first_pts) {
-            // update the duration of the first stored left frame
-            ffmpeg::frame_duration(left_frames.back().get()) = delta_left_pts;
+          if ((side_state.decoded_picture_number_ - side_state.previous_decoded_picture_number_) == 1) {
+            // compute the average PTS delta in a rolling-window fashion
+            const int64_t last_duration = new_pts - side_state.pts_;
+            side_state.frame_duration_deque_.push_back(last_duration);
+            side_state.delta_pts_ = side_state.frame_duration_deque_.average();
           }
-        } else {
-          delta_left_pts = ffmpeg::frame_duration(frame_left.get());
-        }
 
-        left_pts = frame_left->pts;
-        left_previous_decoded_picture_number = left_decoded_picture_number;
-      }
-      if (frame_right != nullptr) {
-        const int64_t new_right_pts = frame_right->pts - right_time_shift;
+          if (side_state.delta_pts_ > 0) {
+            // use the average PTS delta for frame duration
+            ffmpeg::frame_duration(side_state.frame_.get()) = side_state.delta_pts_;
 
-        if ((right_decoded_picture_number - right_previous_decoded_picture_number) == 1) {
-          const int64_t last_duration = new_right_pts - right_pts;
-
-          right_deque.push_back(last_duration);
-          delta_right_pts = right_deque.average();
-        }
-        if (delta_right_pts > 0) {
-          ffmpeg::frame_duration(frame_right.get()) = delta_right_pts;
-
-          if (!right_frames.empty() && right_frames.back()->pts == right_first_pts) {
-            // update the duration of the first stored right frame
-            ffmpeg::frame_duration(right_frames.back().get()) = delta_right_pts;
-          }
-        } else {
-          delta_right_pts = ffmpeg::frame_duration(frame_right.get());
-        }
-
-        right_pts = new_right_pts;
-        right_previous_decoded_picture_number = right_decoded_picture_number;
-      }
-
-      if (store_frames) {
-        if (left_frames.size() >= frame_buffer_size_) {
-          left_frames.pop_back();
-        }
-        if (right_frames.size() >= frame_buffer_size_) {
-          right_frames.pop_back();
-        }
-
-        left_frames.push_front(std::move(frame_left));
-        right_frames.push_front(std::move(frame_right));
-      } else {
-        if (frame_left != nullptr) {
-          if (!left_frames.empty()) {
-            left_frames.front() = std::move(frame_left);
+            if (!side_state.frames_.empty() && side_state.frames_.back()->pts == side_state.first_pts_) {
+              // update the duration of the first stored frame once the second frame has been decoded
+              ffmpeg::frame_duration(side_state.frames_.back().get()) = side_state.delta_pts_;
+            }
           } else {
-            left_frames.push_front(std::move(frame_left));
+            side_state.delta_pts_ = ffmpeg::frame_duration(side_state.frame_.get());
           }
+
+          side_state.pts_ = new_pts;
+          side_state.previous_decoded_picture_number_ = side_state.decoded_picture_number_;
         }
-        if (frame_right != nullptr) {
-          if (!right_frames.empty()) {
-            right_frames.front() = std::move(frame_right);
+      };
+
+      update_frame_timing(left, 0);
+      update_frame_timing(right, right_time_shift);
+
+      auto manage_frame_buffer = [&](SideState& side_state) {
+        auto& frame = side_state.frame_;
+        auto& frames = side_state.frames_;
+
+        if (store_frames) {
+          if (frames.size() >= frame_buffer_size_) {
+            frames.pop_back();
+          }
+          frames.push_front(std::move(frame));
+        } else if (frame != nullptr) {
+          if (!frames.empty()) {
+            frames.front() = std::move(frame);
           } else {
-            right_frames.push_front(std::move(frame_right));
+            frames.push_front(std::move(frame));
           }
         }
-      }
+      };
+
+      manage_frame_buffer(left);
+      manage_frame_buffer(right);
 
       const bool no_activity = !skip_update && !adjusting && !store_frames;
-      const bool end_of_file = no_activity && (frame_queue_[LEFT]->is_stopped() || frame_queue_[RIGHT]->is_stopped());
-      const bool buffer_is_full = left_frames.size() == frame_buffer_size_ && right_frames.size() == frame_buffer_size_;
+      const bool end_of_file = no_activity && (filtered_frame_queue_[LEFT]->is_stopped() || filtered_frame_queue_[RIGHT]->is_stopped());
+      const bool buffer_is_full = left.frames_.size() == frame_buffer_size_ && right.frames_.size() == frame_buffer_size_;
 
-      const int max_left_frame_index = static_cast<int>(left_frames.size()) - 1;
+      const int max_left_frame_index = static_cast<int>(left.frames_.size()) - 1;
 
       auto adjust_frame_offset = [max_left_frame_index](const int frame_offset, const int adjustment) { return std::min(std::max(0, frame_offset + adjustment), max_left_frame_index); };
 
       frame_offset = adjust_frame_offset(frame_offset, display_->get_frame_buffer_offset_delta());
 
-      if (frame_offset >= 0 && !left_frames.empty() && !right_frames.empty()) {
-        const bool is_playback_in_sync = is_in_sync(left_pts, right_pts, delta_left_pts, delta_right_pts);
+      if (frame_offset >= 0 && !left.frames_.empty() && !right.frames_.empty()) {
+        const bool is_playback_in_sync = is_in_sync(left.pts_, right.pts_, left.delta_pts_, right.delta_pts_);
 
         // reduce refresh rate to 10 Hz for faster re-syncing
         const bool skip_refresh = !is_playback_in_sync && refresh_timer.us_until_target() > -100000;
@@ -817,8 +796,8 @@ void VideoCompare::compare() {
           // refresh display
           refresh_timer.update();
 
-          const auto& left_frames_ref = !display_->get_swap_left_right() ? left_frames : right_frames;
-          const auto& right_frames_ref = !display_->get_swap_left_right() ? right_frames : left_frames;
+          const auto& left_frames_ref = !display_->get_swap_left_right() ? left.frames_ : right.frames_;
+          const auto& right_frames_ref = !display_->get_swap_left_right() ? right.frames_ : left.frames_;
 
           display_->refresh(left_frames_ref[frame_offset].get(), right_frames_ref[frame_offset].get(), current_total_browsable, message);
 
@@ -850,7 +829,7 @@ void VideoCompare::compare() {
             }
 
             // update timer for accurate in-buffer playback
-            const int64_t in_buffer_frame_delay = compute_frame_delay(ffmpeg::frame_duration(left_frames[frame_offset].get()), ffmpeg::frame_duration(right_frames[frame_offset].get()));
+            const int64_t in_buffer_frame_delay = compute_frame_delay(ffmpeg::frame_duration(left.frames_[frame_offset].get()), ffmpeg::frame_duration(right.frames_[frame_offset].get()));
 
             timer_->shift_target(in_buffer_frame_delay / display_->get_playback_speed_factor());
           }

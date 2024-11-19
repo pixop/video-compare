@@ -18,9 +18,13 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
-using PacketQueue = Queue<std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>>;
-using DecodedFrameQueue = Queue<std::shared_ptr<AVFrame>>;
-using FrameQueue = Queue<std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>>;
+using AVPacketUniquePtr = std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>;
+using AVFrameSharedPtr = std::shared_ptr<AVFrame>;
+using AVFrameUniquePtr = std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>;
+
+using PacketQueue = Queue<AVPacketUniquePtr>;
+using DecodedFrameQueue = Queue<AVFrameSharedPtr>;
+using FrameQueue = Queue<AVFrameUniquePtr>;
 
 enum Side { LEFT, RIGHT, Count };
 
@@ -108,7 +112,7 @@ class VideoCompare {
   void thread_filter_right();
   void filter_video(const Side side);
 
-  bool filter_decoded_frame(const Side side, std::shared_ptr<AVFrame> frame_decoded);
+  bool filter_decoded_frame(const Side side, AVFrameSharedPtr frame_decoded);
 
   bool keep_running() const;
   void quit_queues(const Side side);
@@ -120,8 +124,6 @@ class VideoCompare {
   void compare();
 
  private:
-  static const size_t QUEUE_SIZE;
-
   bool same_decoded_video_both_sides_;
 
   Display::Loop auto_loop_mode_;
@@ -141,7 +143,7 @@ class VideoCompare {
   std::unique_ptr<Timer> timer_;
   std::unique_ptr<PacketQueue> packet_queue_[Side::Count];
   std::shared_ptr<DecodedFrameQueue> decoded_frame_queue_[Side::Count];
-  std::unique_ptr<FrameQueue> frame_queue_[Side::Count];
+  std::unique_ptr<FrameQueue> filtered_frame_queue_[Side::Count];
 
   std::vector<std::thread> stages_;
 
