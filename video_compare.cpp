@@ -658,7 +658,7 @@ void VideoCompare::compare() {
 
       previous_state = current_state;
 #endif
-      auto pop_frame_and_increment = [&](SideState& side_state) {
+      auto pop_frame = [&](SideState& side_state) {
         const bool result = filtered_frame_queue_[side_state.side_]->pop(side_state.frame_);
 
         if (result) {
@@ -671,7 +671,7 @@ void VideoCompare::compare() {
         if (is_behind(side_state.pts_, other_side.pts_, min_delta)) {
           adjusting = true;
 
-          pop_frame_and_increment(side_state);
+          pop_frame(side_state);
         }
       };
 
@@ -681,7 +681,7 @@ void VideoCompare::compare() {
       // handle regular playback only
       if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
         if (!adjusting && fetch_next_frame) {
-          if (!pop_frame_and_increment(left) || !pop_frame_and_increment(right)) {
+          if (!pop_frame(left) || !pop_frame(right)) {
             left.frame_ = nullptr;
             right.frame_ = nullptr;
 
