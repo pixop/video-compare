@@ -1515,6 +1515,9 @@ void Display::input() {
           case SDLK_t:
             use_bilinear_texture_filtering_ = !use_bilinear_texture_filtering_;
             break;
+          case SDLK_y:
+            fast_format_adaption_ = !fast_format_adaption_;
+            break;
           case SDLK_s: {
             swap_left_right_ = !swap_left_right_;
 
@@ -1652,6 +1655,10 @@ bool Display::get_buffer_play_forward() const {
 
 void Display::toggle_buffer_play_direction() {
   buffer_play_forward_ = !buffer_play_forward_;
+}
+
+bool Display::get_fast_format_adaption() const {
+  return fast_format_adaption_;
 }
 
 bool Display::get_swap_left_right() const {

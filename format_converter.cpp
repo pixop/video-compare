@@ -28,7 +28,15 @@ inline int get_sws_range(const AVColorRange color_range) {
   return color_range == AVCOL_RANGE_JPEG ? 1 : 0;
 }
 
-FormatConverter::FormatConverter(size_t src_width, size_t src_height, size_t dest_width, size_t dest_height, AVPixelFormat src_pixel_format, AVPixelFormat dest_pixel_format, AVColorSpace src_color_space, AVColorRange src_color_range)
+FormatConverter::FormatConverter(size_t src_width,
+                                 size_t src_height,
+                                 size_t dest_width,
+                                 size_t dest_height,
+                                 AVPixelFormat src_pixel_format,
+                                 AVPixelFormat dest_pixel_format,
+                                 AVColorSpace src_color_space,
+                                 AVColorRange src_color_range,
+                                 int flags)
     : src_width_{src_width},
       src_height_{src_height},
       src_pixel_format_{src_pixel_format},
@@ -36,7 +44,9 @@ FormatConverter::FormatConverter(size_t src_width, size_t src_height, size_t des
       dest_height_{dest_height},
       dest_pixel_format_{dest_pixel_format},
       src_color_space_{src_color_space},
-      src_color_range_{src_color_range} {
+      src_color_range_{src_color_range},
+      active_flags_(flags),
+      pending_flags_(active_flags_) {
   init();
 }
 
@@ -51,7 +61,7 @@ void FormatConverter::init() {
       // Destination
       dest_width(), dest_height(), dest_pixel_format(),
       // Filters
-      SWS_BICUBIC, nullptr, nullptr, nullptr);
+      active_flags_, nullptr, nullptr, nullptr);
 
   // set colorspace details
   const int sws_color_space = get_sws_colorspace(src_color_space_);
@@ -94,6 +104,10 @@ AVPixelFormat FormatConverter::dest_pixel_format() const {
   return dest_pixel_format_;
 }
 
+void FormatConverter::set_pending_flags(const int flags) {
+  pending_flags_ = flags;
+}
+
 void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
   bool must_reinit = false;
 
@@ -119,6 +133,10 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
   }
   if (src_color_range_ != src->color_range) {
     src_color_range_ = src->color_range;
+    must_reinit = true;
+  }
+  if (pending_flags_ != active_flags_) {
+    active_flags_ = pending_flags_;
     must_reinit = true;
   }
 

@@ -134,21 +134,21 @@ class VideoCompare {
   const size_t frame_buffer_size_;
   const double time_shift_ms_;
 
-  std::unique_ptr<Demuxer> demuxer_[Side::Count];
-  std::unique_ptr<VideoDecoder> video_decoder_[Side::Count];
-  std::unique_ptr<VideoFilterer> video_filterer_[Side::Count];
+  std::unique_ptr<Demuxer> demuxers_[Side::Count];
+  std::unique_ptr<VideoDecoder> video_decoders_[Side::Count];
+  std::unique_ptr<VideoFilterer> video_filterers_[Side::Count];
 
   size_t max_width_;
   size_t max_height_;
   double shortest_duration_;
 
-  std::unique_ptr<FormatConverter> format_converter_[Side::Count];
+  std::unique_ptr<FormatConverter> format_converters_[Side::Count];
   std::unique_ptr<Display> display_;
   std::unique_ptr<Timer> timer_;
-  std::unique_ptr<PacketQueue> packet_queue_[Side::Count];
-  std::shared_ptr<DecodedFrameQueue> decoded_frame_queue_[Side::Count];
-  std::unique_ptr<FrameQueue> filtered_frame_queue_[Side::Count];
-  std::unique_ptr<FrameQueue> converted_frame_queue_[Side::Count];
+  std::unique_ptr<PacketQueue> packet_queues_[Side::Count];
+  std::shared_ptr<DecodedFrameQueue> decoded_frame_queues_[Side::Count];
+  std::unique_ptr<FrameQueue> filtered_frame_queues_[Side::Count];
+  std::unique_ptr<FrameQueue> converted_frame_queues_[Side::Count];
 
   std::vector<std::thread> stages_;
 
