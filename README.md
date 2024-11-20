@@ -255,9 +255,9 @@ Thanks to [couleurm](https://github.com/couleurm) for the sharing this tip and c
 
 For Windows users, the community has shared several frontend options to complement the command-line functionality:
 
-1. **Beyond Compare** Integration: Launch `video-compare` directly from the interface.
+1. **Beyond Compare** integration: Launch `video-compare` directly from the interface.
 
-2. **Total Commander** Integration: Add a toolbar button to open selected videos.
+2. **Total Commander** integration: Add a toolbar button to open selected videos.
 
 3. **[VideoCompareGUI](https://github.com/TetzkatLipHoka/VideoCompareGUI)**: A standalone graphical utility that simplifies launching `video-compare`.
 
