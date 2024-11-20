@@ -13,6 +13,7 @@ extern "C" {
 }
 
 static constexpr size_t QUEUE_SIZE = 5;
+static constexpr size_t SLEEP_PERIOD_MS = 10;
 
 static auto avpacket_deleter = [](AVPacket* packet) {
   av_packet_unref(packet);
@@ -217,12 +218,12 @@ void VideoCompare::demultiplex(const Side side) {
       if (seeking_ && ready_to_seek_.get(ReadyToSeek::DECODER, side)) {
         ready_to_seek_.set(ReadyToSeek::DEMULTIPLEXER, side);
 
-        sleep_for_ms(10);
+        sleep_for_ms(SLEEP_PERIOD_MS);
         continue;
       }
       // Sleep if we are finished for now
       if (packet_queues_[side]->is_stopped() || (side == RIGHT && single_decoder_mode_)) {
-        sleep_for_ms(10);
+        sleep_for_ms(SLEEP_PERIOD_MS);
         continue;
       }
 
@@ -270,7 +271,7 @@ void VideoCompare::decode_video(const Side side) {
           ready_to_seek_.set(ReadyToSeek::DECODER, side);
         }
 
-        sleep_for_ms(10);
+        sleep_for_ms(SLEEP_PERIOD_MS);
         continue;
       }
 
@@ -361,7 +362,7 @@ void VideoCompare::filter_video(const Side side) {
           ready_to_seek_.set(ReadyToSeek::FILTERER, side);
         }
 
-        sleep_for_ms(10);
+        sleep_for_ms(SLEEP_PERIOD_MS);
         continue;
       }
 
@@ -424,7 +425,7 @@ void VideoCompare::format_convert_video(const Side side) {
           ready_to_seek_.set(ReadyToSeek::CONVERTER, side);
         }
 
-        sleep_for_ms(10);
+        sleep_for_ms(SLEEP_PERIOD_MS);
         continue;
       }
 
@@ -557,7 +558,7 @@ void VideoCompare::compare() {
       }
 #endif
 
-      const int format_conversion_sws_flags = display_->get_fast_format_adaption() ? SWS_FAST_BILINEAR : SWS_BICUBIC;
+      const int format_conversion_sws_flags = display_->get_fast_input_alignment() ? SWS_FAST_BILINEAR : SWS_BICUBIC;
       format_converters_[LEFT]->set_pending_flags(format_conversion_sws_flags);
       format_converters_[RIGHT]->set_pending_flags(format_conversion_sws_flags);
 
@@ -598,7 +599,7 @@ void VideoCompare::compare() {
 
         while (!ready_to_seek_.all_are_idle()) {
           empty_frame_queues();
-          sleep_for_ms(10);
+          sleep_for_ms(SLEEP_PERIOD_MS);
 #ifdef _DEBUG
           dump_debug_info(frame_number, right_time_shift, refresh_time_deque.average());
 #endif
