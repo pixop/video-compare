@@ -157,8 +157,8 @@ see all supported options.
 - Page up: Seek 600 seconds forward
 - J: Reduce playback speed
 - L: Increase playback speed
+- I: Toggle fast/high-quality resizing for input alignment
 - T: Toggle nearest-neighbor/bilinear video texture filtering
-- Y: Toggle fast/high-quality format conversion filtering
 - S: Swap left and right video
 - A: Move to the previous frame in the buffer
 - D: Move to the next frame in the buffer

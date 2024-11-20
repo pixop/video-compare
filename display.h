@@ -95,7 +95,7 @@ class Display {
   bool show_left_{true};
   bool show_right_{true};
   bool show_hud_{true};
-  bool fast_format_adaption_{true};
+  bool fast_input_alignment_{true};
   bool use_bilinear_texture_filtering_{false};
   bool subtraction_mode_{false};
   float seek_relative_{0.0F};
@@ -243,7 +243,7 @@ class Display {
   void set_buffer_play_loop_mode(const Loop& mode);
   bool get_buffer_play_forward() const;
   void toggle_buffer_play_direction();
-  bool get_fast_format_adaption() const;
+  bool get_fast_input_alignment() const;
   bool get_swap_left_right() const;
   float get_seek_relative() const;
   bool get_seek_from_start() const;

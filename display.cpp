@@ -1512,13 +1512,13 @@ void Display::input() {
               frame_buffer_offset_delta_--;
             }
             break;
+          case SDLK_i:
+            fast_input_alignment_ = !fast_input_alignment_;
+            std::cout << "Input alignment resizing filter set to '" << (fast_input_alignment_ ? "BILINEAR (fast)" : "BICUBIC (high-quality)") << "' (takes effect for the next converted frame)" << std::endl;
+            break;
           case SDLK_t:
             use_bilinear_texture_filtering_ = !use_bilinear_texture_filtering_;
-            std::cout << "Video texture filtering changed to '" << (use_bilinear_texture_filtering_ ? "BILINEAR" : "NEAREST NEIGHBOR") << "'" << std::endl;
-            break;
-          case SDLK_y:
-            fast_format_adaption_ = !fast_format_adaption_;
-            std::cout << "Format conversion filtering changed to '" << (fast_format_adaption_ ? "BILINEAR (fast)" : "BICUBIC (high-quality)") << "' (takes effect for the next converted frame)" << std::endl;
+            std::cout << "Video texture filter set to '" << (use_bilinear_texture_filtering_ ? "BILINEAR" : "NEAREST NEIGHBOR") << "'" << std::endl;
             break;
           case SDLK_s: {
             swap_left_right_ = !swap_left_right_;
@@ -1659,8 +1659,8 @@ void Display::toggle_buffer_play_direction() {
   buffer_play_forward_ = !buffer_play_forward_;
 }
 
-bool Display::get_fast_format_adaption() const {
-  return fast_format_adaption_;
+bool Display::get_fast_input_alignment() const {
+  return fast_input_alignment_;
 }
 
 bool Display::get_swap_left_right() const {
