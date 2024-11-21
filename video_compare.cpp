@@ -649,12 +649,15 @@ void VideoCompare::compare() {
           }
         }
 
-        bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
+        const bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
 
 #ifdef _DEBUG
         std::cout << "SEEK: next_left_position=" << (int)(next_left_position * 1000) << ", next_right_position=" << (int)(next_right_position * 1000) << ", backward=" << backward << std::endl;
 #endif
-        if ((!demuxers_[LEFT]->seek(next_left_position, backward) && !backward) || (!demuxers_[RIGHT]->seek(next_right_position, backward) && !backward)) {
+        const bool left_seek_result = demuxers_[LEFT]->seek(next_left_position, backward);
+        const bool right_seek_result = demuxers_[RIGHT]->seek(next_right_position, backward);
+
+        if ((!left_seek_result && !backward) || (!right_seek_result && !backward)) {
           // restore position if unable to perform forward seek
           message = "Unable to seek past end of file";
 
