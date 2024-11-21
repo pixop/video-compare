@@ -920,7 +920,7 @@ void VideoCompare::compare() {
 
       ui_update_time_deque.push_back(-ui_update_timer.us_until_target());
 
-      // update video/UI update rate string every second (or if deque gets full)
+      // update video/UI frame rate string every second (or if deque gets full)
       if ((ui_update_time_deque.sum() > NOMINAL_FPS_UPDATE_RATE_US) || ui_update_time_deque.full()) {
         auto calculate_fps = [](const uint32_t num, const uint32_t denom) { return static_cast<float>(num) / static_cast<float>(denom); };
 

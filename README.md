@@ -178,7 +178,7 @@ see all supported options.
 - 0: Toggle video/subtraction mode
 - Plus `+`: Time-shift right video 1 frame forward
 - Minus `-`: Time-shift right video 1 frame backward
-- X: Show the current video and UI update rates (in FPS)
+- X: Show the current video frame and UI update rates (in FPS)
 
 Move the mouse horizontally to adjust the movable slider position.
 
