@@ -1394,7 +1394,7 @@ void Display::input() {
   frame_buffer_offset_delta_ = 0;
   frame_navigation_delta_ = 0;
   shift_right_frames_ = 0;
-  tick_playback_ = false;
+  possibly_reset_timer_ = false;
 
   while (SDL_PollEvent(&event_) != 0) {
     switch (event_.type) {
@@ -1465,19 +1465,19 @@ void Display::input() {
           case SDLK_SPACE:
             play_ = !play_;
             buffer_play_loop_mode_ = Loop::off;
-            tick_playback_ = true;
+            possibly_reset_timer_ = true;
             break;
           case SDLK_COMMA:
           case SDLK_KP_COMMA:
             buffer_play_loop_mode_ = buffer_play_loop_mode_ != Loop::pingpong ? Loop::pingpong : Loop::off;
             play_ = false;
-            tick_playback_ = true;
+            possibly_reset_timer_ = true;
             break;
           case SDLK_PERIOD:
             buffer_play_loop_mode_ = buffer_play_loop_mode_ != Loop::forwardonly ? Loop::forwardonly : Loop::off;
             buffer_play_forward_ = true;
             play_ = false;
-            tick_playback_ = true;
+            possibly_reset_timer_ = true;
             break;
           case SDLK_1:
           case SDLK_KP_1:
@@ -1589,10 +1589,14 @@ void Display::input() {
             break;
           case SDLK_j:
             update_playback_speed(playback_speed_level_ - 1);
+            possibly_reset_timer_ = true;
             break;
           case SDLK_l:
             update_playback_speed(playback_speed_level_ + 1);
-            tick_playback_ = true;
+            possibly_reset_timer_ = true;
+            break;
+          case SDLK_x:
+            show_fps_ = true;
             break;
           case SDLK_PLUS:
           case SDLK_KP_PLUS:
@@ -1626,6 +1630,9 @@ void Display::input() {
             break;
           case SDLK_c:
             zoom_right_ = false;
+            break;
+          case SDLK_x:
+            show_fps_ = false;
             break;
         }
         break;
@@ -1694,6 +1701,10 @@ float Display::get_playback_speed_factor() const {
   return playback_speed_factor_;
 }
 
-bool Display::get_tick_playback() const {
-  return tick_playback_;
+bool Display::get_possibly_reset_timer() const {
+  return possibly_reset_timer_;
+}
+
+bool Display::get_show_fps() const {
+  return show_fps_;
 }

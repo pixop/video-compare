@@ -14,6 +14,9 @@ extern "C" {
 
 static constexpr size_t QUEUE_SIZE = 5;
 static constexpr size_t SLEEP_PERIOD_MS = 10;
+static constexpr uint32_t ONE_SECOND_US = 1000 * 1000;
+static constexpr uint32_t RESYNC_UPDATE_RATE_US = ONE_SECOND_US / 10;
+static constexpr uint32_t NOMINAL_FPS_UPDATE_RATE_US = 1 * ONE_SECOND_US;
 
 static auto avpacket_deleter = [](AVPacket* packet) {
   av_packet_unref(packet);
@@ -516,10 +519,10 @@ struct SideState {
   int64_t first_pts_ = 0;
   int64_t pts_ = 0;
   int64_t delta_pts_ = 0;
-  int64_t previous_decoded_picture_number_ = -1;
-  int64_t decoded_picture_number_ = 0;
+  int32_t previous_decoded_picture_number_ = -1;
+  int32_t decoded_picture_number_ = 0;
 
-  sorted_flat_deque<int32_t> frame_duration_deque_;
+  sorted_flat_deque<int64_t> frame_duration_deque_;
 };
 
 void VideoCompare::compare() {
@@ -540,12 +543,24 @@ void VideoCompare::compare() {
 
     bool auto_loop_triggered = false;
 
-    Timer refresh_timer;
-    sorted_flat_deque<int32_t> refresh_time_deque(8);
+    // for refreshing the display only
+    Timer display_refresh_timer;
+    sorted_flat_deque<uint32_t> refresh_time_deque(8);
+
+    // for the full update cycle
+    Timer ui_update_timer;
+    sorted_flat_deque<uint32_t> ui_update_time_deque(NOMINAL_FPS_UPDATE_RATE_US / 1000);
+
+    int64_t previous_displayed_tag = -1;
+    int32_t unique_frame_tags_count = 0;
+    std::string fps_message;
 
     for (uint64_t frame_number = 0;; ++frame_number) {
-      std::string message;
+      std::string message = display_->get_show_fps() ? fps_message : "";
 
+      ui_update_timer.update();
+
+      // sample keyboard and mouse input events
       display_->input();
 
       if (!keep_running()) {
@@ -562,7 +577,8 @@ void VideoCompare::compare() {
       format_converters_[LEFT]->set_pending_flags(format_conversion_sws_flags);
       format_converters_[RIGHT]->set_pending_flags(format_conversion_sws_flags);
 
-      if (display_->get_tick_playback()) {
+      // allow 50 ms of lag without resetting timer (and ticking playback)
+      if (display_->get_possibly_reset_timer() && (timer_->us_until_target() < -50000)) {
         timer_->reset();
       }
 
@@ -826,7 +842,7 @@ void VideoCompare::compare() {
         const bool is_playback_in_sync = is_in_sync(left.pts_, right.pts_, left.delta_pts_, right.delta_pts_);
 
         // reduce refresh rate to 10 Hz for faster re-syncing
-        const bool skip_refresh = !is_playback_in_sync && refresh_timer.us_until_target() > -100000;
+        const bool skip_refresh = !is_playback_in_sync && display_refresh_timer.us_until_target() > -RESYNC_UPDATE_RATE_US;
 
         if (!skip_refresh) {
           std::string prefix_str, suffix_str;
@@ -841,15 +857,26 @@ void VideoCompare::compare() {
           const std::string frame_offset_format_str = string_sprintf("%%s%%0%dd/%%0%dd%%s", max_digits, max_digits);
           const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, max_left_frame_index + 1, suffix_str.c_str());
 
-          // refresh display
-          refresh_timer.update();
-
           const auto& left_frames_ref = !display_->get_swap_left_right() ? left.frames_ : right.frames_;
           const auto& right_frames_ref = !display_->get_swap_left_right() ? right.frames_ : left.frames_;
 
-          display_->refresh(left_frames_ref[frame_offset].get(), right_frames_ref[frame_offset].get(), current_total_browsable, message);
+          const auto left_display_frame = left_frames_ref[frame_offset].get();
+          const auto right_display_frame = right_frames_ref[frame_offset].get();
 
-          refresh_time_deque.push_back(-refresh_timer.us_until_target());
+          // count the number of unique video frames displayed
+          const int64_t displayed_tag = (left_display_frame->pts << 20) | right_display_frame->pts;
+
+          if (displayed_tag != previous_displayed_tag) {
+            unique_frame_tags_count++;
+            previous_displayed_tag = displayed_tag;
+          }
+
+          // refresh display
+          display_refresh_timer.update();
+
+          display_->refresh(left_display_frame, right_display_frame, current_total_browsable, message);
+
+          refresh_time_deque.push_back(-display_refresh_timer.us_until_target());
 
           // check if sleeping is the best option for accurate playback by taking the average refresh time into account
           const int64_t time_until_final_refresh = timer_->us_until_target();
@@ -889,6 +916,21 @@ void VideoCompare::compare() {
             auto_loop_triggered = true;
           }
         }
+      }
+
+      ui_update_time_deque.push_back(-ui_update_timer.us_until_target());
+
+      // update video/UI update rate string every second (or if deque gets full)
+      if ((ui_update_time_deque.sum() > NOMINAL_FPS_UPDATE_RATE_US) || ui_update_time_deque.full()) {
+        auto calculate_fps = [](const uint32_t num, const uint32_t denom) { return static_cast<float>(num) / static_cast<float>(denom); };
+
+        const float video_fps = calculate_fps(ONE_SECOND_US * unique_frame_tags_count, ui_update_time_deque.sum());
+        const float ui_fps = calculate_fps(ONE_SECOND_US, ui_update_time_deque.average());
+
+        fps_message = string_sprintf("Video/UI FPS: %.1f/%.1f", video_fps, ui_fps);
+
+        ui_update_time_deque.clear();
+        unique_frame_tags_count = 0;
       }
     }
   } catch (...) {
