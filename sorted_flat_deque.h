@@ -405,6 +405,9 @@ public:
     value_t average() const {
         return m_nodes.size() > 0 ? m_sum / static_cast<value_t>(m_nodes.size()) : 0;
     }
+    value_t sum() const {
+        return m_sum;
+    }
     position_t size() const {
         return m_size;
     }
@@ -413,6 +416,9 @@ public:
     }
     bool empty() const {
         return m_size == 0;
+    }
+    bool full() const {
+        return size() == max_size();
     }
 
     // BidirectionalIterator
