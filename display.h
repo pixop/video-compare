@@ -109,7 +109,8 @@ class Display {
   bool mouse_is_inside_window_{false};
   int playback_speed_level_{0};
   float playback_speed_factor_{1.0F};
-  bool possibly_reset_timer_{false};
+  bool tick_playback_{false};
+  bool possibly_tick_playback_{false};
   bool show_fps_{false};
 
   float global_zoom_level_{0.0F};
@@ -252,6 +253,7 @@ class Display {
   int get_frame_navigation_delta() const;
   int get_shift_right_frames() const;
   float get_playback_speed_factor() const;
-  bool get_possibly_reset_timer() const;
+  bool get_tick_playback() const;
+  bool get_possibly_tick_playback() const;
   bool get_show_fps() const;
 };

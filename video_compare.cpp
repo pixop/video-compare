@@ -578,7 +578,7 @@ void VideoCompare::compare() {
       format_converters_[RIGHT]->set_pending_flags(format_conversion_sws_flags);
 
       // allow 50 ms of lag without resetting timer (and ticking playback)
-      if (display_->get_possibly_reset_timer() && (timer_->us_until_target() < -50000)) {
+      if (display_->get_tick_playback() || (display_->get_possibly_tick_playback() && (timer_->us_until_target() < -50000))) {
         timer_->reset();
       }
 
