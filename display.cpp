@@ -1465,16 +1465,19 @@ void Display::input() {
           case SDLK_SPACE:
             play_ = !play_;
             buffer_play_loop_mode_ = Loop::off;
+            tick_playback_ = true;
             break;
           case SDLK_COMMA:
           case SDLK_KP_COMMA:
             buffer_play_loop_mode_ = buffer_play_loop_mode_ != Loop::pingpong ? Loop::pingpong : Loop::off;
             play_ = false;
+            tick_playback_ = true;
             break;
           case SDLK_PERIOD:
             buffer_play_loop_mode_ = buffer_play_loop_mode_ != Loop::forwardonly ? Loop::forwardonly : Loop::off;
             buffer_play_forward_ = true;
             play_ = false;
+            tick_playback_ = true;
             break;
           case SDLK_1:
           case SDLK_KP_1:
