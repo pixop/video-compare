@@ -89,6 +89,14 @@ static inline AVPixelFormat determine_pixel_format(const VideoCompareConfig& con
   return config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24;
 }
 
+static inline int determine_sws_flags(const bool high_quality) {
+  return high_quality ? SWS_BICUBIC : SWS_FAST_BILINEAR;
+}
+
+static inline int determine_sws_flags(const VideoCompareConfig& config) {
+  return determine_sws_flags(config.high_quality_input_alignment);
+}
+
 VideoCompare::VideoCompare(const VideoCompareConfig& config)
     : same_decoded_video_both_sides_(produces_same_decoded_video(config)),
       auto_loop_mode_(config.auto_loop_mode),
@@ -129,7 +137,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                            video_filterers_[LEFT]->dest_pixel_format(),
                                                            determine_pixel_format(config),
                                                            video_decoders_[LEFT]->color_space(),
-                                                           video_decoders_[LEFT]->color_range()),
+                                                           video_decoders_[LEFT]->color_range(),
+                                                           determine_sws_flags(config)),
                          std::make_unique<FormatConverter>(video_filterers_[RIGHT]->dest_width(),
                                                            video_filterers_[RIGHT]->dest_height(),
                                                            max_width_,
@@ -137,13 +146,15 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                            video_filterers_[RIGHT]->dest_pixel_format(),
                                                            determine_pixel_format(config),
                                                            video_decoders_[RIGHT]->color_space(),
-                                                           video_decoders_[RIGHT]->color_range())},
+                                                           video_decoders_[RIGHT]->color_range(),
+                                                           determine_sws_flags(config))},
       display_{std::make_unique<Display>(config.display_number,
                                          config.display_mode,
                                          config.verbose,
                                          config.fit_window_to_usable_bounds,
                                          config.high_dpi_allowed,
                                          config.use_10_bpc,
+                                         config.high_quality_input_alignment,
                                          config.window_size,
                                          max_width_,
                                          max_height_,
@@ -573,7 +584,7 @@ void VideoCompare::compare() {
       }
 #endif
 
-      const int format_conversion_sws_flags = display_->get_fast_input_alignment() ? SWS_FAST_BILINEAR : SWS_BICUBIC;
+      const int format_conversion_sws_flags = determine_sws_flags(display_->get_high_quality_input_alignment());
       format_converters_[LEFT]->set_pending_flags(format_conversion_sws_flags);
       format_converters_[RIGHT]->set_pending_flags(format_conversion_sws_flags);
 

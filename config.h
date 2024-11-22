@@ -27,6 +27,7 @@ struct VideoCompareConfig {
   bool fit_window_to_usable_bounds{false};
   bool high_dpi_allowed{false};
   bool use_10_bpc{false};
+  bool high_quality_input_alignment{false};
   bool disable_auto_filters{false};
 
   int display_number{0};

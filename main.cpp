@@ -218,6 +218,7 @@ int main(int argc, char** argv) {
                               {"verbose", {"-v", "--verbose"}, "enable verbose output, including information such as library versions and rendering details", 0},
                               {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
                               {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
+                              {"hq-alignment", {"-q", "--hq-alignment"}, "use higher-quality bicubic interpolation for aligning the resolution of input sources instead of faster bilinear scaling", 0},
                               {"display-number", {"-n", "--display-number"}, "open main window on specific display (e.g. 0, 1 or 2), default is 0", 1},
                               {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
                               {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
@@ -278,6 +279,7 @@ int main(int argc, char** argv) {
       config.fit_window_to_usable_bounds = args["window-fit-display"];
       config.high_dpi_allowed = args["high-dpi"];
       config.use_10_bpc = args["10-bpc"];
+      config.high_quality_input_alignment = args["hq-alignment"];
       config.disable_auto_filters = args["disable-auto-filters"];
 
       if (args["display-number"]) {

@@ -70,6 +70,7 @@ class Display {
   const bool fit_window_to_usable_bounds_;
   const bool high_dpi_allowed_;
   const bool use_10_bpc_;
+  bool high_quality_input_alignment_{true};
   const int video_width_;
   const int video_height_;
   const double duration_;
@@ -95,7 +96,6 @@ class Display {
   bool show_left_{true};
   bool show_right_{true};
   bool show_hud_{true};
-  bool fast_input_alignment_{true};
   bool use_bilinear_texture_filtering_{false};
   bool subtraction_mode_{false};
   float seek_relative_{0.0F};
@@ -224,6 +224,7 @@ class Display {
           const bool fit_window_to_usable_bounds,
           const bool high_dpi_allowed,
           const bool use_10_bpc,
+          const bool high_quality_input_alignment,
           const std::tuple<int, int> window_size,
           const unsigned width,
           const unsigned height,
@@ -245,7 +246,7 @@ class Display {
   void set_buffer_play_loop_mode(const Loop& mode);
   bool get_buffer_play_forward() const;
   void toggle_buffer_play_direction();
-  bool get_fast_input_alignment() const;
+  bool get_high_quality_input_alignment() const;
   bool get_swap_left_right() const;
   float get_seek_relative() const;
   bool get_seek_from_start() const;
