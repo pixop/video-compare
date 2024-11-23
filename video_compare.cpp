@@ -97,6 +97,11 @@ static inline int determine_sws_flags(const VideoCompareConfig& config) {
   return determine_sws_flags(config.high_quality_input_alignment);
 }
 
+static void sleep_for_ms(const int ms) {
+  std::chrono::milliseconds sleep(ms);
+  std::this_thread::sleep_for(sleep);
+}
+
 VideoCompare::VideoCompare(const VideoCompareConfig& config)
     : same_decoded_video_both_sides_(produces_same_decoded_video(config)),
       auto_loop_mode_(config.auto_loop_mode),
@@ -218,11 +223,6 @@ void VideoCompare::thread_demultiplex_left() {
 
 void VideoCompare::thread_demultiplex_right() {
   demultiplex(RIGHT);
-}
-
-void VideoCompare::sleep_for_ms(const int ms) {
-  std::chrono::milliseconds sleep(ms);
-  std::this_thread::sleep_for(sleep);
 }
 
 void VideoCompare::demultiplex(const Side side) {
