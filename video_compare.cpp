@@ -562,8 +562,8 @@ void VideoCompare::compare() {
     Timer full_cycle_timer;
     sorted_flat_deque<uint32_t> full_cycle_time_deque(NOMINAL_FPS_UPDATE_RATE_US / 1000);
 
-    int64_t previous_displayed_tag = -1;
-    int32_t unique_frame_tags_count = 0;
+    int64_t previous_frame_combo_tag = -1;
+    int32_t unique_frame_combo_tags_processed = 0;
     std::string fps_message;
 
     double next_refresh_at = 0;
@@ -872,13 +872,13 @@ void VideoCompare::compare() {
           const auto left_display_frame = left_frames_ref[frame_offset].get();
           const auto right_display_frame = right_frames_ref[frame_offset].get();
 
-          // count the number of unique in-sync video frames displayed
+          // count the number of unique in-sync video frame combinations processed
           if (is_playback_in_sync) {
-            const int64_t displayed_tag = (left_display_frame->pts << 20) | right_display_frame->pts;
+            const int64_t frame_combo_tag = (left_display_frame->pts << 20) | right_display_frame->pts;
 
-            if (displayed_tag != previous_displayed_tag) {
-              unique_frame_tags_count++;
-              previous_displayed_tag = displayed_tag;
+            if (frame_combo_tag != previous_frame_combo_tag) {
+              unique_frame_combo_tags_processed++;
+              previous_frame_combo_tag = frame_combo_tag;
             }
           }
 
@@ -956,13 +956,13 @@ void VideoCompare::compare() {
         if ((full_cycle_time_deque.sum() > NOMINAL_FPS_UPDATE_RATE_US) || full_cycle_time_deque.full()) {
           auto calculate_fps = [](const uint32_t num, const uint32_t denom) { return static_cast<float>(num) / static_cast<float>(denom); };
 
-          const float video_fps = calculate_fps(ONE_SECOND_US * unique_frame_tags_count, full_cycle_time_deque.sum());
+          const float video_fps = calculate_fps(ONE_SECOND_US * unique_frame_combo_tags_processed, full_cycle_time_deque.sum());
           const float ui_fps = calculate_fps(ONE_SECOND_US, full_cycle_time_deque.average());
 
           fps_message = string_sprintf("Video/UI FPS: %.1f/%.1f", video_fps, ui_fps);
 
           full_cycle_time_deque.clear();
-          unique_frame_tags_count = 0;
+          unique_frame_combo_tags_processed = 0;
         }
       }
     }
