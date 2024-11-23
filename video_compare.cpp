@@ -556,6 +556,9 @@ void VideoCompare::compare() {
 
     bool auto_loop_triggered = false;
 
+    const int max_digits = std::log10(frame_buffer_size_) + 1;
+    const std::string frame_offset_format_str = string_sprintf("%%s%%0%dd/%%0%dd%%s", max_digits, max_digits);
+
     // for refreshing the display only
     Timer display_refresh_timer;
     sorted_flat_deque<uint32_t> refresh_time_deque(8);
@@ -893,8 +896,6 @@ void VideoCompare::compare() {
               suffix_str = "]";
             }
 
-            const int max_digits = std::log10(frame_buffer_size_) + 1;
-            const std::string frame_offset_format_str = string_sprintf("%%s%%0%dd/%%0%dd%%s", max_digits, max_digits);
             const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, max_left_frame_index + 1, suffix_str.c_str());
 
             // update UI
