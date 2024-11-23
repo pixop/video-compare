@@ -1472,15 +1472,10 @@ void Display::input() {
             break;
           case SDLK_COMMA:
           case SDLK_KP_COMMA:
-            buffer_play_loop_mode_ = buffer_play_loop_mode_ != Loop::pingpong ? Loop::pingpong : Loop::off;
-            play_ = false;
-            tick_playback_ = true;
+            set_buffer_play_loop_mode(buffer_play_loop_mode_ != Loop::pingpong ? Loop::pingpong : Loop::off);
             break;
           case SDLK_PERIOD:
-            buffer_play_loop_mode_ = buffer_play_loop_mode_ != Loop::forwardonly ? Loop::forwardonly : Loop::off;
-            buffer_play_forward_ = true;
-            play_ = false;
-            tick_playback_ = true;
+            set_buffer_play_loop_mode(buffer_play_loop_mode_ != Loop::forwardonly ? Loop::forwardonly : Loop::off);
             break;
           case SDLK_1:
           case SDLK_KP_1:
@@ -1662,6 +1657,12 @@ Display::Loop Display::get_buffer_play_loop_mode() const {
 
 void Display::set_buffer_play_loop_mode(const Display::Loop& mode) {
   buffer_play_loop_mode_ = mode;
+  play_ = false;
+  tick_playback_ = true;
+
+  if (mode == Loop::forwardonly) {
+    buffer_play_forward_ = true;
+  }
 }
 
 bool Display::get_buffer_play_forward() const {
