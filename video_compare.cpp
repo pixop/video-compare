@@ -13,7 +13,9 @@ extern "C" {
 }
 
 static constexpr size_t QUEUE_SIZE = 5;
-static constexpr size_t SLEEP_PERIOD_MS = 10;
+
+static constexpr uint32_t SLEEP_PERIOD_MS = 10;
+
 static constexpr uint32_t ONE_SECOND_US = 1000 * 1000;
 static constexpr uint32_t RESYNC_UPDATE_RATE_US = ONE_SECOND_US / 10;
 static constexpr uint32_t NOMINAL_FPS_UPDATE_RATE_US = 1 * ONE_SECOND_US;
@@ -97,7 +99,7 @@ static inline int determine_sws_flags(const VideoCompareConfig& config) {
   return determine_sws_flags(config.high_quality_input_alignment);
 }
 
-static void sleep_for_ms(const int ms) {
+static void sleep_for_ms(const uint32_t ms) {
   std::chrono::milliseconds sleep(ms);
   std::this_thread::sleep_for(sleep);
 }
