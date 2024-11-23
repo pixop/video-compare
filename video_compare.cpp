@@ -558,18 +558,20 @@ void VideoCompare::compare() {
     Timer display_refresh_timer;
     sorted_flat_deque<uint32_t> refresh_time_deque(8);
 
-    // for the full update cycle
-    Timer ui_update_timer;
-    sorted_flat_deque<uint32_t> ui_update_time_deque(NOMINAL_FPS_UPDATE_RATE_US / 1000);
+    // for the full cycle
+    Timer full_cycle_timer;
+    sorted_flat_deque<uint32_t> full_cycle_time_deque(NOMINAL_FPS_UPDATE_RATE_US / 1000);
 
     int64_t previous_displayed_tag = -1;
     int32_t unique_frame_tags_count = 0;
     std::string fps_message;
 
+    double next_refresh_at = 0;
+
     for (uint64_t frame_number = 0;; ++frame_number) {
       std::string message = display_->get_show_fps() ? fps_message : "";
 
-      ui_update_timer.update();
+      full_cycle_timer.update();
 
       // sample keyboard and mouse input events
       display_->input();
@@ -852,6 +854,8 @@ void VideoCompare::compare() {
 
       frame_offset = adjust_frame_offset(frame_offset, display_->get_frame_buffer_offset_delta());
 
+      bool ui_refresh_performed = false;
+
       if (frame_offset >= 0 && !left.frames_.empty() && !right.frames_.empty()) {
         const bool is_playback_in_sync = is_in_sync(left.pts_, right.pts_, left.delta_pts_, right.delta_pts_);
 
@@ -859,38 +863,53 @@ void VideoCompare::compare() {
         const bool skip_refresh = !is_playback_in_sync && display_refresh_timer.us_until_target() > -RESYNC_UPDATE_RATE_US;
 
         if (!skip_refresh) {
-          std::string prefix_str, suffix_str;
+          // conditionally refresh display in an attempt to keep up with the target playback speed
+          const uint64_t next_refresh_frame_number = lrintf(next_refresh_at);
 
-          // add [] to the current / total browsable string when in sync
-          if (fetch_next_frame && is_playback_in_sync) {
-            prefix_str = "[";
-            suffix_str = "]";
+          if (frame_number >= next_refresh_frame_number) {
+            const auto& left_frames_ref = !display_->get_swap_left_right() ? left.frames_ : right.frames_;
+            const auto& right_frames_ref = !display_->get_swap_left_right() ? right.frames_ : left.frames_;
+
+            const auto left_display_frame = left_frames_ref[frame_offset].get();
+            const auto right_display_frame = right_frames_ref[frame_offset].get();
+
+            // count the number of unique video frames displayed
+            const int64_t displayed_tag = (left_display_frame->pts << 20) | right_display_frame->pts;
+
+            if (displayed_tag != previous_displayed_tag) {
+              unique_frame_tags_count++;
+              previous_displayed_tag = displayed_tag;
+            }
+
+            std::string prefix_str, suffix_str;
+
+            // add [] to the current / total browsable string when in sync
+            if (fetch_next_frame && is_playback_in_sync) {
+              prefix_str = "[";
+              suffix_str = "]";
+            }
+
+            const int max_digits = std::log10(frame_buffer_size_) + 1;
+            const std::string frame_offset_format_str = string_sprintf("%%s%%0%dd/%%0%dd%%s", max_digits, max_digits);
+            const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, max_left_frame_index + 1, suffix_str.c_str());
+
+            // update UI
+            display_refresh_timer.update();
+            display_->refresh(left_display_frame, right_display_frame, current_total_browsable, message);
+            refresh_time_deque.push_back(-display_refresh_timer.us_until_target());
+
+            ui_refresh_performed = true;
+
+            // calculate next refresh based on target playback speed and refresh timing measurements
+            if (frame_number != next_refresh_frame_number) {
+              next_refresh_at = frame_number;
+            }
+
+            const float target_fps = 1000000.0f * display_->get_playback_speed_factor() / float(std::max(ffmpeg::frame_duration(left_display_frame), ffmpeg::frame_duration(right_display_frame)));
+            const float refresh_fps = std::max(1e-5f, 1000000.0f / static_cast<float>(refresh_time_deque.average()));
+
+            next_refresh_at += std::max(1.0f, target_fps / refresh_fps);
           }
-
-          const int max_digits = std::log10(frame_buffer_size_) + 1;
-          const std::string frame_offset_format_str = string_sprintf("%%s%%0%dd/%%0%dd%%s", max_digits, max_digits);
-          const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, max_left_frame_index + 1, suffix_str.c_str());
-
-          const auto& left_frames_ref = !display_->get_swap_left_right() ? left.frames_ : right.frames_;
-          const auto& right_frames_ref = !display_->get_swap_left_right() ? right.frames_ : left.frames_;
-
-          const auto left_display_frame = left_frames_ref[frame_offset].get();
-          const auto right_display_frame = right_frames_ref[frame_offset].get();
-
-          // count the number of unique video frames displayed
-          const int64_t displayed_tag = (left_display_frame->pts << 20) | right_display_frame->pts;
-
-          if (displayed_tag != previous_displayed_tag) {
-            unique_frame_tags_count++;
-            previous_displayed_tag = displayed_tag;
-          }
-
-          // refresh display
-          display_refresh_timer.update();
-
-          display_->refresh(left_display_frame, right_display_frame, current_total_browsable, message);
-
-          refresh_time_deque.push_back(-display_refresh_timer.us_until_target());
 
           // check if sleeping is the best option for accurate playback by taking the average refresh time into account
           const int64_t time_until_final_refresh = timer_->us_until_target();
@@ -932,19 +951,21 @@ void VideoCompare::compare() {
         }
       }
 
-      ui_update_time_deque.push_back(-ui_update_timer.us_until_target());
+      if (ui_refresh_performed) {
+        full_cycle_time_deque.push_back(-full_cycle_timer.us_until_target());
 
-      // update video/UI frame rate string every second (or if deque gets full)
-      if ((ui_update_time_deque.sum() > NOMINAL_FPS_UPDATE_RATE_US) || ui_update_time_deque.full()) {
-        auto calculate_fps = [](const uint32_t num, const uint32_t denom) { return static_cast<float>(num) / static_cast<float>(denom); };
+        // update video/UI frame rate string every second (or if deque gets full)
+        if ((full_cycle_time_deque.sum() > NOMINAL_FPS_UPDATE_RATE_US) || full_cycle_time_deque.full()) {
+          auto calculate_fps = [](const uint32_t num, const uint32_t denom) { return static_cast<float>(num) / static_cast<float>(denom); };
 
-        const float video_fps = calculate_fps(ONE_SECOND_US * unique_frame_tags_count, ui_update_time_deque.sum());
-        const float ui_fps = calculate_fps(ONE_SECOND_US, ui_update_time_deque.average());
+          const float video_fps = calculate_fps(ONE_SECOND_US * unique_frame_tags_count, full_cycle_time_deque.sum());
+          const float ui_fps = calculate_fps(ONE_SECOND_US, full_cycle_time_deque.average());
 
-        fps_message = string_sprintf("Video/UI FPS: %.1f/%.1f", video_fps, ui_fps);
+          fps_message = string_sprintf("Video/UI FPS: %.1f/%.1f", video_fps, ui_fps);
 
-        ui_update_time_deque.clear();
-        unique_frame_tags_count = 0;
+          full_cycle_time_deque.clear();
+          unique_frame_tags_count = 0;
+        }
       }
     }
   } catch (...) {
