@@ -866,21 +866,23 @@ void VideoCompare::compare() {
           // conditionally refresh display in an attempt to keep up with the target playback speed
           const uint64_t next_refresh_frame_number = lrintf(next_refresh_at);
 
-          if (frame_number >= next_refresh_frame_number) {
-            const auto& left_frames_ref = !display_->get_swap_left_right() ? left.frames_ : right.frames_;
-            const auto& right_frames_ref = !display_->get_swap_left_right() ? right.frames_ : left.frames_;
+          const auto& left_frames_ref = !display_->get_swap_left_right() ? left.frames_ : right.frames_;
+          const auto& right_frames_ref = !display_->get_swap_left_right() ? right.frames_ : left.frames_;
 
-            const auto left_display_frame = left_frames_ref[frame_offset].get();
-            const auto right_display_frame = right_frames_ref[frame_offset].get();
+          const auto left_display_frame = left_frames_ref[frame_offset].get();
+          const auto right_display_frame = right_frames_ref[frame_offset].get();
 
-            // count the number of unique video frames displayed
+          // count the number of unique in-sync video frames displayed
+          if (is_playback_in_sync) {
             const int64_t displayed_tag = (left_display_frame->pts << 20) | right_display_frame->pts;
 
             if (displayed_tag != previous_displayed_tag) {
               unique_frame_tags_count++;
               previous_displayed_tag = displayed_tag;
             }
+          }
 
+          if (frame_number >= next_refresh_frame_number) {
             std::string prefix_str, suffix_str;
 
             // add [] to the current / total browsable string when in sync
@@ -900,21 +902,17 @@ void VideoCompare::compare() {
 
             ui_refresh_performed = true;
 
-            // calculate next refresh based on target playback speed and refresh timing measurements
-            if (frame_number != next_refresh_frame_number) {
-              next_refresh_at = frame_number;
-            }
+            // calculate next refresh time dynamically based on target playback speed and current refresh timing
+            const double target_time_us = std::max(1000.0, static_cast<double>(std::max(ffmpeg::frame_duration(left_display_frame), ffmpeg::frame_duration(right_display_frame))) / display_->get_playback_speed_factor());
+            const double refresh_time_us = static_cast<double>(refresh_time_deque.average());
 
-            const float target_fps = 1000000.0f * display_->get_playback_speed_factor() / float(std::max(ffmpeg::frame_duration(left_display_frame), ffmpeg::frame_duration(right_display_frame)));
-            const float refresh_fps = std::max(1e-5f, 1000000.0f / static_cast<float>(refresh_time_deque.average()));
-
-            next_refresh_at += std::max(1.0f, target_fps / refresh_fps);
+            next_refresh_at += std::max(1.0 + (frame_number - next_refresh_frame_number), refresh_time_us / target_time_us);
           }
 
           // check if sleeping is the best option for accurate playback by taking the average refresh time into account
           const int64_t time_until_final_refresh = timer_->us_until_target();
 
-          if (time_until_final_refresh > 0 && time_until_final_refresh < refresh_time_deque.average()) {
+          if (!adjusting && time_until_final_refresh > 0 && time_until_final_refresh < refresh_time_deque.average()) {
             timer_->wait(time_until_final_refresh);
           } else if (time_until_final_refresh <= 0 && display_->get_buffer_play_loop_mode() != Display::Loop::off) {
             // auto-adjust current frame during in-buffer playback
