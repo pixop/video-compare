@@ -863,9 +863,6 @@ void VideoCompare::compare() {
         const bool skip_refresh = !is_playback_in_sync && display_refresh_timer.us_until_target() > -RESYNC_UPDATE_RATE_US;
 
         if (!skip_refresh) {
-          // conditionally refresh display in an attempt to keep up with the target playback speed
-          const uint64_t next_refresh_frame_number = lrintf(next_refresh_at);
-
           const auto& left_frames_ref = !display_->get_swap_left_right() ? left.frames_ : right.frames_;
           const auto& right_frames_ref = !display_->get_swap_left_right() ? right.frames_ : left.frames_;
 
@@ -881,6 +878,9 @@ void VideoCompare::compare() {
               previous_frame_combo_tag = frame_combo_tag;
             }
           }
+
+          // conditionally refresh display in an attempt to keep up with the target playback speed
+          const uint64_t next_refresh_frame_number = lrintf(next_refresh_at);
 
           if (frame_number >= next_refresh_frame_number) {
             std::string prefix_str, suffix_str;
