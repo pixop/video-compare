@@ -415,6 +415,7 @@ void Display::print_verbose_info() {
   std::cout << "Fit to usable bounds:  " << std::boolalpha << fit_window_to_usable_bounds_ << std::endl;
   std::cout << "High-DPI allowed:      " << std::boolalpha << high_dpi_allowed_ << std::endl;
   std::cout << "Use 10 bpc:            " << std::boolalpha << use_10_bpc_ << std::endl;
+  std::cout << "HQ input alignment:    " << std::boolalpha << high_quality_input_alignment_ << std::endl;
   std::cout << "Mouse whl sensitivity: " << wheel_sensitivity_ << std::endl;
 
   SDL_version sdl_linked_version;
@@ -1515,7 +1516,7 @@ void Display::input() {
             break;
           case SDLK_i:
             high_quality_input_alignment_ = !high_quality_input_alignment_;
-            std::cout << "Input alignment resizing filter set to '" << (high_quality_input_alignment_ ? "BICUBIC (high-quality)" : "BILINEAR (fast)") << "' (takes effect for the next converted frame)" << std::endl;
+            std::cout << "Input alignment resizing filter set to '" << (high_quality_input_alignment_ ? "BICUBIC (high-quality)" : "BILINEAR (fast)") << "' (takes effect for the next decoded frame)" << std::endl;
             break;
           case SDLK_t:
             use_bilinear_texture_filtering_ = !use_bilinear_texture_filtering_;
