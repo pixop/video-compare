@@ -91,12 +91,8 @@ static inline AVPixelFormat determine_pixel_format(const VideoCompareConfig& con
   return config.use_10_bpc ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24;
 }
 
-static inline int determine_sws_flags(const bool high_quality) {
-  return high_quality ? SWS_BICUBIC : SWS_FAST_BILINEAR;
-}
-
-static inline int determine_sws_flags(const VideoCompareConfig& config) {
-  return determine_sws_flags(config.high_quality_input_alignment);
+static inline int determine_sws_flags(const bool fast) {
+  return fast ? SWS_FAST_BILINEAR : SWS_BICUBIC;
 }
 
 static void sleep_for_ms(const uint32_t ms) {
@@ -136,6 +132,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                        config.disable_auto_filters)},
       max_width_{std::max(video_filterers_[LEFT]->dest_width(), video_filterers_[RIGHT]->dest_width())},
       max_height_{std::max(video_filterers_[LEFT]->dest_height(), video_filterers_[RIGHT]->dest_height())},
+      fast_scaling_default_{config.fast_input_alignment || ((video_filterers_[LEFT]->dest_width() == video_filterers_[RIGHT]->dest_width()) && (video_filterers_[LEFT]->dest_height() == video_filterers_[RIGHT]->dest_height()))},
       shortest_duration_{std::min(demuxers_[LEFT]->duration(), demuxers_[RIGHT]->duration()) * AV_TIME_TO_SEC},
       format_converters_{std::make_unique<FormatConverter>(video_filterers_[LEFT]->dest_width(),
                                                            video_filterers_[LEFT]->dest_height(),
@@ -145,7 +142,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                            determine_pixel_format(config),
                                                            video_decoders_[LEFT]->color_space(),
                                                            video_decoders_[LEFT]->color_range(),
-                                                           determine_sws_flags(config)),
+                                                           determine_sws_flags(fast_scaling_default_)),
                          std::make_unique<FormatConverter>(video_filterers_[RIGHT]->dest_width(),
                                                            video_filterers_[RIGHT]->dest_height(),
                                                            max_width_,
@@ -154,14 +151,14 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                            determine_pixel_format(config),
                                                            video_decoders_[RIGHT]->color_space(),
                                                            video_decoders_[RIGHT]->color_range(),
-                                                           determine_sws_flags(config))},
+                                                           determine_sws_flags(fast_scaling_default_))},
       display_{std::make_unique<Display>(config.display_number,
                                          config.display_mode,
                                          config.verbose,
                                          config.fit_window_to_usable_bounds,
                                          config.high_dpi_allowed,
                                          config.use_10_bpc,
-                                         config.high_quality_input_alignment,
+                                         !fast_scaling_default_,
                                          config.window_size,
                                          max_width_,
                                          max_height_,

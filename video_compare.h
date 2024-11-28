@@ -137,6 +137,7 @@ class VideoCompare {
 
   size_t max_width_;
   size_t max_height_;
+  bool fast_scaling_default_;
   double shortest_duration_;
 
   std::unique_ptr<FormatConverter> format_converters_[Side::Count];
