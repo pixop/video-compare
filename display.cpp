@@ -47,6 +47,12 @@ static const float PLAYBACK_SPEED_STEP_SIZE = pow(2.0F, 1.0F / float(PLAYBACK_SP
 static const int HELP_TEXT_LINE_SPACING = 1;
 static const int HELP_TEXT_HORIZONTAL_MARGIN = 26;
 
+auto frame_deleter = [](AVFrame* frame) {
+  av_freep(&frame->data[0]);
+  av_frame_free(&frame);
+};
+using AVFramePtr = std::unique_ptr<AVFrame, decltype(frame_deleter)>;
+
 template <typename T>
 inline T check_sdl(T value, const std::string& message) {
   if (!value) {
@@ -541,6 +547,45 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_frame) {
   std::atomic_bool error_occurred(false);
 
+  const auto onscreen_display_avframe = [&]() -> AVFramePtr {
+    const size_t pitch = use_10_bpc_ ? drawable_width_ * 3 * 2 : drawable_width_ * 3;
+    uint8_t* pixels = new uint8_t[drawable_height_ * pitch];
+
+    if (use_10_bpc_) {
+      const size_t temp_pitch = drawable_width_ * 4;
+      std::vector<uint8_t> temp_pixels(drawable_height_ * temp_pitch);
+
+      SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_ARGB2101010, temp_pixels.data(), temp_pitch);
+
+      const uint32_t* src = reinterpret_cast<const uint32_t*>(temp_pixels.data());
+      uint16_t* dest = reinterpret_cast<uint16_t*>(pixels);
+
+      for (int i = 0; i < drawable_width_ * drawable_height_; i++) {
+        const uint32_t argb = src[i];
+        const uint32_t r10 = (argb >> 20) & 0x3FF;
+        const uint32_t g10 = (argb >> 10) & 0x3FF;
+        const uint32_t b10 = argb & 0x3FF;
+
+        dest[i * 3 + 0] = static_cast<uint16_t>(r10 << 6);
+        dest[i * 3 + 1] = static_cast<uint16_t>(g10 << 6);
+        dest[i * 3 + 2] = static_cast<uint16_t>(b10 << 6);
+      }
+    } else {
+      SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_RGB24, pixels, pitch);
+    }
+
+    AVFrame* renderer_frame = av_frame_alloc();
+    renderer_frame->format = use_10_bpc_ ? AV_PIX_FMT_RGB48LE : AV_PIX_FMT_RGB24;
+    renderer_frame->width = drawable_width_;
+    renderer_frame->height = drawable_height_;
+    renderer_frame->data[0] = pixels;
+    renderer_frame->linesize[0] = pitch;
+
+    return AVFramePtr(renderer_frame, frame_deleter);
+  };
+
+  const auto osd_frame = onscreen_display_avframe();
+
   const auto write_png = [this, &error_occurred](const AVFrame* frame, const std::string& filename) {
     try {
       PngSaver::save(frame, filename);
@@ -555,15 +600,18 @@ void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_
 
   const std::string left_filename = string_sprintf("%s%s_%04d.png", left_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_left" : "", saved_image_number_);
   const std::string right_filename = string_sprintf("%s%s_%04d.png", right_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_right" : "", saved_image_number_);
+  const std::string osd_filename = string_sprintf("%s_%s_osd_%04d.png", left_file_stem_.c_str(), right_file_stem_.c_str(), saved_image_number_);
 
   std::thread save_left_frame_thread(write_png, left_frame, left_filename);
   std::thread save_right_frame_thread(write_png, right_frame, right_filename);
+  std::thread osd_frame_thread(write_png, osd_frame.get(), osd_filename);
 
   save_left_frame_thread.join();
   save_right_frame_thread.join();
+  osd_frame_thread.join();
 
   if (!error_occurred) {
-    std::cout << "Saved " << left_filename << " and " << right_filename << std::endl;
+    std::cout << "Saved " << string_sprintf("%s, %s and %s", left_filename.c_str(), right_filename.c_str(), osd_filename.c_str()) << std::endl;
 
     saved_image_number_++;
   }
@@ -686,12 +734,6 @@ const std::array<int, 3> Display::get_rgb_pixel(uint8_t* rgb_plane, const size_t
 }
 
 const std::array<int, 3> Display::convert_rgb_to_yuv(const std::array<int, 3> rgb, const AVPixelFormat rgb_format, const AVColorSpace color_space, const AVColorRange color_range) {
-  auto frame_deleter = [](AVFrame* frame) {
-    av_freep(&frame->data[0]);
-    av_frame_free(&frame);
-  };
-  using AVFramePtr = std::unique_ptr<AVFrame, decltype(frame_deleter)>;
-
   auto allocate_frame = [&](const AVPixelFormat format) -> AVFramePtr {
     AVFrame* raw_frame = av_frame_alloc();
 
