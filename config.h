@@ -15,6 +15,11 @@ struct InputVideo {
   std::string decoder;
   std::string hw_accel_spec;
 
+  std::string color_space;
+  std::string color_range;
+  std::string color_primaries;
+  std::string color_trc;
+
   AVDictionary* demuxer_options{nullptr};   // mutated by Demuxer
   AVDictionary* decoder_options{nullptr};   // mutated by VideoDecoder
   AVDictionary* hw_accel_options{nullptr};  // mutated by VideoDecoder

@@ -11,6 +11,10 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
                              const VideoDecoder* video_decoder,
                              int peak_luminance_nits,
                              const std::string& custom_video_filters,
+                             const std::string& custom_color_space,
+                             const std::string& custom_color_range,
+                             const std::string& custom_color_primaries,
+                             const std::string& custom_color_trc,
                              const Demuxer* other_demuxer,
                              const VideoDecoder* other_video_decoder,
                              int other_peak_luminance_nits,
@@ -97,29 +101,41 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
     }
   }
 
-  // set color space (+ primaries and TRC if tone-mapping is required) to Rec. 709 if metadata is unspecified
+  // set color space and range (+ primaries and TRC if tone-mapping is required) to limited range Rec. 709 if metadata is unspecified or pass any user-provided values
   const bool must_tonemap = tone_mapping_mode != ToneMapping::off;
 
-  if (!disable_auto_filters || must_tonemap) {
+  if (!disable_auto_filters || must_tonemap || !custom_color_space.empty() || !custom_color_range.empty() || !custom_color_primaries.empty() || !custom_color_trc.empty()) {
     std::vector<std::string> notes, setparams_options;
 
-    if (video_decoder->color_space() == AVCOL_SPC_UNSPECIFIED) {
-      notes.push_back("'Color space' (colorspace)");
-      setparams_options.push_back("colorspace=bt709");
+    if ((video_decoder->color_space() == AVCOL_SPC_UNSPECIFIED) || !custom_color_space.empty()) {
+      if (custom_color_space.empty()) {
+        notes.push_back("'Color space' (colorspace)");
+      }
+      setparams_options.push_back("colorspace=" + (custom_color_space.empty() ? "bt709" : custom_color_space));
     }
-    if (must_tonemap && video_decoder->color_primaries() == AVCOL_PRI_UNSPECIFIED) {
-      notes.push_back("'Color primaries' (color_primaries)");
-      setparams_options.push_back("color_primaries=bt709");
+    if ((video_decoder->color_range() == AVCOL_RANGE_UNSPECIFIED) || !custom_color_range.empty()) {
+      if (custom_color_range.empty()) {
+        notes.push_back("'Color range' (range)");
+      }
+      setparams_options.push_back("range=" + (custom_color_range.empty() ? "tv" : custom_color_range));
     }
-    if (must_tonemap && video_decoder->color_trc() == AVCOL_TRC_UNSPECIFIED) {
-      notes.push_back("'Transfer characteristics' (color_trc)");
-      setparams_options.push_back("color_trc=bt709");
+    if ((must_tonemap && video_decoder->color_primaries() == AVCOL_PRI_UNSPECIFIED) || !custom_color_primaries.empty()) {
+      if (custom_color_primaries.empty()) {
+        notes.push_back("'Color primaries' (color_primaries)");
+      }
+      setparams_options.push_back("color_primaries=" + (custom_color_primaries.empty() ? "bt709" : custom_color_primaries));
+    }
+    if ((must_tonemap && video_decoder->color_trc() == AVCOL_TRC_UNSPECIFIED) || !custom_color_trc.empty()) {
+      if (custom_color_trc.empty()) {
+        notes.push_back("'Transfer characteristics' (color_trc)");
+      }
+      setparams_options.push_back("color_trc=" + (custom_color_trc.empty() ? "bt709" : custom_color_trc));
     }
 
     if (!notes.empty()) {
-      std::cout << string_sprintf("Note: Metadata missing for %s; assuming Rec. 709 (bt709). Manually setting missing properties to their correct values using setparams filter is recommended.", string_join(notes, ", ").c_str())
-                << std::endl;
-
+      std::cout << string_sprintf("Note: Metadata is missing for %s; assuming limited range Rec. 709. It is recommended to manually set the missing properties to their correct values.", string_join(notes, ", ").c_str()) << std::endl;
+    }
+    if (!setparams_options.empty()) {
       filters.push_back(string_sprintf("setparams=%s", string_join(setparams_options, ":").c_str()));
     }
   }
