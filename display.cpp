@@ -547,13 +547,13 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
 void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_frame) {
   std::atomic_bool error_occurred(false);
 
-  const auto onscreen_display_avframe = [&]() -> AVFramePtr {
-    const size_t pitch = use_10_bpc_ ? drawable_width_ * 3 * 2 : drawable_width_ * 3;
-    uint8_t* pixels = new uint8_t[drawable_height_ * pitch];
+  const auto create_onscreen_display_avframe = [&]() -> AVFramePtr {
+    const size_t pitch = use_10_bpc_ ? drawable_width_ * 3 * sizeof(uint16_t) : drawable_width_ * 3;
+    uint8_t* pixels = new uint8_t[pitch * drawable_height_];
 
     if (use_10_bpc_) {
-      const size_t temp_pitch = drawable_width_ * 4;
-      std::vector<uint8_t> temp_pixels(drawable_height_ * temp_pitch);
+      const size_t temp_pitch = drawable_width_ * sizeof(uint32_t);
+      std::vector<uint8_t> temp_pixels(temp_pitch * drawable_height_);
 
       SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_ARGB2101010, temp_pixels.data(), temp_pitch);
 
@@ -561,14 +561,14 @@ void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_
       uint16_t* dest = reinterpret_cast<uint16_t*>(pixels);
 
       for (int i = 0; i < drawable_width_ * drawable_height_; i++) {
-        const uint32_t argb = src[i];
+        const uint32_t argb = *(src++);
         const uint32_t r10 = (argb >> 20) & 0x3FF;
         const uint32_t g10 = (argb >> 10) & 0x3FF;
         const uint32_t b10 = argb & 0x3FF;
 
-        dest[i * 3 + 0] = static_cast<uint16_t>(r10 << 6);
-        dest[i * 3 + 1] = static_cast<uint16_t>(g10 << 6);
-        dest[i * 3 + 2] = static_cast<uint16_t>(b10 << 6);
+        *(dest++) = static_cast<uint16_t>(r10 << 6);
+        *(dest++) = static_cast<uint16_t>(g10 << 6);
+        *(dest++) = static_cast<uint16_t>(b10 << 6);
       }
     } else {
       SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_RGB24, pixels, pitch);
@@ -584,7 +584,7 @@ void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_
     return AVFramePtr(renderer_frame, frame_deleter);
   };
 
-  const auto osd_frame = onscreen_display_avframe();
+  const auto osd_frame = create_onscreen_display_avframe();
 
   const auto write_png = [this, &error_occurred](const AVFrame* frame, const std::string& filename) {
     try {
@@ -604,11 +604,11 @@ void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_
 
   std::thread save_left_frame_thread(write_png, left_frame, left_filename);
   std::thread save_right_frame_thread(write_png, right_frame, right_filename);
-  std::thread osd_frame_thread(write_png, osd_frame.get(), osd_filename);
+  std::thread save_osd_frame_thread(write_png, osd_frame.get(), osd_filename);
 
   save_left_frame_thread.join();
   save_right_frame_thread.join();
-  osd_frame_thread.join();
+  save_osd_frame_thread.join();
 
   if (!error_occurred) {
     std::cout << "Saved " << string_sprintf("%s, %s and %s", left_filename.c_str(), right_filename.c_str(), osd_filename.c_str()) << std::endl;
@@ -957,11 +957,6 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
   std::array<uint8_t*, 3> planes_right{right_frame->data[0], right_frame->data[1], right_frame->data[2]};
   std::array<size_t, 3> pitches_left{static_cast<size_t>(left_frame->linesize[0]), static_cast<size_t>(left_frame->linesize[1]), static_cast<size_t>(left_frame->linesize[2])};
   std::array<size_t, 3> pitches_right{static_cast<size_t>(right_frame->linesize[0]), static_cast<size_t>(right_frame->linesize[1]), static_cast<size_t>(right_frame->linesize[2])};
-
-  if (save_image_frames_) {
-    save_image_frames(left_frame, right_frame);
-    save_image_frames_ = false;
-  }
 
   // init 10 bpc temp buffers
   if (use_10_bpc_) {
@@ -1385,6 +1380,11 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
 
   if (show_help_) {
     render_help();
+  }
+
+  if (save_image_frames_) {
+    save_image_frames(left_frame, right_frame);
+    save_image_frames_ = false;
   }
 
   SDL_RenderPresent(renderer_);
