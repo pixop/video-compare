@@ -152,16 +152,16 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
     }
 
     if (warnings.empty()) {
-      filters.push_back("format=rgb48");
-
       float tone_adjustment = (tone_mapping_mode == ToneMapping::relative && peak_luminance_nits < other_peak_luminance_nits) ? static_cast<float>(peak_luminance_nits) / other_peak_luminance_nits : 1.0F;
       tone_adjustment *= boost_tone;
 
       if (std::fabs(tone_adjustment - 1.0F) > 1e-5) {
+        filters.push_back("format=gbrpf32");
         filters.push_back(string_sprintf("zscale=t=linear:npl=%d", peak_luminance_nits));
         filters.push_back(string_sprintf("tonemap=clip:param=%.5f", tone_adjustment));
         filters.push_back(string_sprintf("zscale=p=%s:t=%s", display_primaries.c_str(), display_trc.c_str()));
       } else {
+        filters.push_back("format=rgb48");
         filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%d", display_primaries.c_str(), display_trc.c_str(), peak_luminance_nits));
       }
     } else {
