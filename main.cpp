@@ -50,8 +50,6 @@ void free_argv(int argc, char** argv) {
 }
 #endif
 
-static const std::string REPEAT_FILE_NAME("__");
-
 void print_controls() {
   std::cout << "Controls:" << std::endl << std::endl;
 
@@ -201,6 +199,18 @@ AVDictionary* create_default_demuxer_options() {
   av_dict_set(&demuxer_options, "probesize", "100000000", 0);
 
   return demuxer_options;
+}
+
+void possibly_repeat_other_side(std::string& left, std::string& right, const std::string& type) {
+  static const std::string REPEAT_OTHER_SIDE("__");
+
+  if (left == REPEAT_OTHER_SIDE && right == REPEAT_OTHER_SIDE) {
+    throw std::logic_error{"At least one actual " + type + " must be supplied"};
+  } else if (left == REPEAT_OTHER_SIDE) {
+    left = right;
+  } else if (right == REPEAT_OTHER_SIDE) {
+    right = left;
+  }
 }
 
 int main(int argc, char** argv) {
@@ -417,52 +427,61 @@ int main(int argc, char** argv) {
           throw std::logic_error{"Cannot parse tone mapping mode argument (valid options: off, on, rel)"};
         }
       }
+
+      // video filters
       if (args["left-filters"]) {
         config.left.video_filters = static_cast<const std::string&>(args["left-filters"]);
       }
       if (args["right-filters"]) {
         config.right.video_filters = static_cast<const std::string&>(args["right-filters"]);
       }
+      possibly_repeat_other_side(config.left.video_filters, config.right.video_filters, "filter specification");
 
+      // demuxer
       config.left.demuxer_options = create_default_demuxer_options();
       config.right.demuxer_options = create_default_demuxer_options();
 
       if (args["left-demuxer"]) {
-        auto left_demuxer = static_cast<const std::string&>(args["left-demuxer"]);
-
-        config.left.demuxer = get_nth_token_or_empty(left_demuxer, ':', 0);
-        config.left.demuxer_options = upsert_avdict_options(config.left.demuxer_options, get_nth_token_or_empty(left_demuxer, ':', 1));
+        config.left.demuxer = static_cast<const std::string&>(args["left-demuxer"]);
       }
       if (args["right-demuxer"]) {
-        auto right_demuxer = static_cast<const std::string&>(args["right-demuxer"]);
-
-        config.right.demuxer = get_nth_token_or_empty(right_demuxer, ':', 0);
-        config.right.demuxer_options = upsert_avdict_options(config.right.demuxer_options, get_nth_token_or_empty(right_demuxer, ':', 1));
+        config.right.demuxer = static_cast<const std::string&>(args["right-demuxer"]);
       }
-      if (args["left-decoder"]) {
-        auto left_decoder = static_cast<const std::string&>(args["left-decoder"]);
+      possibly_repeat_other_side(config.left.demuxer, config.right.demuxer, "demuxer");
 
-        config.left.decoder = get_nth_token_or_empty(left_decoder, ':', 0);
-        config.left.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(left_decoder, ':', 1));
+      config.left.demuxer_options = upsert_avdict_options(config.left.demuxer_options, get_nth_token_or_empty(config.left.demuxer, ':', 1));
+      config.right.demuxer_options = upsert_avdict_options(config.right.demuxer_options, get_nth_token_or_empty(config.right.demuxer, ':', 1));
+      config.left.demuxer = get_nth_token_or_empty(config.left.demuxer, ':', 0);
+      config.right.demuxer = get_nth_token_or_empty(config.right.demuxer, ':', 0);
+
+      // decder
+      if (args["left-decoder"]) {
+        config.left.decoder = static_cast<const std::string&>(args["left-decoder"]);
       }
       if (args["right-decoder"]) {
-        auto right_decoder = static_cast<const std::string&>(args["right-decoder"]);
-
-        config.right.decoder = get_nth_token_or_empty(right_decoder, ':', 0);
-        config.right.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(right_decoder, ':', 1));
+        config.right.decoder = static_cast<const std::string&>(args["right-decoder"]);
       }
-      if (args["left-hwaccel"]) {
-        auto left_hw_accel_spec = static_cast<const std::string&>(args["left-hwaccel"]);
+      possibly_repeat_other_side(config.left.decoder, config.right.decoder, "decoder");
 
-        config.left.hw_accel_spec = string_join({get_nth_token_or_empty(left_hw_accel_spec, ':', 0), get_nth_token_or_empty(left_hw_accel_spec, ':', 1)}, ":");
-        config.left.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(left_hw_accel_spec, ':', 2));
+      config.left.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.left.decoder, ':', 1));
+      config.right.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.right.decoder, ':', 1));
+      config.left.decoder = get_nth_token_or_empty(config.left.decoder, ':', 0);
+      config.right.decoder = get_nth_token_or_empty(config.right.decoder, ':', 0);
+
+      // HW acceleration
+      if (args["left-hwaccel"]) {
+        config.left.hw_accel_spec = static_cast<const std::string&>(args["left-hwaccel"]);
       }
       if (args["right-hwaccel"]) {
-        auto right_hw_accel_spec = static_cast<const std::string&>(args["right-hwaccel"]);
-
-        config.right.hw_accel_spec = string_join({get_nth_token_or_empty(right_hw_accel_spec, ':', 0), get_nth_token_or_empty(right_hw_accel_spec, ':', 1)}, ":");
-        config.right.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(right_hw_accel_spec, ':', 2));
+        config.right.hw_accel_spec = static_cast<const std::string&>(args["right-hwaccel"]);
       }
+      possibly_repeat_other_side(config.left.hw_accel_spec, config.right.hw_accel_spec, "hardware acceleration");
+
+      config.left.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.left.hw_accel_spec, ':', 2));
+      config.right.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.right.hw_accel_spec, ':', 2));
+      config.left.hw_accel_spec = string_join({get_nth_token_or_empty(config.left.hw_accel_spec, ':', 0), get_nth_token_or_empty(config.left.hw_accel_spec, ':', 1)}, ":");
+      config.right.hw_accel_spec = string_join({get_nth_token_or_empty(config.right.hw_accel_spec, ':', 0), get_nth_token_or_empty(config.right.hw_accel_spec, ':', 1)}, ":");
+
       if (args["left-peak-nits"] || args["right-peak-nits"]) {
         const std::regex peak_nits_re("(\\d*)");
 
@@ -482,11 +501,22 @@ int main(int argc, char** argv) {
           return result;
         };
 
+        std::string left_peak_nits;
+        std::string right_peak_nits;
+
         if (args["left-peak-nits"]) {
-          config.left.peak_luminance_nits = parse_peak_nits(args["left-peak-nits"], "Left");
+          left_peak_nits = static_cast<const std::string&>(args["left-peak-nits"]);
         }
         if (args["right-peak-nits"]) {
-          config.right.peak_luminance_nits = parse_peak_nits(args["right-peak-nits"], "Right");
+          right_peak_nits = static_cast<const std::string&>(args["right-peak-nits"]);
+        }
+        possibly_repeat_other_side(left_peak_nits, right_peak_nits, "peak (in nits)");
+
+        if (!left_peak_nits.empty()) {
+          config.left.peak_luminance_nits = parse_peak_nits(left_peak_nits, "Left");
+        }
+        if (!right_peak_nits.empty()) {
+          config.right.peak_luminance_nits = parse_peak_nits(right_peak_nits, "Right");
         }
 
         // enable tone mapping if option wasn't specified
@@ -513,13 +543,7 @@ int main(int argc, char** argv) {
       config.left.file_name = args.pos[0];
       config.right.file_name = args.pos[1];
 
-      if (config.left.file_name == REPEAT_FILE_NAME && config.right.file_name == REPEAT_FILE_NAME) {
-        throw std::logic_error{"At least one actual video file must be supplied"};
-      } else if (config.left.file_name == REPEAT_FILE_NAME) {
-        config.left.file_name = config.right.file_name;
-      } else if (config.right.file_name == REPEAT_FILE_NAME) {
-        config.right.file_name = config.left.file_name;
-      }
+      possibly_repeat_other_side(config.left.file_name, config.right.file_name, "video file");
 
       if (args["libvmaf-options"]) {
         VMAFCalculator::instance().set_libvmaf_options(args["libvmaf-options"]);
