@@ -204,7 +204,7 @@ AVDictionary* create_default_demuxer_options() {
 void possibly_repeat_other_side(std::string& left, std::string& right, const std::string& type) {
   static const std::string REPEAT_OTHER_SIDE("__");
 
-  if (left == REPEAT_OTHER_SIDE && right == REPEAT_OTHER_SIDE) {
+  if ((left == REPEAT_OTHER_SIDE && right == REPEAT_OTHER_SIDE) || (left == REPEAT_OTHER_SIDE && right.empty()) || (left.empty() && right == REPEAT_OTHER_SIDE)) {
     throw std::logic_error{"At least one actual " + type + " must be supplied"};
   } else if (left == REPEAT_OTHER_SIDE) {
     left = right;
