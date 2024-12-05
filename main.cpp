@@ -201,15 +201,30 @@ AVDictionary* create_default_demuxer_options() {
   return demuxer_options;
 }
 
-void possibly_repeat_other_side(std::string& left, std::string& right, const std::string& type) {
-  static const std::string REPEAT_OTHER_SIDE("__");
+static const std::string PLACEHOLDER("__");
+static const std::regex PLACEHOLDER_REGEX(PLACEHOLDER);
 
-  if ((left == REPEAT_OTHER_SIDE && right == REPEAT_OTHER_SIDE) || (left == REPEAT_OTHER_SIDE && right.empty()) || (left.empty() && right == REPEAT_OTHER_SIDE)) {
-    throw std::logic_error{"At least one actual " + type + " must be supplied"};
-  } else if (left == REPEAT_OTHER_SIDE) {
-    left = right;
-  } else if (right == REPEAT_OTHER_SIDE) {
-    right = left;
+static inline bool contains_placeholder(const std::string& str) {
+  return str.find(PLACEHOLDER) != std::string::npos;
+}
+
+std::string safe_replace_placeholder(const std::string& template_str, const std::string& replacement, const std::string& type) {
+  if (contains_placeholder(template_str) && contains_placeholder(replacement)) {
+    throw std::logic_error{"Unable to replace placeholder in " + type + ": replacement contains an unresolved placeholder."};
+  }
+
+  return replacement.empty() ? template_str : std::regex_replace(template_str, PLACEHOLDER_REGEX, replacement, std::regex_constants::format_first_only);
+}
+
+void resolve_mutual_placeholders(std::string& left, std::string& right, const std::string& type) {
+  if ((contains_placeholder(left) && right.empty()) || (left.empty() && contains_placeholder(right))) {
+    throw std::logic_error{"Cannot resolve placeholder in " + type + ": the other is empty and cannot be substituted."};
+  }
+
+  if (contains_placeholder(left)) {
+    left = safe_replace_placeholder(left, right, type);
+  } else if (contains_placeholder(right)) {
+    right = safe_replace_placeholder(right, left, type);
   }
 }
 
@@ -246,18 +261,22 @@ int main(int argc, char** argv) {
          {"left-peak-nits", {"-L", "--left-peak-nits"}, "left video peak luminance in nits (e.g. 850 or 1000), default is 100 for SDR; tone mapping is enabled if --tone-map-mode is not set", 1},
          {"right-peak-nits", {"-R", "--right-peak-nits"}, "right video peak luminance in nits; see --left-peak-nits", 1},
          {"boost-tone", {"-B", "--boost-tone"}, "adjust tone-mapping strength using a multiplication factor (e.g. 0.6 or 3), default is 1; tone mapping is enabled if --tone-map-mode is not set", 1},
+         {"filters", {"-i", "--filters"}, "specify a comma-separated list of FFmpeg filters to be applied to both sides (e.g. scale=1920:-2,delogo=x=10:y=10:w=100:h=70)", 1},
          {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
          {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
          {"find-filters", {"--find-filters"}, "find FFmpeg video filters that match the provided search term (e.g. 'scale', 'libvmaf' or 'dnn'; use \"\" to list all)", 1},
          {"find-protocols", {"--find-protocols"}, "find FFmpeg input protocols that match the provided search term (e.g. 'ipfs', 'srt', or 'rtmp'; use \"\" to list all)", 1},
-         {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name, specified as [type?][:options?] (e.g. 'rawvideo:pixel_format=rgb24,video_size=320x240,framerate=10')", 1},
+         {"demuxer", {"--demuxer"}, "left FFmpeg video demuxer name for both sides, specified as [type?][:options?] (e.g. 'rawvideo:pixel_format=rgb24,video_size=320x240,framerate=10')", 1},
+         {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name, specified as [type?][:options?]", 1},
          {"right-demuxer", {"--right-demuxer"}, "right FFmpeg video demuxer name, specified as [type?][:options?]", 1},
          {"find-demuxers", {"--find-demuxers"}, "find FFmpeg video demuxers that match the provided search term (e.g. 'matroska', 'mp4', 'vapoursynth' or 'pipe'; use \"\" to list all)", 1},
-         {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name, specified as [type?][:options?] (e.g. ':strict=unofficial', ':strict=-2' or 'vvc:strict=experimental')", 1},
-         {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name, specified as [type?][:options?] (e.g. ':strict=-2,trust_dec_pts=1' or 'h264:trust_dec_pts=1')", 1},
+         {"decoder", {"--decoder"}, "FFmpeg video decoder name for both sides, specified as [type?][:options?] (e.g. ':strict=unofficial', ':strict=-2' or 'vvc:strict=experimental')", 1},
+         {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name, specified as [type?][:options?] (e.g. ':strict=-2,trust_dec_pts=1' or 'h264:trust_dec_pts=1')", 1},
+         {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name, specified as [type?][:options?]", 1},
          {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders that match the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1},
-         {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128')", 1},
-         {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'cuda', 'cuda:1' or 'vulkan')", 1},
+         {"hwaccel", {"--hwaccel"}, "FFmpeg video hardware acceleration for both sides, specified as [type][:device?[:options?]] (e.g. 'videotoolbox' or 'vaapi:/dev/dri/renderD128')", 1},
+         {"left-hwaccel", {"--left-hwaccel"}, "left FFmpeg video hardware acceleration, specified as [type][:device?[:options?]] (e.g. 'cuda', 'cuda:1' or 'vulkan')", 1},
+         {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg video hardware acceleration, specified as [type][:device?[:options?]]", 1},
          {"find-hwaccels", {"--find-hwaccels"}, "find FFmpeg video hardware acceleration types that match the provided search term (e.g. 'videotoolbox' or 'vulkan'; use \"\" to list all)", 1},
          {"libvmaf-options", {"--libvmaf-options"}, "libvmaf FFmpeg filter options (e.g. 'model=version=vmaf_4k_v0.6.1' or 'model=version=vmaf_v0.6.1\\\\:name=hd|version=vmaf_4k_v0.6.1\\\\:name=4k')", 1},
          {"disable-auto-filters", {"--no-auto-filters"}, "disable the default behaviour of automatically injecting filters for deinterlacing, DAR correction, frame rate harmonization, rotation and colorimetry", 0}}};
@@ -429,25 +448,33 @@ int main(int argc, char** argv) {
       }
 
       // video filters
+      if (args["filters"]) {
+        config.left.video_filters = static_cast<const std::string&>(args["filters"]);
+        config.right.video_filters = static_cast<const std::string&>(args["filters"]);
+      }
       if (args["left-filters"]) {
-        config.left.video_filters = static_cast<const std::string&>(args["left-filters"]);
+        config.left.video_filters = safe_replace_placeholder(static_cast<const std::string&>(args["left-filters"]), config.left.video_filters, "filter specification");
       }
       if (args["right-filters"]) {
-        config.right.video_filters = static_cast<const std::string&>(args["right-filters"]);
+        config.right.video_filters = safe_replace_placeholder(static_cast<const std::string&>(args["right-filters"]), config.right.video_filters, "filter specification");
       }
-      possibly_repeat_other_side(config.left.video_filters, config.right.video_filters, "filter specification");
+      resolve_mutual_placeholders(config.left.video_filters, config.right.video_filters, "filter specification");
 
       // demuxer
       config.left.demuxer_options = create_default_demuxer_options();
       config.right.demuxer_options = create_default_demuxer_options();
 
+      if (args["demuxer"]) {
+        config.left.demuxer = static_cast<const std::string&>(args["demuxer"]);
+        config.right.demuxer = static_cast<const std::string&>(args["demuxer"]);
+      }
       if (args["left-demuxer"]) {
-        config.left.demuxer = static_cast<const std::string&>(args["left-demuxer"]);
+        config.left.demuxer = safe_replace_placeholder(static_cast<const std::string&>(args["left-demuxer"]), config.left.demuxer, "demuxer");
       }
       if (args["right-demuxer"]) {
-        config.right.demuxer = static_cast<const std::string&>(args["right-demuxer"]);
+        config.right.demuxer = safe_replace_placeholder(static_cast<const std::string&>(args["right-demuxer"]), config.right.demuxer, "demuxer");
       }
-      possibly_repeat_other_side(config.left.demuxer, config.right.demuxer, "demuxer");
+      resolve_mutual_placeholders(config.left.demuxer, config.right.demuxer, "demuxer");
 
       config.left.demuxer_options = upsert_avdict_options(config.left.demuxer_options, get_nth_token_or_empty(config.left.demuxer, ':', 1));
       config.right.demuxer_options = upsert_avdict_options(config.right.demuxer_options, get_nth_token_or_empty(config.right.demuxer, ':', 1));
@@ -455,13 +482,17 @@ int main(int argc, char** argv) {
       config.right.demuxer = get_nth_token_or_empty(config.right.demuxer, ':', 0);
 
       // decder
+      if (args["decoder"]) {
+        config.left.decoder = static_cast<const std::string&>(args["decoder"]);
+        config.right.decoder = static_cast<const std::string&>(args["decoder"]);
+      }
       if (args["left-decoder"]) {
-        config.left.decoder = static_cast<const std::string&>(args["left-decoder"]);
+        config.left.decoder = safe_replace_placeholder(static_cast<const std::string&>(args["left-decoder"]), config.left.decoder, "decoder");
       }
       if (args["right-decoder"]) {
-        config.right.decoder = static_cast<const std::string&>(args["right-decoder"]);
+        config.right.decoder = safe_replace_placeholder(static_cast<const std::string&>(args["right-decoder"]), config.right.decoder, "decoder");
       }
-      possibly_repeat_other_side(config.left.decoder, config.right.decoder, "decoder");
+      resolve_mutual_placeholders(config.left.decoder, config.right.decoder, "decoder");
 
       config.left.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.left.decoder, ':', 1));
       config.right.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.right.decoder, ':', 1));
@@ -469,13 +500,17 @@ int main(int argc, char** argv) {
       config.right.decoder = get_nth_token_or_empty(config.right.decoder, ':', 0);
 
       // HW acceleration
+      if (args["hwaccel"]) {
+        config.left.hw_accel_spec = static_cast<const std::string&>(args["hwaccel"]);
+        config.right.hw_accel_spec = static_cast<const std::string&>(args["hwaccel"]);
+      }
       if (args["left-hwaccel"]) {
-        config.left.hw_accel_spec = static_cast<const std::string&>(args["left-hwaccel"]);
+        config.left.hw_accel_spec = safe_replace_placeholder(static_cast<const std::string&>(args["left-hwaccel"]), config.left.hw_accel_spec, "hardware acceleration");
       }
       if (args["right-hwaccel"]) {
-        config.right.hw_accel_spec = static_cast<const std::string&>(args["right-hwaccel"]);
+        config.right.hw_accel_spec = safe_replace_placeholder(static_cast<const std::string&>(args["right-hwaccel"]), config.right.hw_accel_spec, "hardware acceleration");
       }
-      possibly_repeat_other_side(config.left.hw_accel_spec, config.right.hw_accel_spec, "hardware acceleration");
+      resolve_mutual_placeholders(config.left.hw_accel_spec, config.right.hw_accel_spec, "hardware acceleration");
 
       config.left.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.left.hw_accel_spec, ':', 2));
       config.right.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.right.hw_accel_spec, ':', 2));
@@ -510,7 +545,7 @@ int main(int argc, char** argv) {
         if (args["right-peak-nits"]) {
           right_peak_nits = static_cast<const std::string&>(args["right-peak-nits"]);
         }
-        possibly_repeat_other_side(left_peak_nits, right_peak_nits, "peak (in nits)");
+        resolve_mutual_placeholders(left_peak_nits, right_peak_nits, "peak (in nits)");
 
         if (!left_peak_nits.empty()) {
           config.left.peak_luminance_nits = parse_peak_nits(left_peak_nits, "Left");
@@ -543,7 +578,7 @@ int main(int argc, char** argv) {
       config.left.file_name = args.pos[0];
       config.right.file_name = args.pos[1];
 
-      possibly_repeat_other_side(config.left.file_name, config.right.file_name, "video file");
+      resolve_mutual_placeholders(config.left.file_name, config.right.file_name, "video file");
 
       if (args["libvmaf-options"]) {
         VMAFCalculator::instance().set_libvmaf_options(args["libvmaf-options"]);

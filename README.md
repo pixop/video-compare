@@ -2,9 +2,12 @@
 
 [![GitHub release](https://img.shields.io/github/release/pixop/video-compare)](https://github.com/pixop/video-compare/releases)
 
-Split-screen video comparison tool written in C++14, utilizing FFmpeg libraries and SDL2. It provides interactive navigation and playback controls, along with various analysis tools and customizable display options.
+Split-screen video comparison tool written in C++14, utilizing FFmpeg libraries and SDL2. It provides
+interactive navigation and playback controls, along with various analysis tools and customizable display options.
 
-`video-compare` can be used to visually compare the impact of codecs, resizing algorithms, and other modifications on two video files played in sync. The tool is versatile, allowing videos of differing resolutions, frame rates, scanning methods, color formats, dynamic ranges, input protocols, container formats, codecs, or durations.
+`video-compare` can be used to visually compare the impact of codecs, resizing algorithms, and other modifications
+on two video files played in sync. The tool is versatile, allowing videos of differing resolutions, frame rates,
+scanning methods, color formats, dynamic ranges, input protocols, container formats, codecs, or durations.
 
 Thanks to FFmpeg's flexibility, `video-compare` is also capable of comparing images or image sequences.
 
@@ -119,7 +122,11 @@ Explicit decoder selection for the right video:
 
     video-compare --right-decoder h264_cuvid video1.mp4 video2.mp4
 
-Set the hardware acceleration type for the left video:
+Set the same hardware acceleration type for both videos:
+
+    video-compare --hwaccel cuda video1.mp4 video2.mp4
+
+Set the hardware acceleration type for the left video only:
 
     video-compare --left-hwaccel videotoolbox video1.mp4 video2.mp4
 
@@ -138,6 +145,12 @@ enables tasks such as comparing the video with a time-shifted version of itself 
 of filters, without the need to enter the same, potentially long path twice:
 
     video-compare some/very/long/and/complicated/video/path.mp4 __
+
+Apply common filters to both videos and extend them with additional side-specific filters using the
+placeholder resolution functionality. This structure also works for demuxer, decoder, and hardware
+acceleration settings:
+
+    video-compare -i yadif,hqdn3d -l setfield=bff,__ -r __,scale=iw/2:ih/2 video1.mp4 video2.mp4
 
 The above features can be combined in any order, of course. Launch `video-compare` without any arguments to
 see all supported options.
