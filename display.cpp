@@ -162,7 +162,7 @@ Display::Display(const int display_number,
                  const bool fit_window_to_usable_bounds,
                  const bool high_dpi_allowed,
                  const bool use_10_bpc,
-                 const bool high_quality_input_alignment,
+                 const bool fast_input_alignment,
                  const std::tuple<int, int> window_size,
                  const unsigned width,
                  const unsigned height,
@@ -175,7 +175,7 @@ Display::Display(const int display_number,
       fit_window_to_usable_bounds_{fit_window_to_usable_bounds},
       high_dpi_allowed_{high_dpi_allowed},
       use_10_bpc_{use_10_bpc},
-      high_quality_input_alignment_{high_quality_input_alignment},
+      fast_input_alignment_{fast_input_alignment},
       video_width_{static_cast<int>(width)},
       video_height_{static_cast<int>(height)},
       duration_{duration},
@@ -421,7 +421,7 @@ void Display::print_verbose_info() {
   std::cout << "Fit to usable bounds:  " << std::boolalpha << fit_window_to_usable_bounds_ << std::endl;
   std::cout << "High-DPI allowed:      " << std::boolalpha << high_dpi_allowed_ << std::endl;
   std::cout << "Use 10 bpc:            " << std::boolalpha << use_10_bpc_ << std::endl;
-  std::cout << "HQ input alignment:    " << std::boolalpha << high_quality_input_alignment_ << std::endl;
+  std::cout << "Fast input alignment:  " << std::boolalpha << fast_input_alignment_ << std::endl;
   std::cout << "Mouse whl sensitivity: " << wheel_sensitivity_ << std::endl;
 
   SDL_version sdl_linked_version;
@@ -1557,8 +1557,8 @@ void Display::input() {
             }
             break;
           case SDLK_i:
-            high_quality_input_alignment_ = !high_quality_input_alignment_;
-            std::cout << "Input alignment resizing filter set to '" << (high_quality_input_alignment_ ? "BICUBIC (high-quality)" : "BILINEAR (fast)") << "' (takes effect for the next decoded frame)" << std::endl;
+            fast_input_alignment_ = !fast_input_alignment_;
+            std::cout << "Input alignment resizing filter set to '" << (fast_input_alignment_ ? "BILINEAR (fast)" : "BICUBIC (high-quality)") << "' (takes effect for the next decoded frame)" << std::endl;
             break;
           case SDLK_t:
             use_bilinear_texture_filtering_ = !use_bilinear_texture_filtering_;
@@ -1716,8 +1716,8 @@ void Display::toggle_buffer_play_direction() {
   buffer_play_forward_ = !buffer_play_forward_;
 }
 
-bool Display::get_high_quality_input_alignment() const {
-  return high_quality_input_alignment_;
+bool Display::get_fast_input_alignment() const {
+  return fast_input_alignment_;
 }
 
 bool Display::get_swap_left_right() const {

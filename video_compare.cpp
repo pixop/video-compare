@@ -170,7 +170,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                          config.fit_window_to_usable_bounds,
                                          config.high_dpi_allowed,
                                          config.use_10_bpc,
-                                         !initial_fast_input_alignment_,
+                                         initial_fast_input_alignment_,
                                          config.window_size,
                                          max_width_,
                                          max_height_,
@@ -600,7 +600,7 @@ void VideoCompare::compare() {
       }
 #endif
 
-      const int format_conversion_sws_flags = determine_sws_flags(display_->get_high_quality_input_alignment());
+      const int format_conversion_sws_flags = determine_sws_flags(display_->get_fast_input_alignment());
       format_converters_[LEFT]->set_pending_flags(format_conversion_sws_flags);
       format_converters_[RIGHT]->set_pending_flags(format_conversion_sws_flags);
 
