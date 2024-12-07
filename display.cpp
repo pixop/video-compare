@@ -134,7 +134,7 @@ static std::string to_hex(const uint32_t value, const int width) {
   return sstream.str();
 }
 
-std::string format_libav_version(unsigned version) {
+static std::string format_libav_version(unsigned version) {
   int major = (version >> 16) & 0xff;
   int minor = (version >> 8) & 0xff;
   int micro = version & 0xff;
@@ -326,13 +326,25 @@ Display::Display(const int display_number,
     print_verbose_info();
   }
 
-  SDL_Surface* text_surface = TTF_RenderUTF8_Blended(small_font_, left_file_name.c_str(), TEXT_COLOR);
+  auto render_text_with_fallback = [&](const std::string& text) {
+    SDL_Surface* surface = TTF_RenderUTF8_Blended(small_font_, text.c_str(), TEXT_COLOR);
+
+    if (!surface) {
+      std::cerr << "Falling back to lower-quality rendering for '" << text << "'" << std::endl;
+
+      surface = check_sdl(TTF_RenderUTF8_Solid(small_font_, text.c_str(), TEXT_COLOR), "text surface");
+    }
+
+    return surface;
+  };
+
+  SDL_Surface* text_surface = render_text_with_fallback(left_file_name);
   left_text_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
   left_text_width_ = text_surface->w;
   left_text_height_ = text_surface->h;
   SDL_FreeSurface(text_surface);
 
-  text_surface = TTF_RenderUTF8_Blended(small_font_, right_file_name.c_str(), TEXT_COLOR);
+  text_surface = render_text_with_fallback(right_file_name);
   right_text_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
   right_text_width_ = text_surface->w;
   right_text_height_ = text_surface->h;
