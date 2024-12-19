@@ -18,7 +18,7 @@ static const std::vector<std::pair<std::string, std::string>> controls{{"H", "To
                                                                        {"S", "Swap left and right video"},
                                                                        {"A", "Move to the previous frame in the buffer"},
                                                                        {"D", "Move to the next frame in the buffer"},
-                                                                       {"F", "Save both frames as PNG images in the current directory"},
+                                                                       {"F", "Save both frames and the on-screen content as PNG images"},
                                                                        {"P", "Print mouse position and pixel value under cursor to console"},
                                                                        {"M", "Print image similarity metrics to console"},
                                                                        {"Z", "Magnify area around cursor (result shown in lower left corner)"},
