@@ -1076,12 +1076,16 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
       const SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
       const SDL_FRect screen_render_quad_left = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_left));
 
-      if (use_10_bpc_) {
-        convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
+      if (input_received_ || (previous_left_frame_pts_ != left_frame->pts)) {
+        if (use_10_bpc_) {
+          convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
 
-        update_texture(&tex_render_quad_left, left_planes_[0], pitches_left[0], "left update (10 bpc, video mode)");
-      } else {
-        update_texture(&tex_render_quad_left, planes_left[0], pitches_left[0], "left update (video mode)");
+          update_texture(&tex_render_quad_left, left_planes_[0], pitches_left[0], "left update (10 bpc, video mode)");
+        } else {
+          update_texture(&tex_render_quad_left, planes_left[0], pitches_left[0], "left update (video mode)");
+        }
+
+        previous_left_frame_pts_ = left_frame->pts;
       }
 
       check_sdl(SDL_RenderCopyF(renderer_, get_video_texture(), &tex_render_quad_left, &screen_render_quad_left) == 0, "left video texture render copy");
@@ -1095,24 +1099,28 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
       const SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
       const SDL_FRect screen_render_quad_right = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_right));
 
-      if (subtraction_mode_) {
-        update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
+      if (input_received_ || (previous_right_frame_pts_ != right_frame->pts)) {
+        if (subtraction_mode_) {
+          update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
 
-        if (use_10_bpc_) {
-          convert_to_packed_10_bpc(diff_planes_, diff_pitches_, right_planes_, pitches_right, roi);
+          if (use_10_bpc_) {
+            convert_to_packed_10_bpc(diff_planes_, diff_pitches_, right_planes_, pitches_right, roi);
 
-          update_texture(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, subtraction mode)");
+            update_texture(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, subtraction mode)");
+          } else {
+            update_texture(&tex_render_quad_right, diff_planes_[0] + start_right * 3, diff_pitches_[0], "right update (subtraction mode)");
+          }
         } else {
-          update_texture(&tex_render_quad_right, diff_planes_[0] + start_right * 3, diff_pitches_[0], "right update (subtraction mode)");
-        }
-      } else {
-        if (use_10_bpc_) {
-          convert_to_packed_10_bpc(planes_right, pitches_right, right_planes_, pitches_right, roi);
+          if (use_10_bpc_) {
+            convert_to_packed_10_bpc(planes_right, pitches_right, right_planes_, pitches_right, roi);
 
-          update_texture(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, video mode)");
-        } else {
-          update_texture(&tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0], "right update (video mode)");
+            update_texture(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, video mode)");
+          } else {
+            update_texture(&tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0], "right update (video mode)");
+          }
         }
+
+        previous_right_frame_pts_ = right_frame->pts;
       }
 
       check_sdl(SDL_RenderCopyF(renderer_, get_video_texture(), &tex_render_quad_right, &screen_render_quad_right) == 0, "right video texture render copy");
@@ -1400,6 +1408,8 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
   }
 
   SDL_RenderPresent(renderer_);
+
+  input_received_ = false;
 }
 
 float Display::compute_zoom_factor(const float zoom_level) const {
@@ -1444,8 +1454,6 @@ void Display::update_playback_speed(const int playback_speed_level) {
 }
 
 void Display::input() {
-  SDL_GetMouseState(&mouse_x_, &mouse_y_);
-
   seek_relative_ = 0.0F;
   seek_from_start_ = false;
   frame_buffer_offset_delta_ = 0;
@@ -1455,6 +1463,8 @@ void Display::input() {
   possibly_tick_playback_ = false;
 
   while (SDL_PollEvent(&event_) != 0) {
+    input_received_ = true;
+
     switch (event_.type) {
       case SDL_WINDOWEVENT:
         switch (event_.window.event) {
@@ -1487,6 +1497,8 @@ void Display::input() {
         }
         break;
       case SDL_MOUSEMOTION:
+        SDL_GetMouseState(&mouse_x_, &mouse_y_);
+
         if (event_.motion.state & SDL_BUTTON_RMASK) {
           const auto pan_offset = Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_) / Vector2D(drawable_to_window_width_factor_, drawable_to_window_height_factor_);
 
@@ -1601,6 +1613,10 @@ void Display::input() {
           case SDLK_m:
             print_image_similarity_metrics_ = true;
             break;
+          case SDLK_4:
+          case SDLK_KP_4:
+            update_zoom_factor_and_move_offset(std::min(video_to_window_width_factor_ / drawable_to_window_width_factor_, video_to_window_height_factor_ / drawable_to_window_height_factor_));
+            break;
           case SDLK_5:
           case SDLK_KP_5:
             update_zoom_factor_and_move_offset(0.5F);
@@ -1616,6 +1632,10 @@ void Display::input() {
           case SDLK_8:
           case SDLK_KP_8:
             update_zoom_factor_and_move_offset(4.0F);
+            break;
+          case SDLK_9:
+          case SDLK_KP_9:
+            update_zoom_factor_and_move_offset(8.0F);
             break;
           case SDLK_r:
             update_zoom_factor(1.0F);

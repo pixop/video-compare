@@ -113,6 +113,10 @@ class Display {
   bool possibly_tick_playback_{false};
   bool show_fps_{false};
 
+  bool input_received_{true};
+  int64_t previous_left_frame_pts_;
+  int64_t previous_right_frame_pts_;
+
   float global_zoom_level_{0.0F};
   float global_zoom_factor_{1.0F};
   Vector2D move_offset_{0.0F, 0.0F};
