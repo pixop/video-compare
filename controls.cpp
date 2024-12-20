@@ -27,7 +27,7 @@ static const std::vector<std::pair<std::string, std::string>> controls{{"H", "To
                                                                        {"1", "Toggle hide/show left video"},
                                                                        {"2", "Toggle hide/show right video"},
                                                                        {"3", "Toggle hide/show HUD"},
-                                                                       {"4", "Display 1:1"},
+                                                                       {"4", "Zoom to 1:1 pixels"},
                                                                        {"5", "Zoom  50% (x0.5)"},
                                                                        {"6", "Zoom 100% (x1)"},
                                                                        {"7", "Zoom 200% (x2)"},
