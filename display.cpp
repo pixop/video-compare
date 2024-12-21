@@ -964,7 +964,7 @@ void Display::render_help() {
   }
 }
 
-bool Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message) {
+bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message) {
   const bool has_updated_left_pts = previous_left_frame_pts_ != left_frame->pts;
   const bool has_updated_right_pts = previous_right_frame_pts_ != right_frame->pts;
 

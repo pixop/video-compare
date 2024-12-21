@@ -910,7 +910,7 @@ void VideoCompare::compare() {
             // conditionally update the display; otherwise, sleep to conserve resources
             display_refresh_timer.update();
 
-            if (display_->refresh(left_display_frame, right_display_frame, current_total_browsable, message)) {
+            if (display_->possibly_refresh(left_display_frame, right_display_frame, current_total_browsable, message)) {
               refresh_time_deque.push_back(-display_refresh_timer.us_until_target());
             } else {
               sleep_for_ms(refresh_time_deque.average() / 1000);

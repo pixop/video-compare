@@ -240,7 +240,7 @@ class Display {
   ~Display();
 
   // Copy frame to display
-  bool refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message);
+  bool possibly_refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message);
 
   // Handle events
   void input();
