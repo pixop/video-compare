@@ -578,7 +578,7 @@ void VideoCompare::compare() {
 
     int64_t previous_frame_combo_tag = -1;
     int32_t unique_frame_combo_tags_processed = 0;
-    std::string fps_message;
+    std::string fps_message = "Gathering stats... hold onto your pixels!";
 
     double next_refresh_at = 0;
 
@@ -907,10 +907,14 @@ void VideoCompare::compare() {
 
             const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, max_left_frame_index + 1, suffix_str.c_str());
 
-            // update UI
+            // conditionally update the display; otherwise, sleep to conserve resources
             display_refresh_timer.update();
-            display_->refresh(left_display_frame, right_display_frame, current_total_browsable, message);
-            refresh_time_deque.push_back(-display_refresh_timer.us_until_target());
+
+            if (display_->refresh(left_display_frame, right_display_frame, current_total_browsable, message)) {
+              refresh_time_deque.push_back(-display_refresh_timer.us_until_target());
+            } else {
+              sleep_for_ms(refresh_time_deque.average() / 1000);
+            }
 
             ui_refresh_performed = true;
 

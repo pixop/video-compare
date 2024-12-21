@@ -116,6 +116,7 @@ class Display {
   bool input_received_{true};
   int64_t previous_left_frame_pts_;
   int64_t previous_right_frame_pts_;
+  bool timer_based_update_performed_;
 
   float global_zoom_level_{0.0F};
   float global_zoom_factor_{1.0F};
@@ -239,7 +240,7 @@ class Display {
   ~Display();
 
   // Copy frame to display
-  void refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message);
+  bool refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message);
 
   // Handle events
   void input();

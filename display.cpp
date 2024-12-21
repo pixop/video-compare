@@ -964,7 +964,14 @@ void Display::render_help() {
   }
 }
 
-void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message) {
+bool Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message) {
+  const bool has_updated_left_pts = previous_left_frame_pts_ != left_frame->pts;
+  const bool has_updated_right_pts = previous_right_frame_pts_ != right_frame->pts;
+
+  if (!input_received_ && !has_updated_left_pts && !has_updated_right_pts && !timer_based_update_performed_ && message.empty()) {
+    return false;
+  }
+
   std::array<uint8_t*, 3> planes_left{left_frame->data[0], left_frame->data[1], left_frame->data[2]};
   std::array<uint8_t*, 3> planes_right{right_frame->data[0], right_frame->data[1], right_frame->data[2]};
   std::array<size_t, 3> pitches_left{static_cast<size_t>(left_frame->linesize[0]), static_cast<size_t>(left_frame->linesize[1]), static_cast<size_t>(left_frame->linesize[2])};
@@ -1076,7 +1083,7 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
       const SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
       const SDL_FRect screen_render_quad_left = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_left));
 
-      if (input_received_ || (previous_left_frame_pts_ != left_frame->pts)) {
+      if (input_received_ || has_updated_left_pts) {
         if (use_10_bpc_) {
           convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
 
@@ -1084,8 +1091,6 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
         } else {
           update_texture(&tex_render_quad_left, planes_left[0], pitches_left[0], "left update (video mode)");
         }
-
-        previous_left_frame_pts_ = left_frame->pts;
       }
 
       check_sdl(SDL_RenderCopyF(renderer_, get_video_texture(), &tex_render_quad_left, &screen_render_quad_left) == 0, "left video texture render copy");
@@ -1099,7 +1104,7 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
       const SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
       const SDL_FRect screen_render_quad_right = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_right));
 
-      if (input_received_ || (previous_right_frame_pts_ != right_frame->pts)) {
+      if (input_received_ || has_updated_right_pts) {
         if (subtraction_mode_) {
           update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
 
@@ -1119,8 +1124,6 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
             update_texture(&tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0], "right update (video mode)");
           }
         }
-
-        previous_right_frame_pts_ = right_frame->pts;
       }
 
       check_sdl(SDL_RenderCopyF(renderer_, get_video_texture(), &tex_render_quad_right, &screen_render_quad_right) == 0, "right video texture render copy");
@@ -1157,6 +1160,8 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
     SDL_DestroyTexture(render_texture);
     SDL_FreeSurface(render_surface);
   }
+
+  timer_based_update_performed_ = false;
 
   SDL_Rect fill_rect;
   SDL_Rect text_rect;
@@ -1344,6 +1349,8 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
         default:
           break;
       }
+
+      timer_based_update_performed_ = true;
     }
 
     SDL_SetRenderDrawColor(renderer_, label_color.r, label_color.g, label_color.b, label_alpha);
@@ -1383,6 +1390,8 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
     SDL_SetTextureAlphaMod(message_texture_, 255 * keep_alpha);
     text_rect = {drawable_width_ / 2 - message_width_ / 2, drawable_height_ / 2 - message_height_ / 2, message_width_, message_height_};
     SDL_RenderCopy(renderer_, message_texture_, nullptr, &text_rect);
+
+    timer_based_update_performed_ = timer_based_update_performed_ || (keep_alpha > 0.0F);
   }
 
   if (mode_ == Mode::split && show_hud_ && compare_mode) {
@@ -1410,6 +1419,10 @@ void Display::refresh(const AVFrame* left_frame, const AVFrame* right_frame, con
   SDL_RenderPresent(renderer_);
 
   input_received_ = false;
+  previous_left_frame_pts_ = left_frame->pts;
+  previous_right_frame_pts_ = right_frame->pts;
+
+  return true;
 }
 
 float Display::compute_zoom_factor(const float zoom_level) const {
