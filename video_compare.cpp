@@ -862,9 +862,9 @@ void VideoCompare::compare() {
       const bool end_of_file = no_activity && (converted_frame_queues_[LEFT]->is_stopped() || converted_frame_queues_[RIGHT]->is_stopped());
       const bool buffer_is_full = left.frames_.size() == frame_buffer_size_ && right.frames_.size() == frame_buffer_size_;
 
-      const int max_left_frame_index = static_cast<int>(left.frames_.size()) - 1;
+      const int last_common_frame_index = static_cast<int>(std::min(left.frames_.size(), right.frames_.size()) - 1);
 
-      auto adjust_frame_offset = [max_left_frame_index](const int frame_offset, const int adjustment) { return std::min(std::max(0, frame_offset + adjustment), max_left_frame_index); };
+      auto adjust_frame_offset = [last_common_frame_index](const int frame_offset, const int adjustment) { return std::min(std::max(0, frame_offset + adjustment), last_common_frame_index); };
 
       frame_offset = adjust_frame_offset(frame_offset, display_->get_frame_buffer_offset_delta());
 
@@ -905,7 +905,7 @@ void VideoCompare::compare() {
               suffix_str = "]";
             }
 
-            const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, max_left_frame_index + 1, suffix_str.c_str());
+            const std::string current_total_browsable = string_sprintf(frame_offset_format_str.c_str(), prefix_str.c_str(), frame_offset + 1, last_common_frame_index + 1, suffix_str.c_str());
 
             // conditionally update the display; otherwise, sleep to conserve resources
             display_refresh_timer.update();
@@ -935,13 +935,13 @@ void VideoCompare::compare() {
             switch (display_->get_buffer_play_loop_mode()) {
               case Display::Loop::forwardonly:
                 if (frame_offset == 0) {
-                  frame_offset = max_left_frame_index;
+                  frame_offset = last_common_frame_index;
                 } else {
                   frame_offset = adjust_frame_offset(frame_offset, -1);
                 }
                 break;
               case Display::Loop::pingpong:
-                if (max_left_frame_index >= 1 && (frame_offset == 0 || frame_offset == max_left_frame_index)) {
+                if (last_common_frame_index >= 1 && (frame_offset == 0 || frame_offset == last_common_frame_index)) {
                   display_->toggle_buffer_play_direction();
                 }
                 frame_offset = adjust_frame_offset(frame_offset, display_->get_buffer_play_forward() ? -1 : 1);
