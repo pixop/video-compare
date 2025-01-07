@@ -163,6 +163,7 @@ Display::Display(const int display_number,
                  const bool high_dpi_allowed,
                  const bool use_10_bpc,
                  const bool fast_input_alignment,
+                 const bool bilinear_texture_filtering,
                  const std::tuple<int, int> window_size,
                  const unsigned width,
                  const unsigned height,
@@ -176,6 +177,7 @@ Display::Display(const int display_number,
       high_dpi_allowed_{high_dpi_allowed},
       use_10_bpc_{use_10_bpc},
       fast_input_alignment_{fast_input_alignment},
+      bilinear_texture_filtering_{bilinear_texture_filtering},
       video_width_{static_cast<int>(width)},
       video_height_{static_cast<int>(height)},
       duration_{duration},
@@ -711,7 +713,7 @@ void Display::render_progress_dots(const float position, const float progress, c
 }
 
 SDL_Texture* Display::get_video_texture() const {
-  return use_bilinear_texture_filtering_ ? video_texture_linear_ : video_texture_nn_;
+  return bilinear_texture_filtering_ ? video_texture_linear_ : video_texture_nn_;
 }
 
 void Display::update_texture(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& message) {
@@ -1598,8 +1600,8 @@ void Display::input() {
             std::cout << "Input alignment resizing filter set to '" << (fast_input_alignment_ ? "BILINEAR (fast)" : "BICUBIC (high-quality)") << "' (takes effect for the next decoded frame)" << std::endl;
             break;
           case SDLK_t:
-            use_bilinear_texture_filtering_ = !use_bilinear_texture_filtering_;
-            std::cout << "Video texture filter set to '" << (use_bilinear_texture_filtering_ ? "BILINEAR" : "NEAREST NEIGHBOR") << "'" << std::endl;
+            bilinear_texture_filtering_ = !bilinear_texture_filtering_;
+            std::cout << "Video texture filter set to '" << (bilinear_texture_filtering_ ? "BILINEAR" : "NEAREST NEIGHBOR") << "'" << std::endl;
             break;
           case SDLK_s: {
             swap_left_right_ = !swap_left_right_;

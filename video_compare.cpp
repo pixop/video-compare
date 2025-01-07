@@ -171,6 +171,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                          config.high_dpi_allowed,
                                          config.use_10_bpc,
                                          initial_fast_input_alignment_,
+                                         config.bilinear_texture_filtering,
                                          config.window_size,
                                          max_width_,
                                          max_height_,

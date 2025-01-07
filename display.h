@@ -70,7 +70,8 @@ class Display {
   const bool fit_window_to_usable_bounds_;
   const bool high_dpi_allowed_;
   const bool use_10_bpc_;
-  bool fast_input_alignment_{true};
+  bool fast_input_alignment_;
+  bool bilinear_texture_filtering_;
   const int video_width_;
   const int video_height_;
   const double duration_;
@@ -96,7 +97,6 @@ class Display {
   bool show_left_{true};
   bool show_right_{true};
   bool show_hud_{true};
-  bool use_bilinear_texture_filtering_{false};
   bool subtraction_mode_{false};
   float seek_relative_{0.0F};
   int frame_buffer_offset_delta_{0};
@@ -230,6 +230,7 @@ class Display {
           const bool high_dpi_allowed,
           const bool use_10_bpc,
           const bool fast_input_alignment,
+          const bool bilinear_texture_filtering,
           const std::tuple<int, int> window_size,
           const unsigned width,
           const unsigned height,
