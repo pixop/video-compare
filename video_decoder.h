@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include "core_types.h"
 #include "demuxer.h"
 
 extern "C" {
@@ -20,7 +21,6 @@ class VideoDecoder {
 
   bool send(AVPacket* packet);
   bool receive(AVFrame* frame, Demuxer* demuxer);
-  void check_content_light_level(const AVFrame* frame);
 
   void flush();
   bool swap_dimensions() const;
@@ -40,6 +40,9 @@ class VideoDecoder {
 
   int64_t next_pts() const;
 
+  DynamicRange infer_dynamic_range(const std::string& trc_name) const;
+  unsigned safe_peak_luminance_nits(const DynamicRange dynamic_range) const;
+
  private:
   const AVCodec* codec_{};
   AVCodecContext* codec_context_{};
@@ -54,5 +57,4 @@ class VideoDecoder {
   bool trust_decoded_pts_;
 
   unsigned peak_luminance_nits_;
-  bool disable_metadata_maxcll_check_{false};
 };

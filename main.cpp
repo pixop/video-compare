@@ -258,10 +258,10 @@ int main(int argc, char** argv) {
          {"color-range", {"-A", "--color-range"}, "set the color range, specified as [range] for the same on both sides, or [l-range?]:[r-range?] for different values (e.g. 'tv', ':pc' or 'pc:tv')", 1},
          {"color-primaries", {"-P", "--color-primaries"}, "set the color primaries, specified as [primaries] for the same on both sides, or [l-primaries?]:[r-primaries?] for different values (e.g. 'bt709' or 'bt2020:bt709')", 1},
          {"color-trc", {"-N", "--color-trc"}, "set the transfer characteristics (transfer curve), specified as [trc] for the same on both sides, or [l-trc?]:[r-trc?] for different values (e.g. 'bt709' or 'smpte2084:')", 1},
-         {"tone-map-mode", {"-T", "--tone-map-mode"}, "adapt tones to an sRGB display, 'off' for no conversion (default), 'on' for full-range tone mapping, 'rel' for relative tone comparison", 1},
-         {"left-peak-nits", {"-L", "--left-peak-nits"}, "left video peak luminance in nits (e.g. 850 or 1000), default is 100 for SDR; tone mapping is enabled if --tone-map-mode is not set", 1},
+         {"tone-map-mode", {"-T", "--tone-map-mode"}, "adapt tones for sRGB display: 'auto' (default) for automatic HDR, 'off' for none, 'on' for full-range mapping, 'rel' for relative comparison (e.g. 'on', 'auto:off', ':rel')", 1},
+         {"left-peak-nits", {"-L", "--left-peak-nits"}, "left video peak luminance in nits (e.g. 850 or 1000), default is 100 for SDR and 500 for HDR", 1},
          {"right-peak-nits", {"-R", "--right-peak-nits"}, "right video peak luminance in nits; see --left-peak-nits", 1},
-         {"boost-tone", {"-B", "--boost-tone"}, "adjust tone-mapping strength using a multiplication factor (e.g. 0.6 or 3), default is 1; tone mapping is enabled if --tone-map-mode is not set", 1},
+         {"boost-tone", {"-B", "--boost-tone"}, "adjust tone-mapping strength factor, specified as [factor] for the same on both sides, or [l-factor?]:[r-factor?] for different values (e.g. '0.6', ':3' or '2:1.5')", 1},
          {"filters", {"-i", "--filters"}, "specify a comma-separated list of FFmpeg filters to be applied to both sides (e.g. scale=1920:-2,delogo=x=10:y=10:w=100:h=70)", 1},
          {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
          {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
@@ -332,11 +332,11 @@ int main(int argc, char** argv) {
         const std::string display_mode_arg = args["display-mode"];
 
         if (display_mode_arg == "split") {
-          config.display_mode = Display::Mode::split;
+          config.display_mode = Display::Mode::SPLIT;
         } else if (display_mode_arg == "vstack") {
-          config.display_mode = Display::Mode::vstack;
+          config.display_mode = Display::Mode::VSTACK;
         } else if (display_mode_arg == "hstack") {
-          config.display_mode = Display::Mode::hstack;
+          config.display_mode = Display::Mode::HSTACK;
         } else {
           throw std::logic_error{"Cannot parse display mode argument (valid options: split, vstack, hstack)"};
         }
@@ -392,11 +392,11 @@ int main(int argc, char** argv) {
         const std::string auto_loop_mode_arg = args["auto-loop-mode"];
 
         if (auto_loop_mode_arg == "off") {
-          config.auto_loop_mode = Display::Loop::off;
+          config.auto_loop_mode = Display::Loop::OFF;
         } else if (auto_loop_mode_arg == "on") {
-          config.auto_loop_mode = Display::Loop::forwardonly;
+          config.auto_loop_mode = Display::Loop::FORWARDONLY;
         } else if (auto_loop_mode_arg == "pp") {
-          config.auto_loop_mode = Display::Loop::pingpong;
+          config.auto_loop_mode = Display::Loop::PINGPONG;
         } else {
           throw std::logic_error{"Cannot parse auto loop mode argument (valid options: off, on, pp)"};
         }
@@ -438,15 +438,25 @@ int main(int argc, char** argv) {
       if (args["tone-map-mode"]) {
         const std::string tone_mapping_mode_arg = args["tone-map-mode"];
 
-        if (tone_mapping_mode_arg == "off") {
-          config.tone_mapping_mode = ToneMapping::off;
-        } else if (tone_mapping_mode_arg == "on") {
-          config.tone_mapping_mode = ToneMapping::fullrange;
-        } else if (tone_mapping_mode_arg == "rel") {
-          config.tone_mapping_mode = ToneMapping::relative;
-        } else {
-          throw std::logic_error{"Cannot parse tone mapping mode argument (valid options: off, on, rel)"};
-        }
+        auto parse_tm_mode_arg = [](const std::string& tone_mapping_mode_arg) {
+          if (tone_mapping_mode_arg.empty() || tone_mapping_mode_arg == "auto") {
+            return ToneMapping::AUTO;
+          } else if (tone_mapping_mode_arg == "off") {
+            return ToneMapping::OFF;
+          } else if (tone_mapping_mode_arg == "on") {
+            return ToneMapping::FULLRANGE;
+          } else if (tone_mapping_mode_arg == "rel") {
+            return ToneMapping::RELATIVE;
+          } else {
+            throw std::logic_error{"Cannot parse tone mapping mode argument (valid options: auto, off, on, rel)"};
+          }
+        };
+
+        auto tone_mapping_mode_spec = static_cast<const std::string&>(args["tone-map-mode"]);
+        auto left_tone_mapping_mode = get_nth_token_or_empty(tone_mapping_mode_spec, ':', 0);
+
+        config.left.tone_mapping_mode = parse_tm_mode_arg(left_tone_mapping_mode);
+        config.right.tone_mapping_mode = (tone_mapping_mode_spec == left_tone_mapping_mode) ? config.left.tone_mapping_mode : parse_tm_mode_arg(get_nth_token_or_empty(tone_mapping_mode_spec, ':', 1));
       }
 
       // video filters
@@ -522,18 +532,18 @@ int main(int argc, char** argv) {
       if (args["left-peak-nits"] || args["right-peak-nits"]) {
         const std::regex peak_nits_re("(\\d*)");
 
-        auto parse_peak_nits = [&](const std::string& arg, const std::string& location) {
+        auto parse_peak_nits = [&](const std::string& arg, const InputVideo& input_video) {
           if (!std::regex_match(arg, peak_nits_re)) {
-            throw std::logic_error{"Cannot parse " + to_lower_case(location) + " peak nits (required format: [number], e.g. 400, 850 or 1000)"};
+            throw std::logic_error{"Cannot parse " + to_lower_case(input_video.side_description) + " peak nits (required format: [number], e.g. 400, 850 or 1000)"};
           }
 
           int result = std::stoi(arg);
 
           if (result < 1) {
-            throw std::logic_error{location + " peak nits must be at least 1"};
+            throw std::logic_error{input_video.side_description + " peak nits must be at least 1"};
           }
           if (result > 10000) {
-            throw std::logic_error{location + " peak nits must not be more than 10000"};
+            throw std::logic_error{input_video.side_description + " peak nits must not be more than 10000"};
           }
           return result;
         };
@@ -550,31 +560,32 @@ int main(int argc, char** argv) {
         resolve_mutual_placeholders(left_peak_nits, right_peak_nits, "peak (in nits)");
 
         if (!left_peak_nits.empty()) {
-          config.left.peak_luminance_nits = parse_peak_nits(left_peak_nits, "Left");
+          config.left.peak_luminance_nits = parse_peak_nits(left_peak_nits, config.left);
         }
         if (!right_peak_nits.empty()) {
-          config.right.peak_luminance_nits = parse_peak_nits(right_peak_nits, "Right");
-        }
-
-        // enable tone mapping if option wasn't specified
-        if (!args["tone-map-mode"]) {
-          config.tone_mapping_mode = ToneMapping::fullrange;
+          config.right.peak_luminance_nits = parse_peak_nits(right_peak_nits, config.right);
         }
       }
       if (args["boost-tone"]) {
-        const std::string boost_tone_arg = args["boost-tone"];
-        const std::regex boost_tone_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
+        auto parse_boost_tone = [](const std::string& boost_tone_arg, const InputVideo& input_video) {
+          if (boost_tone_arg.empty()) {
+            return 1.0;
+          }
 
-        if (!std::regex_match(boost_tone_arg, boost_tone_re)) {
-          throw std::logic_error{"Cannot parse boost luminance argument; must be a valid number, e.g. 1.3 or 3.0"};
-        }
+          const std::regex boost_tone_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
 
-        config.boost_tone = std::stod(boost_tone_arg);
+          if (!std::regex_match(boost_tone_arg, boost_tone_re)) {
+            throw std::logic_error{"Cannot parse " + to_lower_case(input_video.side_description) + " boost luminance argument; must be a valid number, e.g. 1.3 or 3.0"};
+          }
 
-        // enable tone mapping if option wasn't specified
-        if (!args["tone-map-mode"]) {
-          config.tone_mapping_mode = ToneMapping::fullrange;
-        }
+          return std::stod(boost_tone_arg);
+        };
+
+        auto boost_tone_spec = static_cast<const std::string&>(args["boost-tone"]);
+        auto left_boost_tone = get_nth_token_or_empty(boost_tone_spec, ':', 0);
+
+        config.left.boost_tone = parse_boost_tone(left_boost_tone, config.left);
+        config.right.boost_tone = (boost_tone_spec == left_boost_tone) ? config.left.boost_tone : parse_boost_tone(get_nth_token_or_empty(boost_tone_spec, ':', 1), config.right);
       }
 
       config.left.file_name = args.pos[0];

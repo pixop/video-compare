@@ -1,4 +1,5 @@
 #pragma once
+#include "core_types.h"
 #include "config.h"
 #include "demuxer.h"
 #include "video_decoder.h"
@@ -12,7 +13,8 @@ class VideoFilterer {
  public:
   VideoFilterer(const Demuxer* demuxer,
                 const VideoDecoder* video_decoder,
-                int peak_luminance_nits,
+                const ToneMapping tone_mapping_mode,
+                const float boost_tone,
                 const std::string& custom_video_filters,
                 const std::string& custom_color_space,
                 const std::string& custom_color_range,
@@ -20,9 +22,7 @@ class VideoFilterer {
                 const std::string& custom_color_trc,
                 const Demuxer* other_demuxer,
                 const VideoDecoder* other_video_decoder,
-                int other_peak_luminance_nits,
-                const ToneMapping tone_mapping_mode,
-                const float boost_tone,
+                const std::string& other_custom_color_trc,
                 const bool disable_auto_filters);
   ~VideoFilterer();
 
@@ -60,4 +60,9 @@ class VideoFilterer {
   AVFilterContext* buffersrc_ctx_;
   AVFilterContext* buffersink_ctx_;
   AVFilterGraph* filter_graph_;
+
+  ToneMapping tone_mapping_mode_;
+  DynamicRange dynamic_range_;
+  unsigned peak_luminance_nits_;
+  bool disable_cll_reporting_{false};
 };

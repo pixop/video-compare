@@ -21,6 +21,26 @@ bool get_and_remove_bool_avdict_option(AVDictionary*& options, const char* key) 
   return false;
 }
 
+DynamicRange infer_from_trc_name(const std::string& trc_name) {
+  if (trc_name == "smpte2084") {
+    return DynamicRange::PQ;
+  } else if (trc_name == "arib-std-b67") {
+    return DynamicRange::HLG;
+  }
+  return DynamicRange::STANDARD;
+}
+
+DynamicRange infer_from_metadata(const AVColorTransferCharacteristic color_trc) {
+  switch (color_trc) {
+    case AVCOL_TRC_SMPTE2084:
+      return DynamicRange::PQ;
+    case AVCOL_TRC_ARIB_STD_B67:
+      return DynamicRange::HLG;
+    default:
+      return DynamicRange::STANDARD;
+  }
+}
+
 VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, const AVCodecParameters* codec_parameters, const unsigned peak_luminance_nits, AVDictionary* hwaccel_options, AVDictionary* decoder_options)
     : hw_pixel_format_(AV_PIX_FMT_NONE), first_pts_(AV_NOPTS_VALUE), next_pts_(AV_NOPTS_VALUE), trust_decoded_pts_(false), peak_luminance_nits_(peak_luminance_nits) {
   if (decoder_name.empty()) {
@@ -159,29 +179,7 @@ bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
   previous_pts_ = avframe_pts;
   next_pts_ = frame->pts + ffmpeg::frame_duration(frame);
 
-  // check MaxCLL against expected light level
-  check_content_light_level(frame);
-
   return true;
-}
-
-void VideoDecoder::check_content_light_level(const AVFrame* frame) {
-  if (disable_metadata_maxcll_check_) {
-    return;
-  }
-
-  AVFrameSideData* frame_side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
-
-  if (frame_side_data != nullptr && static_cast<size_t>(frame_side_data->size) >= sizeof(AVContentLightMetadata)) {
-    AVContentLightMetadata* cll_metadata = reinterpret_cast<AVContentLightMetadata*>(frame_side_data->data);
-
-    unsigned metadata_max_cll = cll_metadata->MaxCLL;
-
-    if (peak_luminance_nits_ != metadata_max_cll) {
-      std::cout << string_sprintf("Warning: Frame metadata MaxCLL value of %d differs from expected peak luminance %d, disabling check.", metadata_max_cll, peak_luminance_nits_) << std::endl;
-      disable_metadata_maxcll_check_ = true;
-    }
-  }
 }
 
 void VideoDecoder::flush() {
@@ -245,4 +243,20 @@ bool VideoDecoder::is_anamorphic() const {
 
 int64_t VideoDecoder::next_pts() const {
   return next_pts_;
+}
+
+DynamicRange VideoDecoder::infer_dynamic_range(const std::string& trc_name) const {
+  if (!trc_name.empty()) {
+    return infer_from_trc_name(trc_name);
+  }
+  return infer_from_metadata(color_trc());
+}
+
+unsigned VideoDecoder::safe_peak_luminance_nits(const DynamicRange dynamic_range) const {
+  if (peak_luminance_nits_ != UNSET_PEAK_LUMINANCE) {
+    return peak_luminance_nits_;
+  } else {
+    // resolve default peak luminance
+    return (dynamic_range == DynamicRange::STANDARD) ? DEFAULT_SDR_NITS : DEFAULT_HDR_NITS;
+  }
 }

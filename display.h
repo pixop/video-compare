@@ -48,16 +48,16 @@ class Vector2D {
 
 class Display {
  public:
-  enum Mode { split, vstack, hstack };
-  enum Loop { off, forwardonly, pingpong };
+  enum Mode { SPLIT, VSTACK, HSTACK };
+  enum Loop { OFF, FORWARDONLY, PINGPONG };
 
   std::string modeToString(const Mode& mode) {
     switch (mode) {
-      case split:
+      case SPLIT:
         return "split";
-      case vstack:
+      case VSTACK:
         return "vstack";
-      case hstack:
+      case HSTACK:
         return "hstack";
       default:
         return "unknown";
@@ -89,7 +89,7 @@ class Display {
   bool show_help_{false};
   bool quit_{false};
   bool play_{true};
-  Loop buffer_play_loop_mode_{off};
+  Loop buffer_play_loop_mode_{OFF};
   bool buffer_play_forward_{true};
   bool swap_left_right_{false};
   bool zoom_left_{false};

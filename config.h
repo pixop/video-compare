@@ -1,13 +1,15 @@
 #pragma once
 #include <string>
+#include "core_types.h"
 #include "display.h"
 extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
-enum ToneMapping { off, fullrange, relative };
-
 struct InputVideo {
+  Side side;
+  std::string side_description;
+
   std::string file_name;
 
   std::string video_filters;
@@ -24,7 +26,9 @@ struct InputVideo {
   AVDictionary* decoder_options{nullptr};   // mutated by VideoDecoder
   AVDictionary* hw_accel_options{nullptr};  // mutated by VideoDecoder
 
-  unsigned peak_luminance_nits{100};  // [cd / m^2]
+  ToneMapping tone_mapping_mode{ToneMapping::AUTO};
+  unsigned peak_luminance_nits{UNSET_PEAK_LUMINANCE};  // [cd / m^2]
+  float boost_tone{1};
 };
 
 struct VideoCompareConfig {
@@ -39,11 +43,8 @@ struct VideoCompareConfig {
   int display_number{0};
   std::tuple<int, int> window_size{-1, -1};
 
-  Display::Mode display_mode{Display::Mode::split};
-  Display::Loop auto_loop_mode{Display::Loop::off};
-
-  ToneMapping tone_mapping_mode{ToneMapping::off};
-  float boost_tone{1};
+  Display::Mode display_mode{Display::Mode::SPLIT};
+  Display::Loop auto_loop_mode{Display::Loop::OFF};
 
   size_t frame_buffer_size{50};
 
@@ -51,6 +52,6 @@ struct VideoCompareConfig {
 
   float wheel_sensitivity{1};
 
-  InputVideo left;
-  InputVideo right;
+  InputVideo left{Side::LEFT, "Left"};
+  InputVideo right{Side::RIGHT, "Right"};
 };

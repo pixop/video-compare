@@ -6,6 +6,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include "core_types.h"
 #include "config.h"
 #include "demuxer.h"
 #include "display.h"
@@ -25,8 +26,6 @@ using AVFrameUniquePtr = std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>
 using PacketQueue = Queue<AVPacketUniquePtr>;
 using DecodedFrameQueue = Queue<AVFrameSharedPtr>;
 using FrameQueue = Queue<AVFrameUniquePtr>;
-
-enum Side { LEFT, RIGHT, Count };
 
 class ReadyToSeek {
  public:

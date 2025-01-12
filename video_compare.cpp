@@ -116,7 +116,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
           std::make_unique<VideoDecoder>(config.right.decoder, config.right.hw_accel_spec, demuxers_[RIGHT]->video_codec_parameters(), config.right.peak_luminance_nits, config.right.hw_accel_options, config.right.decoder_options)},
       video_filterers_{std::make_unique<VideoFilterer>(demuxers_[LEFT].get(),
                                                        video_decoders_[LEFT].get(),
-                                                       config.left.peak_luminance_nits,
+                                                       config.left.tone_mapping_mode,
+                                                       config.left.boost_tone,
                                                        config.left.video_filters,
                                                        config.left.color_space,
                                                        config.left.color_range,
@@ -124,13 +125,12 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                        config.left.color_trc,
                                                        demuxers_[RIGHT].get(),
                                                        video_decoders_[RIGHT].get(),
-                                                       config.right.peak_luminance_nits,
-                                                       config.tone_mapping_mode,
-                                                       config.boost_tone,
+                                                       config.right.color_trc,
                                                        config.disable_auto_filters),
                        std::make_unique<VideoFilterer>(demuxers_[RIGHT].get(),
                                                        video_decoders_[RIGHT].get(),
-                                                       config.right.peak_luminance_nits,
+                                                       config.right.tone_mapping_mode,
+                                                       config.right.boost_tone,
                                                        config.right.video_filters,
                                                        config.right.color_space,
                                                        config.right.color_range,
@@ -138,9 +138,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                        config.right.color_trc,
                                                        demuxers_[LEFT].get(),
                                                        video_decoders_[LEFT].get(),
-                                                       config.left.peak_luminance_nits,
-                                                       config.tone_mapping_mode,
-                                                       config.boost_tone,
+                                                       config.left.color_trc,
                                                        config.disable_auto_filters)},
       max_width_{std::max(video_filterers_[LEFT]->dest_width(), video_filterers_[RIGHT]->dest_width())},
       max_height_{std::max(video_filterers_[LEFT]->dest_height(), video_filterers_[RIGHT]->dest_height())},
@@ -774,7 +772,7 @@ void VideoCompare::compare() {
       sync_frame_queue(right, left);
 
       // handle regular playback only
-      if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::off) {
+      if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::OFF) {
         if (!adjusting && fetch_next_frame) {
           if (!pop_frame(left) || !pop_frame(right)) {
             left.frame_ = nullptr;
@@ -931,17 +929,17 @@ void VideoCompare::compare() {
 
           if (!adjusting && time_until_final_refresh > 0 && time_until_final_refresh < refresh_time_deque.average()) {
             timer_->wait(time_until_final_refresh);
-          } else if (time_until_final_refresh <= 0 && display_->get_buffer_play_loop_mode() != Display::Loop::off) {
+          } else if (time_until_final_refresh <= 0 && display_->get_buffer_play_loop_mode() != Display::Loop::OFF) {
             // auto-adjust current frame during in-buffer playback
             switch (display_->get_buffer_play_loop_mode()) {
-              case Display::Loop::forwardonly:
+              case Display::Loop::FORWARDONLY:
                 if (frame_offset == 0) {
                   frame_offset = last_common_frame_index;
                 } else {
                   frame_offset = adjust_frame_offset(frame_offset, -1);
                 }
                 break;
-              case Display::Loop::pingpong:
+              case Display::Loop::PINGPONG:
                 if (last_common_frame_index >= 1 && (frame_offset == 0 || frame_offset == last_common_frame_index)) {
                   display_->toggle_buffer_play_direction();
                 }
@@ -958,7 +956,7 @@ void VideoCompare::compare() {
           }
 
           // enter in-buffer playback once if buffer is full or EOF reached
-          if (auto_loop_mode_ != Display::Loop::off && !auto_loop_triggered && (buffer_is_full || end_of_file)) {
+          if (auto_loop_mode_ != Display::Loop::OFF && !auto_loop_triggered && (buffer_is_full || end_of_file)) {
             display_->set_buffer_play_loop_mode(auto_loop_mode_);
 
             auto_loop_triggered = true;

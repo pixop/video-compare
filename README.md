@@ -130,8 +130,9 @@ Set the hardware acceleration type for the left video only:
 
     video-compare --left-hwaccel videotoolbox video1.mp4 video2.mp4
 
-Convert the color space of the SDR video and map the 850-nit peak light level HDR video to adapt them
-for an sRGB display at the same light level:
+By default, HDR videos are automatically color space converted to sRGB with an initial 500-nit peak light
+level. This default can be overridden with a custom peak light level, such as 850 nits. The specified peak
+light level is then dynamically adjusted during decoding based on any MaxCLL metadata:
 
     video-compare -R 850 sdr_video.mp4 hdr_video.mp4
 
@@ -185,7 +186,7 @@ see all supported options.
 - 2: Toggle hide/show right video
 - 3: Toggle hide/show HUD
 - 4: Zoom to 1:1 pixels
-- 5: Zoom 50%  (x0.5)
+- 5: Zoom 50% (x0.5)
 - 6: Zoom 100% (x1)
 - 7: Zoom 200% (x2)
 - 8: Zoom 400% (x4)

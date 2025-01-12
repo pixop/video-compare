@@ -5,11 +5,24 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
-constexpr char VIDEO_FILTER_GROUP_DELIMITER = '|';
+static constexpr char VIDEO_FILTER_GROUP_DELIMITER = '|';
+
+static unsigned get_content_light_level_or_zero(const AVFrame* frame) {
+  AVFrameSideData* frame_side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+
+  if (frame_side_data != nullptr && static_cast<size_t>(frame_side_data->size) >= sizeof(AVContentLightMetadata)) {
+    AVContentLightMetadata* cll_metadata = reinterpret_cast<AVContentLightMetadata*>(frame_side_data->data);
+
+    return cll_metadata->MaxCLL;
+  }
+
+  return 0;
+}
 
 VideoFilterer::VideoFilterer(const Demuxer* demuxer,
                              const VideoDecoder* video_decoder,
-                             int peak_luminance_nits,
+                             const ToneMapping tone_mapping_mode,
+                             const float boost_tone,
                              const std::string& custom_video_filters,
                              const std::string& custom_color_space,
                              const std::string& custom_color_range,
@@ -17,9 +30,7 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
                              const std::string& custom_color_trc,
                              const Demuxer* other_demuxer,
                              const VideoDecoder* other_video_decoder,
-                             int other_peak_luminance_nits,
-                             const ToneMapping tone_mapping_mode,
-                             const float boost_tone,
+                             const std::string& other_custom_color_trc,
                              const bool disable_auto_filters)
     : demuxer_(demuxer),
       video_decoder_(video_decoder),
@@ -27,7 +38,8 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
       height_(video_decoder->height()),
       pixel_format_(video_decoder->pixel_format()),
       color_space_(video_decoder->color_space()),
-      color_range_(video_decoder->color_range()) {
+      color_range_(video_decoder->color_range()),
+      tone_mapping_mode_(tone_mapping_mode) {
   std::vector<std::string> filters;
 
   // up to two filter groups are allowed ("pre" and "post"), if only a single group is specified it is assigned to the "post" group
@@ -102,7 +114,22 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
   }
 
   // set color space and range (+ primaries and TRC if tone-mapping is required) to limited range Rec. 709 if metadata is unspecified or pass any user-provided values
-  const bool must_tonemap = tone_mapping_mode != ToneMapping::off;
+  dynamic_range_ = video_decoder->infer_dynamic_range(custom_color_trc);
+  const bool is_hdr_trc = dynamic_range_ != DynamicRange::STANDARD;
+  const bool must_tonemap = tone_mapping_mode == ToneMapping::FULLRANGE || tone_mapping_mode == ToneMapping::RELATIVE || (tone_mapping_mode == ToneMapping::AUTO && is_hdr_trc);
+
+  // resolve default peak luminance
+  peak_luminance_nits_ = video_decoder->safe_peak_luminance_nits(dynamic_range_);
+
+  if (tone_mapping_mode == ToneMapping::AUTO && is_hdr_trc) {
+    if (dynamic_range_ == DynamicRange::PQ) {
+      std::cout << "PQ / SMPTE ST 2084 transfer characteristics (smpte2084)";
+    } else if (dynamic_range_ == DynamicRange::HLG) {
+      std::cout << "Hybrid log–gamma transfer characteristics (arib-std-b67)";
+    }
+
+    std::cout << string_sprintf(" applied; performing tone mapping at an initial %d nits", peak_luminance_nits_).c_str() << std::endl;
+  }
 
   if (!disable_auto_filters || must_tonemap || !custom_color_space.empty() || !custom_color_range.empty() || !custom_color_primaries.empty() || !custom_color_trc.empty()) {
     std::vector<std::string> notes, setparams_options;
@@ -152,17 +179,32 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
     }
 
     if (warnings.empty()) {
-      float tone_adjustment = (tone_mapping_mode == ToneMapping::relative && peak_luminance_nits < other_peak_luminance_nits) ? static_cast<float>(peak_luminance_nits) / other_peak_luminance_nits : 1.0F;
+      const unsigned other_peak_luminance_nits = other_video_decoder->safe_peak_luminance_nits(other_video_decoder->infer_dynamic_range(other_custom_color_trc));
+
+      float tone_adjustment = (tone_mapping_mode == ToneMapping::RELATIVE && peak_luminance_nits_ < other_peak_luminance_nits) ? static_cast<float>(peak_luminance_nits_) / other_peak_luminance_nits : 1.0F;
       tone_adjustment *= boost_tone;
 
       if (std::fabs(tone_adjustment - 1.0F) > 1e-5) {
         filters.push_back("format=gbrpf32");
-        filters.push_back(string_sprintf("zscale=t=linear:npl=%d", peak_luminance_nits));
+
+        if (tone_mapping_mode == ToneMapping::AUTO) {
+          // peak luma gets injected from within init_filters() during auto-mode
+          filters.push_back("zscale=t=linear:npl=%d");
+        } else {
+          filters.push_back(string_sprintf("zscale=t=linear:npl=%d", peak_luminance_nits_));
+        }
+
         filters.push_back(string_sprintf("tonemap=clip:param=%.5f", tone_adjustment));
         filters.push_back(string_sprintf("zscale=p=%s:t=%s", display_primaries.c_str(), display_trc.c_str()));
       } else {
         filters.push_back("format=rgb48");
-        filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%d", display_primaries.c_str(), display_trc.c_str(), peak_luminance_nits));
+
+        if (tone_mapping_mode == ToneMapping::AUTO) {
+          // peak luma gets injected from within init_filters() during auto-mode
+          filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%%d", display_primaries.c_str(), display_trc.c_str()));
+        } else {
+          filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%d", display_primaries.c_str(), display_trc.c_str(), peak_luminance_nits_));
+        }
       }
     } else {
       std::cout << string_sprintf("Warning: Cannot add tone mapping filters: %s", string_join(warnings, ", ").c_str()) << std::endl;
@@ -243,7 +285,7 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
     inputs->pad_idx = 0;
     inputs->next = nullptr;
 
-    if ((ret = avfilter_graph_parse_ptr(filter_graph_, filter_description_.c_str(), &inputs, &outputs, nullptr)) >= 0) {
+    if ((ret = avfilter_graph_parse_ptr(filter_graph_, string_sprintf(filter_description_, peak_luminance_nits_).c_str(), &inputs, &outputs, nullptr)) >= 0) {
       ret = avfilter_graph_config(filter_graph_, nullptr);
     }
   }
@@ -281,6 +323,25 @@ bool VideoFilterer::send(AVFrame* decoded_frame) {
     if (color_range_ != decoded_frame->color_range) {
       color_range_ = static_cast<AVColorRange>(decoded_frame->color_range);
       must_reinit = true;
+    }
+
+    if (dynamic_range_ != DynamicRange::STANDARD) {
+      unsigned max_cll = get_content_light_level_or_zero(decoded_frame);
+
+      if (tone_mapping_mode_ == ToneMapping::FULLRANGE || tone_mapping_mode_ == ToneMapping::RELATIVE) {
+        if (!disable_cll_reporting_ && (max_cll != UNSET_PEAK_LUMINANCE) && (peak_luminance_nits_ != max_cll)) {
+          std::cout << string_sprintf("Warning: Frame metadata MaxCLL value (%d) differs from the expected peak luminance (%d). Check disabled.", max_cll, peak_luminance_nits_) << std::endl;
+          disable_cll_reporting_ = true;
+        }
+      } else if (tone_mapping_mode_ == ToneMapping::AUTO && (max_cll != UNSET_PEAK_LUMINANCE) && (peak_luminance_nits_ != max_cll)) {
+        peak_luminance_nits_ = max_cll;
+        must_reinit = true;
+
+        if (!disable_cll_reporting_) {
+          std::cout << string_sprintf("Tone mapping adjusted to %d nits based on MaxCLL metadata. Further reporting is disabled.", peak_luminance_nits_).c_str() << std::endl;
+          disable_cll_reporting_ = true;
+        }
+      }
     }
 
     if (must_reinit) {
