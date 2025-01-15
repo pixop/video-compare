@@ -1,6 +1,6 @@
 #pragma once
-#include "core_types.h"
 #include "config.h"
+#include "core_types.h"
 #include "demuxer.h"
 #include "video_decoder.h"
 extern "C" {
@@ -64,5 +64,5 @@ class VideoFilterer {
   ToneMapping tone_mapping_mode_;
   DynamicRange dynamic_range_;
   unsigned peak_luminance_nits_;
-  bool disable_cll_reporting_{false};
+  bool disable_max_cll_reporting_{false};
 };

@@ -6,8 +6,8 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include "core_types.h"
 #include "config.h"
+#include "core_types.h"
 #include "demuxer.h"
 #include "display.h"
 #include "format_converter.h"

@@ -4,6 +4,9 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
+constexpr unsigned DEFAULT_SDR_NITS = 100;
+constexpr unsigned DEFAULT_HDR_NITS = 500;
+
 bool is_one_or_true(const char* str) {
   return strcmp(str, "1") == 0 || strcmp(str, "true") == 0 || strcmp(str, "t") == 0;
 }
@@ -21,7 +24,7 @@ bool get_and_remove_bool_avdict_option(AVDictionary*& options, const char* key) 
   return false;
 }
 
-DynamicRange infer_from_trc_name(const std::string& trc_name) {
+DynamicRange dynamic_range_from_trc_name(const std::string& trc_name) {
   if (trc_name == "smpte2084") {
     return DynamicRange::PQ;
   } else if (trc_name == "arib-std-b67") {
@@ -30,7 +33,7 @@ DynamicRange infer_from_trc_name(const std::string& trc_name) {
   return DynamicRange::STANDARD;
 }
 
-DynamicRange infer_from_metadata(const AVColorTransferCharacteristic color_trc) {
+DynamicRange dynamic_range_from_av_enum(const AVColorTransferCharacteristic color_trc) {
   switch (color_trc) {
     case AVCOL_TRC_SMPTE2084:
       return DynamicRange::PQ;
@@ -247,9 +250,9 @@ int64_t VideoDecoder::next_pts() const {
 
 DynamicRange VideoDecoder::infer_dynamic_range(const std::string& trc_name) const {
   if (!trc_name.empty()) {
-    return infer_from_trc_name(trc_name);
+    return dynamic_range_from_trc_name(trc_name);
   }
-  return infer_from_metadata(color_trc());
+  return dynamic_range_from_av_enum(color_trc());
 }
 
 unsigned VideoDecoder::safe_peak_luminance_nits(const DynamicRange dynamic_range) const {
