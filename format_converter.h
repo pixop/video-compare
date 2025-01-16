@@ -1,20 +1,22 @@
 #pragma once
+#include "side_aware.h"
 extern "C" {
 #include "libavformat/avformat.h"
 #include "libswscale/swscale.h"
 }
 
-class FormatConverter {
+class FormatConverter : public SideAware {
  public:
-  FormatConverter(size_t src_width,
-                  size_t src_height,
-                  size_t dest_width,
-                  size_t dest_height,
-                  AVPixelFormat src_pixel_format,
-                  AVPixelFormat dest_pixel_format,
-                  AVColorSpace src_color_space,
-                  AVColorRange src_color_range,
-                  int flags = SWS_FAST_BILINEAR);
+  FormatConverter(const size_t src_width,
+                  const size_t src_height,
+                  const size_t dest_width,
+                  const size_t dest_height,
+                  const AVPixelFormat src_pixel_format,
+                  const AVPixelFormat dest_pixel_format,
+                  const AVColorSpace src_color_space,
+                  const AVColorRange src_color_range,
+                  const Side side = NONE,
+                  const int flags = SWS_FAST_BILINEAR);
   ~FormatConverter();
 
   void init();

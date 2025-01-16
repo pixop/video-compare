@@ -2,15 +2,22 @@
 #include <string>
 #include "core_types.h"
 #include "demuxer.h"
+#include "side_aware.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/mastering_display_metadata.h>
 }
 
-class VideoDecoder {
+class VideoDecoder : public SideAware {
  public:
-  explicit VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, const AVCodecParameters* codec_parameters, const unsigned peak_luminance_nits, AVDictionary* hwaccel_options, AVDictionary* decoder_options);
+  explicit VideoDecoder(const Side side,
+                        const std::string& decoder_name,
+                        const std::string& hw_accel_spec,
+                        const AVCodecParameters* codec_parameters,
+                        const unsigned peak_luminance_nits,
+                        AVDictionary* hwaccel_options,
+                        AVDictionary* decoder_options);
   ~VideoDecoder();
 
   const AVCodec* codec() const;

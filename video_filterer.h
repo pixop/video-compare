@@ -2,6 +2,7 @@
 #include "config.h"
 #include "core_types.h"
 #include "demuxer.h"
+#include "side_aware.h"
 #include "video_decoder.h"
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -9,9 +10,10 @@ extern "C" {
 #include <libavfilter/buffersrc.h>
 }
 
-class VideoFilterer {
+class VideoFilterer : public SideAware {
  public:
-  VideoFilterer(const Demuxer* demuxer,
+  VideoFilterer(const Side side,
+                const Demuxer* demuxer,
                 const VideoDecoder* video_decoder,
                 const ToneMapping tone_mapping_mode,
                 const float boost_tone,

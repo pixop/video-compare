@@ -1,6 +1,7 @@
 #include "filtered_logger.h"
 #include <algorithm>
 #include <iostream>
+#include "side_aware_logger.h"
 extern "C" {
 #include <libavutil/log.h>
 }
@@ -95,6 +96,6 @@ void FilteredLogger::reset() {
 
 void FilteredLogger::ffmpeg_log_callback(void* ptr, int level, const char* fmt, va_list vl) {
   if (!instance().log_callback(level, fmt, vl)) {
-    av_log_default_callback(ptr, level, fmt, vl);
+    sa_av_log_callback(ptr, level, fmt, vl);
   }
 }

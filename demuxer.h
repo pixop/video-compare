@@ -1,13 +1,14 @@
 #pragma once
 #include <string>
+#include "side_aware.h"
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/display.h>
 }
 
-class Demuxer {
+class Demuxer : public SideAware {
  public:
-  explicit Demuxer(const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options);
+  explicit Demuxer(const Side side, const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options);
   ~Demuxer();
 
   AVCodecParameters* video_codec_parameters();

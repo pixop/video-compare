@@ -109,12 +109,13 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       auto_loop_mode_(config.auto_loop_mode),
       frame_buffer_size_(config.frame_buffer_size),
       time_shift_ms_(config.time_shift_ms),
-      demuxers_{std::make_unique<Demuxer>(config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options),
-                std::make_unique<Demuxer>(config.right.demuxer, config.right.file_name, config.right.demuxer_options, config.right.decoder_options)},
+      demuxers_{std::make_unique<Demuxer>(LEFT, config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options),
+                std::make_unique<Demuxer>(RIGHT, config.right.demuxer, config.right.file_name, config.right.demuxer_options, config.right.decoder_options)},
       video_decoders_{
-          std::make_unique<VideoDecoder>(config.left.decoder, config.left.hw_accel_spec, demuxers_[LEFT]->video_codec_parameters(), config.left.peak_luminance_nits, config.left.hw_accel_options, config.left.decoder_options),
-          std::make_unique<VideoDecoder>(config.right.decoder, config.right.hw_accel_spec, demuxers_[RIGHT]->video_codec_parameters(), config.right.peak_luminance_nits, config.right.hw_accel_options, config.right.decoder_options)},
-      video_filterers_{std::make_unique<VideoFilterer>(demuxers_[LEFT].get(),
+          std::make_unique<VideoDecoder>(LEFT, config.left.decoder, config.left.hw_accel_spec, demuxers_[LEFT]->video_codec_parameters(), config.left.peak_luminance_nits, config.left.hw_accel_options, config.left.decoder_options),
+          std::make_unique<VideoDecoder>(RIGHT, config.right.decoder, config.right.hw_accel_spec, demuxers_[RIGHT]->video_codec_parameters(), config.right.peak_luminance_nits, config.right.hw_accel_options, config.right.decoder_options)},
+      video_filterers_{std::make_unique<VideoFilterer>(LEFT,
+                                                       demuxers_[LEFT].get(),
                                                        video_decoders_[LEFT].get(),
                                                        config.left.tone_mapping_mode,
                                                        config.left.boost_tone,
@@ -127,7 +128,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                        video_decoders_[RIGHT].get(),
                                                        config.right.color_trc,
                                                        config.disable_auto_filters),
-                       std::make_unique<VideoFilterer>(demuxers_[RIGHT].get(),
+                       std::make_unique<VideoFilterer>(RIGHT,
+                                                       demuxers_[RIGHT].get(),
                                                        video_decoders_[RIGHT].get(),
                                                        config.right.tone_mapping_mode,
                                                        config.right.boost_tone,
@@ -152,6 +154,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                            determine_pixel_format(config),
                                                            video_decoders_[LEFT]->color_space(),
                                                            video_decoders_[LEFT]->color_range(),
+                                                           LEFT,
                                                            determine_sws_flags(initial_fast_input_alignment_)),
                          std::make_unique<FormatConverter>(video_filterers_[RIGHT]->dest_width(),
                                                            video_filterers_[RIGHT]->dest_height(),
@@ -161,6 +164,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                            determine_pixel_format(config),
                                                            video_decoders_[RIGHT]->color_space(),
                                                            video_decoders_[RIGHT]->color_range(),
+                                                           RIGHT,
                                                            determine_sws_flags(initial_fast_input_alignment_))},
       display_{std::make_unique<Display>(config.display_number,
                                          config.display_mode,
@@ -236,6 +240,8 @@ void VideoCompare::thread_demultiplex_right() {
 }
 
 void VideoCompare::demultiplex(const Side side) {
+  log_side = side;
+
   try {
     while (keep_running()) {
       // Wait for decoder to drain
@@ -283,6 +289,8 @@ void VideoCompare::thread_decode_video_right() {
 }
 
 void VideoCompare::decode_video(const Side side) {
+  log_side = side;
+
   try {
     while (keep_running()) {
       // Sleep if we are finished for now
@@ -379,6 +387,8 @@ void VideoCompare::thread_filter_right() {
 }
 
 void VideoCompare::filter_video(const Side side) {
+  log_side = side;
+
   try {
     while (keep_running()) {
       if (filtered_frame_queues_[side]->is_stopped()) {
@@ -442,6 +452,8 @@ void VideoCompare::thread_format_converter_right() {
 }
 
 void VideoCompare::format_convert_video(const Side side) {
+  log_side = side;
+
   try {
     while (keep_running()) {
       if (converted_frame_queues_[side]->is_stopped()) {
@@ -525,7 +537,7 @@ void VideoCompare::dump_debug_info(const int frame_number, const int right_time_
 struct SideState {
   SideState(const Side side, const std::string side_desc, const Demuxer* demuxer) : side_(side), side_desc_(std::move(side_desc)), start_time_(demuxer->start_time() * AV_TIME_TO_SEC), frame_duration_deque_(8) {
     if (start_time_ > 0) {
-      std::cout << "Note: The " + side_desc + " video has a start time of " << format_position(start_time_, true) << " - timestamps will be shifted so they start at zero!" << std::endl;
+      sa_log_info(side, string_sprintf("Video has a start time of %s - timestamps will be shifted so they start at zero!", format_position(start_time_, true).c_str()));
     }
   }
 

@@ -6,6 +6,7 @@
 #include <vector>
 #include "argagg.h"
 #include "controls.h"
+#include "side_aware_logger.h"
 #include "string_utils.h"
 #include "version.h"
 #include "video_compare.h"
@@ -596,6 +597,8 @@ int main(int argc, char** argv) {
       if (args["libvmaf-options"]) {
         VMAFCalculator::instance().set_libvmaf_options(args["libvmaf-options"]);
       }
+
+      av_log_set_callback(sa_av_log_callback);
 
       VideoCompare compare{config};
       compare();

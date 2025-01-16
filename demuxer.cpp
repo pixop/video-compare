@@ -3,7 +3,9 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
-Demuxer::Demuxer(const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options) {
+Demuxer::Demuxer(const Side side, const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options) : SideAware(side) {
+  ScopedLogSide scoped_log_side(side);
+
   const AVInputFormat* input_format = nullptr;
 
   if (!demuxer_name.empty()) {
@@ -78,6 +80,8 @@ bool Demuxer::operator()(AVPacket& packet) {
 }
 
 bool Demuxer::seek(const float position, const bool backward) {
+  ScopedLogSide scoped_log_side(get_side());
+
   int64_t seek_target = static_cast<int64_t>(position * AV_TIME_BASE);
 
   return av_seek_frame(format_context_, -1, seek_target, backward ? AVSEEK_FLAG_BACKWARD : 0) >= 0;

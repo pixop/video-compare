@@ -28,16 +28,18 @@ inline int get_sws_range(const AVColorRange color_range) {
   return color_range == AVCOL_RANGE_JPEG ? 1 : 0;
 }
 
-FormatConverter::FormatConverter(size_t src_width,
-                                 size_t src_height,
-                                 size_t dest_width,
-                                 size_t dest_height,
-                                 AVPixelFormat src_pixel_format,
-                                 AVPixelFormat dest_pixel_format,
-                                 AVColorSpace src_color_space,
-                                 AVColorRange src_color_range,
-                                 int flags)
-    : src_width_{src_width},
+FormatConverter::FormatConverter(const size_t src_width,
+                                 const size_t src_height,
+                                 const size_t dest_width,
+                                 const size_t dest_height,
+                                 const AVPixelFormat src_pixel_format,
+                                 const AVPixelFormat dest_pixel_format,
+                                 const AVColorSpace src_color_space,
+                                 const AVColorRange src_color_range,
+                                 const Side side,
+                                 const int flags)
+    : SideAware(side),
+      src_width_{src_width},
       src_height_{src_height},
       src_pixel_format_{src_pixel_format},
       dest_width_{dest_width},
@@ -47,6 +49,8 @@ FormatConverter::FormatConverter(size_t src_width,
       src_color_range_{src_color_range},
       active_flags_(flags),
       pending_flags_(active_flags_) {
+  ScopedLogSide scoped_log_side(side);
+
   init();
 }
 

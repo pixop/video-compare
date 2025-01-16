@@ -44,8 +44,16 @@ DynamicRange dynamic_range_from_av_enum(const AVColorTransferCharacteristic colo
   }
 }
 
-VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& hw_accel_spec, const AVCodecParameters* codec_parameters, const unsigned peak_luminance_nits, AVDictionary* hwaccel_options, AVDictionary* decoder_options)
-    : hw_pixel_format_(AV_PIX_FMT_NONE), first_pts_(AV_NOPTS_VALUE), next_pts_(AV_NOPTS_VALUE), trust_decoded_pts_(false), peak_luminance_nits_(peak_luminance_nits) {
+VideoDecoder::VideoDecoder(const Side side,
+                           const std::string& decoder_name,
+                           const std::string& hw_accel_spec,
+                           const AVCodecParameters* codec_parameters,
+                           const unsigned peak_luminance_nits,
+                           AVDictionary* hwaccel_options,
+                           AVDictionary* decoder_options)
+    : SideAware(side), hw_pixel_format_(AV_PIX_FMT_NONE), first_pts_(AV_NOPTS_VALUE), next_pts_(AV_NOPTS_VALUE), trust_decoded_pts_(false), peak_luminance_nits_(peak_luminance_nits) {
+  ScopedLogSide scoped_log_side(side);
+
   if (decoder_name.empty()) {
     codec_ = avcodec_find_decoder(codec_parameters->codec_id);
   } else {
@@ -112,7 +120,7 @@ VideoDecoder::VideoDecoder(const std::string& decoder_name, const std::string& h
   trust_decoded_pts_ = get_and_remove_bool_avdict_option(decoder_options, "trust_dec_pts");
 
   if (trust_decoded_pts_) {
-    std::cout << "Trusting decoded PTS; extrapolation logic disabled." << std::endl;
+    log_info("Trusting decoded PTS; extrapolation logic disabled.");
   }
 
   // open codec and check all options were consumed

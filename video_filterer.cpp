@@ -19,7 +19,8 @@ static unsigned get_content_light_level_or_zero(const AVFrame* frame) {
   return UNSET_PEAK_LUMINANCE;
 }
 
-VideoFilterer::VideoFilterer(const Demuxer* demuxer,
+VideoFilterer::VideoFilterer(const Side side,
+                             const Demuxer* demuxer,
                              const VideoDecoder* video_decoder,
                              const ToneMapping tone_mapping_mode,
                              const float boost_tone,
@@ -32,7 +33,8 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
                              const VideoDecoder* other_video_decoder,
                              const std::string& other_custom_color_trc,
                              const bool disable_auto_filters)
-    : demuxer_(demuxer),
+    : SideAware(side),
+      demuxer_(demuxer),
       video_decoder_(video_decoder),
       width_(video_decoder->width()),
       height_(video_decoder->height()),
@@ -40,6 +42,8 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
       color_space_(video_decoder->color_space()),
       color_range_(video_decoder->color_range()),
       tone_mapping_mode_(tone_mapping_mode) {
+  ScopedLogSide scoped_log_side(side);
+
   std::vector<std::string> filters;
 
   // up to two filter groups are allowed ("pre" and "post"), if only a single group is specified it is assigned to the "post" group
@@ -121,13 +125,17 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
   peak_luminance_nits_ = video_decoder->safe_peak_luminance_nits(dynamic_range_);
 
   if (tone_mapping_mode == ToneMapping::AUTO && is_hdr_trc) {
+    const char* msg;
+
     if (dynamic_range_ == DynamicRange::PQ) {
-      std::cout << "PQ / SMPTE ST 2084 transfer characteristics (smpte2084)";
+      msg = "PQ / SMPTE ST 2084 transfer characteristics (smpte2084)";
     } else if (dynamic_range_ == DynamicRange::HLG) {
-      std::cout << "Hybrid log–gamma transfer characteristics (arib-std-b67)";
+      msg = "Hybrid log–gamma transfer characteristics (arib-std-b67)";
+    } else {
+      msg = "Unknown transfer characteristics";
     }
 
-    std::cout << string_sprintf(" applied; performing HDR color space conversion at an initial %d nits.", peak_luminance_nits_).c_str() << std::endl;
+    log_info(string_sprintf("%s applied; performing HDR color space conversion at an initial %d nits.", msg, peak_luminance_nits_).c_str());
   }
 
   // set color space and range (+ primaries and TRC if tone-mapping is required) to limited range Rec. 709 if metadata is unspecified or pass any user-provided values
@@ -160,7 +168,7 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
     }
 
     if (!notes.empty()) {
-      std::cout << string_sprintf("Note: Metadata is missing for %s; assuming limited range Rec. 709. It is recommended to manually set the missing properties to their correct values.", string_join(notes, ", ").c_str()) << std::endl;
+      log_warning(string_sprintf("Note: Metadata is missing for %s; assuming limited range Rec. 709. It is recommended to manually set the missing properties to their correct values.", string_join(notes, ", ").c_str()));
     }
     if (!setparams_options.empty()) {
       filters.push_back(string_sprintf("setparams=%s", string_join(setparams_options, ":").c_str()));
@@ -207,7 +215,7 @@ VideoFilterer::VideoFilterer(const Demuxer* demuxer,
         }
       }
     } else {
-      std::cout << string_sprintf("Warning: Cannot add tone mapping filters: %s", string_join(warnings, ", ").c_str()) << std::endl;
+      log_warning(string_sprintf("Cannot add tone mapping filters: %s", string_join(warnings, ", ").c_str()));
     }
   }
 
@@ -332,14 +340,14 @@ bool VideoFilterer::send(AVFrame* decoded_frame) {
 
       if (tone_mapping_mode_ == ToneMapping::FULLRANGE || tone_mapping_mode_ == ToneMapping::RELATIVE) {
         if (!disable_max_cll_reporting_ && (max_cll != UNSET_PEAK_LUMINANCE) && (peak_luminance_nits_ != max_cll)) {
-          std::cout << string_sprintf("Warning: Frame metadata MaxCLL value (%d) differs from the expected peak luminance (%d). Check disabled.", max_cll, peak_luminance_nits_) << std::endl;
+          log_warning(string_sprintf("Frame metadata MaxCLL value (%d) differs from the expected peak luminance (%d). Check disabled.", max_cll, peak_luminance_nits_));
           disable_max_cll_reporting_ = true;
         }
       } else if (tone_mapping_mode_ == ToneMapping::AUTO && (max_cll != UNSET_PEAK_LUMINANCE) && (peak_luminance_nits_ != max_cll)) {
         peak_luminance_nits_ = max_cll;
         must_reinit = true;
 
-        std::cout << string_sprintf("HDR color space conversion adjusted to %d nits based on MaxCLL metadata.", peak_luminance_nits_).c_str() << std::endl;
+        log_info(string_sprintf("HDR color space conversion adjusted to %d nits based on MaxCLL metadata.", peak_luminance_nits_).c_str());
       }
     }
 
