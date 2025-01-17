@@ -5,6 +5,8 @@
 
 extern thread_local Side log_side;
 
+std::string sa_format_string(const Side side, const char* message = nullptr);
+
 void sa_av_log_callback(void* ptr, int level, const char* fmt, va_list args);
 
 void sa_log(const Side side, const std::string& message);

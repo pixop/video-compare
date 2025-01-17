@@ -3,6 +3,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
+#include "string_utils.h"
 
 extern "C" {
 #include <libavutil/log.h>
@@ -18,12 +19,28 @@ static std::unordered_set<std::string> search_strings = {"No accelerated colorsp
 const char* to_string(Side side) {
   switch (side) {
     case LEFT:
-      return "LEFT ";
+      return "LEFT";
     case RIGHT:
       return "RIGHT";
     default:
       return "UNKNN";
   }
+}
+
+std::string sa_format_string(const Side side, const char* message) {
+  std::string formatted_string;
+
+  if (side > NONE) {
+    if (message == nullptr) {
+      formatted_string = string_sprintf("[%s]", to_string(side));
+    } else {
+      formatted_string = string_sprintf("[%s] %s", to_string(side), message);
+    }
+  } else {
+    formatted_string = message;
+  }
+
+  return formatted_string;
 }
 
 void sa_av_log_callback(void* ptr, int level, const char* fmt, va_list args) {
@@ -53,7 +70,7 @@ void sa_av_log_callback(void* ptr, int level, const char* fmt, va_list args) {
   }
 
   if (log_side > NONE) {
-    std::cerr << "[" << to_string(log_side) << "] ";
+    std::cerr << sa_format_string(log_side, "");
   }
 
   av_log_default_callback(ptr, level, fmt, args);
