@@ -39,9 +39,9 @@ class FormatConverter : public SideAware {
   size_t src_height_;
   AVPixelFormat src_pixel_format_;
 
-  size_t dest_width_;
-  size_t dest_height_;
-  AVPixelFormat dest_pixel_format_;
+  const size_t dest_width_;
+  const size_t dest_height_;
+  const AVPixelFormat dest_pixel_format_;
 
   AVColorSpace src_color_space_;
   AVColorRange src_color_range_;

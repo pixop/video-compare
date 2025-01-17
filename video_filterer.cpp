@@ -36,12 +36,12 @@ VideoFilterer::VideoFilterer(const Side side,
     : SideAware(side),
       demuxer_(demuxer),
       video_decoder_(video_decoder),
+      tone_mapping_mode_(tone_mapping_mode),
       width_(video_decoder->width()),
       height_(video_decoder->height()),
       pixel_format_(video_decoder->pixel_format()),
       color_space_(video_decoder->color_space()),
-      color_range_(video_decoder->color_range()),
-      tone_mapping_mode_(tone_mapping_mode) {
+      color_range_(video_decoder->color_range()) {
   ScopedLogSide scoped_log_side(side);
 
   std::vector<std::string> filters;

@@ -13,13 +13,9 @@ void sa_log_warning(const Side side, const std::string& message);
 void sa_log_error(const Side side, const std::string& message);
 
 class ScopedLogSide {
-  Side previous_side;
+  const Side previous_side_;
 
  public:
-  ScopedLogSide(const Side new_side) {
-    previous_side = log_side;
-    log_side = new_side;
-  }
-
-  ~ScopedLogSide() { log_side = previous_side; }
+  ScopedLogSide(const Side new_side) : previous_side_(log_side) { log_side = new_side; }
+  ~ScopedLogSide() { log_side = previous_side_; }
 };

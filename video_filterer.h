@@ -51,6 +51,8 @@ class VideoFilterer : public SideAware {
 
   const Demuxer* demuxer_;
   const VideoDecoder* video_decoder_;
+  const ToneMapping tone_mapping_mode_;
+
   std::string filter_description_;
 
   int width_;
@@ -63,7 +65,6 @@ class VideoFilterer : public SideAware {
   AVFilterContext* buffersink_ctx_;
   AVFilterGraph* filter_graph_;
 
-  ToneMapping tone_mapping_mode_;
   DynamicRange dynamic_range_;
   unsigned peak_luminance_nits_;
   bool disable_max_cll_reporting_{false};

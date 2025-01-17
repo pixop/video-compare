@@ -12,8 +12,8 @@ static std::recursive_mutex log_mutex;
 
 thread_local Side log_side = NONE;
 
-std::unordered_map<Side, std::unordered_set<std::string>> ignored_log_messages_per_side;
-std::unordered_set<std::string> search_strings = {"No accelerated colorspace conversion found from"};
+static std::unordered_map<Side, std::unordered_set<std::string>> ignored_log_messages_per_side;
+static std::unordered_set<std::string> search_strings = {"No accelerated colorspace conversion found from"};
 
 const char* to_string(Side side) {
   switch (side) {
