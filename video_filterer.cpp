@@ -168,7 +168,7 @@ VideoFilterer::VideoFilterer(const Side side,
     }
 
     if (!notes.empty()) {
-      log_warning(string_sprintf("Note: Metadata is missing for %s; assuming limited range Rec. 709. It is recommended to manually set the missing properties to their correct values.", string_join(notes, ", ").c_str()));
+      log_warning(string_sprintf("Metadata is missing for %s; assuming limited range Rec. 709. It is recommended to manually set the missing properties to their correct values.", string_join(notes, ", ").c_str()));
     }
     if (!setparams_options.empty()) {
       filters.push_back(string_sprintf("setparams=%s", string_join(setparams_options, ":").c_str()));
