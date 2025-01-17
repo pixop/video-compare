@@ -12,7 +12,7 @@ static std::recursive_mutex log_mutex;
 
 thread_local Side log_side = NONE;
 
-std::unordered_map<Side, std::unordered_set<std::string>> logged_search_strings_per_side;
+std::unordered_map<Side, std::unordered_set<std::string>> ignored_log_messages_per_side;
 std::unordered_set<std::string> search_strings = {"No accelerated colorspace conversion found from"};
 
 const char* to_string(Side side) {
@@ -27,6 +27,10 @@ const char* to_string(Side side) {
 }
 
 void sa_av_log_callback(void* ptr, int level, const char* fmt, va_list args) {
+  if (level > av_log_get_level()) {
+    return;
+  }
+
   const std::string message(fmt);
 
   // Check if the message starts with any of the substrings that generate log clutter
@@ -43,12 +47,12 @@ void sa_av_log_callback(void* ptr, int level, const char* fmt, va_list args) {
 
   // If noise and already logged, return early
   if (is_noise) {
-    if (!logged_search_strings_per_side[log_side].insert(message).second) {
+    if (!ignored_log_messages_per_side[log_side].insert(message).second) {
       return;
     }
   }
 
-  if (level <= av_log_get_level() && log_side > NONE) {
+  if (log_side > NONE) {
     std::cerr << "[" << to_string(log_side) << "] ";
   }
 
