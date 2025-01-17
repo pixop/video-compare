@@ -1,4 +1,5 @@
 #include "side_aware_logger.h"
+#include <iomanip>
 #include <iostream>
 #include <mutex>
 #include <unordered_map>
@@ -70,7 +71,9 @@ void sa_av_log_callback(void* ptr, int level, const char* fmt, va_list args) {
   }
 
   if (log_side > NONE) {
+    std::cerr << std::setw(8) << std::left;
     std::cerr << sa_format_string(log_side, "");
+    std::cerr << std::setw(0) << std::right;
   }
 
   av_log_default_callback(ptr, level, fmt, args);
