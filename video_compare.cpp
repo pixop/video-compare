@@ -5,6 +5,7 @@
 #include <iostream>
 #include <thread>
 #include "ffmpeg.h"
+#include "side_aware_logger.h"
 #include "sorted_flat_deque.h"
 #include "string_utils.h"
 extern "C" {
@@ -186,7 +187,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       decoded_frame_queues_{std::make_unique<DecodedFrameQueue>(QUEUE_SIZE), std::make_unique<DecodedFrameQueue>(QUEUE_SIZE)},
       filtered_frame_queues_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)},
       converted_frame_queues_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
-  auto dump_video_info = [&](const std::string& label, const Side side, const std::string& file_name) {
+  auto dump_video_info = [&](const Side side, const std::string& file_name) {
     const std::string dimensions = string_sprintf("%dx%d", video_decoders_[side]->width(), video_decoders_[side]->height());
     const std::string pixel_format_and_color_space =
         stringify_pixel_format(video_decoders_[side]->pixel_format(), video_decoders_[side]->color_range(), video_decoders_[side]->color_space(), video_decoders_[side]->color_primaries(), video_decoders_[side]->color_trc());
@@ -199,15 +200,17 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       aspect_ratio = string_sprintf(" [DAR %d:%d]", display_aspect_ratio.num, display_aspect_ratio.den);
     }
 
-    std::cout << string_sprintf("%s %9s%s, %s, %s, %s, %s, %s, %s, %s, %s, %s", label.c_str(), dimensions.c_str(), aspect_ratio.c_str(), format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC).c_str(),
-                                stringify_frame_rate(demuxers_[side]->guess_frame_rate(), video_decoders_[side]->codec_context()->field_order).c_str(), stringify_decoder(video_decoders_[side].get()).c_str(),
-                                pixel_format_and_color_space.c_str(), demuxers_[side]->format_name().c_str(), file_name.c_str(), stringify_file_size(demuxers_[side]->file_size(), 2).c_str(),
-                                stringify_bit_rate(demuxers_[side]->bit_rate(), 1).c_str(), video_filterers_[side]->filter_description().c_str())
-              << std::endl;
+
+    auto info = string_sprintf("Input: %9s%s, %s, %s, %s, %s, %s, %s, %s, %s, %s", dimensions.c_str(), aspect_ratio.c_str(), format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC).c_str(),
+                               stringify_frame_rate(demuxers_[side]->guess_frame_rate(), video_decoders_[side]->codec_context()->field_order).c_str(), stringify_decoder(video_decoders_[side].get()).c_str(),
+                               pixel_format_and_color_space.c_str(), demuxers_[side]->format_name().c_str(), file_name.c_str(), stringify_file_size(demuxers_[side]->file_size(), 2).c_str(),
+                               stringify_bit_rate(demuxers_[side]->bit_rate(), 1).c_str(), video_filterers_[side]->filter_description().c_str());
+
+    sa_log_info(side, info);
   };
 
-  dump_video_info("Left video: ", LEFT, config.left.file_name.c_str());
-  dump_video_info("Right video:", RIGHT, config.right.file_name.c_str());
+  dump_video_info(LEFT, config.left.file_name.c_str());
+  dump_video_info(RIGHT, config.right.file_name.c_str());
 
   update_decoder_mode(time_ms_to_av_time(time_shift_ms_));
 }
