@@ -67,5 +67,4 @@ class VideoFilterer : public SideAware {
 
   DynamicRange dynamic_range_;
   unsigned peak_luminance_nits_;
-  bool disable_max_cll_reporting_{false};
 };
