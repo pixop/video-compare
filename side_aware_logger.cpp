@@ -28,14 +28,14 @@ const char* to_string(Side side) {
   }
 }
 
-std::string sa_format_string(const Side side, const char* message) {
+std::string sa_format_string(const std::string& message) {
   std::string formatted_string;
 
-  if (side > NONE) {
-    if (message == nullptr) {
-      formatted_string = string_sprintf("[%s]", to_string(side));
+  if (log_side > NONE) {
+    if (message.empty()) {
+      formatted_string = string_sprintf("[%s]", to_string(log_side));
     } else {
-      formatted_string = string_sprintf("[%s] %s", to_string(side), message);
+      formatted_string = string_sprintf("[%s] %s", to_string(log_side), message.c_str());
     }
   } else {
     formatted_string = message;
@@ -72,7 +72,7 @@ void sa_av_log_callback(void* ptr, int level, const char* fmt, va_list args) {
 
   if (log_side > NONE) {
     std::cerr << std::setw(8) << std::left;
-    std::cerr << sa_format_string(log_side, "");
+    std::cerr << sa_format_string();
     std::cerr << std::setw(0) << std::right;
   }
 
@@ -105,4 +105,11 @@ void sa_log_warning(const Side side, const std::string& message) {
 
 void sa_log_error(const Side side, const std::string& message) {
   sa_log(side, AV_LOG_ERROR, message);
+}
+
+ScopedLogSide::ScopedLogSide(const Side new_side) : previous_side_(log_side) {
+  log_side = new_side;
+}
+ScopedLogSide::~ScopedLogSide() {
+  log_side = previous_side_;
 }

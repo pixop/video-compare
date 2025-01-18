@@ -3,9 +3,7 @@
 #include <string>
 #include "core_types.h"
 
-extern thread_local Side log_side;
-
-std::string sa_format_string(const Side side, const char* message = nullptr);
+std::string sa_format_string(const std::string& message = "");
 
 void sa_av_log_callback(void* ptr, int level, const char* fmt, va_list args);
 
@@ -18,6 +16,6 @@ class ScopedLogSide {
   const Side previous_side_;
 
  public:
-  ScopedLogSide(const Side new_side) : previous_side_(log_side) { log_side = new_side; }
-  ~ScopedLogSide() { log_side = previous_side_; }
+  ScopedLogSide(const Side new_side);
+  ~ScopedLogSide();
 };

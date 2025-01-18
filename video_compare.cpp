@@ -200,7 +200,6 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       aspect_ratio = string_sprintf(" [DAR %d:%d]", display_aspect_ratio.num, display_aspect_ratio.den);
     }
 
-
     auto info = string_sprintf("Input: %9s%s, %s, %s, %s, %s, %s, %s, %s, %s, %s", dimensions.c_str(), aspect_ratio.c_str(), format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC).c_str(),
                                stringify_frame_rate(demuxers_[side]->guess_frame_rate(), video_decoders_[side]->codec_context()->field_order).c_str(), stringify_decoder(video_decoders_[side].get()).c_str(),
                                pixel_format_and_color_space.c_str(), demuxers_[side]->format_name().c_str(), file_name.c_str(), stringify_file_size(demuxers_[side]->file_size(), 2).c_str(),
@@ -243,7 +242,7 @@ void VideoCompare::thread_demultiplex_right() {
 }
 
 void VideoCompare::demultiplex(const Side side) {
-  log_side = side;
+  ScopedLogSide scoped_log_side(side);
 
   try {
     while (keep_running()) {
@@ -292,7 +291,7 @@ void VideoCompare::thread_decode_video_right() {
 }
 
 void VideoCompare::decode_video(const Side side) {
-  log_side = side;
+  ScopedLogSide scoped_log_side(side);
 
   try {
     while (keep_running()) {
@@ -390,7 +389,7 @@ void VideoCompare::thread_filter_right() {
 }
 
 void VideoCompare::filter_video(const Side side) {
-  log_side = side;
+  ScopedLogSide scoped_log_side(side);
 
   try {
     while (keep_running()) {
@@ -455,7 +454,7 @@ void VideoCompare::thread_format_converter_right() {
 }
 
 void VideoCompare::format_convert_video(const Side side) {
-  log_side = side;
+  ScopedLogSide scoped_log_side(side);
 
   try {
     while (keep_running()) {

@@ -13,9 +13,9 @@ std::string error_string(const int error_code) {
   return std::string(buffer.data());
 }
 
-Error::Error(const std::string& message) : std::runtime_error{sa_format_string(log_side, string_sprintf("FFmpeg: %s", message.c_str()).c_str())} {}
+Error::Error(const std::string& message) : std::runtime_error{sa_format_string(string_sprintf("FFmpeg: %s", message.c_str()))} {}
 
-Error::Error(const int status) : std::runtime_error{sa_format_string(log_side, string_sprintf("FFmpeg: %s", error_string(status).c_str()).c_str())} {}
+Error::Error(const int status) : std::runtime_error{sa_format_string(string_sprintf("FFmpeg: %s", error_string(status).c_str()))} {}
 
-Error::Error(const std::string& file_name, int status) : std::runtime_error{sa_format_string(log_side, string_sprintf("%s: %s", file_name.c_str(), error_string(status).c_str()).c_str())} {}
+Error::Error(const std::string& file_name, int status) : std::runtime_error{sa_format_string(string_sprintf("%s: %s", file_name.c_str(), error_string(status).c_str()))} {}
 }  // namespace ffmpeg
