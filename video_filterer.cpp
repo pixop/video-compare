@@ -338,17 +338,19 @@ bool VideoFilterer::send(AVFrame* decoded_frame) {
     if (dynamic_range_ != DynamicRange::STANDARD) {
       unsigned max_cll = get_content_light_level_or_zero(decoded_frame);
 
-      if (tone_mapping_mode_ == ToneMapping::FULLRANGE || tone_mapping_mode_ == ToneMapping::RELATIVE) {
-        if ((max_cll != UNSET_PEAK_LUMINANCE) && (peak_luminance_nits_ != max_cll)) {
-          log_warning(string_sprintf("MaxCLL metadata (%d) differs from the expected HDR peak luminance (%d).", max_cll, peak_luminance_nits_));
+      if (max_cll != UNSET_PEAK_LUMINANCE) {
+        if (tone_mapping_mode_ == ToneMapping::FULLRANGE || tone_mapping_mode_ == ToneMapping::RELATIVE) {
+          if (peak_luminance_nits_ != max_cll) {
+            log_warning(string_sprintf("MaxCLL metadata (%d) differs from the expected HDR peak luminance (%d).", max_cll, peak_luminance_nits_));
+          }
+        } else if (tone_mapping_mode_ == ToneMapping::AUTO && (peak_luminance_nits_ != max_cll)) {
+          log_info(string_sprintf("HDR color space conversion adjusted to %d nits based on MaxCLL metadata.", max_cll).c_str());
+
+          must_reinit = true;
         }
-      } else if (tone_mapping_mode_ == ToneMapping::AUTO && (max_cll != UNSET_PEAK_LUMINANCE) && (peak_luminance_nits_ != max_cll)) {
-        log_info(string_sprintf("HDR color space conversion adjusted to %d nits based on MaxCLL metadata.", max_cll).c_str());
 
-        must_reinit = true;
+        peak_luminance_nits_ = max_cll;
       }
-
-      peak_luminance_nits_ = max_cll;
     }
 
     if (must_reinit) {
