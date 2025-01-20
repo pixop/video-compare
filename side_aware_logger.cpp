@@ -17,6 +17,10 @@ thread_local Side log_side = NONE;
 static std::unordered_map<Side, std::unordered_set<std::string>> ignored_log_messages_per_side;
 static std::unordered_set<std::string> search_strings = {"No accelerated colorspace conversion found from"};
 
+Side previously_logged_side = NONE;
+void* previously_logged_ptr = nullptr;
+bool previously_logged_trailing_newline = true;
+
 const char* to_string(Side side) {
   switch (side) {
     case LEFT:
@@ -71,12 +75,30 @@ void sa_av_log_callback(void* ptr, int level, const char* fmt, va_list args) {
   }
 
   if (log_side > NONE) {
-    std::cerr << std::setw(8) << std::left;
-    std::cerr << sa_format_string();
-    std::cerr << std::setw(0) << std::right;
+    // FFmpeg might log partially in two or more calls. Avoid inserting the side prefix if a newline was not logged previously
+    bool must_print_side = previously_logged_trailing_newline;
+
+    if (!previously_logged_trailing_newline && ((previously_logged_side != log_side) || (previously_logged_ptr != ptr))) {
+      // However, force a newline for any logging related to different sides and/or contexts, since
+      // consecutive calls might pertain to different sides (due to multi-threading). Breaking up partial
+      // logging is better than mixing messages.
+      std::cerr << "..." << std::endl;
+
+      must_print_side = true;
+    }
+
+    if (must_print_side) {
+      std::cerr << std::setw(8) << std::left;
+      std::cerr << sa_format_string();
+      std::cerr << std::setw(0) << std::right;
+    }
   }
 
   av_log_default_callback(ptr, level, fmt, args);
+
+  previously_logged_side = log_side;
+  previously_logged_ptr = ptr;
+  previously_logged_trailing_newline = !message.empty() && message.back() == '\n';
 }
 
 void sa_invoke_av_log_callback(void* ptr, int level, const char* fmt, ...) {
