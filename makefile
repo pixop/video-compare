@@ -5,8 +5,8 @@ CXXFLAGS = -g3 -Ofast -std=c++14 -D__STDC_CONSTANT_MACROS \
 
 ifeq ($(findstring CYGWIN_NT-10.0, $(shell uname)), CYGWIN_NT-10.0)
   FFMPEG_VERSION = 7.1-full_build-shared
-  SDL2_VERSION = 2.30.8
-  SDL2_TTF_VERSION = 2.22.0
+  SDL2_VERSION = 2.30.11
+  SDL2_TTF_VERSION = 2.24.0
 
   FFMPEG_PATH = ffmpeg-$(FFMPEG_VERSION)
   SDL2_PATH = SDL2-devel-$(SDL2_VERSION)-mingw/SDL2-$(SDL2_VERSION)/x86_64-w64-mingw32
