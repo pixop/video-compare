@@ -14,6 +14,7 @@
 
 #ifdef _WIN32
 #include <Windows.h>
+#undef RELATIVE
 
 // Credits to Mircea Neacsu, https://github.com/neacsum/utf8
 char** get_argv(int* argc, char** argv) {
