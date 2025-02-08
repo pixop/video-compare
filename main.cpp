@@ -223,14 +223,20 @@ void resolve_mutual_placeholders(std::string& left, std::string& right, const st
     throw std::logic_error{"Cannot resolve placeholder in " + type + ": the other is empty and cannot be substituted."};
   }
 
-  if (only_replace_full_placeholder && (left != PLACEHOLDER) && (right != PLACEHOLDER)) {
-    return;
-  }
-
-  if (contains_placeholder(left)) {
-    left = safe_replace_placeholder(left, right, type);
-  } else if (contains_placeholder(right)) {
-    right = safe_replace_placeholder(right, left, type);
+  if (only_replace_full_placeholder) {
+    if ((left == PLACEHOLDER) && (right == PLACEHOLDER)) {
+      throw std::logic_error{"Cannot resolve placeholder in " + type + ": the other is also a placeholder."};
+    } else if (left == PLACEHOLDER) {
+      left = right;
+    } else if (right == PLACEHOLDER) {
+      right = left;
+    }
+  } else {
+    if (contains_placeholder(left)) {
+      left = safe_replace_placeholder(left, right, type);
+    } else if (contains_placeholder(right)) {
+      right = safe_replace_placeholder(right, left, type);
+    }
   }
 }
 
