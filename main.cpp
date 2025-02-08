@@ -218,9 +218,13 @@ std::string safe_replace_placeholder(const std::string& template_str, const std:
   return replacement.empty() ? template_str : std::regex_replace(template_str, PLACEHOLDER_REGEX, replacement, std::regex_constants::format_first_only);
 }
 
-void resolve_mutual_placeholders(std::string& left, std::string& right, const std::string& type) {
+void resolve_mutual_placeholders(std::string& left, std::string& right, const std::string& type, bool only_replace_full_placeholder = false) {
   if ((contains_placeholder(left) && right.empty()) || (left.empty() && contains_placeholder(right))) {
     throw std::logic_error{"Cannot resolve placeholder in " + type + ": the other is empty and cannot be substituted."};
+  }
+
+  if (only_replace_full_placeholder && (left != PLACEHOLDER) && (right != PLACEHOLDER)) {
+    return;
   }
 
   if (contains_placeholder(left)) {
@@ -593,7 +597,7 @@ int main(int argc, char** argv) {
       config.left.file_name = args.pos[0];
       config.right.file_name = args.pos[1];
 
-      resolve_mutual_placeholders(config.left.file_name, config.right.file_name, "video file");
+      resolve_mutual_placeholders(config.left.file_name, config.right.file_name, "video file", true);
 
       if (args["libvmaf-options"]) {
         VMAFCalculator::instance().set_libvmaf_options(args["libvmaf-options"]);
