@@ -563,7 +563,7 @@ void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_
 
   const auto create_onscreen_display_avframe = [&]() -> AVFramePtr {
     const size_t pitch = use_10_bpc_ ? drawable_width_ * 3 * sizeof(uint16_t) : drawable_width_ * 3;
-    uint8_t* pixels = new uint8_t[pitch * drawable_height_];
+    uint8_t* pixels = reinterpret_cast<uint8_t*>(av_malloc(pitch * drawable_height_));
 
     if (use_10_bpc_) {
       const size_t temp_pitch = drawable_width_ * sizeof(uint32_t);
