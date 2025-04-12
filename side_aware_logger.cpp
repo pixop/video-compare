@@ -15,7 +15,7 @@ static std::recursive_mutex log_mutex;
 thread_local Side log_side = NONE;
 
 static std::unordered_map<Side, std::unordered_set<std::string>> ignored_log_messages_per_side;
-static std::unordered_set<std::string> search_strings = {"No accelerated colorspace conversion found from"};
+static std::unordered_set<std::string> search_strings = {"No accelerated colorspace conversion found from", "Skipping NAL unit %d"};
 
 Side previously_logged_side = NONE;
 void* previously_logged_ptr = nullptr;
