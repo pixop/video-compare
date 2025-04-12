@@ -49,6 +49,42 @@ std::string format_duration(const float duration) {
   return duration > 0 ? format_position(duration, false) : "unknown duration";
 }
 
+float parse_timestamps_to_seconds(const std::string& timestamp) {
+  std::istringstream ss(timestamp);
+  std::string token;
+  std::vector<std::string> parts;
+
+  // split the timestamp by ':'
+  while (std::getline(ss, token, ':')) {
+    parts.push_back(token);
+  }
+
+  if (parts.empty() || parts.size() > 3) {
+    throw std::invalid_argument("Invalid timestamp format");
+  }
+
+  // Initialize time components
+  int hours = 0, minutes = 0;
+  float seconds = 0.0f;
+
+  try {
+    if (parts.size() == 3) {
+      hours = std::stoi(parts[0]);
+      minutes = std::stoi(parts[1]);
+      seconds = std::stof(parts[2]);
+    } else if (parts.size() == 2) {
+      minutes = std::stoi(parts[0]);
+      seconds = std::stof(parts[1]);
+    } else if (parts.size() == 1) {
+      seconds = std::stof(parts[0]);
+    }
+  } catch (const std::exception& e) {
+    throw std::invalid_argument("Invalid numeric value in timestamp");
+  }
+
+  return hours * 3600.0f + minutes * 60.0f + seconds;
+}
+
 std::string to_lower_case(const std::string& str) {
   std::string tmp;
 

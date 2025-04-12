@@ -1479,6 +1479,16 @@ void Display::input() {
 
   while (SDL_PollEvent(&event_) != 0) {
     input_received_ = true;
+    const SDL_Keymod keymod = SDL_GetModState();
+    const SDL_Keycode keycode = event_.key.keysym.sym;
+
+    auto is_clipboard_mod_pressed = [keymod]() -> bool {
+#ifdef __APPLE__
+      return (keymod & KMOD_GUI);
+#else
+      return (keymod & KMOD_CTRL);
+#endif
+    };
 
     switch (event_.type) {
       case SDL_WINDOWEVENT:
@@ -1540,7 +1550,7 @@ void Display::input() {
         }
         break;
       case SDL_KEYDOWN:
-        switch (event_.key.keysym.sym) {
+        switch (keycode) {
           case SDLK_h:
             show_help_ = !show_help_;
             break;
@@ -1578,18 +1588,55 @@ void Display::input() {
           case SDLK_z:
             zoom_left_ = true;
             break;
-          case SDLK_c:
-            zoom_right_ = true;
+          case SDLK_c: {
+            if (is_clipboard_mod_pressed()) {
+              const float previous_left_frame_secs = previous_left_frame_pts_ * AV_TIME_TO_SEC;
+              const std::string previous_left_frame_secs_str = format_position(previous_left_frame_secs, false);
+
+              SDL_SetClipboardText(previous_left_frame_secs_str.c_str());
+
+              std::cout << "Copied to clipboard: " << previous_left_frame_secs_str << std::endl;
+            } else {
+              zoom_right_ = true;
+            }
             break;
+          }
+          case SDLK_v: {
+            if (is_clipboard_mod_pressed()) {
+              char* clip_text = SDL_GetClipboardText();
+
+              if (!clip_text) {
+                std::cerr << "Failed to get clipboard text: " << SDL_GetError() << std::endl;
+                return;
+              }
+
+              std::string clipboard_str(clip_text);
+              SDL_free(clip_text);
+
+              static const std::regex timestamp_regex(R"((?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?))");
+              std::smatch match;
+
+              if (std::regex_search(clipboard_str, match, timestamp_regex)) {
+                std::string timestamp = match.str();
+                std::cout << "Timestamp pasted: " << timestamp << std::endl;
+
+                seek_relative_ = parse_timestamps_to_seconds(timestamp) / static_cast<float>(duration_);
+                seek_from_start_ = true;
+              } else {
+                std::cout << "No valid timestamp found in clipboard." << std::endl;
+              }
+            }
+            break;
+          }
           case SDLK_a:
-            if (event_.key.keysym.mod & KMOD_SHIFT) {
+            if (keymod & KMOD_SHIFT) {
               std::cerr << "Frame-accurate backward navigation has not yet been implemented" << std::endl;
             } else {
               frame_buffer_offset_delta_++;
             }
             break;
           case SDLK_d:
-            if (event_.key.keysym.mod & KMOD_SHIFT) {
+            if (keymod & KMOD_SHIFT) {
               frame_navigation_delta_++;
             } else {
               frame_buffer_offset_delta_--;
@@ -1689,9 +1736,9 @@ void Display::input() {
           case SDLK_PLUS:
           case SDLK_KP_PLUS:
           case SDLK_EQUALS:  // for tenkeyless keyboards
-            if (event_.key.keysym.mod & KMOD_ALT) {
+            if (keymod & KMOD_ALT) {
               shift_right_frames_ += 100;
-            } else if (event_.key.keysym.mod & KMOD_CTRL) {
+            } else if (keymod & KMOD_CTRL) {
               shift_right_frames_ += 10;
             } else {
               shift_right_frames_++;
@@ -1699,9 +1746,9 @@ void Display::input() {
             break;
           case SDLK_MINUS:
           case SDLK_KP_MINUS:
-            if (event_.key.keysym.mod & KMOD_ALT) {
+            if (keymod & KMOD_ALT) {
               shift_right_frames_ -= 100;
-            } else if (event_.key.keysym.mod & KMOD_CTRL) {
+            } else if (keymod & KMOD_CTRL) {
               shift_right_frames_ -= 10;
             } else {
               shift_right_frames_--;
@@ -1712,7 +1759,7 @@ void Display::input() {
         }
         break;
       case SDL_KEYUP:
-        switch (event_.key.keysym.sym) {
+        switch (keycode) {
           case SDLK_z:
             zoom_left_ = false;
             break;

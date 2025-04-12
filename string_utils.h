@@ -33,6 +33,8 @@ std::string format_position(const float position, const bool use_compact);
 
 std::string format_duration(const float duration);
 
+float parse_timestamps_to_seconds(const std::string& timestamp);
+
 std::string to_lower_case(const std::string& str);
 
 std::string::const_iterator string_ci_find(std::string& str, const std::string& query);
