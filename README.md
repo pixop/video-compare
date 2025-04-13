@@ -205,14 +205,14 @@ Left-click the mouse to perform a time seek based on the horizontal position of 
 mouse cursor relative to the window width (the target position is shown in the lower
 right corner).
 
-Hold the SHIFT key while pressing `D` to decode and move to the next frame.
+**Hold** `Shift` while pressing `D` to decode and move to the next frame.
 
-Hold CTRL while time-shifting with `+`/`-` for faster increments/decrements of 10 frames per
-keystroke. Similarly, hold down the ALT key for even bigger time-shifts of 100 frames.
+**Hold** `Ctrl` while time-shifting with `+`/`-` for faster increments/decrements of 10 frames
+per keystroke. Similarly, **hold** `Alt` for even larger time-shifts of 100 frames.
 
-Use Ctrl+C (Windows/Linux) or Cmd+C (macOS) to copy the current timestamp to the clipboard,
-and Ctrl+V (Windows/Linux) or Cmd+V (macOS) to paste a timestamp from the clipboard and seek
-to that position.
+Use `Ctrl+C` (Windows/Linux) or `Cmd+C` (macOS) to copy the current timestamp of the left video
+to the clipboard, and `Ctrl+V` (Windows/Linux) or `Cmd+V` (macOS) to paste a timestamp from the
+clipboard and seek to that position.
 
 ## Build
 
