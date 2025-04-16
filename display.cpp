@@ -311,6 +311,7 @@ Display::Display(const int display_number,
 
   normal_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
   pan_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZEALL);
+  selection_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
 
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
 
@@ -413,6 +414,7 @@ Display::~Display() {
 
   SDL_FreeCursor(normal_mode_cursor_);
   SDL_FreeCursor(pan_mode_cursor_);
+  SDL_FreeCursor(selection_mode_cursor_);
 
   delete[] diff_buffer_;
 
@@ -558,6 +560,18 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
   }
 }
 
+void write_png(const AVFrame* frame, const std::string& filename, std::atomic_bool& error_occurred) {
+  try {
+    PngSaver::save(frame, filename);
+  } catch (const PngSaver::IOException& e) {
+    std::cerr << "Error saving video PNG image to file: " << filename << std::endl;
+    error_occurred = true;
+  } catch (const std::runtime_error& e) {
+    std::cerr << "Unexpected while error saving PNG: " << e.what() << std::endl;
+    error_occurred = true;
+  }
+};
+
 void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_frame) {
   std::atomic_bool error_occurred(false);
 
@@ -600,25 +614,17 @@ void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_
 
   const auto osd_frame = create_onscreen_display_avframe();
 
-  const auto write_png = [this, &error_occurred](const AVFrame* frame, const std::string& filename) {
-    try {
-      PngSaver::save(frame, filename);
-    } catch (const PngSaver::IOException& e) {
-      std::cerr << "Error saving video PNG image to file: " << filename << std::endl;
-      error_occurred = true;
-    } catch (const std::runtime_error& e) {
-      std::cerr << "Unexpected while error saving PNG: " << e.what() << std::endl;
-      error_occurred = true;
-    }
-  };
-
   const std::string left_filename = string_sprintf("%s%s_%04d.png", left_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_left" : "", saved_image_number_);
   const std::string right_filename = string_sprintf("%s%s_%04d.png", right_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_right" : "", saved_image_number_);
   const std::string osd_filename = string_sprintf("%s_%s_osd_%04d.png", left_file_stem_.c_str(), right_file_stem_.c_str(), saved_image_number_);
 
-  std::thread save_left_frame_thread(write_png, left_frame, left_filename);
-  std::thread save_right_frame_thread(write_png, right_frame, right_filename);
-  std::thread save_osd_frame_thread(write_png, osd_frame.get(), osd_filename);
+  auto save_frame = [&](const AVFrame* frame, const std::string& filename) {
+    return write_png(frame, filename, error_occurred);
+  };
+
+  std::thread save_left_frame_thread(save_frame, left_frame, left_filename);
+  std::thread save_right_frame_thread(save_frame, right_frame, right_filename);
+  std::thread save_osd_frame_thread(save_frame, osd_frame.get(), osd_filename);
 
   save_left_frame_thread.join();
   save_right_frame_thread.join();
@@ -966,6 +972,154 @@ void Display::render_help() {
   }
 }
 
+SDL_Rect Display::get_left_selection_rect() const {
+  const int x = std::min(selection_start_.x(), selection_end_.x());
+  const int y = std::min(selection_start_.y(), selection_end_.y());
+  const int w = std::abs(selection_end_.x() - selection_start_.x());
+  const int h = std::abs(selection_end_.y() - selection_start_.y());
+
+  const int clipped_x = std::max(0, x);
+  const int clipped_y = std::max(0, y);
+  const int clipped_w = std::min(w - (clipped_x - x), video_width_ - clipped_x);
+  const int clipped_h = std::min(h - (clipped_y - y), video_height_ - clipped_y);
+
+  return {clipped_x, clipped_y, clipped_w, clipped_h};
+}
+
+void Display::draw_selection_rect() {
+  if (selection_state_ == SelectionState::NONE) {
+    return;
+  }
+
+  const auto zoom_rect = compute_zoom_rect();
+
+  auto draw_rect = [this](const SDL_FRect& r, Uint8 r_val, Uint8 g_val, Uint8 b_val) {
+    // Draw semi-transparent overlay
+    SDL_SetRenderDrawColor(renderer_, r_val / 2, g_val / 2, b_val / 2, 128);
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_RenderFillRectF(renderer_, &r);
+
+    // Draw border
+    SDL_SetRenderDrawColor(renderer_, r_val, g_val, b_val, 255);
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
+    SDL_RenderDrawRectF(renderer_, &r);
+  };
+
+  SDL_Rect selection_rect = get_left_selection_rect();
+  SDL_FRect drawable_rect = video_rect_to_drawable_transform(video_to_zoom_space(selection_rect, zoom_rect));
+
+  if (mode_ == Mode::SPLIT) {
+    // For split mode, we don't need to draw a second rectangle
+    draw_rect(drawable_rect, 255, 255, 255);
+    return;
+  } else {
+    draw_rect(drawable_rect, 255, 128, 128);
+  }
+
+  // Draw right rectangle with appropriate offset
+  switch (mode_) {
+    case Mode::HSTACK:
+      selection_rect.x += video_width_;
+      break;
+    case Mode::VSTACK:
+      selection_rect.y += video_height_;
+      break;
+    default:
+      break;
+  }
+
+  drawable_rect = video_rect_to_drawable_transform(video_to_zoom_space(selection_rect, zoom_rect));
+  draw_rect(drawable_rect, 128, 128, 255);
+}
+
+void Display::possibly_save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame) {
+  if (selection_state_ != SelectionState::COMPLETED) {
+    return;
+  }
+
+  const SDL_Rect selection_rect = get_left_selection_rect();
+
+  if (selection_rect.w <= 0 || selection_rect.h <= 0) {
+    std::cerr << "Selection rectangle is empty. Please make a valid selection." << std::endl;
+  } else {
+    save_selected_area(left_frame, right_frame, selection_rect);
+  }
+
+  selection_state_ = SelectionState::NONE;
+  save_selected_area_ = false;
+}
+
+void Display::save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame, const SDL_Rect& selection_rect) {
+  std::atomic_bool error_occurred(false);
+
+  // Lambda for creating and initializing frames
+  auto create_frame = [&](const int width, const int height, const AVFrame* source_frame) -> AVFrame* {
+    AVFrame* frame = av_frame_alloc();
+    frame->format = source_frame->format;
+    frame->width = width;
+    frame->height = height;
+    frame->colorspace = source_frame->colorspace;
+    frame->color_range = source_frame->color_range;
+    av_frame_get_buffer(frame, 0);
+    return frame;
+  };
+
+  AVFrame* left_selected = create_frame(selection_rect.w, selection_rect.h, left_frame);
+  AVFrame* right_selected = create_frame(selection_rect.w, selection_rect.h, right_frame);
+  AVFrame* concatenated = create_frame(selection_rect.w * 2, selection_rect.h, left_frame);
+
+  const int pixel_size = use_10_bpc_ ? 3 * sizeof(uint16_t) : 3;
+
+  for (int y = 0; y < selection_rect.h; y++) {
+    const int src_y = selection_rect.y + y;
+    const int dst_y = y;
+
+    // Copy left frame data
+    memcpy(left_selected->data[0] + dst_y * left_selected->linesize[0],
+           left_frame->data[0] + src_y * left_frame->linesize[0] + selection_rect.x * pixel_size,
+           selection_rect.w * pixel_size);
+
+    // Copy right frame data
+    memcpy(right_selected->data[0] + dst_y * right_selected->linesize[0],
+           right_frame->data[0] + src_y * right_frame->linesize[0] + selection_rect.x * pixel_size,
+           selection_rect.w * pixel_size);
+
+    // Copy to concatenated frame
+    memcpy(concatenated->data[0] + dst_y * concatenated->linesize[0],
+           left_frame->data[0] + src_y * left_frame->linesize[0] + selection_rect.x * pixel_size,
+           selection_rect.w * pixel_size);
+    memcpy(concatenated->data[0] + dst_y * concatenated->linesize[0] + selection_rect.w * pixel_size,
+           right_frame->data[0] + src_y * right_frame->linesize[0] + selection_rect.x * pixel_size,
+           selection_rect.w * pixel_size);
+  }
+
+  const std::string left_filename = string_sprintf("%s%s_cutout_%04d.png", left_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_left" : "", saved_selected_image_number_);
+  const std::string right_filename = string_sprintf("%s%s_cutout_%04d.png", right_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_right" : "", saved_selected_image_number_);
+  const std::string concatenated_filename = string_sprintf("%s_%s_cutout_concat_%04d.png", left_file_stem_.c_str(), right_file_stem_.c_str(), saved_selected_image_number_);
+
+  auto save_frame = [&](const AVFrame* frame, const std::string& filename) {
+    return write_png(frame, filename, error_occurred);
+  };
+
+  std::thread save_left_thread(save_frame, left_selected, left_filename);
+  std::thread save_right_thread(save_frame, right_selected, right_filename);
+  std::thread save_concatenated_thread(save_frame, concatenated, concatenated_filename);
+
+  save_left_thread.join();
+  save_right_thread.join();
+  save_concatenated_thread.join();
+
+  av_frame_free(&left_selected);
+  av_frame_free(&right_selected);
+  av_frame_free(&concatenated);
+
+  if (!error_occurred) {
+    std::cout << "Saved " << string_sprintf("%s, %s and %s", left_filename.c_str(), right_filename.c_str(), concatenated_filename.c_str()) << std::endl;
+
+    saved_selected_image_number_++;
+  }
+}
+
 bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message) {
   const bool has_updated_left_pts = previous_left_frame_pts_ != left_frame->pts;
   const bool has_updated_right_pts = previous_right_frame_pts_ != right_frame->pts;
@@ -993,13 +1147,11 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
   const bool compare_mode = show_left_ && show_right_;
 
-  const Vector2D video_extent(video_width_, video_height_);
-  const Vector2D zoom_rect_start((global_center_ - global_zoom_factor_ * 0.5F) * video_extent);
-  const Vector2D zoom_rect_end((global_center_ + global_zoom_factor_ * 0.5F) * video_extent);
-  const Vector2D zoom_rect_size(zoom_rect_end - zoom_rect_start);
+  const auto zoom_rect = compute_zoom_rect();
 
-  const int mouse_video_x = std::floor((static_cast<float>(mouse_x_) * video_to_window_width_factor_ - zoom_rect_start.x()) * static_cast<float>(video_width_) / zoom_rect_size.x());
-  const int mouse_video_y = std::floor((static_cast<float>(mouse_y_) * video_to_window_height_factor_ - zoom_rect_start.y()) * static_cast<float>(video_height_) / zoom_rect_size.y());
+  const Vector2D mouse_video_pos = get_mouse_video_position(mouse_x_, mouse_y_, zoom_rect);
+  const int mouse_video_x = mouse_video_pos.x();
+  const int mouse_video_y = mouse_video_pos.y();
 
   // print pixel position in original video coordinates and RGB+YUV color value
   if (print_mouse_position_and_color_) {
@@ -1066,24 +1218,18 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   const float full_ws_mouse_video_x = static_cast<float>(mouse_x_ * window_width_ / (window_width_ - 1)) * video_to_window_width_factor_;
 
   // mouse x-position in video coordinates
-  const float video_mouse_x = (full_ws_mouse_video_x - zoom_rect_start.x()) * static_cast<float>(video_width_) / zoom_rect_size.x();
+  const float video_mouse_x = (full_ws_mouse_video_x - zoom_rect.start.x()) * static_cast<float>(video_width_) / zoom_rect.size.x();
 
   // the nearest texel border to the mouse x-position in window coordinates
-  const float video_texel_clamped_mouse_x = (std::round(video_mouse_x) * zoom_rect_size.x() / static_cast<float>(video_width_) + zoom_rect_start.x()) / video_to_window_width_factor_;
+  const float video_texel_clamped_mouse_x = (std::round(video_mouse_x) * zoom_rect.size.x() / static_cast<float>(video_width_) + zoom_rect.start.x()) / video_to_window_width_factor_;
 
   if (show_left_ || show_right_) {
     const int split_x = (compare_mode && mode_ == Mode::SPLIT) ? std::min(std::max(std::round(video_mouse_x), 0.0F), float(video_width_)) : show_left_ ? video_width_ : 0;
 
-    // transform video coordinates to the currently zoomed area space
-    auto video_to_zoom_space = [this, zoom_rect_start, zoom_rect_size](const SDL_Rect& video_rect) {
-      return SDL_FRect({zoom_rect_start.x() + float(video_rect.x) * global_zoom_factor_, zoom_rect_start.y() + float(video_rect.y) * global_zoom_factor_, std::min(float(video_rect.w) * global_zoom_factor_, zoom_rect_size.x()),
-                        std::min(float(video_rect.h) * global_zoom_factor_, zoom_rect_size.y())});
-    };
-
     // update video
     if (show_left_ && (split_x > 0)) {
       const SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
-      const SDL_FRect screen_render_quad_left = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_left));
+      const SDL_FRect screen_render_quad_left = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_left, zoom_rect));
 
       if (input_received_ || has_updated_left_pts) {
         if (use_10_bpc_) {
@@ -1104,7 +1250,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
       const SDL_Rect tex_render_quad_right = {right_x_offset + start_right, right_y_offset, (video_width_ - start_right), video_height_};
       const SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
-      const SDL_FRect screen_render_quad_right = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_right));
+      const SDL_FRect screen_render_quad_right = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_right, zoom_rect));
 
       if (input_received_ || has_updated_right_pts) {
         if (subtraction_mode_) {
@@ -1418,6 +1564,12 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     save_image_frames_ = false;
   }
 
+  if (save_selected_area_) {
+    possibly_save_selected_area(left_frame, right_frame);
+  }
+
+  draw_selection_rect();
+
   SDL_RenderPresent(renderer_);
 
   input_received_ = false;
@@ -1460,6 +1612,29 @@ void Display::update_move_offset(const Vector2D& move_offset) {
   global_center_ = Vector2D(move_offset_.x() / video_width_ + 0.5F, move_offset_.y() / video_height_ + 0.5F);
 }
 
+Display::ZoomRect Display::compute_zoom_rect() const {
+  const Vector2D video_extent(video_width_, video_height_);
+  const Vector2D zoom_rect_start((global_center_ - global_zoom_factor_ * 0.5F) * video_extent);
+  const Vector2D zoom_rect_end((global_center_ + global_zoom_factor_ * 0.5F) * video_extent);
+  const Vector2D zoom_rect_size(zoom_rect_end - zoom_rect_start);
+  return {zoom_rect_start, zoom_rect_end, zoom_rect_size, global_zoom_factor_};
+}
+
+Vector2D Display::get_mouse_video_position(const int mouse_x, const int mouse_y, const Display::ZoomRect& zoom_rect) const {
+  const int mouse_video_x = std::floor((static_cast<float>(mouse_x) * video_to_window_width_factor_ - zoom_rect.start.x()) * static_cast<float>(video_width_) / zoom_rect.size.x());
+  const int mouse_video_y = std::floor((static_cast<float>(mouse_y) * video_to_window_height_factor_ - zoom_rect.start.y()) * static_cast<float>(video_height_) / zoom_rect.size.y());
+
+  return Vector2D(mouse_video_x, mouse_video_y);
+}
+
+SDL_FRect Display::video_to_zoom_space(const SDL_Rect& video_rect, const Display::ZoomRect& zoom_rect) {
+  // transform video coordinates to the currently zoomed area space
+  return SDL_FRect({zoom_rect.start.x() + float(video_rect.x) * zoom_rect.zoom_factor,
+                    zoom_rect.start.y() + float(video_rect.y) * zoom_rect.zoom_factor,
+                    std::min(float(video_rect.w) * zoom_rect.zoom_factor, zoom_rect.size.x()),
+                    std::min(float(video_rect.h) * zoom_rect.zoom_factor, zoom_rect.size.y())});
+};
+
 void Display::update_playback_speed(const int playback_speed_level) {
   // allow 128x change of playback speed
   if (abs(playback_speed_level) <= (PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE * 7)) {
@@ -1488,6 +1663,19 @@ void Display::input() {
 #else
       return (keymod & KMOD_CTRL);
 #endif
+    };
+
+    auto wrap_to_left_frame = [&](Vector2D& video_position) -> Vector2D {
+      switch (mode_) {
+        case Mode::HSTACK:
+          return video_position - Vector2D(video_width_, 0);
+        case Mode::VSTACK:
+          return video_position - Vector2D(0, video_height_);
+        default:
+          break;
+      }
+
+      return video_position;
     };
 
     switch (event_.type) {
@@ -1524,6 +1712,14 @@ void Display::input() {
       case SDL_MOUSEMOTION:
         SDL_GetMouseState(&mouse_x_, &mouse_y_);
 
+        if (selection_state_ == SelectionState::STARTED) {
+          selection_end_ = get_mouse_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
+
+          if (selection_wrap_) {
+            selection_end_ = wrap_to_left_frame(selection_end_);
+          }
+        }
+
         if (event_.motion.state & SDL_BUTTON_RMASK) {
           const auto pan_offset = Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_) / Vector2D(drawable_to_window_width_factor_, drawable_to_window_height_factor_);
 
@@ -1539,6 +1735,20 @@ void Display::input() {
       case SDL_MOUSEBUTTONDOWN:
         if (event_.button.button == SDL_BUTTON_RIGHT) {
           SDL_SetCursor(pan_mode_cursor_);
+        } else if (event_.button.button == SDL_BUTTON_LEFT) {
+          if (save_selected_area_ && (selection_state_ == SelectionState::NONE)) {
+            selection_state_ = SelectionState::STARTED;
+            selection_start_ = get_mouse_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
+
+            // Check if the selection is outside the left video frame
+            selection_wrap_ = (mode_ == Mode::HSTACK && selection_start_.x() >= video_width_) || (mode_ == Mode::VSTACK && selection_start_.y() >= video_height_);
+
+            if (selection_wrap_) {
+              selection_start_ = wrap_to_left_frame(selection_start_);
+            }
+
+            selection_end_ = selection_start_;
+          }
         } else {
           seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
           seek_from_start_ = true;
@@ -1547,6 +1757,10 @@ void Display::input() {
       case SDL_MOUSEBUTTONUP:
         if (event_.button.button == SDL_BUTTON_RIGHT) {
           SDL_SetCursor(normal_mode_cursor_);
+        } else if (event_.button.button == SDL_BUTTON_LEFT && selection_state_ == SelectionState::STARTED) {
+          SDL_SetCursor(normal_mode_cursor_);
+
+          selection_state_ = SelectionState::COMPLETED;
         }
         break;
       case SDL_KEYDOWN:
@@ -1667,7 +1881,18 @@ void Display::input() {
             break;
           }
           case SDLK_f:
-            save_image_frames_ = true;
+            if (keymod & KMOD_SHIFT) {
+              if (!save_selected_area_) {
+                SDL_SetCursor(selection_mode_cursor_);
+                save_selected_area_ = true;
+              } else {
+                SDL_SetCursor(normal_mode_cursor_);
+                save_selected_area_ = false;
+                selection_state_ = SelectionState::NONE;
+              }
+            } else {
+              save_image_frames_ = true;
+            }
             break;
           case SDLK_p:
             print_mouse_position_and_color_ = mouse_is_inside_window_;

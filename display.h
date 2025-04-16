@@ -113,6 +113,14 @@ class Display {
   bool possibly_tick_playback_{false};
   bool show_fps_{false};
 
+  // Rectangle selection state
+  enum class SelectionState { NONE, STARTED, COMPLETED };
+  SelectionState selection_state_{SelectionState::NONE};
+  Vector2D selection_start_{0.0F, 0.0F};
+  Vector2D selection_end_{0.0F, 0.0F};
+  bool selection_wrap_{false};
+  bool save_selected_area_{false};
+
   bool input_received_{true};
   int64_t previous_left_frame_pts_;
   int64_t previous_right_frame_pts_;
@@ -128,6 +136,7 @@ class Display {
   TTF_Font* big_font_;
   SDL_Cursor* normal_mode_cursor_;
   SDL_Cursor* pan_mode_cursor_;
+  SDL_Cursor* selection_mode_cursor_;
   uint8_t* diff_buffer_;
   uint32_t* left_buffer_{nullptr};
   uint32_t* right_buffer_{nullptr};
@@ -168,6 +177,7 @@ class Display {
   const std::string left_file_stem_;
   const std::string right_file_stem_;
   int saved_image_number_{1};
+  int saved_selected_image_number_{1};
 
   std::vector<SDL_Texture*> help_textures_;
   int help_total_height_{0};
@@ -214,11 +224,26 @@ class Display {
 
   void render_help();
 
+  SDL_Rect get_left_selection_rect() const;
+  void draw_selection_rect();
+  void possibly_save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame);
+  void save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame, const SDL_Rect& selection_rect);
+
   float compute_zoom_factor(const float zoom_level) const;
   Vector2D compute_relative_move_offset(const Vector2D& zoom_point, const float zoom_factor) const;
   void update_zoom_factor_and_move_offset(const float zoom_factor);
   void update_zoom_factor(const float zoom_factor);
   void update_move_offset(const Vector2D& move_offset);
+
+  struct ZoomRect {
+    Vector2D start;
+    Vector2D end;
+    Vector2D size;
+    float zoom_factor;
+  };
+  ZoomRect compute_zoom_rect() const;
+  Vector2D get_mouse_video_position(const int mouse_x, const int mouse_y, const ZoomRect& zoom_rect) const;
+  SDL_FRect video_to_zoom_space(const SDL_Rect& video_rect, const ZoomRect& zoom_rect);
 
   void update_playback_speed(const int playback_speed_level);
 
