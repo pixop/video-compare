@@ -207,6 +207,9 @@ right corner).
 
 **Hold** `Shift` while pressing `D` to decode and move to the next frame.
 
+**Hold** `Shift` and press `F` to select a region; cutouts from both frames and their
+concatenation will be saved as PNGs.
+
 **Hold** `Ctrl` while time-shifting with `+`/`-` for faster increments/decrements of 10 frames
 per keystroke. Similarly, **hold** `Alt` for even larger time-shifts of 100 frames.
 

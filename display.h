@@ -118,6 +118,7 @@ class Display {
   SelectionState selection_state_{SelectionState::NONE};
   Vector2D selection_start_{0.0F, 0.0F};
   Vector2D selection_end_{0.0F, 0.0F};
+  bool selection_wrap_{false};
   bool save_selected_area_{false};
 
   bool input_received_{true};
@@ -176,6 +177,7 @@ class Display {
   const std::string left_file_stem_;
   const std::string right_file_stem_;
   int saved_image_number_{1};
+  int saved_selected_image_number_{1};
 
   std::vector<SDL_Texture*> help_textures_;
   int help_total_height_{0};
@@ -231,9 +233,9 @@ class Display {
   void update_playback_speed(const int playback_speed_level);
 
   // New helper functions for rectangle selection
-  SDL_FRect get_selection_rect() const;
+  SDL_Rect get_left_selection_rect() const;
   void draw_selection_rect();
-  void save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame);
+  void possibly_save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame);
   void concatenate_and_save_frames(const AVFrame* left_frame, const AVFrame* right_frame, const SDL_Rect& selection_rect);
 
  public:
