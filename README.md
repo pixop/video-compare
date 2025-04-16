@@ -214,7 +214,7 @@ Use `Ctrl+C` (Windows/Linux) or `Cmd+C` (macOS) to copy the current timestamp of
 to the clipboard, and `Ctrl+V` (Windows/Linux) or `Cmd+V` (macOS) to paste a timestamp from the
 clipboard and seek to that position.
 
-Use `Ctrl+F` to select a region; cutouts from both frames and their concatenation will be saved
+Use `Shift+F` to select a region; cutouts from both frames and their concatenation will be saved
 as PNGs.
 
 ## Build
