@@ -113,6 +113,13 @@ class Display {
   bool possibly_tick_playback_{false};
   bool show_fps_{false};
 
+  // Rectangle selection state
+  enum class SelectionState { NONE, STARTED, COMPLETED };
+  SelectionState selection_state_{SelectionState::NONE};
+  Vector2D selection_start_{0.0F, 0.0F};
+  Vector2D selection_end_{0.0F, 0.0F};
+  bool save_selected_area_{false};
+
   bool input_received_{true};
   int64_t previous_left_frame_pts_;
   int64_t previous_right_frame_pts_;
@@ -128,6 +135,7 @@ class Display {
   TTF_Font* big_font_;
   SDL_Cursor* normal_mode_cursor_;
   SDL_Cursor* pan_mode_cursor_;
+  SDL_Cursor* selection_mode_cursor_;
   uint8_t* diff_buffer_;
   uint32_t* left_buffer_{nullptr};
   uint32_t* right_buffer_{nullptr};
@@ -221,6 +229,12 @@ class Display {
   void update_move_offset(const Vector2D& move_offset);
 
   void update_playback_speed(const int playback_speed_level);
+
+  // New helper functions for rectangle selection
+  SDL_FRect get_selection_rect() const;
+  void draw_selection_rect();
+  void save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame);
+  void concatenate_and_save_frames(const AVFrame* left_frame, const AVFrame* right_frame, const SDL_Rect& selection_rect);
 
  public:
   Display(const int display_number,

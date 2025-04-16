@@ -311,6 +311,7 @@ Display::Display(const int display_number,
 
   normal_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
   pan_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZEALL);
+  selection_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
 
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
 
@@ -413,6 +414,7 @@ Display::~Display() {
 
   SDL_FreeCursor(normal_mode_cursor_);
   SDL_FreeCursor(pan_mode_cursor_);
+  SDL_FreeCursor(selection_mode_cursor_);
 
   delete[] diff_buffer_;
 
@@ -1418,6 +1420,12 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     save_image_frames_ = false;
   }
 
+  if (save_selected_area_) {
+    save_selected_area(left_frame, right_frame);
+  }
+
+  draw_selection_rect();
+
   SDL_RenderPresent(renderer_);
 
   input_received_ = false;
@@ -1490,6 +1498,21 @@ void Display::input() {
 #endif
     };
 
+    auto get_mouse_video_position = [&](const int mouse_x, const int mouse_y) -> Vector2D {
+      const Vector2D video_extent(video_width_, video_height_);
+      const Vector2D zoom_rect_start((global_center_ - global_zoom_factor_ * 0.5F) * video_extent);
+      const Vector2D zoom_rect_end((global_center_ + global_zoom_factor_ * 0.5F) * video_extent);
+      const Vector2D zoom_rect_size(zoom_rect_end - zoom_rect_start);
+
+      const int mouse_video_x = std::floor((static_cast<float>(mouse_x) * video_to_window_width_factor_ - zoom_rect_start.x()) * static_cast<float>(video_width_) / zoom_rect_size.x());
+      const int mouse_video_y = std::floor((static_cast<float>(mouse_y) * video_to_window_height_factor_ - zoom_rect_start.y()) * static_cast<float>(video_height_) / zoom_rect_size.y());
+
+      const int pixel_video_x = mouse_video_x % video_width_;
+      const int pixel_video_y = mouse_video_y % video_height_;
+
+      return Vector2D(pixel_video_x, pixel_video_y);
+    };
+
     switch (event_.type) {
       case SDL_WINDOWEVENT:
         switch (event_.window.event) {
@@ -1524,6 +1547,10 @@ void Display::input() {
       case SDL_MOUSEMOTION:
         SDL_GetMouseState(&mouse_x_, &mouse_y_);
 
+        if (selection_state_ == SelectionState::STARTED) {
+          selection_end_ = get_mouse_video_position(mouse_x_, mouse_y_);
+        }
+
         if (event_.motion.state & SDL_BUTTON_RMASK) {
           const auto pan_offset = Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_) / Vector2D(drawable_to_window_width_factor_, drawable_to_window_height_factor_);
 
@@ -1539,6 +1566,12 @@ void Display::input() {
       case SDL_MOUSEBUTTONDOWN:
         if (event_.button.button == SDL_BUTTON_RIGHT) {
           SDL_SetCursor(pan_mode_cursor_);
+        } else if (event_.button.button == SDL_BUTTON_LEFT) {
+          if (save_selected_area_ && (selection_state_ == SelectionState::NONE)) {
+            selection_state_ = SelectionState::STARTED;
+            selection_start_ = get_mouse_video_position(mouse_x_, mouse_y_);
+            selection_end_ = selection_start_;
+          }
         } else {
           seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
           seek_from_start_ = true;
@@ -1547,6 +1580,10 @@ void Display::input() {
       case SDL_MOUSEBUTTONUP:
         if (event_.button.button == SDL_BUTTON_RIGHT) {
           SDL_SetCursor(normal_mode_cursor_);
+        } else if (event_.button.button == SDL_BUTTON_LEFT && selection_state_ == SelectionState::STARTED) {
+          SDL_SetCursor(normal_mode_cursor_);
+
+          selection_state_ = SelectionState::COMPLETED;
         }
         break;
       case SDL_KEYDOWN:
@@ -1667,7 +1704,18 @@ void Display::input() {
             break;
           }
           case SDLK_f:
-            save_image_frames_ = true;
+            if (keymod & KMOD_SHIFT) {
+              if (!save_selected_area_) {
+                SDL_SetCursor(selection_mode_cursor_);
+                save_selected_area_ = true;
+              } else {
+                SDL_SetCursor(normal_mode_cursor_);
+                save_selected_area_ = false;
+                selection_state_ = SelectionState::NONE;
+              }
+            } else {
+              save_image_frames_ = true;
+            }
             break;
           case SDLK_p:
             print_mouse_position_and_color_ = mouse_is_inside_window_;
@@ -1852,4 +1900,142 @@ bool Display::get_possibly_tick_playback() const {
 
 bool Display::get_show_fps() const {
   return show_fps_;
+}
+
+SDL_FRect Display::get_selection_rect() const {
+  const int x = std::min(selection_start_.x(), selection_end_.x());
+  const int y = std::min(selection_start_.y(), selection_end_.y());
+  const int w = std::abs(selection_end_.x() - selection_start_.x());
+  const int h = std::abs(selection_end_.y() - selection_start_.y());
+
+  // Clip to video extents
+  //const int max_width = (mode_ == Mode::HSTACK) ? video / 2 : window_width_;
+  //const int max_height = (mode_ == Mode::VSTACK) ? window_height_ / 2 : window_height_;
+
+  const float clipped_x = std::max(0, x);
+  const float clipped_y = std::max(0, y);
+  const float clipped_w = std::min(w - (clipped_x - x), video_width_ - clipped_x - 1);
+  const float clipped_h = std::min(h - (clipped_y - y), video_height_ - clipped_y - 1);
+
+  return {clipped_x, clipped_y, clipped_w, clipped_h};
+}
+
+void Display::draw_selection_rect() {
+  if (selection_state_ == SelectionState::NONE) {
+    return;
+  }
+
+  SDL_FRect frect = video_rect_to_drawable_transform(get_selection_rect());
+  SDL_Rect rect = {static_cast<int>(frect.x), static_cast<int>(frect.y), static_cast<int>(frect.w), static_cast<int>(frect.h)};
+
+  auto draw_rect = [this](const SDL_Rect& r) {
+    // Draw semi-transparent overlay
+    SDL_SetRenderDrawColor(renderer_, 128, 128, 128, 128);
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_RenderFillRect(renderer_, &r);
+
+    // Draw white border
+    SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
+    SDL_RenderDrawRect(renderer_, &r);
+  };
+
+  // Draw first rectangle
+  draw_rect(rect);
+
+  // For split mode, we don't need to draw a second rectangle
+  if (mode_ == Mode::SPLIT) {
+    return;
+  }
+  /*
+
+  // Check if selection starts on the right frame
+  bool starts_on_right = false;
+  switch (mode_) {
+    case Mode::HSTACK:
+      starts_on_right = selection_start_.x() >= drawable_width_ / 2;
+      break;
+    case Mode::VSTACK:
+      starts_on_right = selection_start_.y() >= drawable_height_ / 2;
+      break;
+    default:
+      break;
+  }
+
+  // Draw second rectangle with appropriate offset
+  SDL_Rect second_rect = rect;
+  if (starts_on_right) {
+    switch (mode_) {
+      case Mode::HSTACK:
+        second_rect.x -= drawable_width_ / 2;
+        break;
+      case Mode::VSTACK:
+        second_rect.y -= drawable_height_ / 2;
+        break;
+      default:
+        break;
+    }
+  } else {
+    switch (mode_) {
+      case Mode::HSTACK:
+        second_rect.x += drawable_width_ / 2;
+        break;
+      case Mode::VSTACK:
+        second_rect.y += drawable_height_ / 2;
+        break;
+      default:
+        break;
+    }
+  }
+
+  draw_rect(second_rect);
+  */
+}
+
+void Display::save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame) {
+  if (selection_state_ != SelectionState::COMPLETED) {
+    return;
+  }
+
+/*
+  const SDL_Rect selection_rect = get_selection_rect();
+  concatenate_and_save_frames(left_frame, right_frame, selection_rect);
+  selection_state_ = SelectionState::NONE;
+  save_selected_area_ = false;
+  */
+}
+
+void Display::concatenate_and_save_frames(const AVFrame* left_frame, const AVFrame* right_frame, const SDL_Rect& selection_rect) {
+  // Create a new frame for the concatenated result
+  AVFrame* result_frame = av_frame_alloc();
+  result_frame->format = left_frame->format;
+  result_frame->width = selection_rect.w * 2;  // Double width for concatenation
+  result_frame->height = selection_rect.h;
+  result_frame->colorspace = left_frame->colorspace;
+  result_frame->color_range = left_frame->color_range;
+  av_frame_get_buffer(result_frame, 0);
+
+  // Copy selected area from left frame
+  for (int y = 0; y < selection_rect.h; y++) {
+    const int src_y = selection_rect.y + y;
+    const int dst_y = y;
+    
+    // Copy left frame data
+    memcpy(result_frame->data[0] + dst_y * result_frame->linesize[0],
+           left_frame->data[0] + src_y * left_frame->linesize[0] + selection_rect.x * 3,
+           selection_rect.w * 3);
+           
+    // Copy right frame data
+    memcpy(result_frame->data[0] + dst_y * result_frame->linesize[0] + selection_rect.w * 3,
+           right_frame->data[0] + src_y * right_frame->linesize[0] + selection_rect.x * 3,
+           selection_rect.w * 3);
+  }
+
+  // Save the concatenated frame
+  const std::string filename = string_sprintf("%s_%s_selected_%04d.png", 
+    left_file_stem_.c_str(), right_file_stem_.c_str(), saved_image_number_);
+  PngSaver::save(result_frame, filename);
+  saved_image_number_++;
+
+  av_frame_free(&result_frame);
 }
