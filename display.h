@@ -224,19 +224,28 @@ class Display {
 
   void render_help();
 
+  SDL_Rect get_left_selection_rect() const;
+  void draw_selection_rect();
+  void possibly_save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame);
+  void save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame, const SDL_Rect& selection_rect);
+
   float compute_zoom_factor(const float zoom_level) const;
   Vector2D compute_relative_move_offset(const Vector2D& zoom_point, const float zoom_factor) const;
   void update_zoom_factor_and_move_offset(const float zoom_factor);
   void update_zoom_factor(const float zoom_factor);
   void update_move_offset(const Vector2D& move_offset);
 
-  void update_playback_speed(const int playback_speed_level);
+  struct ZoomRect {
+    Vector2D start;
+    Vector2D end;
+    Vector2D size;
+    float zoom_factor;
+  };
+  ZoomRect compute_zoom_rect() const;
+  Vector2D get_mouse_video_position(const int mouse_x, const int mouse_y, const ZoomRect& zoom_rect) const;
+  SDL_FRect video_to_zoom_space(const SDL_Rect& video_rect, const ZoomRect& zoom_rect);
 
-  // New helper functions for rectangle selection
-  SDL_Rect get_left_selection_rect() const;
-  void draw_selection_rect();
-  void possibly_save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame);
-  void concatenate_and_save_frames(const AVFrame* left_frame, const AVFrame* right_frame, const SDL_Rect& selection_rect);
+  void update_playback_speed(const int playback_speed_level);
 
  public:
   Display(const int display_number,
