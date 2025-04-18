@@ -4,8 +4,8 @@ CXXFLAGS = -g3 -Ofast -std=c++14 -D__STDC_CONSTANT_MACROS \
 		   -Woverloaded-virtual -Wno-unused -Wno-missing-field-initializers
 
 ifeq ($(findstring CYGWIN_NT-10.0, $(shell uname)), CYGWIN_NT-10.0)
-  FFMPEG_VERSION = 7.1-full_build-shared
-  SDL2_VERSION = 2.30.11
+  FFMPEG_VERSION = 7.1.1-full_build-shared
+  SDL2_VERSION = 2.32.4
   SDL2_TTF_VERSION = 2.24.0
 
   FFMPEG_PATH = ffmpeg-$(FFMPEG_VERSION)
