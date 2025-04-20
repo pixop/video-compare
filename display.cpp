@@ -618,9 +618,7 @@ void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_
   const std::string right_filename = string_sprintf("%s%s_%04d.png", right_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_right" : "", saved_image_number_);
   const std::string osd_filename = string_sprintf("%s_%s_osd_%04d.png", left_file_stem_.c_str(), right_file_stem_.c_str(), saved_image_number_);
 
-  auto save_frame = [&](const AVFrame* frame, const std::string& filename) {
-    return write_png(frame, filename, error_occurred);
-  };
+  auto save_frame = [&](const AVFrame* frame, const std::string& filename) { return write_png(frame, filename, error_occurred); };
 
   std::thread save_left_frame_thread(save_frame, left_frame, left_filename);
   std::thread save_right_frame_thread(save_frame, right_frame, right_filename);
@@ -1075,31 +1073,21 @@ void Display::save_selected_area(const AVFrame* left_frame, const AVFrame* right
     const int dst_y = y;
 
     // Copy left frame data
-    memcpy(left_selected->data[0] + dst_y * left_selected->linesize[0],
-           left_frame->data[0] + src_y * left_frame->linesize[0] + selection_rect.x * pixel_size,
-           selection_rect.w * pixel_size);
+    memcpy(left_selected->data[0] + dst_y * left_selected->linesize[0], left_frame->data[0] + src_y * left_frame->linesize[0] + selection_rect.x * pixel_size, selection_rect.w * pixel_size);
 
     // Copy right frame data
-    memcpy(right_selected->data[0] + dst_y * right_selected->linesize[0],
-           right_frame->data[0] + src_y * right_frame->linesize[0] + selection_rect.x * pixel_size,
-           selection_rect.w * pixel_size);
+    memcpy(right_selected->data[0] + dst_y * right_selected->linesize[0], right_frame->data[0] + src_y * right_frame->linesize[0] + selection_rect.x * pixel_size, selection_rect.w * pixel_size);
 
     // Copy to concatenated frame
-    memcpy(concatenated->data[0] + dst_y * concatenated->linesize[0],
-           left_frame->data[0] + src_y * left_frame->linesize[0] + selection_rect.x * pixel_size,
-           selection_rect.w * pixel_size);
-    memcpy(concatenated->data[0] + dst_y * concatenated->linesize[0] + selection_rect.w * pixel_size,
-           right_frame->data[0] + src_y * right_frame->linesize[0] + selection_rect.x * pixel_size,
-           selection_rect.w * pixel_size);
+    memcpy(concatenated->data[0] + dst_y * concatenated->linesize[0], left_frame->data[0] + src_y * left_frame->linesize[0] + selection_rect.x * pixel_size, selection_rect.w * pixel_size);
+    memcpy(concatenated->data[0] + dst_y * concatenated->linesize[0] + selection_rect.w * pixel_size, right_frame->data[0] + src_y * right_frame->linesize[0] + selection_rect.x * pixel_size, selection_rect.w * pixel_size);
   }
 
   const std::string left_filename = string_sprintf("%s%s_cutout_%04d.png", left_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_left" : "", saved_selected_image_number_);
   const std::string right_filename = string_sprintf("%s%s_cutout_%04d.png", right_file_stem_.c_str(), (left_file_stem_ == right_file_stem_) ? "_right" : "", saved_selected_image_number_);
   const std::string concatenated_filename = string_sprintf("%s_%s_cutout_concat_%04d.png", left_file_stem_.c_str(), right_file_stem_.c_str(), saved_selected_image_number_);
 
-  auto save_frame = [&](const AVFrame* frame, const std::string& filename) {
-    return write_png(frame, filename, error_occurred);
-  };
+  auto save_frame = [&](const AVFrame* frame, const std::string& filename) { return write_png(frame, filename, error_occurred); };
 
   std::thread save_left_thread(save_frame, left_selected, left_filename);
   std::thread save_right_thread(save_frame, right_selected, right_filename);
@@ -1629,9 +1617,7 @@ Vector2D Display::get_mouse_video_position(const int mouse_x, const int mouse_y,
 
 SDL_FRect Display::video_to_zoom_space(const SDL_Rect& video_rect, const Display::ZoomRect& zoom_rect) {
   // transform video coordinates to the currently zoomed area space
-  return SDL_FRect({zoom_rect.start.x() + float(video_rect.x) * zoom_rect.zoom_factor,
-                    zoom_rect.start.y() + float(video_rect.y) * zoom_rect.zoom_factor,
-                    std::min(float(video_rect.w) * zoom_rect.zoom_factor, zoom_rect.size.x()),
+  return SDL_FRect({zoom_rect.start.x() + float(video_rect.x) * zoom_rect.zoom_factor, zoom_rect.start.y() + float(video_rect.y) * zoom_rect.zoom_factor, std::min(float(video_rect.w) * zoom_rect.zoom_factor, zoom_rect.size.x()),
                     std::min(float(video_rect.h) * zoom_rect.zoom_factor, zoom_rect.size.y())});
 };
 
