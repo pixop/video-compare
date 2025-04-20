@@ -1552,11 +1552,11 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     save_image_frames_ = false;
   }
 
+  draw_selection_rect();
+
   if (save_selected_area_) {
     possibly_save_selected_area(left_frame, right_frame);
   }
-
-  draw_selection_rect();
 
   SDL_RenderPresent(renderer_);
 
@@ -1721,20 +1721,18 @@ void Display::input() {
       case SDL_MOUSEBUTTONDOWN:
         if (event_.button.button == SDL_BUTTON_RIGHT) {
           SDL_SetCursor(pan_mode_cursor_);
-        } else if (event_.button.button == SDL_BUTTON_LEFT) {
-          if (save_selected_area_ && (selection_state_ == SelectionState::NONE)) {
-            selection_state_ = SelectionState::STARTED;
-            selection_start_ = get_mouse_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
+        } else if (event_.button.button == SDL_BUTTON_LEFT && save_selected_area_ && selection_state_ == SelectionState::NONE) {
+          selection_state_ = SelectionState::STARTED;
+          selection_start_ = get_mouse_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
 
-            // Check if the selection is outside the left video frame
-            selection_wrap_ = (mode_ == Mode::HSTACK && selection_start_.x() >= video_width_) || (mode_ == Mode::VSTACK && selection_start_.y() >= video_height_);
+          // Check if the selection is outside the left video frame
+          selection_wrap_ = (mode_ == Mode::HSTACK && selection_start_.x() >= video_width_) || (mode_ == Mode::VSTACK && selection_start_.y() >= video_height_);
 
-            if (selection_wrap_) {
-              selection_start_ = wrap_to_left_frame(selection_start_);
-            }
-
-            selection_end_ = selection_start_;
+          if (selection_wrap_) {
+            selection_start_ = wrap_to_left_frame(selection_start_);
           }
+
+          selection_end_ = selection_start_;
         } else {
           seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
           seek_from_start_ = true;
