@@ -985,7 +985,7 @@ SDL_Rect Display::get_left_selection_rect() const {
 }
 
 void Display::draw_selection_rect() {
-  if (selection_state_ == SelectionState::NONE) {
+  if (selection_state_ != SelectionState::STARTED) {
     return;
   }
 
@@ -1656,7 +1656,7 @@ void Display::input() {
 
       if (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_RMASK) {
         cursor = pan_mode_cursor_;
-      } else if (save_selected_area_) {
+      } else if (save_selected_area_ && selection_state_ != SelectionState::COMPLETED) {
         cursor = selection_mode_cursor_;
       } else {
         cursor = normal_mode_cursor_;
