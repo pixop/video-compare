@@ -1543,6 +1543,8 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     }
   }
 
+  draw_selection_rect();
+
   if (show_help_) {
     render_help();
   }
@@ -1551,8 +1553,6 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     save_image_frames(left_frame, right_frame);
     save_image_frames_ = false;
   }
-
-  draw_selection_rect();
 
   if (save_selected_area_) {
     possibly_save_selected_area(left_frame, right_frame);
@@ -1651,6 +1651,20 @@ void Display::input() {
 #endif
     };
 
+    auto update_cursor = [&]() {
+      SDL_Cursor* cursor;
+
+      if (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_RMASK) {
+        cursor = pan_mode_cursor_;
+      } else if (save_selected_area_) {
+        cursor = selection_mode_cursor_;
+      } else {
+        cursor = normal_mode_cursor_;
+      }
+
+      SDL_SetCursor(cursor);
+    };
+
     auto wrap_to_left_frame = [&](Vector2D& video_position) -> Vector2D {
       switch (mode_) {
         case Mode::HSTACK:
@@ -1719,9 +1733,7 @@ void Display::input() {
         }
         break;
       case SDL_MOUSEBUTTONDOWN:
-        if (event_.button.button == SDL_BUTTON_RIGHT) {
-          SDL_SetCursor(pan_mode_cursor_);
-        } else if (event_.button.button == SDL_BUTTON_LEFT && save_selected_area_ && selection_state_ == SelectionState::NONE) {
+        if (event_.button.button == SDL_BUTTON_LEFT && save_selected_area_ && selection_state_ == SelectionState::NONE) {
           selection_state_ = SelectionState::STARTED;
           selection_start_ = get_mouse_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
 
@@ -1737,15 +1749,13 @@ void Display::input() {
           seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
           seek_from_start_ = true;
         }
+        update_cursor();
         break;
       case SDL_MOUSEBUTTONUP:
-        if (event_.button.button == SDL_BUTTON_RIGHT) {
-          SDL_SetCursor(normal_mode_cursor_);
-        } else if (event_.button.button == SDL_BUTTON_LEFT && selection_state_ == SelectionState::STARTED) {
-          SDL_SetCursor(normal_mode_cursor_);
-
+        if (event_.button.button == SDL_BUTTON_LEFT && selection_state_ == SelectionState::STARTED) {
           selection_state_ = SelectionState::COMPLETED;
         }
+        update_cursor();
         break;
       case SDL_KEYDOWN:
         switch (keycode) {
@@ -1867,13 +1877,12 @@ void Display::input() {
           case SDLK_f:
             if (keymod & KMOD_SHIFT) {
               if (!save_selected_area_) {
-                SDL_SetCursor(selection_mode_cursor_);
                 save_selected_area_ = true;
               } else {
-                SDL_SetCursor(normal_mode_cursor_);
                 save_selected_area_ = false;
                 selection_state_ = SelectionState::NONE;
               }
+              update_cursor();
             } else {
               save_image_frames_ = true;
             }
