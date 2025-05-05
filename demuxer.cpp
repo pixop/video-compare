@@ -19,15 +19,40 @@ Demuxer::Demuxer(const Side side, const std::string& demuxer_name, const std::st
   ffmpeg::check(file_name, avformat_open_input(&format_context_, file_name.c_str(), const_cast<AVInputFormat*>(input_format), &demuxer_options));
   ffmpeg::check_dict_is_empty(demuxer_options, string_sprintf("Demuxer %s", format_name().c_str()));
 
-  video_stream_index_ = ffmpeg::check(file_name, av_find_best_stream(format_context_, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0));
+  // Try to find best stream first
+  video_stream_index_ = av_find_best_stream(format_context_, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
 
   AVDictionary* stream_codec_options = nullptr;
   av_dict_copy(&stream_codec_options, decoder_options, 0);
 
   AVDictionary** opts_for_streams = (AVDictionary**)av_calloc(format_context_->nb_streams, sizeof(AVDictionary*));
-  opts_for_streams[video_stream_index_] = stream_codec_options;
+
+  if (video_stream_index_ < 0) {
+    // Try all streams since we don't know which is video yet
+    for (unsigned int i = 0; i < format_context_->nb_streams; i++) {
+      opts_for_streams[i] = stream_codec_options;
+    }
+  } else {
+    opts_for_streams[video_stream_index_] = stream_codec_options;
+  }
 
   ffmpeg::check(file_name, avformat_find_stream_info(format_context_, opts_for_streams));
+
+  if (video_stream_index_ < 0) {
+    // Try manual search for video stream
+    for (unsigned int i = 0; i < format_context_->nb_streams; i++) {
+      const AVStream* stream = format_context_->streams[i];
+
+      if (stream != nullptr && stream->codecpar != nullptr && stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+        video_stream_index_ = i;
+        break;
+      }
+    }
+
+    if (video_stream_index_ < 0) {
+      throw std::runtime_error(file_name + ": No video stream found");
+    }
+  }
 }
 
 Demuxer::~Demuxer() {
