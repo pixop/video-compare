@@ -24,12 +24,8 @@ Demuxer::Demuxer(const Side side, const std::string& demuxer_name, const std::st
 
   AVDictionary** opts_for_streams = (AVDictionary**)av_calloc(format_context_->nb_streams, sizeof(AVDictionary*));
 
-  if (video_stream_index_ < 0) {
-    // Try all streams since we don't know which is video yet
-    for (unsigned int i = 0; i < format_context_->nb_streams; i++) {
-      av_dict_copy(&opts_for_streams[i], decoder_options, 0);
-    }
-  } else {
+  // User-specified options are only used if we have a valid video stream index
+  if (video_stream_index_ >= 0) {
     av_dict_copy(&opts_for_streams[video_stream_index_], decoder_options, 0);
   }
 
@@ -56,7 +52,7 @@ Demuxer::Demuxer(const Side side, const std::string& demuxer_name, const std::st
     }
   }
 
-  for (unsigned int i = 0; i < format_context_->nb_streams; ++i) {
+  for (unsigned int i = 0; i < format_context_->nb_streams; i++) {
     av_dict_free(&opts_for_streams[i]);
   }
 
