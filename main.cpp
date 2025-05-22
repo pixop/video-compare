@@ -550,7 +550,7 @@ int main(int argc, char** argv) {
 
         auto parse_peak_nits = [&](const std::string& arg, const InputVideo& input_video) {
           if (!std::regex_match(arg, peak_nits_re)) {
-            throw std::logic_error{"Cannot parse " + to_lower_case(input_video.side_description) + " peak nits (required format: [number], e.g. 400, 850 or 1000)"};
+            throw std::logic_error{"Cannot parse " + to_lower_case(input_video.side_description) + " peak nits (required format: [nits], e.g. 400, 850 or 1000)"};
           }
 
           int result = std::stoi(arg);
