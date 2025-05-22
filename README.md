@@ -2,7 +2,7 @@
 
 [![GitHub release](https://img.shields.io/github/release/pixop/video-compare)](https://github.com/pixop/video-compare/releases)
 
-Split-screen video comparison tool written in C++14, utilizing FFmpeg libraries and SDL2. It provides
+Split-screen video comparison tool written in C++14, utilizing FFmpeg libraries and SDL3. It provides
 interactive navigation and playback controls, along with various analysis tools and customizable display options.
 
 `video-compare` can be used to visually compare the impact of codecs, resizing algorithms, and other modifications
@@ -56,7 +56,7 @@ Vertically stacked mode:
 `video-compare` was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on
 the excellent video player GitHub project: https://github.com/pockethook/player
 
-Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://github.com/libsdl-org/SDL) and
+Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL3](https://github.com/libsdl-org/SDL) and
 [stb](https://github.com/nothings/stb) authors.
 
 ## Usage
@@ -84,7 +84,7 @@ video onto a low resolution display:
 
     video-compare -w 1280x720 video1.mp4 video2.mp4
 
-Size the window to fit the usable display bounds while maintaining the video’s aspect ratio. This option adjusts
+Size the window to fit the usable display bounds while maintaining the video's aspect ratio. This option adjusts
 for elements like taskbars or OS menus. Ideal for maximizing the viewing area while keeping the video dimensions
 proportional to the screen:
 
@@ -221,15 +221,13 @@ as PNGs.
 
 ### Requirements
 
-Requires FFmpeg headers and development libraries to be installed, along with SDL2 and
-its TrueType font rendering add on (libsdl2_ttf). SDL2 version 2.0.10 or later is now
-specifically required for subpixel accuracy rendering capabilities. Users may need to
-upgrade their existing SDL2 installation before compiling.
+Requires FFmpeg headers and development libraries to be installed, along with SDL3 and
+its TrueType font rendering add on (libsdl3_ttf).
 
 On Debian GNU/Linux the required development packages can be installed via `apt`:
 
 ```sh
-apt install libavformat-dev libavcodec-dev libavfilter-dev libavutil-dev libswscale-dev libswresample-dev libsdl2-dev libsdl2-ttf-dev
+apt install libavformat-dev libavcodec-dev libavfilter-dev libavutil-dev libswscale-dev libswresample-dev libsdl3-dev libsdl3-ttf-dev
 ```
 
 ### Instructions
