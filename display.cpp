@@ -156,7 +156,7 @@ SDL::~SDL() {
   SDL_Quit();
 }
 
-Display::Display(const int display_number,
+Display::Display(const int display_id,
                  const Mode mode,
                  const bool verbose,
                  const bool fit_window_to_usable_bounds,
@@ -171,7 +171,7 @@ Display::Display(const int display_number,
                  const float wheel_sensitivity,
                  const std::string& left_file_name,
                  const std::string& right_file_name)
-    : display_number_{display_number},
+    : display_id_{display_id},
       mode_{mode},
       fit_window_to_usable_bounds_{fit_window_to_usable_bounds},
       high_dpi_allowed_{high_dpi_allowed},
@@ -212,8 +212,8 @@ Display::Display(const int display_number,
       }
     }
 
-    window_x = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number);
-    window_y = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number);
+    window_x = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_id);
+    window_y = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_id);
 
     if (high_dpi_allowed_) {
       window_width /= 2;
@@ -223,12 +223,24 @@ Display::Display(const int display_number,
     int num_displays;
     SDL_DisplayID* display_ids = SDL_GetDisplays(&num_displays);
 
-    if (display_ids == nullptr || display_number >= num_displays) {
-      throw std::runtime_error{"Invalid display number " + std::to_string(display_number) + " (found " + std::to_string(num_displays) + " displays)"};
+    if (display_ids == nullptr) {
+      throw std::runtime_error{"Failed to get display IDs"};
+    }
+
+    bool found_display = false;
+    for (int i = 0; i < num_displays; i++) {
+      if (display_ids[i] == static_cast<SDL_DisplayID>(display_id)) {
+        found_display = true;
+        break;
+      }
+    }
+
+    if (!found_display) {
+      throw std::runtime_error{"Invalid display ID " + std::to_string(display_id) + " (found " + std::to_string(num_displays) + " displays)"};
     }
 
     SDL_Rect bounds;
-    check_sdl(SDL_GetDisplayUsableBounds(display_ids[display_number], &bounds), "get display usable bounds");
+    check_sdl(SDL_GetDisplayUsableBounds(display_id, &bounds), "get display usable bounds");
 
     SDL_free(display_ids);
 
@@ -478,8 +490,9 @@ void Display::print_verbose_info() {
   const char* renderer_name = SDL_GetRendererName(renderer_);
   std::cout << "SDL renderer:          " << (renderer_name ? renderer_name : "unknown") << std::endl;
 
-  SDL_DisplayID display_id = SDL_GetDisplayForWindow(window_);
+  const SDL_DisplayID display_id = SDL_GetDisplayForWindow(window_);
   std::cout << "SDL display ID:        " << display_id << std::endl;
+  std::cout << "SDL display name:      " << SDL_GetDisplayName(display_id) << std::endl;
 
   const SDL_DisplayMode* desktop_display_mode = SDL_GetDesktopDisplayMode(display_id);
   if (desktop_display_mode) {
@@ -493,11 +506,11 @@ void Display::print_verbose_info() {
     return string_sprintf("%s (%d bpp)", SDL_GetPixelFormatName(pixel_format), SDL_BITSPERPIXEL(pixel_format));
   };
 
-  SDL_PixelFormat window_pixel_format = SDL_GetWindowPixelFormat(window_);
+  const SDL_PixelFormat window_pixel_format = SDL_GetWindowPixelFormat(window_);
   std::cout << "SDL window px format:  " << stringify_format_and_bpp(window_pixel_format) << std::endl;
 
-  SDL_PropertiesID props = SDL_GetTextureProperties(video_texture_linear_);
-  SDL_PixelFormat video_pixel_format = static_cast<SDL_PixelFormat>(SDL_GetNumberProperty(props, SDL_PROP_TEXTURE_FORMAT_NUMBER, SDL_PIXELFORMAT_UNKNOWN));
+  const SDL_PropertiesID props = SDL_GetTextureProperties(video_texture_linear_);
+  const SDL_PixelFormat video_pixel_format = static_cast<SDL_PixelFormat>(SDL_GetNumberProperty(props, SDL_PROP_TEXTURE_FORMAT_NUMBER, SDL_PIXELFORMAT_UNKNOWN));
   std::cout << "SDL video px format:   " << stringify_format_and_bpp(video_pixel_format) << std::endl;
 
   std::cout << "FFmpeg version:        " << av_version_info() << std::endl;

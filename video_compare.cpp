@@ -167,7 +167,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                            video_decoders_[RIGHT]->color_range(),
                                                            RIGHT,
                                                            determine_sws_flags(initial_fast_input_alignment_))},
-      display_{std::make_unique<Display>(config.display_number,
+      display_{std::make_unique<Display>(config.display_id,
                                          config.display_mode,
                                          config.verbose,
                                          config.fit_window_to_usable_bounds,

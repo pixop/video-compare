@@ -40,7 +40,7 @@ struct VideoCompareConfig {
   bool bilinear_texture_filtering{false};
   bool disable_auto_filters{false};
 
-  int display_number{0};
+  int display_id{1};
   std::tuple<int, int> window_size{-1, -1};
 
   Display::Mode display_mode{Display::Mode::SPLIT};

@@ -65,7 +65,7 @@ class Display {
   }
 
  private:
-  const int display_number_;
+  const int display_id_;
   const Mode mode_;
   const bool fit_window_to_usable_bounds_;
   const bool high_dpi_allowed_;
@@ -248,7 +248,7 @@ class Display {
   void update_playback_speed(const int playback_speed_level);
 
  public:
-  Display(const int display_number,
+  Display(const int display_id,
           const Mode mode,
           const bool verbose,
           const bool fit_window_to_usable_bounds,
