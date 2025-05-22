@@ -222,7 +222,7 @@ as PNGs.
 ### Requirements
 
 Requires FFmpeg headers and development libraries to be installed, along with SDL3 and
-its TrueType font rendering add on (libsdl3_ttf).
+its TrueType font rendering add on (SDL_ttf 3.0).
 
 On Debian GNU/Linux the required development packages can be installed via `apt`:
 
