@@ -335,7 +335,7 @@ int main(int argc, char** argv) {
         const std::regex display_id_re("(\\d*)");
 
         if (!std::regex_match(display_id_arg, display_id_re)) {
-          throw std::logic_error{"Cannot parse display ID argument (required format: [number], e.g. 1, 2 or 3)"};
+          throw std::logic_error{"Cannot parse display ID argument (required format: [id], e.g. 1, 2 or 3)"};
         }
 
         config.display_id = std::stoi(display_id_arg);
@@ -422,7 +422,7 @@ int main(int argc, char** argv) {
         const std::regex frame_buffer_size_re("(\\d*)");
 
         if (!std::regex_match(frame_buffer_size_arg, frame_buffer_size_re)) {
-          throw std::logic_error{"Cannot parse frame buffer size (required format: [number], e.g. 10, 70 or 150)"};
+          throw std::logic_error{"Cannot parse frame buffer size (required format: [size], e.g. 10, 70 or 150)"};
         }
 
         config.frame_buffer_size = std::stoi(frame_buffer_size_arg);
