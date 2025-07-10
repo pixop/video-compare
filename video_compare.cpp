@@ -93,11 +93,11 @@ static inline AVPixelFormat determine_pixel_format(const VideoCompareConfig& con
 }
 
 static inline int determine_sws_flags(const bool fast) {
-  return fast ? SWS_FAST_BILINEAR : SWS_BICUBIC;
+  return fast ? SWS_FAST_BILINEAR : (SWS_BICUBIC | SWS_FULL_CHR_H_INT | SWS_ACCURATE_RND);
 }
 
-static inline bool use_fast_input_alignment(const VideoCompareConfig& config, const VideoFilterer* left_filterer, const VideoFilterer* right_filterer) {
-  return config.fast_input_alignment || ((left_filterer->dest_width() == right_filterer->dest_width()) && (left_filterer->dest_height() == right_filterer->dest_height()));
+static inline bool use_fast_input_alignment(const VideoCompareConfig& config) {
+  return config.fast_input_alignment;
 }
 
 static void sleep_for_ms(const uint32_t ms) {
@@ -145,7 +145,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                        config.disable_auto_filters)},
       max_width_{std::max(video_filterers_[LEFT]->dest_width(), video_filterers_[RIGHT]->dest_width())},
       max_height_{std::max(video_filterers_[LEFT]->dest_height(), video_filterers_[RIGHT]->dest_height())},
-      initial_fast_input_alignment_{use_fast_input_alignment(config, video_filterers_[LEFT].get(), video_filterers_[RIGHT].get())},
+      initial_fast_input_alignment_{use_fast_input_alignment(config)},
       shortest_duration_{std::min(demuxers_[LEFT]->duration(), demuxers_[RIGHT]->duration()) * AV_TIME_TO_SEC},
       format_converters_{std::make_unique<FormatConverter>(video_filterers_[LEFT]->dest_width(),
                                                            video_filterers_[LEFT]->dest_height(),
