@@ -43,7 +43,20 @@ ifneq "$(wildcard /usr/include/ffmpeg)" ""
   CXXFLAGS += -I/usr/include/ffmpeg
 endif
 
-LDLIBS += -lavformat -lavcodec -lavfilter -lavutil -lswscale -lswresample -lSDL2 -lSDL2_ttf
+# Default: don't use pkg-config unless user explicitly enables it
+# Usage: make USE_PKG_CONFIG=1
+USE_PKG_CONFIG ?= 0
+
+ifeq ($(USE_PKG_CONFIG),1)
+  # Use pkg-config to get the appropriate flags for FFmpeg libraries
+  LDLIBS += $(shell pkg-config --libs libavformat libavcodec libavfilter libavutil libswscale libswresample)
+else
+  # Fallback to a fixed order of FFmpeg libraries
+  LDLIBS += -lavformat -lavcodec -lavfilter -lavutil -lswscale -lswresample
+endif
+
+# SDL2 libraries are always linked
+LDLIBS += -lSDL2 -lSDL2_ttf
 
 src = $(wildcard *.cpp)
 obj = $(src:.cpp=.o)
