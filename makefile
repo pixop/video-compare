@@ -49,14 +49,11 @@ USE_PKG_CONFIG ?= 0
 
 ifeq ($(USE_PKG_CONFIG),1)
   # Use pkg-config to get the appropriate flags for FFmpeg libraries
-  LDLIBS += $(shell pkg-config --libs libavformat libavcodec libavfilter libavutil libswscale libswresample)
+  LDLIBS += $(shell pkg-config --libs libavformat libavcodec libavfilter libavutil libswscale libswresample sdl2 SDL2_ttf)
 else
   # Fallback to a fixed order of FFmpeg libraries
-  LDLIBS += -lavformat -lavcodec -lavfilter -lavutil -lswscale -lswresample
+  LDLIBS += -lavformat -lavcodec -lavfilter -lavutil -lswscale -lswresample -lSDL2 -lSDL2_ttf
 endif
-
-# SDL2 libraries are always linked
-LDLIBS += -lSDL2 -lSDL2_ttf
 
 src = $(wildcard *.cpp)
 obj = $(src:.cpp=.o)
