@@ -47,7 +47,7 @@ endif
 USE_PKG_CONFIG ?= 0
 
 ifeq ($(USE_PKG_CONFIG),1)
-  LDLIBS += $(shell pkg-config --libs libavformat libavcodec libavfilter libavutil libswscale libswresample sdl3 SDL3_ttf)
+  LDLIBS += $(shell pkg-config --libs libavformat libavcodec libavfilter libavutil libswscale libswresample sdl3 sdl3-ttf)
 else
   LDLIBS += -lavformat -lavcodec -lavfilter -lavutil -lswscale -lswresample -lSDL3_ttf -lSDL3
 endif
