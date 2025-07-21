@@ -256,7 +256,7 @@ int main(int argc, char** argv) {
          {"verbose", {"-v", "--verbose"}, "enable verbose output, including information such as library versions and rendering details", 0},
          {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
          {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
-         {"fast-alignment", {"-F", "--fast-alignment"}, "toggle faster bilinear scaling for aligning input source resolutions, replacing higher-quality bicubic interpolation when resolutions differ", 0},
+         {"fast-alignment", {"-F", "--fast-alignment"}, "toggle fast bilinear scaling for aligning input source resolutions, replacing high-quality bicubic and chroma-accurate interpolation", 0},
          {"bilinear-texture", {"-I", "--bilinear-texture"}, "toggle bilinear video texture interpolation, replacing nearest-neighbor filtering", 0},
          {"display-id", {"-p", "--display-id"}, "open main window on specific display (e.g. 1, 2 or 3), default is 1", 1},
          {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
