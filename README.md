@@ -232,6 +232,12 @@ On Debian GNU/Linux the required development packages can be installed via `apt`
 apt install libavformat-dev libavcodec-dev libavfilter-dev libavutil-dev libswscale-dev libswresample-dev libsdl2-dev libsdl2-ttf-dev
 ```
 
+On Fedora Linux the required development packages can be installed via `dnf`:
+
+```sh
+dnf install make automake gcc gcc-c++ ffmpeg-devel SDL2_ttf SDL2_ttf-devel
+```
+
 ### Instructions
 
 Compile the source code via GNU Make:
@@ -240,7 +246,7 @@ Compile the source code via GNU Make:
 make
 ```
 
-The linked `video-compare` executable will be created in the soure code directory. To perform a system wide installation:
+The linked `video-compare` executable will be created in the source code directory. To perform a system wide installation:
 
 ```sh
 make install
