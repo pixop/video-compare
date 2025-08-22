@@ -4,6 +4,7 @@
 #include <atomic>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
@@ -970,6 +971,221 @@ void Display::render_help() {
   }
 }
 
+void Display::render_metadata_overlay() {
+  SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+  SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 3 / 2);
+  SDL_RenderFillRect(renderer_, nullptr);
+
+  const int table_width = drawable_width_ - HELP_TEXT_HORIZONTAL_MARGIN * 2;
+  const int table_x = HELP_TEXT_HORIZONTAL_MARGIN;
+
+  // Calculate the starting Y position to center the table vertically
+  int y;
+
+  if (mode_ == Mode::VSTACK && metadata_total_height_ < drawable_height_ / 2) {
+    y = (drawable_height_ / 2 - metadata_total_height_) / 2;
+  } else if (mode_ != Mode::VSTACK && metadata_total_height_ < drawable_height_) {
+    y = (drawable_height_ - metadata_total_height_) / 2;
+  } else {
+    y = metadata_y_offset_ + 10;
+  }
+
+  for (size_t i = 0; i < metadata_textures_.size(); i++) {
+    int w, h;
+    SDL_QueryTexture(metadata_textures_[i], nullptr, nullptr, &w, &h);
+
+    int x_offset = (table_width - w) / 2;
+
+    SDL_Rect screen_area = {table_x + x_offset, y, w, h};
+    SDL_RenderCopy(renderer_, metadata_textures_[i], nullptr, &screen_area);
+
+    y += h + HELP_TEXT_LINE_SPACING;
+  }
+}
+
+void Display::update_metadata_text(const std::string& left_metadata, const std::string& right_metadata) {
+  constexpr char TOKENIZER = ',';
+
+  for (auto texture : metadata_textures_) {
+    SDL_DestroyTexture(texture);
+  }
+  metadata_textures_.clear();
+  metadata_total_height_ = 0;
+
+  auto add_metadata_texture = [&](TTF_Font* font, const std::string& text, bool primary_color, bool is_header) {
+    int h;
+
+    // choose text color based on content type and alternating pattern
+    SDL_Color text_color = is_header ? HELP_TEXT_PRIMARY_COLOR : (primary_color ? HELP_TEXT_PRIMARY_COLOR : HELP_TEXT_ALTERNATE_COLOR);
+
+    // render text with word wrapping to fit available width
+    SDL_Surface* surface = TTF_RenderUTF8_Blended_Wrapped(font, text.c_str(), text_color, drawable_width_ - HELP_TEXT_HORIZONTAL_MARGIN * 2);
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer_, surface);
+    SDL_FreeSurface(surface);
+
+    // get texture dimensions and accumulate total height for scrolling calculations
+    SDL_QueryTexture(texture, nullptr, nullptr, nullptr, &h);
+    metadata_total_height_ += h + HELP_TEXT_LINE_SPACING;
+
+    metadata_textures_.push_back(texture);
+  };
+
+  // parse metadata strings into structured data
+  auto parse_metadata = [](const std::string& metadata) -> std::pair<std::map<std::string, std::string>, size_t> {
+    std::map<std::string, std::string> result;
+    std::istringstream iss(metadata);
+    std::string line;
+    size_t max_length = 0;
+
+    while (std::getline(iss, line)) {
+      const size_t colon_pos = line.find(':');
+
+      if (colon_pos != std::string::npos) {
+        // extract key and value from "key: value" format
+        std::string key = line.substr(0, colon_pos);
+        std::string value = line.substr(colon_pos + 1);
+
+        // trim whitespace from both key and value
+        key.erase(0, key.find_first_not_of(" \t"));
+        key.erase(key.find_last_not_of(" \t") + 1);
+        value.erase(0, value.find_first_not_of(" \t"));
+        value.erase(value.find_last_not_of(" \t") + 1);
+
+        // comma tokenize value and find max length among all tokens
+        std::vector<std::string> tokens = string_split(value, TOKENIZER);
+        for (const auto& token : tokens) {
+          max_length = std::max(max_length, token.length());
+        }
+
+        result[key] = value;
+      }
+    }
+    return {result, max_length};
+  };
+
+  auto left_data = parse_metadata(left_metadata);
+  auto right_data = parse_metadata(right_metadata);
+
+  const std::vector<std::string> properties = {"Resolution",
+                                               "Display Aspect Ratio",
+                                               "Duration",
+                                               "Frame Rate",
+                                               "Field Order",
+                                               "Codec",
+                                               "Hardware Acceleration",
+                                               "Pixel Format",
+                                               "Color Space",
+                                               "Color Primaries",
+                                               "Transfer Curve",
+                                               "Color Range",
+                                               "Container",
+                                               "File Size",
+                                               "Bit Rate",
+                                               "Filters"};
+
+  int longest_property = 0;
+  for (const auto& prop : properties) {
+    if (static_cast<int>(prop.length()) > longest_property) {
+      longest_property = static_cast<int>(prop.length());
+    }
+  }
+
+  // calculate available display width (accounting for margins)
+  const int available_width = drawable_width_ - HELP_TEXT_HORIZONTAL_MARGIN * 2;
+
+  // dynamic column width calculation
+  constexpr int spacing = 2;  // minimum spacing between columns for readability
+
+  // calculate initial column widths based on content
+  int prop_cols = longest_property + spacing;
+  int left_cols = left_data.second + spacing;
+  int right_cols = right_data.second + spacing;
+  int total_cols = prop_cols + left_cols + right_cols;
+
+  // determine character widths for both font sizes to choose optimal font
+  const std::string test_text = "FOR COMPUTING THE AVERAGE CHARACTER WIDTHS, WE NEED TO TEST THE WIDTH OF A STRING";
+
+  int char_width_small = 10;
+  int char_width_big = 14;
+
+  int text_width, text_height;
+
+  if (TTF_SizeText(small_font_, test_text.c_str(), &text_width, &text_height) == 0) {
+    char_width_small = text_width / test_text.length() + 1;
+  }
+  if (TTF_SizeText(big_font_, test_text.c_str(), &text_width, &text_height) == 0) {
+    char_width_big = text_width / test_text.length() + 1;
+  }
+
+  // calculate how many characters can fit per line with each font
+  const int max_cols_per_line_big = available_width / char_width_big;
+  const int max_cols_per_line_small = available_width / char_width_small;
+
+  // choose the largest font that can accommodate all columns
+  const int char_width = max_cols_per_line_big >= total_cols ? char_width_big : char_width_small;
+  auto font = max_cols_per_line_big >= total_cols ? big_font_ : small_font_;
+
+  const int max_cols_per_line = available_width / char_width;
+
+  // if content is too wide for the window, proportionally reduce column widths
+  if (total_cols > max_cols_per_line) {
+    const int overshoot = total_cols - max_cols_per_line;
+
+    // distribute the overshoot proportionally across columns
+    // property column gets priority (2x weight) since it's the least important
+    const int prop_cols_overshoot = std::min(prop_cols, overshoot * prop_cols / total_cols * 2);
+    const int left_cols_overshoot = std::max(0, overshoot - prop_cols_overshoot) * left_cols / (left_cols + right_cols);
+    const int right_cols_overshoot = overshoot - prop_cols_overshoot - left_cols_overshoot;
+
+    prop_cols -= prop_cols_overshoot;
+    left_cols -= left_cols_overshoot;
+    right_cols -= right_cols_overshoot;
+  }
+
+  // generate table content
+  TTF_SetFontStyle(font, TTF_STYLE_ITALIC | TTF_STYLE_UNDERLINE);
+  add_metadata_texture(font, string_sprintf("%-*s%-*s%-*s", prop_cols, "", left_cols, "LEFT", right_cols, "RIGHT"), true, false);
+  TTF_SetFontStyle(font, TTF_STYLE_NORMAL);
+
+  bool primary_color = false;
+
+  for (const auto& prop : properties) {
+    std::string prop_value = to_upper_case(prop);
+
+    // extract values for both videos, defaulting to "N/A" if not available
+    std::string left_value = left_data.first.count(prop) ? left_data.first[prop] : "N/A";
+    std::string right_value = right_data.first.count(prop) ? right_data.first[prop] : "N/A";
+
+    // tokenize values by comma
+    std::vector<std::string> left_tokens = string_split(left_value, TOKENIZER);
+    std::vector<std::string> right_tokens = string_split(right_value, TOKENIZER);
+
+    // determine how many lines we need for this property
+    size_t max_tokens = std::max(left_tokens.size(), right_tokens.size());
+
+    for (size_t i = 0; i < max_tokens; i++) {
+      std::string current_prop_value = (i == 0) ? prop_value : "";
+      std::string current_left_value = (i < left_tokens.size()) ? left_tokens[i] : "";
+      std::string current_right_value = (i < right_tokens.size()) ? right_tokens[i] : "";
+
+      // text truncation for narrow columns
+      if (static_cast<int>(current_prop_value.length()) >= prop_cols) {
+        current_prop_value = prop_cols > 1 ? current_prop_value.substr(0, prop_cols - 2) + "… " : "";
+      }
+      if (static_cast<int>(current_left_value.length()) >= left_cols) {
+        current_left_value = "…" + current_left_value.substr(current_left_value.length() - left_cols + 2) + " ";
+      }
+      if (static_cast<int>(current_right_value.length()) >= right_cols) {
+        current_right_value = "…" + current_right_value.substr(current_right_value.length() - right_cols + 2) + " ";
+      }
+
+      add_metadata_texture(font, string_sprintf("%-*s%-*s%-*s", prop_cols, current_prop_value.c_str(), left_cols, current_left_value.c_str(), right_cols, current_right_value.c_str()), primary_color, false);
+
+      primary_color = !primary_color;
+    }
+  }
+}
+
 SDL_Rect Display::get_left_selection_rect() const {
   const int x = std::min(selection_start_.x(), selection_end_.x());
   const int y = std::min(selection_start_.y(), selection_end_.y());
@@ -1545,6 +1761,10 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
   draw_selection_rect();
 
+  if (show_metadata_) {
+    render_metadata_overlay();
+  }
+
   if (show_help_) {
     render_help();
   }
@@ -1731,6 +1951,12 @@ void Display::input() {
           help_y_offset_ = std::max(help_y_offset_, drawable_height_ - help_total_height_ - static_cast<int>(help_textures_.size()) * HELP_TEXT_LINE_SPACING);
           help_y_offset_ = std::min(help_y_offset_, 0);
         }
+
+        if (show_metadata_) {
+          metadata_y_offset_ += (-event_.motion.yrel * metadata_total_height_ * 3) / drawable_height_;
+          metadata_y_offset_ = std::max(metadata_y_offset_, drawable_height_ - metadata_total_height_ - static_cast<int>(metadata_textures_.size()) * HELP_TEXT_LINE_SPACING);
+          metadata_y_offset_ = std::min(metadata_y_offset_, 0);
+        }
         break;
       case SDL_MOUSEBUTTONDOWN:
         if (event_.button.button == SDL_BUTTON_LEFT && save_selected_area_ && selection_state_ == SelectionState::NONE) {
@@ -1833,6 +2059,8 @@ void Display::input() {
               } else {
                 std::cout << "No valid timestamp found in clipboard." << std::endl;
               }
+            } else {
+                show_metadata_ = !show_metadata_;
             }
             break;
           }

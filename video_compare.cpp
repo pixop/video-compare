@@ -10,6 +10,7 @@
 #include "string_utils.h"
 extern "C" {
 #include <libavutil/imgutils.h>
+#include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
 }
 
@@ -210,6 +211,31 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 
   dump_video_info(LEFT, config.left.file_name.c_str());
   dump_video_info(RIGHT, config.right.file_name.c_str());
+
+  // Initialize metadata overlay
+  auto collect_metadata = [&](const Side side) -> std::string {
+    const std::string dimensions = string_sprintf("%dx%d", video_decoders_[side]->width(), video_decoders_[side]->height());
+
+    std::string aspect_ratio;
+
+    if (video_decoders_[side]->is_anamorphic()) {
+      const AVRational display_aspect_ratio = video_decoders_[side]->display_aspect_ratio();
+      aspect_ratio = string_sprintf("%d:%d", display_aspect_ratio.num, display_aspect_ratio.den);
+    } else {
+      aspect_ratio = "1:1";
+    }
+
+    return string_sprintf(
+        "Resolution: %s\nDisplay Aspect Ratio: %s\nCodec: %s\nFrame Rate: %s\nField Order: %s\nDuration: %s\nBit Rate: %s\nFile Size: %s\nContainer: %s\nPixel Format: %s\nColor Space: %s\nColor Primaries: %s\nTransfer "
+        "Curve: %s\nColor Range: %s\nHardware Acceleration: %s\nFilters: %s",
+        dimensions.c_str(), aspect_ratio.c_str(), video_decoders_[side].get()->codec()->name, stringify_frame_rate_only(demuxers_[side]->guess_frame_rate()).c_str(),
+        stringify_field_order(video_decoders_[side]->codec_context()->field_order, "unknown").c_str(), format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC).c_str(), stringify_bit_rate(demuxers_[side]->bit_rate(), 1).c_str(),
+        stringify_file_size(demuxers_[side]->file_size(), 2).c_str(), demuxers_[side]->format_name().c_str(), av_get_pix_fmt_name(video_decoders_[side]->pixel_format()),
+        av_color_space_name(video_decoders_[side]->color_space()), av_color_primaries_name(video_decoders_[side]->color_primaries()), av_color_transfer_name(video_decoders_[side]->color_trc()),
+        av_color_range_name(video_decoders_[side]->color_range()), video_decoders_[side]->is_hw_accelerated() ? video_decoders_[side]->hw_accel_name().c_str() : "None", video_filterers_[side]->filter_description().c_str());
+  };
+
+  display_->update_metadata_text(collect_metadata(LEFT), collect_metadata(RIGHT));
 
   update_decoder_mode(time_ms_to_av_time(time_shift_ms_));
 }

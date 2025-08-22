@@ -93,6 +93,14 @@ std::string to_lower_case(const std::string& str) {
   return tmp;
 }
 
+std::string to_upper_case(const std::string& str) {
+  std::string tmp;
+
+  std::transform(str.begin(), str.end(), std::back_inserter(tmp), ::toupper);
+
+  return tmp;
+}
+
 inline bool ci_compare_char(char a, char b) {
   return (::tolower(a) == b);
 }
@@ -103,45 +111,45 @@ std::string::const_iterator string_ci_find(std::string& str, const std::string& 
   return (search(str.cbegin(), str.cend(), lower_case_query.cbegin(), lower_case_query.cend(), ci_compare_char));
 }
 
-std::string stringify_frame_rate(const AVRational frame_rate, const AVFieldOrder field_order) noexcept {
-  static const std::string postfix = "fps";
-
-  // format field order
-  std::string field_order_str;
-
+std::string stringify_field_order(const AVFieldOrder field_order, const std::string& unknown) noexcept {
   switch (field_order) {
     case AV_FIELD_PROGRESSIVE:
-      field_order_str = " (progressive)";
-      break;
+      return "progressive";
     case AV_FIELD_TT:
-      field_order_str = " (top first)";
-      break;
+      return "top first";
     case AV_FIELD_BB:
-      field_order_str = " (bottom first)";
-      break;
+      return "bottom first";
     case AV_FIELD_TB:
-      field_order_str = " (top coded first, swapped)";
-      break;
+      return "top coded first, swapped";
     case AV_FIELD_BT:
-      field_order_str = " (bottom coded first, swapped)";
-      break;
+      return "bottom coded first, swapped";
     default:
-      field_order_str = "";
+      return unknown;
   }
+}
+
+std::string stringify_frame_rate_only(const AVRational frame_rate) noexcept {
+  static const std::string postfix = "fps";
 
   // formatting code borrowed (with love!) from libavformat/dump.c
   const double d = av_q2d(frame_rate);
   const uint64_t v = lrintf(d * 100);
 
   if (!v) {
-    return string_sprintf("%1.4f %s%s", d, postfix.c_str(), field_order_str.c_str());
+    return string_sprintf("%1.4f %s", d, postfix.c_str());
   } else if (v % 100) {
-    return string_sprintf("%3.2f %s%s", d, postfix.c_str(), field_order_str.c_str());
+    return string_sprintf("%3.2f %s", d, postfix.c_str());
   } else if (v % (100 * 1000)) {
-    return string_sprintf("%1.0f %s%s", d, postfix.c_str(), field_order_str.c_str());
+    return string_sprintf("%1.0f %s", d, postfix.c_str());
   }
 
-  return string_sprintf("%1.0fk %s%s", d / 1000, postfix.c_str(), field_order_str.c_str());
+  return string_sprintf("%1.0fk %s", d / 1000, postfix.c_str());
+}
+
+std::string stringify_frame_rate(const AVRational frame_rate, const AVFieldOrder field_order) noexcept {
+  const auto field_order_str = stringify_field_order(field_order);
+
+  return stringify_frame_rate_only(frame_rate) + (field_order_str.empty() ? "" : " (" + field_order_str + ")");
 }
 
 std::string stringify_decoder(const VideoDecoder* video_decoder) noexcept {

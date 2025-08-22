@@ -37,7 +37,13 @@ float parse_timestamps_to_seconds(const std::string& timestamp);
 
 std::string to_lower_case(const std::string& str);
 
+std::string to_upper_case(const std::string& str);
+
 std::string::const_iterator string_ci_find(std::string& str, const std::string& query);
+
+std::string stringify_field_order(const AVFieldOrder field_order, const std::string& unknown = "") noexcept;
+
+std::string stringify_frame_rate_only(const AVRational frame_rate) noexcept;
 
 std::string stringify_frame_rate(const AVRational frame_rate, const AVFieldOrder field_order) noexcept;
 

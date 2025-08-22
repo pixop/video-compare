@@ -87,6 +87,7 @@ class Display {
   float font_scale_;
 
   bool show_help_{false};
+  bool show_metadata_{false};
   bool quit_{false};
   bool play_{true};
   Loop buffer_play_loop_mode_{OFF};
@@ -179,6 +180,12 @@ class Display {
   int saved_image_number_{1};
   int saved_selected_image_number_{1};
 
+  std::vector<SDL_Texture*> metadata_textures_;
+  int metadata_total_height_{0};
+  int metadata_y_offset_{0};
+  std::string left_metadata_text_;
+  std::string right_metadata_text_;
+
   std::vector<SDL_Texture*> help_textures_;
   int help_total_height_{0};
   int help_y_offset_{0};
@@ -223,6 +230,7 @@ class Display {
   float compute_psnr(const float* left_plane, const float* right_plane);
 
   void render_help();
+  void render_metadata_overlay();
 
   SDL_Rect get_left_selection_rect() const;
   void draw_selection_rect();
@@ -288,4 +296,5 @@ class Display {
   bool get_tick_playback() const;
   bool get_possibly_tick_playback() const;
   bool get_show_fps() const;
+  void update_metadata_text(const std::string& left_metadata, const std::string& right_metadata);
 };
