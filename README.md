@@ -230,7 +230,7 @@ upgrade their existing SDL2 installation before compiling.
 On Debian GNU/Linux the required development packages can be installed via `apt`:
 
 ```sh
-apt install libavformat-dev libavcodec-dev libavfilter-dev libavutil-dev libswscale-dev libswresample-dev libsdl2-dev libsdl2-ttf-dev
+apt install build-essential libavformat-dev libavcodec-dev libavfilter-dev libavutil-dev libswscale-dev libswresample-dev libsdl2-dev libsdl2-ttf-dev
 ```
 
 On Fedora Linux the required development packages can be installed via `dnf`:
