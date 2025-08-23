@@ -236,7 +236,7 @@ apt install build-essential libavformat-dev libavcodec-dev libavfilter-dev libav
 On Fedora Linux the required development packages can be installed via `dnf`:
 
 ```sh
-sudo dnf install make gcc-c++ ffmpeg-devel SDL2-devel SDL2_ttf-devel
+dnf install make gcc-c++ ffmpeg-devel SDL2-devel SDL2_ttf-devel
 ```
 
 ### Instructions
