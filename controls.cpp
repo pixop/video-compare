@@ -1,7 +1,7 @@
 #include "controls.h"
 
 static const std::vector<std::pair<std::string, std::string>> controls{{"H", "Toggle on-screen help text for controls"},
-                                                                       {"V", "Toggle video metadata overlay"},
+                                                                       {"V", "Toggle video info overlay"},
                                                                        {"Space", "Toggle play/pause"},
                                                                        {",", "Toggle bidirectional in-buffer loop/pause"},
                                                                        {".", "Toggle forward-only in-buffer loop/pause"},

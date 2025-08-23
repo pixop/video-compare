@@ -159,7 +159,7 @@ see all supported options.
 ## Controls
 
 - H: Toggle on-screen help text for controls
-- V: Toggle video metadata overlay
+- V: Toggle video info overlay
 - Space: Toggle play/pause
 - Comma `,`: Toggle bidirectional in-buffer loop/pause
 - Period `.`: Toggle forward-only in-buffer loop/pause
