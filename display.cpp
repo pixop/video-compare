@@ -1076,8 +1076,7 @@ void Display::update_metadata_text(const std::string& left_metadata_text, const 
   auto left_data = parse_metadata(left_metadata_text);
   auto right_data = parse_metadata(right_metadata_text);
 
-  const std::vector<std::string> properties = {"Resolution",     "Display Aspect Ratio", "Duration",  "Frame Rate", "Field Order", "Codec",  "Hardware Acceleration", "Pixel Format", "Color Space", "Color Primaries",
-                                               "Transfer Curve", "Color Range",          "Container", "File Size",  "Bit Rate",    "Filters"};
+  const std::vector<std::string> properties(MetadataProperties::ALL, MetadataProperties::ALL + MetadataProperties::COUNT);
 
   int longest_property = 0;
   for (const auto& prop : properties) {

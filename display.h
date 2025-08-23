@@ -12,6 +12,32 @@ extern "C" {
 #include <libavutil/frame.h>
 }
 
+// Video metadata property names - keep in sync with display order
+namespace MetadataProperties {
+constexpr const char* RESOLUTION = "Resolution";
+constexpr const char* DISPLAY_ASPECT_RATIO = "Display Aspect Ratio";
+constexpr const char* DURATION = "Duration";
+constexpr const char* FRAME_RATE = "Frame Rate";
+constexpr const char* FIELD_ORDER = "Field Order";
+constexpr const char* CODEC = "Codec";
+constexpr const char* HARDWARE_ACCELERATION = "Hardware Acceleration";
+constexpr const char* PIXEL_FORMAT = "Pixel Format";
+constexpr const char* COLOR_SPACE = "Color Space";
+constexpr const char* COLOR_PRIMARIES = "Color Primaries";
+constexpr const char* TRANSFER_CURVE = "Transfer Curve";
+constexpr const char* COLOR_RANGE = "Color Range";
+constexpr const char* CONTAINER = "Container";
+constexpr const char* FILE_SIZE = "File Size";
+constexpr const char* BIT_RATE = "Bit Rate";
+constexpr const char* FILTERS = "Filters";
+
+// Array for iteration (maintains order)
+constexpr const char* const ALL[] = {RESOLUTION,     DISPLAY_ASPECT_RATIO, DURATION,  FRAME_RATE, FIELD_ORDER, CODEC,  HARDWARE_ACCELERATION, PIXEL_FORMAT, COLOR_SPACE, COLOR_PRIMARIES,
+                                     TRANSFER_CURVE, COLOR_RANGE,          CONTAINER, FILE_SIZE,  BIT_RATE,    FILTERS};
+
+constexpr size_t COUNT = sizeof(ALL) / sizeof(ALL[0]);
+}  // namespace MetadataProperties
+
 struct SDL {
   SDL();
   ~SDL();

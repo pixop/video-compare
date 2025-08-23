@@ -201,10 +201,22 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       aspect_ratio = string_sprintf(" [DAR %d:%d]", display_aspect_ratio.num, display_aspect_ratio.den);
     }
 
-    auto info = string_sprintf("Input: %9s%s, %s, %s, %s, %s, %s, %s, %s, %s, %s", dimensions.c_str(), aspect_ratio.c_str(), format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC).c_str(),
-                               stringify_frame_rate(demuxers_[side]->guess_frame_rate(), video_decoders_[side]->codec_context()->field_order).c_str(), stringify_decoder(video_decoders_[side].get()).c_str(),
-                               pixel_format_and_color_space.c_str(), demuxers_[side]->format_name().c_str(), file_name.c_str(), stringify_file_size(demuxers_[side]->file_size(), 2).c_str(),
-                               stringify_bit_rate(demuxers_[side]->bit_rate(), 1).c_str(), video_filterers_[side]->filter_description().c_str());
+    // clang-format off
+    auto info = string_sprintf(
+      "Input: %9s%s, %s, %s, %s, %s, %s, %s, %s, %s, %s",
+      dimensions.c_str(),
+      aspect_ratio.c_str(),
+      format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC).c_str(),
+      stringify_frame_rate(demuxers_[side]->guess_frame_rate(), video_decoders_[side]->codec_context()->field_order).c_str(),
+      stringify_decoder(video_decoders_[side].get()).c_str(),
+      pixel_format_and_color_space.c_str(),
+      demuxers_[side]->format_name().c_str(),
+      file_name.c_str(),
+      stringify_file_size(demuxers_[side]->file_size(), 2).c_str(),
+      stringify_bit_rate(demuxers_[side]->bit_rate(), 1).c_str(),
+      video_filterers_[side]->filter_description().c_str()
+    );
+    // clang-format on
 
     sa_log_info(side, info);
   };
@@ -225,14 +237,27 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       aspect_ratio = "1:1";
     }
 
+    // clang-format off
     return string_sprintf(
-        "Resolution: %s\nDisplay Aspect Ratio: %s\nCodec: %s\nFrame Rate: %s\nField Order: %s\nDuration: %s\nBit Rate: %s\nFile Size: %s\nContainer: %s\nPixel Format: %s\nColor Space: %s\nColor Primaries: %s\nTransfer "
-        "Curve: %s\nColor Range: %s\nHardware Acceleration: %s\nFilters: %s",
-        dimensions.c_str(), aspect_ratio.c_str(), video_decoders_[side].get()->codec()->name, stringify_frame_rate_only(demuxers_[side]->guess_frame_rate()).c_str(),
-        stringify_field_order(video_decoders_[side]->codec_context()->field_order, "unknown").c_str(), format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC).c_str(), stringify_bit_rate(demuxers_[side]->bit_rate(), 1).c_str(),
-        stringify_file_size(demuxers_[side]->file_size(), 2).c_str(), demuxers_[side]->format_name().c_str(), av_get_pix_fmt_name(video_decoders_[side]->pixel_format()), av_color_space_name(video_decoders_[side]->color_space()),
-        av_color_primaries_name(video_decoders_[side]->color_primaries()), av_color_transfer_name(video_decoders_[side]->color_trc()), av_color_range_name(video_decoders_[side]->color_range()),
-        video_decoders_[side]->is_hw_accelerated() ? video_decoders_[side]->hw_accel_name().c_str() : "None", video_filterers_[side]->filter_description().c_str());
+      "%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s",
+      MetadataProperties::RESOLUTION, dimensions.c_str(),
+      MetadataProperties::DISPLAY_ASPECT_RATIO, aspect_ratio.c_str(),
+      MetadataProperties::CODEC, video_decoders_[side].get()->codec()->name,
+      MetadataProperties::FRAME_RATE, stringify_frame_rate_only(demuxers_[side]->guess_frame_rate()).c_str(),
+      MetadataProperties::FIELD_ORDER, stringify_field_order(video_decoders_[side]->codec_context()->field_order, "unknown").c_str(),
+      MetadataProperties::DURATION, format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC).c_str(),
+      MetadataProperties::BIT_RATE, stringify_bit_rate(demuxers_[side]->bit_rate(), 1).c_str(),
+      MetadataProperties::FILE_SIZE, stringify_file_size(demuxers_[side]->file_size(), 2).c_str(),
+      MetadataProperties::CONTAINER, demuxers_[side]->format_name().c_str(),
+      MetadataProperties::PIXEL_FORMAT, av_get_pix_fmt_name(video_decoders_[side]->pixel_format()),
+      MetadataProperties::COLOR_SPACE, av_color_space_name(video_decoders_[side]->color_space()),
+      MetadataProperties::COLOR_PRIMARIES, av_color_primaries_name(video_decoders_[side]->color_primaries()),
+      MetadataProperties::TRANSFER_CURVE, av_color_transfer_name(video_decoders_[side]->color_trc()),
+      MetadataProperties::COLOR_RANGE, av_color_range_name(video_decoders_[side]->color_range()),
+      MetadataProperties::HARDWARE_ACCELERATION, video_decoders_[side]->is_hw_accelerated() ? video_decoders_[side]->hw_accel_name().c_str() : "None",
+      MetadataProperties::FILTERS, video_filterers_[side]->filter_description().c_str()
+    );
+    // clang-format on
   };
 
   display_->update_metadata_text(collect_metadata(LEFT), collect_metadata(RIGHT));
