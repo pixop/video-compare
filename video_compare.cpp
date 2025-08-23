@@ -230,9 +230,9 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
         "Curve: %s\nColor Range: %s\nHardware Acceleration: %s\nFilters: %s",
         dimensions.c_str(), aspect_ratio.c_str(), video_decoders_[side].get()->codec()->name, stringify_frame_rate_only(demuxers_[side]->guess_frame_rate()).c_str(),
         stringify_field_order(video_decoders_[side]->codec_context()->field_order, "unknown").c_str(), format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC).c_str(), stringify_bit_rate(demuxers_[side]->bit_rate(), 1).c_str(),
-        stringify_file_size(demuxers_[side]->file_size(), 2).c_str(), demuxers_[side]->format_name().c_str(), av_get_pix_fmt_name(video_decoders_[side]->pixel_format()),
-        av_color_space_name(video_decoders_[side]->color_space()), av_color_primaries_name(video_decoders_[side]->color_primaries()), av_color_transfer_name(video_decoders_[side]->color_trc()),
-        av_color_range_name(video_decoders_[side]->color_range()), video_decoders_[side]->is_hw_accelerated() ? video_decoders_[side]->hw_accel_name().c_str() : "None", video_filterers_[side]->filter_description().c_str());
+        stringify_file_size(demuxers_[side]->file_size(), 2).c_str(), demuxers_[side]->format_name().c_str(), av_get_pix_fmt_name(video_decoders_[side]->pixel_format()), av_color_space_name(video_decoders_[side]->color_space()),
+        av_color_primaries_name(video_decoders_[side]->color_primaries()), av_color_transfer_name(video_decoders_[side]->color_trc()), av_color_range_name(video_decoders_[side]->color_range()),
+        video_decoders_[side]->is_hw_accelerated() ? video_decoders_[side]->hw_accel_name().c_str() : "None", video_filterers_[side]->filter_description().c_str());
   };
 
   display_->update_metadata_text(collect_metadata(LEFT), collect_metadata(RIGHT));
