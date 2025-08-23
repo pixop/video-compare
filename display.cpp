@@ -975,7 +975,7 @@ void Display::render_metadata_overlay() {
   // Check if swap state has changed and refresh metadata if needed
   if (swap_left_right_ != last_swap_left_right_state_) {
     last_swap_left_right_state_ = swap_left_right_;
-    update_metadata_text(std::string(right_metadata_text_), std::string(left_metadata_text_));
+    update_metadata(right_metadata_, left_metadata_);
   }
 
   SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
@@ -1009,10 +1009,10 @@ void Display::render_metadata_overlay() {
   }
 }
 
-void Display::update_metadata_text(const std::string& left_metadata_text, const std::string& right_metadata_text) {
-  // Store the metadata strings for later use when swapping
-  left_metadata_text_ = left_metadata_text;
-  right_metadata_text_ = right_metadata_text;
+void Display::update_metadata(const VideoMetadata left_metadata, const VideoMetadata right_metadata) {
+  // Store the metadata for later use when swapping
+  left_metadata_ = left_metadata;
+  right_metadata_ = right_metadata;
 
   constexpr char TOKENIZER = ',';
 
@@ -1040,61 +1040,34 @@ void Display::update_metadata_text(const std::string& left_metadata_text, const 
     metadata_textures_.push_back(texture);
   };
 
-  // parse metadata strings into structured data
-  auto parse_metadata = [](const std::string& metadata) -> std::pair<std::map<std::string, std::string>, size_t> {
-    std::map<std::string, std::string> result;
-    std::istringstream iss(metadata);
-    std::string line;
+  // Calculate max length for column sizing
+  auto calculate_max_length = [](const VideoMetadata& metadata) -> size_t {
     size_t max_length = 0;
-
-    while (std::getline(iss, line)) {
-      const size_t colon_pos = line.find(':');
-
-      if (colon_pos != std::string::npos) {
-        // extract key and value from "key: value" format
-        std::string key = line.substr(0, colon_pos);
-        std::string value = line.substr(colon_pos + 1);
-
-        // trim whitespace from both key and value
-        key.erase(0, key.find_first_not_of(" \t"));
-        key.erase(key.find_last_not_of(" \t") + 1);
-        value.erase(0, value.find_first_not_of(" \t"));
-        value.erase(value.find_last_not_of(" \t") + 1);
-
-        // comma tokenize value and find max length among all tokens
-        std::vector<std::string> tokens = string_split(value, TOKENIZER);
-        for (const auto& token : tokens) {
-          max_length = std::max(max_length, token.length());
-        }
-
-        result[key] = value;
+    for (const auto& kv : metadata.properties) {
+      // comma tokenize value and find max length among all tokens
+      std::vector<std::string> tokens = string_split(kv.second, TOKENIZER);
+      for (const auto& token : tokens) {
+        max_length = std::max(max_length, token.length());
       }
     }
-    return {result, max_length};
+    return max_length;
   };
 
-  auto left_data = parse_metadata(left_metadata_text);
-  auto right_data = parse_metadata(right_metadata_text);
+  auto left_max_length = calculate_max_length(left_metadata);
+  auto right_max_length = calculate_max_length(right_metadata);
 
   const std::vector<std::string> properties(MetadataProperties::ALL, MetadataProperties::ALL + MetadataProperties::COUNT);
-
-  int longest_property = 0;
-  for (const auto& prop : properties) {
-    if (static_cast<int>(prop.length()) > longest_property) {
-      longest_property = static_cast<int>(prop.length());
-    }
-  }
 
   // calculate available display width (accounting for margins)
   const int available_width = drawable_width_ - HELP_TEXT_HORIZONTAL_MARGIN * 2;
 
   // dynamic column width calculation
-  constexpr int spacing = 2;  // minimum spacing between columns for readability
+  constexpr int spacing = 2;
 
   // calculate initial column widths based on content
-  int prop_cols = longest_property + spacing;
-  int left_cols = left_data.second + spacing;
-  int right_cols = right_data.second + spacing;
+  int prop_cols = MetadataProperties::LONGEST + spacing;
+  int left_cols = left_max_length + spacing;
+  int right_cols = right_max_length + spacing;
   int total_cols = prop_cols + left_cols + right_cols;
 
   // determine character widths for both font sizes to choose optimal font
@@ -1147,9 +1120,9 @@ void Display::update_metadata_text(const std::string& left_metadata_text, const 
   for (const auto& prop : properties) {
     std::string prop_value = to_upper_case(prop);
 
-    // extract values for both videos, defaulting to "N/A" if not available
-    std::string left_value = left_data.first.count(prop) ? left_data.first[prop] : "N/A";
-    std::string right_value = right_data.first.count(prop) ? right_data.first[prop] : "N/A";
+    // extract values for both videos
+    std::string left_value = left_metadata.get(prop);
+    std::string right_value = right_metadata.get(prop);
 
     // tokenize values by comma
     std::vector<std::string> left_tokens = string_split(left_value, TOKENIZER);

@@ -5,14 +5,15 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
+#include "core_types.h"
 extern "C" {
 #include <libavutil/frame.h>
 }
 
-// Video metadata property names - keep in sync with display order
 namespace MetadataProperties {
 constexpr const char* RESOLUTION = "Resolution";
 constexpr const char* DISPLAY_ASPECT_RATIO = "Display Aspect Ratio";
@@ -31,12 +32,46 @@ constexpr const char* FILE_SIZE = "File Size";
 constexpr const char* BIT_RATE = "Bit Rate";
 constexpr const char* FILTERS = "Filters";
 
-// Array for iteration (maintains order)
 constexpr const char* const ALL[] = {RESOLUTION,     DISPLAY_ASPECT_RATIO, DURATION,  FRAME_RATE, FIELD_ORDER, CODEC,  HARDWARE_ACCELERATION, PIXEL_FORMAT, COLOR_SPACE, COLOR_PRIMARIES,
                                      TRANSFER_CURVE, COLOR_RANGE,          CONTAINER, FILE_SIZE,  BIT_RATE,    FILTERS};
 
 constexpr size_t COUNT = sizeof(ALL) / sizeof(ALL[0]);
+
+// constexpr strlen for char literals
+constexpr size_t cstrlen(const char* s) {
+  size_t n = 0;
+  while (s[n] != '\0') {
+    ++n;
+  }
+  return n;
+}
+
+constexpr size_t longest_label_len() {
+  size_t m = 0;
+  for (size_t i = 0; i < COUNT; ++i) {
+    const size_t len = cstrlen(ALL[i]);
+    if (len > m) {
+      m = len;
+    }
+  }
+  return m;
+}
+
+constexpr size_t LONGEST = longest_label_len();
 }  // namespace MetadataProperties
+
+struct VideoMetadata {
+  std::map<std::string, std::string> properties;
+
+  // Helper method to get a property value with default
+  std::string get(const std::string& key, const std::string& default_value = "N/A") const {
+    auto it = properties.find(key);
+    return it != properties.end() ? it->second : default_value;
+  }
+
+  // Helper method to set a property
+  void set(const std::string& key, const std::string& value) { properties[key] = value; }
+};
 
 struct SDL {
   SDL();
@@ -209,8 +244,8 @@ class Display {
   std::vector<SDL_Texture*> metadata_textures_;
   int metadata_total_height_{0};
   int metadata_y_offset_{0};
-  std::string left_metadata_text_;
-  std::string right_metadata_text_;
+  VideoMetadata left_metadata_;
+  VideoMetadata right_metadata_;
   bool last_swap_left_right_state_{false};
 
   std::vector<SDL_Texture*> help_textures_;
@@ -324,5 +359,5 @@ class Display {
   bool get_possibly_tick_playback() const;
   bool get_show_fps() const;
 
-  void update_metadata_text(const std::string& left_metadata_text, const std::string& right_metadata_text);
+  void update_metadata(const VideoMetadata left_metadata, const VideoMetadata right_metadata);
 };

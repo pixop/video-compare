@@ -225,42 +225,40 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   dump_video_info(RIGHT, config.right.file_name.c_str());
 
   // Initialize metadata overlay
-  auto collect_metadata = [&](const Side side) -> std::string {
+  auto collect_metadata = [&](const Side side) -> VideoMetadata {
+    VideoMetadata metadata;
+
     const std::string dimensions = string_sprintf("%dx%d", video_decoders_[side]->width(), video_decoders_[side]->height());
+    metadata.set(MetadataProperties::RESOLUTION, dimensions);
 
     std::string aspect_ratio;
-
     if (video_decoders_[side]->is_anamorphic()) {
       const AVRational display_aspect_ratio = video_decoders_[side]->display_aspect_ratio();
       aspect_ratio = string_sprintf("%d:%d", display_aspect_ratio.num, display_aspect_ratio.den);
     } else {
       aspect_ratio = "1:1";
     }
+    metadata.set(MetadataProperties::DISPLAY_ASPECT_RATIO, aspect_ratio);
 
-    // clang-format off
-    return string_sprintf(
-      "%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s",
-      MetadataProperties::RESOLUTION, dimensions.c_str(),
-      MetadataProperties::DISPLAY_ASPECT_RATIO, aspect_ratio.c_str(),
-      MetadataProperties::CODEC, video_decoders_[side].get()->codec()->name,
-      MetadataProperties::FRAME_RATE, stringify_frame_rate_only(demuxers_[side]->guess_frame_rate()).c_str(),
-      MetadataProperties::FIELD_ORDER, stringify_field_order(video_decoders_[side]->codec_context()->field_order, "unknown").c_str(),
-      MetadataProperties::DURATION, format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC).c_str(),
-      MetadataProperties::BIT_RATE, stringify_bit_rate(demuxers_[side]->bit_rate(), 1).c_str(),
-      MetadataProperties::FILE_SIZE, stringify_file_size(demuxers_[side]->file_size(), 2).c_str(),
-      MetadataProperties::CONTAINER, demuxers_[side]->format_name().c_str(),
-      MetadataProperties::PIXEL_FORMAT, av_get_pix_fmt_name(video_decoders_[side]->pixel_format()),
-      MetadataProperties::COLOR_SPACE, av_color_space_name(video_decoders_[side]->color_space()),
-      MetadataProperties::COLOR_PRIMARIES, av_color_primaries_name(video_decoders_[side]->color_primaries()),
-      MetadataProperties::TRANSFER_CURVE, av_color_transfer_name(video_decoders_[side]->color_trc()),
-      MetadataProperties::COLOR_RANGE, av_color_range_name(video_decoders_[side]->color_range()),
-      MetadataProperties::HARDWARE_ACCELERATION, video_decoders_[side]->is_hw_accelerated() ? video_decoders_[side]->hw_accel_name().c_str() : "None",
-      MetadataProperties::FILTERS, video_filterers_[side]->filter_description().c_str()
-    );
-    // clang-format on
+    metadata.set(MetadataProperties::CODEC, video_decoders_[side].get()->codec()->name);
+    metadata.set(MetadataProperties::FRAME_RATE, stringify_frame_rate_only(demuxers_[side]->guess_frame_rate()));
+    metadata.set(MetadataProperties::FIELD_ORDER, stringify_field_order(video_decoders_[side]->codec_context()->field_order, "unknown"));
+    metadata.set(MetadataProperties::DURATION, format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC));
+    metadata.set(MetadataProperties::BIT_RATE, stringify_bit_rate(demuxers_[side]->bit_rate(), 1));
+    metadata.set(MetadataProperties::FILE_SIZE, stringify_file_size(demuxers_[side]->file_size(), 2));
+    metadata.set(MetadataProperties::CONTAINER, demuxers_[side]->format_name());
+    metadata.set(MetadataProperties::PIXEL_FORMAT, av_get_pix_fmt_name(video_decoders_[side]->pixel_format()));
+    metadata.set(MetadataProperties::COLOR_SPACE, av_color_space_name(video_decoders_[side]->color_space()));
+    metadata.set(MetadataProperties::COLOR_PRIMARIES, av_color_primaries_name(video_decoders_[side]->color_primaries()));
+    metadata.set(MetadataProperties::TRANSFER_CURVE, av_color_transfer_name(video_decoders_[side]->color_trc()));
+    metadata.set(MetadataProperties::COLOR_RANGE, av_color_range_name(video_decoders_[side]->color_range()));
+    metadata.set(MetadataProperties::HARDWARE_ACCELERATION, video_decoders_[side]->is_hw_accelerated() ? video_decoders_[side]->hw_accel_name() : "None");
+    metadata.set(MetadataProperties::FILTERS, video_filterers_[side]->filter_description());
+
+    return metadata;
   };
 
-  display_->update_metadata_text(collect_metadata(LEFT), collect_metadata(RIGHT));
+  display_->update_metadata(collect_metadata(LEFT), collect_metadata(RIGHT));
 
   update_decoder_mode(time_ms_to_av_time(time_shift_ms_));
 }
