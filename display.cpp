@@ -972,6 +972,12 @@ void Display::render_help() {
 }
 
 void Display::render_metadata_overlay() {
+  // Check if swap state has changed and refresh metadata if needed
+  if (swap_left_right_ != last_swap_left_right_state_) {
+    last_swap_left_right_state_ = swap_left_right_;
+    update_metadata_text(std::string(right_metadata_text_), std::string(left_metadata_text_));
+  }
+
   SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 3 / 2);
   SDL_RenderFillRect(renderer_, nullptr);
@@ -1003,7 +1009,11 @@ void Display::render_metadata_overlay() {
   }
 }
 
-void Display::update_metadata_text(const std::string& left_metadata, const std::string& right_metadata) {
+void Display::update_metadata_text(const std::string& left_metadata_text, const std::string& right_metadata_text) {
+  // Store the metadata strings for later use when swapping
+  left_metadata_text_ = left_metadata_text;
+  right_metadata_text_ = right_metadata_text;
+
   constexpr char TOKENIZER = ',';
 
   for (auto texture : metadata_textures_) {
@@ -1063,25 +1073,11 @@ void Display::update_metadata_text(const std::string& left_metadata, const std::
     return {result, max_length};
   };
 
-  auto left_data = parse_metadata(left_metadata);
-  auto right_data = parse_metadata(right_metadata);
+  auto left_data = parse_metadata(left_metadata_text);
+  auto right_data = parse_metadata(right_metadata_text);
 
-  const std::vector<std::string> properties = {"Resolution",
-                                               "Display Aspect Ratio",
-                                               "Duration",
-                                               "Frame Rate",
-                                               "Field Order",
-                                               "Codec",
-                                               "Hardware Acceleration",
-                                               "Pixel Format",
-                                               "Color Space",
-                                               "Color Primaries",
-                                               "Transfer Curve",
-                                               "Color Range",
-                                               "Container",
-                                               "File Size",
-                                               "Bit Rate",
-                                               "Filters"};
+  const std::vector<std::string> properties = {"Resolution",     "Display Aspect Ratio", "Duration",  "Frame Rate", "Field Order", "Codec",  "Hardware Acceleration", "Pixel Format", "Color Space", "Color Primaries",
+                                               "Transfer Curve", "Color Range",          "Container", "File Size",  "Bit Rate",    "Filters"};
 
   int longest_property = 0;
   for (const auto& prop : properties) {
@@ -1142,7 +1138,7 @@ void Display::update_metadata_text(const std::string& left_metadata, const std::
     right_cols -= right_cols_overshoot;
   }
 
-  // generate table content
+  // generate table header
   TTF_SetFontStyle(font, TTF_STYLE_ITALIC | TTF_STYLE_UNDERLINE);
   add_metadata_texture(font, string_sprintf("%-*s%-*s%-*s", prop_cols, "", left_cols, "LEFT", right_cols, "RIGHT"), true, false);
   TTF_SetFontStyle(font, TTF_STYLE_NORMAL);
@@ -2060,7 +2056,7 @@ void Display::input() {
                 std::cout << "No valid timestamp found in clipboard." << std::endl;
               }
             } else {
-                show_metadata_ = !show_metadata_;
+              show_metadata_ = !show_metadata_;
             }
             break;
           }

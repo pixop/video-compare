@@ -185,6 +185,7 @@ class Display {
   int metadata_y_offset_{0};
   std::string left_metadata_text_;
   std::string right_metadata_text_;
+  bool last_swap_left_right_state_{false};
 
   std::vector<SDL_Texture*> help_textures_;
   int help_total_height_{0};
@@ -296,5 +297,6 @@ class Display {
   bool get_tick_playback() const;
   bool get_possibly_tick_playback() const;
   bool get_show_fps() const;
-  void update_metadata_text(const std::string& left_metadata, const std::string& right_metadata);
+
+  void update_metadata_text(const std::string& left_metadata_text, const std::string& right_metadata_text);
 };
