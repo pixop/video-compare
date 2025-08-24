@@ -88,12 +88,22 @@ int64_t Demuxer::start_time() const {
 
 int Demuxer::rotation() const {
   double theta = 0;
+  const AVStream* stream = format_context_->streams[video_stream_index_];
 
-  uint8_t* displaymatrix = av_stream_get_side_data(format_context_->streams[video_stream_index_], AV_PKT_DATA_DISPLAYMATRIX, nullptr);
+#if LIBAVFORMAT_VERSION_MAJOR >= 62
+  const AVPacketSideData* side_data = av_packet_side_data_get(stream->codecpar->coded_side_data, stream->codecpar->nb_coded_side_data, AV_PKT_DATA_DISPLAYMATRIX);
+
+  // require 9 integers (3x3 matrix) + allow hypothetical padding
+  if (side_data != nullptr && side_data->data != nullptr && side_data->size >= int(9 * sizeof(int32_t))) {
+    theta = -av_display_rotation_get(reinterpret_cast<const int32_t*>(side_data->data));
+  }
+#else
+  uint8_t* displaymatrix = av_stream_get_side_data(stream, AV_PKT_DATA_DISPLAYMATRIX, nullptr);
 
   if (displaymatrix != nullptr) {
     theta = -av_display_rotation_get(reinterpret_cast<int32_t*>(displaymatrix));
   }
+#endif
 
   theta -= 360 * floor(theta / 360 + 0.9 / 360);
 
