@@ -1919,12 +1919,12 @@ void Display::input() {
           update_move_offset(move_offset_ + pan_offset);
         }
 
-        if (show_help_) {
-          handle_scroll(help_y_offset_, help_total_height_, help_textures_);
-        }
-
         if (show_metadata_) {
           handle_scroll(metadata_y_offset_, metadata_total_height_, metadata_textures_);
+        }
+
+        if (show_help_) {
+          handle_scroll(help_y_offset_, help_total_height_, help_textures_);
         }
         break;
       case SDL_MOUSEBUTTONDOWN:
