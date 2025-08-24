@@ -1865,6 +1865,12 @@ void Display::input() {
       return video_position;
     };
 
+    auto handle_scroll = [&](int& y_offset, const int total_height, std::vector<SDL_Texture*>& textures) {
+      y_offset += (-event_.motion.yrel * total_height * 3) / drawable_height_;
+      y_offset = std::max(y_offset, drawable_height_ - total_height - static_cast<int>(textures.size()) * HELP_TEXT_LINE_SPACING);
+      y_offset = std::min(y_offset, 0);
+    };
+
     switch (event_.type) {
       case SDL_WINDOWEVENT:
         switch (event_.window.event) {
@@ -1914,15 +1920,11 @@ void Display::input() {
         }
 
         if (show_help_) {
-          help_y_offset_ += (-event_.motion.yrel * help_total_height_ * 3) / drawable_height_;
-          help_y_offset_ = std::max(help_y_offset_, drawable_height_ - help_total_height_ - static_cast<int>(help_textures_.size()) * HELP_TEXT_LINE_SPACING);
-          help_y_offset_ = std::min(help_y_offset_, 0);
+          handle_scroll(help_y_offset_, help_total_height_, help_textures_);
         }
 
         if (show_metadata_) {
-          metadata_y_offset_ += (-event_.motion.yrel * metadata_total_height_ * 3) / drawable_height_;
-          metadata_y_offset_ = std::max(metadata_y_offset_, drawable_height_ - metadata_total_height_ - static_cast<int>(metadata_textures_.size()) * HELP_TEXT_LINE_SPACING);
-          metadata_y_offset_ = std::min(metadata_y_offset_, 0);
+          handle_scroll(metadata_y_offset_, metadata_total_height_, metadata_textures_);
         }
         break;
       case SDL_MOUSEBUTTONDOWN:
