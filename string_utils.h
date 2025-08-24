@@ -10,6 +10,31 @@ extern "C" {
 #include <libavutil/rational.h>
 }
 
+// Constexpr string utilities
+namespace ConstexprStringUtils {
+// constexpr strlen for char literals
+constexpr size_t cstrlen(const char* s) {
+  size_t n = 0;
+  while (s[n] != '\0') {
+    ++n;
+  }
+  return n;
+}
+
+// Find the longest string length in an array of const char*
+template <size_t N>
+constexpr size_t longest_string_length(const char* const (&strings)[N]) {
+  size_t max_len = 0;
+  for (size_t i = 0; i < N; ++i) {
+    const size_t len = cstrlen(strings[i]);
+    if (len > max_len) {
+      max_len = len;
+    }
+  }
+  return max_len;
+}
+}  // namespace ConstexprStringUtils
+
 // Credits to user2622016 for this C++11 approach
 // https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf
 template <typename... Args>

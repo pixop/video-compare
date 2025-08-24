@@ -15,7 +15,6 @@
 #include "format_converter.h"
 #include "png_saver.h"
 #include "source_code_pro_regular_ttf.h"
-#include "string_utils.h"
 #include "version.h"
 #include "video_compare_icon.h"
 #include "vmaf_calculator.h"

@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include "core_types.h"
+#include "string_utils.h"
 extern "C" {
 #include <libavutil/frame.h>
 }
@@ -37,27 +38,7 @@ constexpr const char* const ALL[] = {RESOLUTION,     DISPLAY_ASPECT_RATIO, DURAT
 
 constexpr size_t COUNT = sizeof(ALL) / sizeof(ALL[0]);
 
-// constexpr strlen for char literals
-constexpr size_t cstrlen(const char* s) {
-  size_t n = 0;
-  while (s[n] != '\0') {
-    ++n;
-  }
-  return n;
-}
-
-constexpr size_t longest_label_len() {
-  size_t m = 0;
-  for (size_t i = 0; i < COUNT; ++i) {
-    const size_t len = cstrlen(ALL[i]);
-    if (len > m) {
-      m = len;
-    }
-  }
-  return m;
-}
-
-constexpr size_t LONGEST = longest_label_len();
+const size_t LONGEST = ConstexprStringUtils::longest_string_length<COUNT>(ALL);
 }  // namespace MetadataProperties
 
 struct VideoMetadata {
