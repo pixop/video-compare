@@ -1938,7 +1938,7 @@ void Display::input() {
           }
 
           selection_end_ = selection_start_;
-        } else {
+        } else if (event_.button.button != SDL_BUTTON_RIGHT) {
           seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
           seek_from_start_ = true;
         }
