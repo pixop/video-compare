@@ -239,8 +239,14 @@ AVRational VideoDecoder::time_base() const {
   return codec_context_->time_base;
 }
 
-AVRational VideoDecoder::sample_aspect_ratio() const {
-  return codec_context_->sample_aspect_ratio;
+AVRational VideoDecoder::sample_aspect_ratio(const bool reduce) const {
+  AVRational sar = codec_context_->sample_aspect_ratio;
+
+  if (reduce) {
+    av_reduce(&sar.num, &sar.den, sar.num, sar.den, 1024 * 1024);
+  }
+
+  return sar;
 }
 
 AVRational VideoDecoder::display_aspect_ratio() const {

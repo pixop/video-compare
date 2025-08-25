@@ -231,14 +231,10 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
     const std::string dimensions = string_sprintf("%dx%d", video_decoders_[side]->width(), video_decoders_[side]->height());
     metadata.set(MetadataProperties::RESOLUTION, dimensions);
 
-    std::string aspect_ratio;
-    if (video_decoders_[side]->is_anamorphic()) {
-      const AVRational display_aspect_ratio = video_decoders_[side]->display_aspect_ratio();
-      aspect_ratio = string_sprintf("%d:%d", display_aspect_ratio.num, display_aspect_ratio.den);
-    } else {
-      aspect_ratio = "1:1";
-    }
-    metadata.set(MetadataProperties::DISPLAY_ASPECT_RATIO, aspect_ratio);
+    const AVRational sample_aspect_ratio = video_decoders_[side]->sample_aspect_ratio(true);
+    const AVRational display_aspect_ratio = video_decoders_[side]->display_aspect_ratio();
+    metadata.set(MetadataProperties::SAMPLE_ASPECT_RATIO, string_sprintf("%d:%d", sample_aspect_ratio.num, sample_aspect_ratio.den));
+    metadata.set(MetadataProperties::DISPLAY_ASPECT_RATIO, string_sprintf("%d:%d", display_aspect_ratio.num, display_aspect_ratio.den));
 
     metadata.set(MetadataProperties::CODEC, video_decoders_[side].get()->codec()->name);
     metadata.set(MetadataProperties::FRAME_RATE, stringify_frame_rate_only(demuxers_[side]->guess_frame_rate()));

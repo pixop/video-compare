@@ -41,7 +41,7 @@ class VideoDecoder : public SideAware {
   AVColorTransferCharacteristic color_trc() const;
   AVRational time_base() const;
 
-  AVRational sample_aspect_ratio() const;
+  AVRational sample_aspect_ratio(const bool reduce = false) const;
   AVRational display_aspect_ratio() const;
   bool is_anamorphic() const;
 

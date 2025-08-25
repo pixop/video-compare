@@ -17,6 +17,7 @@ extern "C" {
 
 namespace MetadataProperties {
 constexpr const char* RESOLUTION = "Resolution";
+constexpr const char* SAMPLE_ASPECT_RATIO = "Sample Aspect Ratio";
 constexpr const char* DISPLAY_ASPECT_RATIO = "Display Aspect Ratio";
 constexpr const char* DURATION = "Duration";
 constexpr const char* FRAME_RATE = "Frame Rate";
@@ -33,8 +34,8 @@ constexpr const char* FILE_SIZE = "File Size";
 constexpr const char* BIT_RATE = "Bit Rate";
 constexpr const char* FILTERS = "Filters";
 
-constexpr const char* const ALL[] = {RESOLUTION,     DISPLAY_ASPECT_RATIO, DURATION,  FRAME_RATE, FIELD_ORDER, CODEC,  HARDWARE_ACCELERATION, PIXEL_FORMAT, COLOR_SPACE, COLOR_PRIMARIES,
-                                     TRANSFER_CURVE, COLOR_RANGE,          CONTAINER, FILE_SIZE,  BIT_RATE,    FILTERS};
+constexpr const char* const ALL[] = {RESOLUTION,      SAMPLE_ASPECT_RATIO, DISPLAY_ASPECT_RATIO, DURATION,  FRAME_RATE, FIELD_ORDER, CODEC,  HARDWARE_ACCELERATION, PIXEL_FORMAT, COLOR_SPACE,
+                                     COLOR_PRIMARIES, TRANSFER_CURVE,      COLOR_RANGE,          CONTAINER, FILE_SIZE,  BIT_RATE,    FILTERS};
 
 constexpr size_t COUNT = sizeof(ALL) / sizeof(ALL[0]);
 
