@@ -233,8 +233,14 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 
     const AVRational sample_aspect_ratio = video_decoders_[side]->sample_aspect_ratio(true);
     const AVRational display_aspect_ratio = video_decoders_[side]->display_aspect_ratio();
-    metadata.set(MetadataProperties::SAMPLE_ASPECT_RATIO, string_sprintf("%d:%d", sample_aspect_ratio.num, sample_aspect_ratio.den));
-    metadata.set(MetadataProperties::DISPLAY_ASPECT_RATIO, string_sprintf("%d:%d", display_aspect_ratio.num, display_aspect_ratio.den));
+
+    if (sample_aspect_ratio.num > 0) {
+      metadata.set(MetadataProperties::SAMPLE_ASPECT_RATIO, string_sprintf("%d:%d", sample_aspect_ratio.num, sample_aspect_ratio.den));
+      metadata.set(MetadataProperties::DISPLAY_ASPECT_RATIO, string_sprintf("%d:%d", display_aspect_ratio.num, display_aspect_ratio.den));
+    } else {
+      metadata.set(MetadataProperties::SAMPLE_ASPECT_RATIO, "unknown");
+      metadata.set(MetadataProperties::DISPLAY_ASPECT_RATIO, "unknown");
+    }
 
     metadata.set(MetadataProperties::CODEC, video_decoders_[side].get()->codec()->name);
     metadata.set(MetadataProperties::FRAME_RATE, stringify_frame_rate_only(demuxers_[side]->guess_frame_rate()));
