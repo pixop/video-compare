@@ -19,41 +19,81 @@ void PngSaver::save(const AVFrame* frame, const std::string& filename) {
 }
 
 void PngSaver::save_with_ffmpeg(const AVFrame* frame, const std::string& filename) {
+  // Step 1: Create a scaling context (SwsContext) for YUV → RGB conversion
+  auto sws_ctx = std::unique_ptr<SwsContext, void(*)(SwsContext*)>(
+      sws_getContext(
+          frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
+          frame->width, frame->height, AV_PIX_FMT_RGB24,
+          SWS_BILINEAR, nullptr, nullptr, nullptr
+      ),
+      [](SwsContext* ctx) { if (ctx) sws_freeContext(ctx); }
+  );
+
+  if (!sws_ctx) {
+    throw EncodingException("Cannot create scaling context");
+  }
+
+  // Step 2: Allocate and initialize the target RGB frame
+  auto rgb_frame = std::unique_ptr<AVFrame, void(*)(AVFrame*)>(
+      av_frame_alloc(),
+      [](AVFrame* frame) { if (frame) av_frame_free(&frame); }
+  );
+
+  if (!rgb_frame) {
+    throw EncodingException("Could not allocate RGB frame");
+  }
+
+  rgb_frame->width = frame->width;
+  rgb_frame->height = frame->height;
+  rgb_frame->format = AV_PIX_FMT_RGB24;
+
+  if (av_frame_get_buffer(rgb_frame.get(), 32) < 0) {
+    throw EncodingException("Could not allocate frame data");
+  }
+
+  // Step 3: Perform color space and range conversion (automatically handles TV → PC)
+  int ret = sws_scale(sws_ctx.get(),
+                      frame->data, frame->linesize, 0, frame->height,
+                      rgb_frame->data, rgb_frame->linesize);
+  if (ret < 0) {
+    throw EncodingException("Error during scaling");
+  }
+
+  // Step 4: Initialize PNG encoder context
   const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_PNG);
   if (!codec) {
-    throw EncodingException("Codec not found");
+    throw EncodingException("PNG codec not found");
   }
 
-  const AVFrame* frame_to_save = frame;
+  auto codec_ctx = std::unique_ptr<AVCodecContext, void(*)(AVCodecContext*)>(
+      avcodec_alloc_context3(codec),
+      [](AVCodecContext* ctx) { if (ctx) avcodec_free_context(&ctx); }
+  );
 
-  // Convert AV_PIX_FMT_RGB48LE to AV_PIX_FMT_RGB48BE
-  AVFramePtr converted_frame(nullptr);
-
-  if (frame->format == AV_PIX_FMT_RGB48LE) {
-    converted_frame.reset(convert(frame, AV_PIX_FMT_RGB48BE));
-    frame_to_save = converted_frame.get();
-  }
-
-  AVCodecContextPtr codec_ctx(avcodec_alloc_context3(codec));
   if (!codec_ctx) {
-    throw EncodingException("Could not allocate video codec context");
+    throw EncodingException("Could not allocate codec context");
   }
 
-  codec_ctx->width = frame_to_save->width;
-  codec_ctx->height = frame_to_save->height;
-  codec_ctx->pix_fmt = static_cast<enum AVPixelFormat>(frame_to_save->format);
-  codec_ctx->time_base = {1, 25};
+  codec_ctx->width = rgb_frame->width;
+  codec_ctx->height = rgb_frame->height;
+  codec_ctx->pix_fmt = AV_PIX_FMT_RGB24;
+  codec_ctx->time_base = {1, 1};
 
   if (avcodec_open2(codec_ctx.get(), codec, nullptr) < 0) {
     throw EncodingException("Could not open codec");
   }
 
-  AVPacketPtr packet(av_packet_alloc());
+  // Step 5: Allocate and encode frame
+  auto packet = std::unique_ptr<AVPacket, void(*)(AVPacket*)>(
+      av_packet_alloc(),
+      [](AVPacket* pkt) { if (pkt) av_packet_free(&pkt); }
+  );
+
   if (!packet) {
     throw EncodingException("Could not allocate packet");
   }
 
-  if (avcodec_send_frame(codec_ctx.get(), frame_to_save) < 0) {
+  if (avcodec_send_frame(codec_ctx.get(), rgb_frame.get()) < 0) {
     throw EncodingException("Error sending a frame for encoding");
   }
 
@@ -61,6 +101,7 @@ void PngSaver::save_with_ffmpeg(const AVFrame* frame, const std::string& filenam
     throw EncodingException("Error during encoding");
   }
 
+  // Step 6: Write to file
   try {
     std::ofstream file(filename, std::ios::out | std::ios::binary);
     if (!file.is_open()) {
@@ -68,7 +109,7 @@ void PngSaver::save_with_ffmpeg(const AVFrame* frame, const std::string& filenam
     }
     file.write(reinterpret_cast<const char*>(packet->data), packet->size);
     file.close();
-  } catch (const std::ios_base::failure& e) {
+  } catch (const std::exception& e) {
     throw IOException("IO error while writing file " + filename + ": " + e.what());
   }
 }
