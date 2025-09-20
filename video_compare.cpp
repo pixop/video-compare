@@ -63,9 +63,11 @@ static inline int64_t time_ms_to_av_time(const double time_ms) {
   return time_ms * MILLISEC_TO_AV_TIME;
 }
 
-static inline int64_t calculate_dynamic_time_shift(const AVRational& multiplier, const int64_t original_pts) {
+static inline int64_t calculate_dynamic_time_shift(const AVRational& multiplier, const int64_t original_pts, const bool inverse) {
   // Calculate the time shift as the difference between original and scaled PTS
-  const int64_t time_shift = original_pts - av_rescale_q(original_pts, AVRational{multiplier.den, multiplier.num}, AVRational{1, 1});
+  const int64_t time_shift = inverse ?
+    (original_pts - av_rescale_q(original_pts, AVRational{multiplier.den, multiplier.num}, AVRational{1, 1})) :
+    (av_rescale_q(original_pts, AVRational{multiplier.num, multiplier.den}, AVRational{1, 1}) - original_pts);
 
   return time_shift;
 }
@@ -749,7 +751,7 @@ void VideoCompare::compare() {
           }
         }
 
-        next_right_position += static_cast<float>(calculate_dynamic_time_shift(time_shift_.multiplier, (next_right_position - right.start_time_) / AV_TIME_TO_SEC)) * AV_TIME_TO_SEC;
+        next_right_position += static_cast<float>(calculate_dynamic_time_shift(time_shift_.multiplier, (next_right_position - right.start_time_) / AV_TIME_TO_SEC, false)) * AV_TIME_TO_SEC;
 
         const bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
 
@@ -788,7 +790,7 @@ void VideoCompare::compare() {
 
             // if the effective time shift is provided, update it and subtract it from the PTS
             if (effective_time_shift != nullptr) {
-              *effective_time_shift += calculate_dynamic_time_shift(time_shift_.multiplier, side_state.frame_->pts);
+              *effective_time_shift += calculate_dynamic_time_shift(time_shift_.multiplier, side_state.frame_->pts, true);
               side_state.pts_ -= *effective_time_shift;
             }
 
@@ -866,7 +868,7 @@ void VideoCompare::compare() {
           } else {
             store_frames = true;
 
-            effective_right_time_shift = static_right_time_shift + calculate_dynamic_time_shift(time_shift_.multiplier, right.frame_->pts);
+            effective_right_time_shift = static_right_time_shift + calculate_dynamic_time_shift(time_shift_.multiplier, right.frame_->pts, true);
 
             // update timer for regular playback
             if (frame_number > 0) {
