@@ -63,34 +63,11 @@ static inline int64_t time_ms_to_av_time(const double time_ms) {
   return time_ms * MILLISEC_TO_AV_TIME;
 }
 
-static int64_t calculate_dynamic_time_shift(const AVRational& multiplier, int64_t original_pts) {
-  // If multiplier is 1:1, no change needed
-  if (multiplier.num == multiplier.den) {
-    return 0;
-  }
-
-  // Prevent division by zero in inverse multiplier
-  if (multiplier.num == 0) {
-      throw std::runtime_error("Cannot calculate inverse multiplier: denominator will be zero");
-  }
-
-  // Handle negative PTS
-  int sign = 1;
-  if (original_pts < 0) {
-    original_pts = -original_pts;
-    sign = -1;
-  }
-
-  // Scale the PTS by the inverse multiplier
-  const int64_t scaled_pts = av_rescale_q(original_pts, AVRational{multiplier.den, multiplier.num}, AVRational{1, 1});
-
+static inline int64_t calculate_dynamic_time_shift(const AVRational& multiplier, const int64_t original_pts) {
   // Calculate the time shift as the difference between original and scaled PTS
-  const int64_t time_shift = original_pts - scaled_pts;
+  const int64_t time_shift = original_pts - av_rescale_q(original_pts, AVRational{multiplier.den, multiplier.num}, AVRational{1, 1});
 
-  // Apply sign to the time shift
-  auto result = (sign < 0) ? -time_shift : time_shift;
-
-  return result;
+  return time_shift;
 }
 
 static const int64_t NEAR_ZERO_TIME_SHIFT_THRESHOLD = time_ms_to_av_time(0.5);
