@@ -4,7 +4,13 @@
 #include "display.h"
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavutil/rational.h>
 }
+
+struct TimeShiftConfig {
+  AVRational multiplier{1, 1};
+  AVRational offset_ms{0, 1};
+};
 
 struct InputVideo {
   Side side;
@@ -48,7 +54,7 @@ struct VideoCompareConfig {
 
   size_t frame_buffer_size{50};
 
-  double time_shift_ms{0};
+  TimeShiftConfig time_shift;
 
   float wheel_sensitivity{1};
 

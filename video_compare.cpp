@@ -63,6 +63,13 @@ static inline int64_t time_ms_to_av_time(const double time_ms) {
   return time_ms * MILLISEC_TO_AV_TIME;
 }
 
+static inline int64_t calculate_dynamic_time_shift(const AVRational& multiplier, const int64_t original_pts) {
+  // Calculate original_pts * (multiplier - 1) using rational arithmetic
+  const AVRational multiplier_minus_one = {multiplier.num - multiplier.den, multiplier.den};
+
+  return av_rescale_q(original_pts, multiplier_minus_one, AVRational{1, 1});
+}
+
 static const int64_t NEAR_ZERO_TIME_SHIFT_THRESHOLD = time_ms_to_av_time(0.5);
 
 static bool compare_av_dictionaries(AVDictionary* dict1, AVDictionary* dict2) {
@@ -110,7 +117,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
     : same_decoded_video_both_sides_(produces_same_decoded_video(config)),
       auto_loop_mode_(config.auto_loop_mode),
       frame_buffer_size_(config.frame_buffer_size),
-      time_shift_ms_(config.time_shift_ms),
+      time_shift_(config.time_shift),
+      time_shift_offset_av_time_(time_ms_to_av_time(av_q2d(config.time_shift.offset_ms))),
       demuxers_{std::make_unique<Demuxer>(LEFT, config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options),
                 std::make_unique<Demuxer>(RIGHT, config.right.demuxer, config.right.file_name, config.right.demuxer_options, config.right.decoder_options)},
       video_decoders_{
@@ -262,7 +270,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 
   display_->update_metadata(collect_metadata(LEFT), collect_metadata(RIGHT));
 
-  update_decoder_mode(time_ms_to_av_time(time_shift_ms_));
+  update_decoder_mode(time_shift_offset_av_time_);
 }
 
 void VideoCompare::operator()() {
@@ -556,10 +564,10 @@ void VideoCompare::quit_queues(const Side side) {
 }
 
 void VideoCompare::update_decoder_mode(const int right_time_shift) {
-  single_decoder_mode_ = same_decoded_video_both_sides_ && (abs(right_time_shift) < NEAR_ZERO_TIME_SHIFT_THRESHOLD);
+  single_decoder_mode_ = same_decoded_video_both_sides_ && (av_q2d(time_shift_.multiplier) == 1.0) && (abs(right_time_shift) < NEAR_ZERO_TIME_SHIFT_THRESHOLD);
 }
 
-void VideoCompare::dump_debug_info(const int frame_number, const int right_time_shift, const int average_refresh_time) {
+void VideoCompare::dump_debug_info(const int frame_number, const int effective_right_time_shift, const int average_refresh_time) {
   auto dump_queue_side = [&](const std::string& name, const std::string side_name, const Side side, const auto& queue) {
     std::cout << side_name << " " << name << ": size=" << queue[side]->size() << ", is_stopped=" << queue[side]->is_stopped() << ", quit=" << queue[side]->is_quit() << std::endl;
   };
@@ -573,7 +581,7 @@ void VideoCompare::dump_debug_info(const int frame_number, const int right_time_
   std::cout << "keep_running()=" << keep_running() << std::endl;
   std::cout << "has_exception()=" << exception_holder_.has_exception() << std::endl;
   std::cout << "seeking=" << seeking_ << std::endl;
-  std::cout << "right_time_shift=" << right_time_shift << std::endl;
+  std::cout << "effective_right_time_shift=" << effective_right_time_shift << std::endl;
   std::cout << "single_decoder_mode=" << single_decoder_mode_ << std::endl;
   std::cout << "average_refresh_time=" << average_refresh_time << std::endl;
 
@@ -622,7 +630,8 @@ void VideoCompare::compare() {
 
     int frame_offset = 0;
 
-    int64_t right_time_shift = time_ms_to_av_time(time_shift_ms_);
+    int64_t static_right_time_shift = time_shift_offset_av_time_;
+    int64_t effective_right_time_shift = static_right_time_shift;
     int total_right_time_shifted = 0;
 
     int forward_navigate_frames = 0;
@@ -660,7 +669,7 @@ void VideoCompare::compare() {
 
 #ifdef _DEBUG
       if ((frame_number % 100) == 0) {
-        dump_debug_info(frame_number, right_time_shift, refresh_time_deque.average());
+        dump_debug_info(frame_number, effective_right_time_shift, refresh_time_deque.average());
       }
 #endif
 
@@ -681,7 +690,7 @@ void VideoCompare::compare() {
         total_right_time_shifted += display_->get_shift_right_frames();
 
         // compute effective time shift
-        right_time_shift = time_ms_to_av_time(time_shift_ms_) + total_right_time_shifted * (right.delta_pts_ > 0 ? right.delta_pts_ : 10000);
+        static_right_time_shift = time_shift_offset_av_time_ + total_right_time_shifted * (right.delta_pts_ > 0 ? right.delta_pts_ : 10000);
 
         ready_to_seek_.reset();
         seeking_ = true;
@@ -708,7 +717,7 @@ void VideoCompare::compare() {
           empty_frame_queues();
           sleep_for_ms(SLEEP_PERIOD_MS);
 #ifdef _DEBUG
-          dump_debug_info(frame_number, right_time_shift, refresh_time_deque.average());
+          dump_debug_info(frame_number, effective_right_time_shift, refresh_time_deque.average());
 #endif
         }
 
@@ -719,7 +728,7 @@ void VideoCompare::compare() {
         video_filterers_[LEFT]->reinit();
         video_filterers_[RIGHT]->reinit();
 
-        update_decoder_mode(right_time_shift);
+        update_decoder_mode(static_right_time_shift);
 
         float next_left_position, next_right_position;
 
@@ -735,10 +744,12 @@ void VideoCompare::compare() {
           next_left_position = left_position + display_->get_seek_relative();
           next_right_position = right_position + display_->get_seek_relative();
 
-          if (right_time_shift < 0) {
-            next_right_position += (right_time_shift + right.delta_pts_) * AV_TIME_TO_SEC;
+          if (static_right_time_shift < 0) {
+            next_right_position += (static_right_time_shift + right.delta_pts_) * AV_TIME_TO_SEC;
           }
         }
+
+        next_right_position += static_cast<float>(calculate_dynamic_time_shift(time_shift_.multiplier, next_right_position / AV_TIME_TO_SEC)) * AV_TIME_TO_SEC;
 
         const bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
 
@@ -769,11 +780,18 @@ void VideoCompare::compare() {
         reset_queues(LEFT);
         reset_queues(RIGHT);
 
-        auto pop_and_reset = [&](SideState& side_state, const int64_t& time_shift) {
+        auto pop_and_reset = [&](SideState& side_state, int64_t* effective_time_shift = nullptr) {
           converted_frame_queues_[side_state.side_]->pop(side_state.frame_);
 
           if (side_state.frame_ != nullptr) {
-            side_state.pts_ = side_state.frame_->pts - time_shift;
+            side_state.pts_ = side_state.frame_->pts;
+
+            // if the effective time shift is provided, update it and subtract it from the PTS
+            if (effective_time_shift != nullptr) {
+              *effective_time_shift += calculate_dynamic_time_shift(time_shift_.multiplier, side_state.frame_->pts);
+              side_state.pts_ -= *effective_time_shift;
+            }
+
             side_state.previous_decoded_picture_number_ = -1;
             side_state.decoded_picture_number_ = 1;
 
@@ -781,16 +799,17 @@ void VideoCompare::compare() {
           }
         };
 
-        pop_and_reset(left, 0);
+        pop_and_reset(left);
 
         // round away from zero to nearest 2 ms
-        if (right_time_shift > 0) {
-          right_time_shift = ((right_time_shift / 1000) + 2) * 1000;
-        } else if (right_time_shift < 0) {
-          right_time_shift = ((right_time_shift / 1000) - 2) * 1000;
+        if (static_right_time_shift > 0) {
+          static_right_time_shift = ((static_right_time_shift / 1000) + 2) * 1000;
+        } else if (static_right_time_shift < 0) {
+          static_right_time_shift = ((static_right_time_shift / 1000) - 2) * 1000;
         }
 
-        pop_and_reset(right, right_time_shift);
+        effective_right_time_shift = static_right_time_shift;
+        pop_and_reset(right, &effective_right_time_shift);
 
         // don't sync until the next iteration to prevent freezing when comparing a single image
         skip_update = true;
@@ -807,8 +826,8 @@ void VideoCompare::compare() {
       const int64_t min_delta = compute_min_delta(left.delta_pts_, right.delta_pts_);
 
 #ifdef _DEBUG
-      const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, right_time_shift=%5d", left.pts_ / 1000, is_behind(left.pts_, right.pts_, min_delta),
-                                                       (right.pts_ + right_time_shift) / 1000, is_behind(right.pts_, left.pts_, min_delta), min_delta / 1000, right_time_shift / 1000);
+      const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, effective_right_time_shift=%5d", left.pts_ / 1000, is_behind(left.pts_, right.pts_, min_delta),
+                                                       (right.pts_ + static_right_time_shift) / 1000, is_behind(right.pts_, left.pts_, min_delta), min_delta / 1000, effective_right_time_shift / 1000);
 
       if (current_state != previous_state) {
         std::cout << current_state << std::endl;
@@ -847,9 +866,11 @@ void VideoCompare::compare() {
           } else {
             store_frames = true;
 
+            effective_right_time_shift = static_right_time_shift + calculate_dynamic_time_shift(time_shift_.multiplier, right.frame_->pts);
+
             // update timer for regular playback
             if (frame_number > 0) {
-              const int64_t play_frame_delay = compute_frame_delay(left.frame_->pts - left.pts_, right.frame_->pts - right.pts_ - right_time_shift);
+              const int64_t play_frame_delay = compute_frame_delay(left.frame_->pts - left.pts_, right.frame_->pts - right.pts_ - effective_right_time_shift);
 
               timer_->shift_target(play_frame_delay / display_->get_playback_speed_factor());
             } else {
@@ -899,7 +920,7 @@ void VideoCompare::compare() {
       };
 
       update_frame_timing(left, 0);
-      update_frame_timing(right, right_time_shift);
+      update_frame_timing(right, effective_right_time_shift);
 
       auto manage_frame_buffer = [&](SideState& side_state) {
         auto& frame = side_state.frame_;

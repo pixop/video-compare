@@ -128,7 +128,8 @@ class VideoCompare {
 
   const Display::Loop auto_loop_mode_;
   const size_t frame_buffer_size_;
-  const double time_shift_ms_;
+  const TimeShiftConfig time_shift_;
+  const int64_t time_shift_offset_av_time_;
 
   const std::array<std::unique_ptr<Demuxer>, Side::Count> demuxers_;
   const std::array<std::unique_ptr<VideoDecoder>, Side::Count> video_decoders_;

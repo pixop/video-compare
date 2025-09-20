@@ -173,6 +173,77 @@ void find_matching_hw_accels(const std::string& search_string) {
   }
 }
 
+TimeShiftConfig parse_time_shift(const std::string& time_shift_arg) {
+  TimeShiftConfig config;
+
+  // Check if it's a simple number or time format, treat it as an offset
+  try {
+    double offset = parse_timestamps_to_seconds(time_shift_arg);
+    config.offset_ms = av_d2q(offset * 1000.0, 1000000);
+    return config;
+  } catch (const std::logic_error& e) {
+    // If parsing as time format fails, continue with multiplier parsing
+  }
+
+  // Parse new format: [xmultiplier][+/-offset]
+  std::string remaining = time_shift_arg;
+
+  // Parse multiplier if present
+  if (remaining[0] == 'x') {
+    remaining = remaining.substr(1); // Remove 'x'
+
+    // Find the end of the multiplier (either end of string or start of offset)
+    size_t multiplier_end = remaining.find_first_of("+-");
+    if (multiplier_end == std::string::npos) {
+      multiplier_end = remaining.length();
+    }
+
+    std::string multiplier_str = remaining.substr(0, multiplier_end);
+    remaining = remaining.substr(multiplier_end);
+
+    // Check if it's a rational fraction (e.g., "25/24")
+    size_t slash_pos = multiplier_str.find('/');
+    if (slash_pos != std::string::npos) {
+      std::string numerator_str = multiplier_str.substr(0, slash_pos);
+      std::string denominator_str = multiplier_str.substr(slash_pos + 1);
+
+      const std::regex number_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
+      if (!std::regex_match(numerator_str, number_re) || !std::regex_match(denominator_str, number_re)) {
+        throw std::logic_error{"Cannot parse time shift multiplier; numerator and denominator must be valid postive numbers"};
+      }
+
+      double numerator = std::stod(numerator_str);
+      double denominator = std::stod(denominator_str);
+
+      if (denominator == 0) {
+        throw std::logic_error{"Cannot parse time shift multiplier; denominator cannot be zero"};
+      }
+
+      av_reduce(&config.multiplier.num, &config.multiplier.den, numerator * 10000, denominator * 10000, 1000000);
+    } else {
+      // Decimal multiplier
+      const std::regex decimal_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
+      if (!std::regex_match(multiplier_str, decimal_re)) {
+        throw std::logic_error{"Cannot parse time shift multiplier; must be a valid positive number"};
+      }
+
+      config.multiplier = av_d2q(std::stod(multiplier_str), 1000000);
+    }
+  }
+
+  // Parse offset if present
+  if (!remaining.empty()) {
+    try {
+      double offset = parse_timestamps_to_seconds(remaining);
+      config.offset_ms = av_d2q(offset * 1000.0, 1000000);
+    } catch (const std::logic_error& e) {
+      throw std::logic_error{"Cannot parse time shift offset: " + std::string(e.what())};
+    }
+  }
+
+  return config;
+}
+
 const std::string get_nth_token_or_empty(const std::string& options_string, const char delimiter, const size_t n) {
   auto tokens = string_split(options_string, delimiter);
 
@@ -264,7 +335,7 @@ int main(int argc, char** argv) {
          {"window-fit-display", {"-W", "--window-fit-display"}, "calculate the window size to fit within the usable display bounds while maintaining the video aspect ratio", 0},
          {"auto-loop-mode", {"-a", "--auto-loop-mode"}, "auto-loop playback when buffer fills, 'off' for continuous streaming (default), 'on' for forward-only mode, 'pp' for ping-pong mode", 1},
          {"frame-buffer-size", {"-f", "--frame-buffer-size"}, "frame buffer size (e.g. 10, 70 or 150), default is 50", 1},
-         {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified number of seconds (e.g. 0.150, -0.1 or 1)", 1},
+         {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified time offset, optionally with a multiplier (e.g. 0.150, -0.1, x1.04+0.1, x25.025/24-1:30.5)", 1},
          {"wheel-sensitivity", {"-s", "--wheel-sensitivity"}, "mouse wheel sensitivity (e.g. 0.5, -1 or 1.7), default is 1; negative values invert the input direction", 1},
          {"color-space", {"-C", "--color-space"}, "set the color space matrix, specified as [matrix] for the same on both sides, or [l-matrix?]:[r-matrix?] for different values (e.g. 'bt709' or 'bt2020nc:')", 1},
          {"color-range", {"-A", "--color-range"}, "set the color range, specified as [range] for the same on both sides, or [l-range?]:[r-range?] for different values (e.g. 'tv', ':pc' or 'pc:tv')", 1},
@@ -429,13 +500,13 @@ int main(int argc, char** argv) {
       }
       if (args["time-shift"]) {
         const std::string time_shift_arg = args["time-shift"];
-        const std::regex time_shift_re("^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$");
 
-        if (!std::regex_match(time_shift_arg, time_shift_re)) {
-          throw std::logic_error{"Cannot parse time shift argument; must be a valid number in seconds, e.g. 1 or -0.333"};
+        try {
+          const TimeShiftConfig time_shift_config = parse_time_shift(time_shift_arg);
+          config.time_shift = time_shift_config;
+        } catch (const std::logic_error& e) {
+          throw std::logic_error{"Cannot parse time shift argument: " + std::string(e.what())};
         }
-
-        config.time_shift_ms = std::stod(time_shift_arg) * 1000.0;
       }
       if (args["wheel-sensitivity"]) {
         const std::string wheel_sensitivity_arg = args["wheel-sensitivity"];
