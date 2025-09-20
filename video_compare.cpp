@@ -749,7 +749,7 @@ void VideoCompare::compare() {
           }
         }
 
-        next_right_position += static_cast<float>(calculate_dynamic_time_shift(time_shift_.multiplier, next_right_position / AV_TIME_TO_SEC)) * AV_TIME_TO_SEC;
+        next_right_position += static_cast<float>(calculate_dynamic_time_shift(time_shift_.multiplier, (next_right_position - right.start_time_) / AV_TIME_TO_SEC)) * AV_TIME_TO_SEC;
 
         const bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
 
