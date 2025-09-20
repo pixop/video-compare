@@ -229,6 +229,11 @@ TimeShiftConfig parse_time_shift(const std::string& time_shift_arg) {
 
       config.multiplier = av_d2q(std::stod(multiplier_str), 1000000);
     }
+
+    // Prevent division by zero in inverse multiplier
+    if (config.multiplier.num == 0) {
+      throw std::runtime_error("Multiplier cannot be zero");
+    }
   }
 
   // Parse offset if present
