@@ -58,7 +58,9 @@ std::string format_position(const float position, const bool use_compact);
 
 std::string format_duration(const float duration);
 
-float parse_timestamps_to_seconds(const std::string& timestamp);
+double parse_strict_double(const std::string& s);
+
+double parse_timestamps_to_seconds(const std::string& timestamp);
 
 std::string to_lower_case(const std::string& str);
 

@@ -178,7 +178,7 @@ TimeShiftConfig parse_time_shift(const std::string& time_shift_arg) {
 
   // Check if it's a simple number or time format, treat it as an offset
   try {
-    double offset = parse_timestamps_to_seconds(time_shift_arg);
+    const double offset = parse_timestamps_to_seconds(time_shift_arg);
     config.offset_ms = static_cast<int64_t>(offset * 1000.0);
     return config;
   } catch (const std::logic_error& e) {
@@ -198,22 +198,23 @@ TimeShiftConfig parse_time_shift(const std::string& time_shift_arg) {
       multiplier_end = remaining.length();
     }
 
-    std::string multiplier_str = remaining.substr(0, multiplier_end);
+    const std::string multiplier_str = remaining.substr(0, multiplier_end);
     remaining = remaining.substr(multiplier_end);
 
     // Check if it's a rational fraction (e.g., "25/24")
+    const std::regex number_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
+
     size_t slash_pos = multiplier_str.find('/');
     if (slash_pos != std::string::npos) {
       std::string numerator_str = multiplier_str.substr(0, slash_pos);
       std::string denominator_str = multiplier_str.substr(slash_pos + 1);
 
-      const std::regex number_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
       if (!std::regex_match(numerator_str, number_re) || !std::regex_match(denominator_str, number_re)) {
         throw std::logic_error{"Cannot parse time shift multiplier; numerator and denominator must be valid postive numbers"};
       }
 
-      double numerator = std::stod(numerator_str);
-      double denominator = std::stod(denominator_str);
+      const double numerator = parse_strict_double(numerator_str);
+      const double denominator = parse_strict_double(denominator_str);
 
       if (denominator == 0) {
         throw std::logic_error{"Cannot parse time shift multiplier; denominator cannot be zero"};
@@ -221,13 +222,11 @@ TimeShiftConfig parse_time_shift(const std::string& time_shift_arg) {
 
       av_reduce(&config.multiplier.num, &config.multiplier.den, numerator * 10000, denominator * 10000, 1000000);
     } else {
-      // Decimal multiplier
-      const std::regex decimal_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
-      if (!std::regex_match(multiplier_str, decimal_re)) {
+      if (!std::regex_match(multiplier_str, number_re)) {
         throw std::logic_error{"Cannot parse time shift multiplier; must be a valid positive number"};
       }
 
-      config.multiplier = av_d2q(std::stod(multiplier_str), 1000000);
+      config.multiplier = av_d2q(parse_strict_double(multiplier_str), 1000000);
     }
 
     // Prevent division by zero in inverse multiplier
@@ -509,6 +508,10 @@ int main(int argc, char** argv) {
         try {
           const TimeShiftConfig time_shift_config = parse_time_shift(time_shift_arg);
           config.time_shift = time_shift_config;
+
+          const double multiplier_value = av_q2d(time_shift_config.multiplier);
+          std::cout << string_sprintf("Timeshift config: multiplier=%d/%d (x%.6f), offset=%ld ms",
+                                      time_shift_config.multiplier.num, time_shift_config.multiplier.den, multiplier_value, time_shift_config.offset_ms) << std::endl;
         } catch (const std::logic_error& e) {
           throw std::logic_error{"Cannot parse time shift argument: " + std::string(e.what())};
         }
@@ -521,7 +524,7 @@ int main(int argc, char** argv) {
           throw std::logic_error{"Cannot parse mouse wheel sensitivity argument; must be a valid number, e.g. 1.3 or -1"};
         }
 
-        config.wheel_sensitivity = std::stod(wheel_sensitivity_arg);
+        config.wheel_sensitivity = parse_strict_double(wheel_sensitivity_arg);
       }
       if (args["tone-map-mode"]) {
         const std::string tone_mapping_mode_arg = args["tone-map-mode"];
@@ -666,7 +669,7 @@ int main(int argc, char** argv) {
             throw std::logic_error{"Cannot parse " + to_lower_case(input_video.side_description) + " boost luminance argument; must be a valid number, e.g. 1.3 or 3.0"};
           }
 
-          return std::stod(boost_tone_arg);
+          return parse_strict_double(boost_tone_arg);
         };
 
         auto boost_tone_spec = static_cast<const std::string&>(args["boost-tone"]);
