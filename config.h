@@ -9,7 +9,7 @@ extern "C" {
 
 struct TimeShiftConfig {
   AVRational multiplier{1, 1};
-  AVRational offset_ms{0, 1};
+  int64_t offset_ms{0};
 };
 
 struct InputVideo {

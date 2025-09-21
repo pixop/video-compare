@@ -179,7 +179,7 @@ TimeShiftConfig parse_time_shift(const std::string& time_shift_arg) {
   // Check if it's a simple number or time format, treat it as an offset
   try {
     double offset = parse_timestamps_to_seconds(time_shift_arg);
-    config.offset_ms = av_d2q(offset * 1000.0, 1000000);
+    config.offset_ms = static_cast<int64_t>(offset * 1000.0);
     return config;
   } catch (const std::logic_error& e) {
     // If parsing as time format fails, continue with multiplier parsing
@@ -240,7 +240,7 @@ TimeShiftConfig parse_time_shift(const std::string& time_shift_arg) {
   if (!remaining.empty()) {
     try {
       double offset = parse_timestamps_to_seconds(remaining);
-      config.offset_ms = av_d2q(offset * 1000.0, 1000000);
+      config.offset_ms = static_cast<int64_t>(offset * 1000.0);
     } catch (const std::logic_error& e) {
       throw std::logic_error{"Cannot parse time shift offset: " + std::string(e.what())};
     }

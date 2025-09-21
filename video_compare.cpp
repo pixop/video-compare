@@ -120,7 +120,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       auto_loop_mode_(config.auto_loop_mode),
       frame_buffer_size_(config.frame_buffer_size),
       time_shift_(config.time_shift),
-      time_shift_offset_av_time_(time_ms_to_av_time(av_q2d(config.time_shift.offset_ms))),
+      time_shift_offset_av_time_(time_ms_to_av_time(static_cast<double>(config.time_shift.offset_ms))),
       demuxers_{std::make_unique<Demuxer>(LEFT, config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options),
                 std::make_unique<Demuxer>(RIGHT, config.right.demuxer, config.right.file_name, config.right.demuxer_options, config.right.decoder_options)},
       video_decoders_{
