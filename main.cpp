@@ -220,7 +220,7 @@ TimeShiftConfig parse_time_shift(const std::string& time_shift_arg) {
         throw std::logic_error{"Cannot parse time shift multiplier; denominator cannot be zero"};
       }
 
-      av_reduce(&config.multiplier.num, &config.multiplier.den, numerator * 10000, denominator * 10000, 1000000);
+      av_reduce(&config.multiplier.num, &config.multiplier.den, std::round(numerator * 10000), std::round(denominator * 10000), 1000000);
     } else {
       if (!std::regex_match(multiplier_str, number_re)) {
         throw std::logic_error{"Cannot parse time shift multiplier; must be a valid positive number"};
