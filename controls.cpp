@@ -37,7 +37,9 @@ static const std::vector<std::pair<std::string, std::string>> controls{{"H", "To
                                                                        {"0", "Toggle video/subtraction mode"},
                                                                        {"+", "Time-shift right video 1 frame forward"},
                                                                        {"-", "Time-shift right video 1 frame backward"},
-                                                                       {"X", "Show the current video frame and UI update rates (in FPS)"}};
+                                                                       {"X", "Show the current video frame and UI update rates (in FPS)"},
+                                                                       {"Y", "Cycle through subtraction modes"},
+                                                                       {"U", "Toggle luminance-only subtraction mode"}};
 
 static const std::vector<std::string> instructions{
     "Move the mouse horizontally to adjust the movable slider position.",

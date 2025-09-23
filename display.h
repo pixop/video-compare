@@ -93,6 +93,7 @@ class Display {
  public:
   enum Mode { SPLIT, VSTACK, HSTACK };
   enum Loop { OFF, FORWARDONLY, PINGPONG };
+  enum class DiffMode { LegacyAbs, AbsLinear, AbsSqrt, SignedDiverging };
 
   std::string modeToString(const Mode& mode) {
     switch (mode) {
@@ -156,6 +157,10 @@ class Display {
   bool tick_playback_{false};
   bool possibly_tick_playback_{false};
   bool show_fps_{false};
+
+  // Subtraction mode settings
+  DiffMode diff_mode_{DiffMode::AbsLinear};
+  bool diff_luma_only_{false};
 
   // Rectangle selection state
   enum class SelectionState { NONE, STARTED, COMPLETED };

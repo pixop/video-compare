@@ -196,6 +196,8 @@ see all supported options.
 - Plus `+`: Time-shift right video 1 frame forward
 - Minus `-`: Time-shift right video 1 frame backward
 - X: Show the current video frame and UI update rates (in FPS)
+- Y: Cycle through subtraction modes
+- U: Toggle luminance-only subtraction mode
 
 Move the mouse horizontally to adjust the movable slider position.
 
