@@ -564,15 +564,15 @@ inline void process_difference_scanline(
     const int rr = load(plane_right[idx]), gr = load(plane_right[idx + 1]), br = load(plane_right[idx + 2]);
 
     if (mode == Display::DiffMode::LegacyAbs) {
-      // Original: per-channel abs * amplification, clamped to bit depth
+      // Original: per-channel abs * AMPLIFICATION, clamped to bit depth
       constexpr int AMPLIFICATION = 2;
 
       if (luma_only) {
         const int dl = luma709(rl, gl, bl) - luma709(rr, gr, br);
         const uint32_t Y = clamp_u32(std::abs(dl) * AMPLIFICATION, MAX);
-        auto yP = T::from10(Y);
+        auto y_p = T::from10(Y);
 
-        plane_difference[idx] = yP; plane_difference[idx + 1] = yP; plane_difference[idx + 2] = yP;
+        plane_difference[idx] = y_p; plane_difference[idx + 1] = y_p; plane_difference[idx + 2] = y_p;
       } else {
         const uint32_t R = clamp_u32(std::abs(rl - rr) * AMPLIFICATION, MAX);
         const uint32_t G = clamp_u32(std::abs(gl - gr) * AMPLIFICATION, MAX);
@@ -593,15 +593,15 @@ inline void process_difference_scanline(
         const uint32_t m = (uint32_t) std::lround(map_unit(x, mode) * MID);
         const int out = (int) MID + (dl >= 0 ? (int) m : -(int) m);
         const uint32_t Y = clamp_u32(out, MAX);
-        auto yP = T::from10(Y);
+        auto y_p = T::from10(Y);
 
-        plane_difference[idx] = yP; plane_difference[idx + 1] = yP; plane_difference[idx + 2] = yP;
+        plane_difference[idx] = y_p; plane_difference[idx + 1] = y_p; plane_difference[idx + 2] = y_p;
       } else {
         const float x = std::abs(dl) / scale_max_or_neg;
         const uint32_t Y = (uint32_t)std::lround(map_unit(x, mode) * MAX);
-        auto yP = T::from10(Y);
+        auto y_p = T::from10(Y);
 
-        plane_difference[idx] = yP; plane_difference[idx + 1] = yP; plane_difference[idx + 2] = yP;
+        plane_difference[idx] = y_p; plane_difference[idx + 1] = y_p; plane_difference[idx + 2] = y_p;
       }
     } else {
       const int dr = rl - rr, dg = gl - gr, db = bl - br;
@@ -642,27 +642,27 @@ float calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_left,
   static_assert(Bpc == 8 || Bpc == 10, "Bpc must be 8 or 10");
   constexpr int CHANNELS = 3;
 
-  const size_t strideL = pitch_left  / sizeof(typename T::P);
-  const size_t strideR = pitch_right / sizeof(typename T::P);
+  const size_t stride_l = pitch_left  / sizeof(typename T::P);
+  const size_t stride_r = pitch_right / sizeof(typename T::P);
 
   // Compute histogram
   const int bins = static_cast<int>(T::MaxCode) + 1;
   std::vector<uint32_t> hist(static_cast<size_t>(bins), 0u);
 
   for (int y = 0; y < height; y += 1) {
-    const typename T::P* rowL = plane_left  + y * strideL;
-    const typename T::P* rowR = plane_right + y * strideR;
+    const typename T::P* row_l = plane_left  + y * stride_l;
+    const typename T::P* row_r = plane_right + y * stride_r;
 
     for (int x = 0; x < width_right; x += 1) {
       const int idx = x * CHANNELS;
 
-      const int rl = rowL[idx + 0] >> T::PackShift;
-      const int gl = rowL[idx + 1] >> T::PackShift;
-      const int bl = rowL[idx + 2] >> T::PackShift;
+      const int rl = row_l[idx + 0] >> T::PackShift;
+      const int gl = row_l[idx + 1] >> T::PackShift;
+      const int bl = row_l[idx + 2] >> T::PackShift;
 
-      const int rr = rowR[idx + 0] >> T::PackShift;
-      const int gr = rowR[idx + 1] >> T::PackShift;
-      const int br = rowR[idx + 2] >> T::PackShift;
+      const int rr = row_r[idx + 0] >> T::PackShift;
+      const int gr = row_r[idx + 1] >> T::PackShift;
+      const int br = row_r[idx + 2] >> T::PackShift;
 
       int d;
 
