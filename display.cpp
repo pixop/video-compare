@@ -2,6 +2,7 @@
 #include <libgen.h>
 #include <algorithm>
 #include <atomic>
+#include <future>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -65,6 +66,28 @@ inline T check_sdl(T value, const std::string& message) {
 template <typename T>
 inline T clamp_range(T v, T lo, T hi) {
   return (v < lo) ? lo : (v > hi) ? hi : v;
+}
+
+inline int get_num_threads() {
+  return clamp_range(std::thread::hardware_concurrency(), 1u, 4u);
+}
+
+template <typename Func>
+void parallel_process_rows(int total_rows, Func&& func) {
+  const int num_threads = get_num_threads();
+
+  std::vector<std::future<void>> futures;
+
+  for (int t = 0; t < num_threads; ++t) {
+    const int start_row = (t * total_rows) / num_threads;
+    const int end_row = ((t + 1) * total_rows) / num_threads;
+
+    futures.emplace_back(std::async(std::launch::async, [=, func = std::forward<Func>(func)]() { func(start_row, end_row); }));
+  }
+
+  for (auto& future : futures) {
+    future.wait();
+  }
 }
 
 inline uint32_t clamp_u32(int v, uint32_t hi) {
@@ -515,21 +538,23 @@ void Display::print_verbose_info() {
 }
 
 void Display::convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi) {
-  uint16_t* p_in = reinterpret_cast<uint16_t*>(in_planes[0] + roi.x * 6 + in_pitches[0] * roi.y);
-  uint32_t* p_out = out_planes[0] + roi.x + out_pitches[0] * roi.y / 4;
+  parallel_process_rows(roi.h, [=](int start_row, int end_row) {
+    uint16_t* p_in = reinterpret_cast<uint16_t*>(in_planes[0] + roi.x * 6 + in_pitches[0] * (roi.y + start_row));
+    uint32_t* p_out = out_planes[0] + roi.x + out_pitches[0] * (roi.y + start_row) / sizeof(uint32_t);
 
-  for (int y = 0; y < roi.h; y++) {
-    for (int in_x = 0, out_x = 0; out_x < roi.w; in_x += 3, out_x++) {
-      const uint32_t r = p_in[in_x] >> 6;
-      const uint32_t g = p_in[in_x + 1] >> 6;
-      const uint32_t b = p_in[in_x + 2] >> 6;
+    for (int y = start_row; y < end_row; y++) {
+      for (int in_x = 0, out_x = 0; out_x < roi.w; in_x += 3, out_x++) {
+        const uint32_t r = p_in[in_x] >> 6;
+        const uint32_t g = p_in[in_x + 1] >> 6;
+        const uint32_t b = p_in[in_x + 2] >> 6;
 
-      p_out[out_x] = (r << 20) | (g << 10) | (b);
+        p_out[out_x] = (r << 20) | (g << 10) | (b);
+      }
+
+      p_in += in_pitches[0] / sizeof(uint16_t);
+      p_out += out_pitches[0] / sizeof(uint32_t);
     }
-
-    p_in += in_pitches[0] / 2;
-    p_out += out_pitches[0] / 4;
-  }
+  });
 }
 
 template <int Bpc>
@@ -652,42 +677,61 @@ float Display::calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_
   const size_t stride_l = pitch_left / sizeof(typename T::P);
   const size_t stride_r = pitch_right / sizeof(typename T::P);
 
-  // Compute histogram
   const int bins = static_cast<int>(T::MaxCode) + 1;
-  std::vector<uint32_t> hist(static_cast<size_t>(bins), 0u);
+  const int num_threads = get_num_threads();
 
-  for (int y = 0; y < video_height_; y++) {
-    const typename T::P* row_l = plane_left + y * stride_l;
-    const typename T::P* row_r = plane_right + y * stride_r;
+  std::vector<std::vector<uint32_t>> thread_histograms(num_threads, std::vector<uint32_t>(bins, 0u));
+  std::vector<std::future<void>> futures;
 
-    for (int x = 0; x < width_right; x++) {
-      const int idx = x * CHANNELS;
+  // Launch threads to compute histograms for different row ranges
+  for (int t = 0; t < num_threads; ++t) {
+    const int start_row = (t * video_height_) / num_threads;
+    const int end_row = ((t + 1) * video_height_) / num_threads;
 
-      const int rl = row_l[idx + 0] >> T::PackShift;
-      const int gl = row_l[idx + 1] >> T::PackShift;
-      const int bl = row_l[idx + 2] >> T::PackShift;
+    futures.emplace_back(std::async(std::launch::async, [=, &hist = thread_histograms[t]]() {
+      for (int y = start_row; y < end_row; y++) {
+        const typename T::P* row_l = plane_left + y * stride_l;
+        const typename T::P* row_r = plane_right + y * stride_r;
 
-      const int rr = row_r[idx + 0] >> T::PackShift;
-      const int gr = row_r[idx + 1] >> T::PackShift;
-      const int br = row_r[idx + 2] >> T::PackShift;
+        for (int x = 0; x < width_right; x++) {
+          const int idx = x * CHANNELS;
 
-      int d;
+          const int rl = row_l[idx + 0] >> T::PackShift;
+          const int gl = row_l[idx + 1] >> T::PackShift;
+          const int bl = row_l[idx + 2] >> T::PackShift;
 
-      if (diff_luma_only_) {
-        const int yl = luma709(rl, gl, bl);
-        const int yr = luma709(rr, gr, br);
+          const int rr = row_r[idx + 0] >> T::PackShift;
+          const int gr = row_r[idx + 1] >> T::PackShift;
+          const int br = row_r[idx + 2] >> T::PackShift;
 
-        d = std::abs(yl - yr);
-      } else {
-        const int dr = std::abs(rl - rr);
-        const int dg = std::abs(gl - gr);
-        const int db = std::abs(bl - br);
+          int d;
+          if (diff_luma_only_) {
+            const int yl = luma709(rl, gl, bl);
+            const int yr = luma709(rr, gr, br);
+            d = std::abs(yl - yr);
+          } else {
+            const int dr = std::abs(rl - rr);
+            const int dg = std::abs(gl - gr);
+            const int db = std::abs(bl - br);
+            d = dr > dg ? (dr > db ? dr : db) : (dg > db ? dg : db);
+          }
 
-        d = dr > dg ? (dr > db ? dr : db) : (dg > db ? dg : db);
+          const int bin = clamp_range(d, 0, bins - 1);
+          hist[static_cast<size_t>(bin)]++;
+        }
       }
+    }));
+  }
 
-      const int bin = clamp_range(d, 0, bins - 1);
-      hist[static_cast<size_t>(bin)]++;
+  for (auto& future : futures) {
+    future.wait();
+  }
+
+  // Merge histograms
+  std::vector<uint32_t> hist(bins, 0u);
+  for (const auto& thread_hist : thread_histograms) {
+    for (size_t i = 0; i < bins; ++i) {
+      hist[i] += thread_hist[i];
     }
   }
 
@@ -735,16 +779,20 @@ void Display::process_difference_planes(const typename BitDepthTraits<Bpc>::P* p
                                         const float diff_max) const {
   using T = BitDepthTraits<Bpc>;
 
-  auto plane_left = plane_left0, plane_right = plane_right0;
-  auto plane_difference = plane_difference0;
   const float scale_max = (diff_mode_ == Display::DiffMode::LegacyAbs) ? -1.f : clamp_range(diff_max, 4.f, (float)T::MaxCode);
 
-  for (int y = 0; y < video_height_; y++) {
-    process_difference_scanline<Bpc>(plane_left, plane_right, plane_difference, width_right, diff_mode_, diff_luma_only_, scale_max);
-    plane_left += pitch_left / sizeof(typename T::P);
-    plane_right += pitch_right / sizeof(typename T::P);
-    plane_difference += pitch_difference / sizeof(typename T::P);
-  }
+  parallel_process_rows(video_height_, [=](int start_row, int end_row) {
+    auto plane_left = plane_left0 + start_row * (pitch_left / sizeof(typename T::P));
+    auto plane_right = plane_right0 + start_row * (pitch_right / sizeof(typename T::P));
+    auto plane_difference = plane_difference0 + start_row * (pitch_difference / sizeof(typename T::P));
+
+    for (int y = start_row; y < end_row; y++) {
+      process_difference_scanline<Bpc>(plane_left, plane_right, plane_difference, width_right, diff_mode_, diff_luma_only_, scale_max);
+      plane_left += pitch_left / sizeof(typename T::P);
+      plane_right += pitch_right / sizeof(typename T::P);
+      plane_difference += pitch_difference / sizeof(typename T::P);
+    }
+  });
 }
 
 void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x) {
