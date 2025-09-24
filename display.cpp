@@ -62,12 +62,21 @@ inline T check_sdl(T value, const std::string& message) {
   return value;
 }
 
+template <typename T>
+inline T clamp_range(T v, T lo, T hi) {
+  return (v < lo) ? lo : (v > hi) ? hi : v;
+}
+
+inline uint32_t clamp_u32(int v, uint32_t hi) {
+  return (v < 0) ? 0u : (v > (int)hi ? hi : (uint32_t)v);
+}
+
 inline int clamp_int_to_byte_range(int value) {
-  return value > 255 ? 255 : value < 0 ? 0 : value;
+  return clamp_range(value, 0, 255);
 }
 
 inline int clamp_int_to_10_bpc_range(int value) {
-  return value > 1023 ? 1023 : value < 0 ? 0 : value;
+  return clamp_range(value, 0, 1023);
 }
 
 inline uint8_t clamp_int_to_byte(int value) {
@@ -76,15 +85,6 @@ inline uint8_t clamp_int_to_byte(int value) {
 
 inline uint16_t clamp_int_to_10_bpc(int value) {
   return static_cast<uint16_t>(clamp_int_to_10_bpc_range(value));
-}
-
-template <typename T>
-inline T clamp_range(T v, T lo, T hi) {
-  return (v < lo) ? lo : (v > hi) ? hi : v;
-}
-
-inline uint32_t clamp_u32(int v, uint32_t hi) {
-  return (v < 0) ? 0u : (v > (int)hi ? hi : (uint32_t)v);
 }
 
 inline int luma709(int r, int g, int b) {
@@ -692,7 +692,7 @@ float calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_left,
         d = dr > dg ? (dr > db ? dr : db) : (dg > db ? dg : db);
       }
 
-      const int bin = (d >= 0 && d < bins) ? d : (bins - 1);
+      const int bin = clamp_range(d, 0, bins - 1);
       hist[static_cast<size_t>(bin)]++;
     }
   }
@@ -730,7 +730,6 @@ float calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_left,
   return p;
 }
 
-// ---- template helper for main processing loop ------------------------------
 template <int Bpc>
 void process_difference_planes(const typename BitDepthTraits<Bpc>::P* plane_left0,
                                const typename BitDepthTraits<Bpc>::P* plane_right0,
@@ -1627,7 +1626,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   const float video_texel_clamped_mouse_x = (std::round(video_mouse_x) * zoom_rect.size.x() / static_cast<float>(video_width_) + zoom_rect.start.x()) / video_to_window_width_factor_;
 
   if (show_left_ || show_right_) {
-    const int split_x = (compare_mode && mode_ == Mode::SPLIT) ? std::min(std::max(std::round(video_mouse_x), 0.0F), float(video_width_)) : show_left_ ? video_width_ : 0;
+    const int split_x = (compare_mode && mode_ == Mode::SPLIT) ? clamp_range(std::round(video_mouse_x), 0.0F, float(video_width_)) : show_left_ ? video_width_ : 0;
 
     // update video
     if (show_left_ && (split_x > 0)) {
@@ -1692,7 +1691,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     const int src_zoomed_size = 64;
     const int src_half_zoomed_size = src_zoomed_size / 2;
 
-    SDL_Rect src_zoomed_area = {std::min(std::max(0, mouse_drawable_x - src_half_zoomed_size), drawable_width_ - src_zoomed_size - 1), std::min(std::max(0, mouse_drawable_y - src_half_zoomed_size), drawable_height_ - src_zoomed_size - 1),
+    SDL_Rect src_zoomed_area = {clamp_range(mouse_drawable_x - src_half_zoomed_size, 0, drawable_width_ - src_zoomed_size - 1), clamp_range(mouse_drawable_y - src_half_zoomed_size, 0, drawable_height_ - src_zoomed_size - 1),
                                 src_zoomed_size, src_zoomed_size};
 
     SDL_Surface* render_surface = SDL_CreateRGBSurface(0, src_zoomed_size, src_zoomed_size, 32, 0, 0, 0, 0);
