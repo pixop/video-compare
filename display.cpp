@@ -564,30 +564,13 @@ inline void process_difference_scanline(const typename BitDepthTraits<Bpc>::P* p
                                         const int pixels,
                                         const Display::DiffMode mode,
                                         const bool luma_only,
-                                        const float scale_max_or_neg) {
+                                        const std::vector<uint32_t>& mag_u,
+                                        const std::vector<uint32_t>& mag_s) {
   using T = BitDepthTraits<Bpc>;
   constexpr uint32_t MAX = T::MaxCode;
   constexpr uint32_t MID = MAX >> 1;
 
   auto load = [](typename T::P v) -> int { return (int)(v >> T::PackShift); };
-
-  // Non-linear magnitude map
-  auto map_unit = [](float x, Display::DiffMode m) -> float {
-    x = clamp_range(x, 0.0f, 1.0f);
-
-    switch (m) {
-      case Display::DiffMode::AbsLinear:
-        return x;
-      case Display::DiffMode::AbsSqrt:
-        return std::sqrt(x);
-      case Display::DiffMode::SignedDiverging:
-        return std::sqrt(x);  // mag part; sign handled outside
-      case Display::DiffMode::LegacyAbs:
-        return x;  // not used
-    }
-
-    return x;
-  };
 
   for (int i = 0; i < pixels; i++) {
     const int idx = i * 3;
@@ -621,48 +604,37 @@ inline void process_difference_scanline(const typename BitDepthTraits<Bpc>::P* p
     // Adaptive mapping with optional sign and luma-only
     if (luma_only) {
       const int dl = luma709(rl, gl, bl) - luma709(rr, gr, br);
+      const uint32_t a = (uint32_t)std::min<int>(MAX, std::abs(dl));
+
       if (mode == Display::DiffMode::SignedDiverging) {
-        const float x = std::abs(dl) / scale_max_or_neg;
-        const uint32_t m = (uint32_t)std::lround(map_unit(x, mode) * MID);
-        const int out = (int)MID + (dl >= 0 ? (int)m : -(int)m);
-        const uint32_t Y = clamp_u32(out, MAX);
+        const uint32_t m = mag_s[a];
+        const uint32_t Y = (dl >= 0) ? (MID + m) : (MID - m);
         auto y_p = T::from10(Y);
-
-        plane_difference[idx] = y_p;
-        plane_difference[idx + 1] = y_p;
-        plane_difference[idx + 2] = y_p;
+        plane_difference[idx + 0] = plane_difference[idx + 1] = plane_difference[idx + 2] = y_p;
       } else {
-        const float x = std::abs(dl) / scale_max_or_neg;
-        const uint32_t Y = (uint32_t)std::lround(map_unit(x, mode) * MAX);
+        const uint32_t Y = mag_u[a];
         auto y_p = T::from10(Y);
-
-        plane_difference[idx] = y_p;
-        plane_difference[idx + 1] = y_p;
-        plane_difference[idx + 2] = y_p;
+        plane_difference[idx + 0] = plane_difference[idx + 1] = plane_difference[idx + 2] = y_p;
       }
     } else {
       const int dr = rl - rr, dg = gl - gr, db = bl - br;
 
       if (mode == Display::DiffMode::SignedDiverging) {
-        auto map_signed = [&](const int d) -> uint32_t {
-          const float x_abs = std::abs(d) / scale_max_or_neg;
-          const uint32_t map_value = (uint32_t)std::lround(map_unit(x_abs, mode) * MID);
-          const int out = (int)MID + (d >= 0 ? (int)map_value : -(int)map_value);
-          return clamp_u32(out, MAX);
-        };
+        const uint32_t ar = (uint32_t)std::min<int>(MAX, std::abs(dr));
+        const uint32_t ag = (uint32_t)std::min<int>(MAX, std::abs(dg));
+        const uint32_t ab = (uint32_t)std::min<int>(MAX, std::abs(db));
 
-        plane_difference[idx + 0] = T::from10(map_signed(dr));
-        plane_difference[idx + 1] = T::from10(map_signed(dg));
-        plane_difference[idx + 2] = T::from10(map_signed(db));
+        plane_difference[idx + 0] = T::from10(dr >= 0 ? (MID + mag_s[ar]) : (MID - mag_s[ar]));
+        plane_difference[idx + 1] = T::from10(dg >= 0 ? (MID + mag_s[ag]) : (MID - mag_s[ag]));
+        plane_difference[idx + 2] = T::from10(db >= 0 ? (MID + mag_s[ab]) : (MID - mag_s[ab]));
       } else {
-        auto map_unsigned = [&](const int d) -> uint32_t {
-          const float x_abs = std::abs(d) / scale_max_or_neg;
-          return (uint32_t)std::lround(map_unit(x_abs, mode) * MAX);
-        };
+        const uint32_t ar = (uint32_t)std::min<int>(MAX, std::abs(dr));
+        const uint32_t ag = (uint32_t)std::min<int>(MAX, std::abs(dg));
+        const uint32_t ab = (uint32_t)std::min<int>(MAX, std::abs(db));
 
-        plane_difference[idx + 0] = T::from10(map_unsigned(dr));
-        plane_difference[idx + 1] = T::from10(map_unsigned(dg));
-        plane_difference[idx + 2] = T::from10(map_unsigned(db));
+        plane_difference[idx + 0] = T::from10(mag_u[ar]);
+        plane_difference[idx + 1] = T::from10(mag_u[ag]);
+        plane_difference[idx + 2] = T::from10(mag_u[ab]);
       }
     }
   }
@@ -768,6 +740,51 @@ float Display::calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_
   return p;
 }
 
+std::pair<std::vector<uint32_t>, std::vector<uint32_t>> make_diff_lut(uint32_t max_code, Display::DiffMode mode, uint32_t scale_max) {
+  std::vector<uint32_t> mag_u(max_code + 1);
+  std::vector<uint32_t> mag_s(max_code + 1);
+
+  if (mode != Display::DiffMode::LegacyAbs) {
+    if (scale_max == 0) {
+      scale_max = 1;
+    }
+
+    const uint32_t MID = max_code >> 1;
+    const uint32_t Q = 16;
+    const uint32_t ONE_Q = 1u << Q;
+    const uint64_t HALF = uint64_t(1) << (Q - 1);
+
+    for (uint32_t a = 0; a <= max_code; a++) {
+      // x_q = clamp(a/scale, 0..1) in Q16
+      uint32_t x_q = (uint32_t)std::min<uint64_t>(ONE_Q, ((uint64_t)a << Q) / scale_max);
+
+      // map_unit(x): Linear / Sqrt (SignedDiverging uses sqrt magnitude)
+      uint32_t y_q;
+      switch (mode) {
+        case Display::DiffMode::AbsLinear:
+          y_q = x_q;
+          break;
+        case Display::DiffMode::AbsSqrt:
+        case Display::DiffMode::SignedDiverging: {
+          const double x = double(x_q) / double(ONE_Q);
+          const double y = std::sqrt(x);
+          y_q = (uint32_t)std::llround(y * double(ONE_Q));
+          break;
+        }
+        default:  // LegacyAbs not expected here; fall back to linear
+          y_q = x_q;
+          break;
+      }
+
+      // Scale back to code domain with Q16 rounding
+      mag_u[a] = (uint32_t)(((uint64_t)y_q * max_code + HALF) >> Q);  // [0..MAX]
+      mag_s[a] = (uint32_t)(((uint64_t)y_q * MID + HALF) >> Q);       // [0..MID]
+    }
+  }
+
+  return std::pair<std::vector<uint32_t>, std::vector<uint32_t>>(std::move(mag_u), std::move(mag_s));
+};
+
 template <int Bpc>
 void Display::process_difference_planes(const typename BitDepthTraits<Bpc>::P* plane_left0,
                                         const typename BitDepthTraits<Bpc>::P* plane_right0,
@@ -778,8 +795,17 @@ void Display::process_difference_planes(const typename BitDepthTraits<Bpc>::P* p
                                         const int width_right,
                                         const float diff_max) const {
   using T = BitDepthTraits<Bpc>;
+  constexpr uint32_t MAX = T::MaxCode;
 
-  const float scale_max = (diff_mode_ == Display::DiffMode::LegacyAbs) ? -1.f : clamp_range(diff_max, 4.f, (float)T::MaxCode);
+  const float scale_max = (diff_mode_ == Display::DiffMode::LegacyAbs) ? -1.f : clamp_range(diff_max, 4.f, (float)MAX);
+
+  // Integerize/clip scale once
+  const uint32_t scale_max_i = (uint32_t)std::max<double>(1.0, std::min<double>(double(MAX), std::round(std::fabs(scale_max))));
+
+  // Build LUTs (only for adaptive mapping)
+  auto luts = make_diff_lut(MAX, diff_mode_, scale_max_i);
+  const std::vector<uint32_t>& mag_u = luts.first;
+  const std::vector<uint32_t>& mag_s = luts.second;
 
   parallel_process_rows(video_height_, [=](int start_row, int end_row) {
     auto plane_left = plane_left0 + start_row * (pitch_left / sizeof(typename T::P));
@@ -787,7 +813,7 @@ void Display::process_difference_planes(const typename BitDepthTraits<Bpc>::P* p
     auto plane_difference = plane_difference0 + start_row * (pitch_difference / sizeof(typename T::P));
 
     for (int y = start_row; y < end_row; y++) {
-      process_difference_scanline<Bpc>(plane_left, plane_right, plane_difference, width_right, diff_mode_, diff_luma_only_, scale_max);
+      process_difference_scanline<Bpc>(plane_left, plane_right, plane_difference, width_right, diff_mode_, diff_luma_only_, mag_u, mag_s);
       plane_left += pitch_left / sizeof(typename T::P);
       plane_right += pitch_right / sizeof(typename T::P);
       plane_difference += pitch_difference / sizeof(typename T::P);
