@@ -78,7 +78,8 @@ inline uint16_t clamp_int_to_10_bpc(int value) {
   return static_cast<uint16_t>(clamp_int_to_10_bpc_range(value));
 }
 
-template <typename T> inline T clamp_range(T v, T lo, T hi) {
+template <typename T>
+inline T clamp_range(T v, T lo, T hi) {
   return (v < lo) ? lo : (v > hi) ? hi : v;
 }
 
@@ -90,21 +91,24 @@ inline int luma709(int r, int g, int b) {
   return (217 * r + 733 * g + 74 * b) >> 10;
 }
 
-template <int Bpc> struct BitDepthTraits;
-template <> struct BitDepthTraits<8>  {
+template <int Bpc>
+struct BitDepthTraits;
+template <>
+struct BitDepthTraits<8> {
   using P = uint8_t;
   static constexpr uint32_t MaxCode = 255u;
-  static constexpr int PackShift = 0; // stored as 8b
-  static inline int  to10(int v) { return v; }  // already 8-bit working domain
-  static inline P    from10(uint32_t v) { return (P)clamp_u32((int)v, MaxCode); }
+  static constexpr int PackShift = 0;          // stored as 8b
+  static inline int to10(int v) { return v; }  // already 8-bit working domain
+  static inline P from10(uint32_t v) { return (P)clamp_u32((int)v, MaxCode); }
 };
 
-template <> struct BitDepthTraits<10> {
+template <>
+struct BitDepthTraits<10> {
   using P = uint16_t;
   static constexpr uint32_t MaxCode = 1023u;
-  static constexpr int PackShift = 6; // stored as 16b with <<6
-  static inline int  to10(int v) { return v; }  // values in working domain are 10b
-  static inline P    from10(uint32_t v) { return (P)(clamp_u32((int)v, MaxCode) << PackShift); }
+  static constexpr int PackShift = 6;          // stored as 16b with <<6
+  static inline int to10(int v) { return v; }  // values in working domain are 10b
+  static inline P from10(uint32_t v) { return (P)(clamp_u32((int)v, MaxCode) << PackShift); }
 };
 
 // Credits to Kemin Zhou for this approach which does not require Boost or C++17
@@ -529,15 +533,13 @@ void Display::convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::a
 }
 
 template <int Bpc>
-inline void process_difference_scanline(
-  const typename BitDepthTraits<Bpc>::P* plane_left,
-  const typename BitDepthTraits<Bpc>::P* plane_right,
-  typename BitDepthTraits<Bpc>::P* plane_difference,
-  const int pixels,
-  const Display::DiffMode mode,
-  const bool luma_only,
-  const float scale_max_or_neg)
-{
+inline void process_difference_scanline(const typename BitDepthTraits<Bpc>::P* plane_left,
+                                        const typename BitDepthTraits<Bpc>::P* plane_right,
+                                        typename BitDepthTraits<Bpc>::P* plane_difference,
+                                        const int pixels,
+                                        const Display::DiffMode mode,
+                                        const bool luma_only,
+                                        const float scale_max_or_neg) {
   using T = BitDepthTraits<Bpc>;
   constexpr uint32_t MAX = T::MaxCode;
   constexpr uint32_t MID = MAX >> 1;
@@ -549,10 +551,14 @@ inline void process_difference_scanline(
     x = clamp_range(x, 0.0f, 1.0f);
 
     switch (m) {
-      case Display::DiffMode::AbsLinear:      return x;
-      case Display::DiffMode::AbsSqrt:        return std::sqrt(x);
-      case Display::DiffMode::SignedDiverging:return std::sqrt(x); // mag part; sign handled outside
-      case Display::DiffMode::LegacyAbs:      return x; // not used
+      case Display::DiffMode::AbsLinear:
+        return x;
+      case Display::DiffMode::AbsSqrt:
+        return std::sqrt(x);
+      case Display::DiffMode::SignedDiverging:
+        return std::sqrt(x);  // mag part; sign handled outside
+      case Display::DiffMode::LegacyAbs:
+        return x;  // not used
     }
 
     return x;
@@ -572,7 +578,9 @@ inline void process_difference_scanline(
         const uint32_t Y = clamp_u32(std::abs(dl) * AMPLIFICATION, MAX);
         auto y_p = T::from10(Y);
 
-        plane_difference[idx] = y_p; plane_difference[idx + 1] = y_p; plane_difference[idx + 2] = y_p;
+        plane_difference[idx] = y_p;
+        plane_difference[idx + 1] = y_p;
+        plane_difference[idx + 2] = y_p;
       } else {
         const uint32_t R = clamp_u32(std::abs(rl - rr) * AMPLIFICATION, MAX);
         const uint32_t G = clamp_u32(std::abs(gl - gr) * AMPLIFICATION, MAX);
@@ -590,18 +598,22 @@ inline void process_difference_scanline(
       const int dl = luma709(rl, gl, bl) - luma709(rr, gr, br);
       if (mode == Display::DiffMode::SignedDiverging) {
         const float x = std::abs(dl) / scale_max_or_neg;
-        const uint32_t m = (uint32_t) std::lround(map_unit(x, mode) * MID);
-        const int out = (int) MID + (dl >= 0 ? (int) m : -(int) m);
+        const uint32_t m = (uint32_t)std::lround(map_unit(x, mode) * MID);
+        const int out = (int)MID + (dl >= 0 ? (int)m : -(int)m);
         const uint32_t Y = clamp_u32(out, MAX);
         auto y_p = T::from10(Y);
 
-        plane_difference[idx] = y_p; plane_difference[idx + 1] = y_p; plane_difference[idx + 2] = y_p;
+        plane_difference[idx] = y_p;
+        plane_difference[idx + 1] = y_p;
+        plane_difference[idx + 2] = y_p;
       } else {
         const float x = std::abs(dl) / scale_max_or_neg;
         const uint32_t Y = (uint32_t)std::lround(map_unit(x, mode) * MAX);
         auto y_p = T::from10(Y);
 
-        plane_difference[idx] = y_p; plane_difference[idx + 1] = y_p; plane_difference[idx + 2] = y_p;
+        plane_difference[idx] = y_p;
+        plane_difference[idx + 1] = y_p;
+        plane_difference[idx + 2] = y_p;
       }
     } else {
       const int dr = rl - rr, dg = gl - gr, db = bl - br;
@@ -609,8 +621,8 @@ inline void process_difference_scanline(
       if (mode == Display::DiffMode::SignedDiverging) {
         auto map_signed = [&](const int d) -> uint32_t {
           const float x_abs = std::abs(d) / scale_max_or_neg;
-          const uint32_t map_value = (uint32_t) std::lround(map_unit(x_abs, mode) * MID);
-          const int out = (int) MID + (d >= 0 ? (int) map_value : -(int) map_value);
+          const uint32_t map_value = (uint32_t)std::lround(map_unit(x_abs, mode) * MID);
+          const int out = (int)MID + (d >= 0 ? (int)map_value : -(int)map_value);
           return clamp_u32(out, MAX);
         };
 
@@ -620,7 +632,7 @@ inline void process_difference_scanline(
       } else {
         auto map_unsigned = [&](const int d) -> uint32_t {
           const float x_abs = std::abs(d) / scale_max_or_neg;
-          return (uint32_t) std::lround(map_unit(x_abs, mode) * MAX);
+          return (uint32_t)std::lround(map_unit(x_abs, mode) * MAX);
         };
 
         plane_difference[idx + 0] = T::from10(map_unsigned(dr));
@@ -631,18 +643,19 @@ inline void process_difference_scanline(
   }
 }
 
-template<int Bpc>
+template <int Bpc>
 float calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_left,
                           const typename BitDepthTraits<Bpc>::P* plane_right,
-                          const size_t pitch_left, const size_t pitch_right,
-                          const int width_right, const int height,
-                          const bool diff_luma_only)
-{
+                          const size_t pitch_left,
+                          const size_t pitch_right,
+                          const int width_right,
+                          const int height,
+                          const bool diff_luma_only) {
   using T = BitDepthTraits<Bpc>;
   static_assert(Bpc == 8 || Bpc == 10, "Bpc must be 8 or 10");
   constexpr int CHANNELS = 3;
 
-  const size_t stride_l = pitch_left  / sizeof(typename T::P);
+  const size_t stride_l = pitch_left / sizeof(typename T::P);
   const size_t stride_r = pitch_right / sizeof(typename T::P);
 
   // Compute histogram
@@ -650,7 +663,7 @@ float calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_left,
   std::vector<uint32_t> hist(static_cast<size_t>(bins), 0u);
 
   for (int y = 0; y < height; y += 1) {
-    const typename T::P* row_l = plane_left  + y * stride_l;
+    const typename T::P* row_l = plane_left + y * stride_l;
     const typename T::P* row_r = plane_right + y * stride_r;
 
     for (int x = 0; x < width_right; x += 1) {
@@ -718,18 +731,23 @@ float calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_left,
 }
 
 // ---- template helper for main processing loop ------------------------------
-template<int Bpc>
+template <int Bpc>
 void process_difference_planes(const typename BitDepthTraits<Bpc>::P* plane_left0,
                                const typename BitDepthTraits<Bpc>::P* plane_right0,
                                typename BitDepthTraits<Bpc>::P* plane_difference0,
-                               const size_t pitch_left, const size_t pitch_right, const size_t pitch_difference,
-                               const int width_right, const int height,
-                               const Display::DiffMode diff_mode, const bool diff_luma_only, const float diff_max) {
+                               const size_t pitch_left,
+                               const size_t pitch_right,
+                               const size_t pitch_difference,
+                               const int width_right,
+                               const int height,
+                               const Display::DiffMode diff_mode,
+                               const bool diff_luma_only,
+                               const float diff_max) {
   using T = BitDepthTraits<Bpc>;
 
   auto plane_left = plane_left0, plane_right = plane_right0;
   auto plane_difference = plane_difference0;
-  const float scale_max = (diff_mode == Display::DiffMode::LegacyAbs) ? -1.f : clamp_range(diff_max, 4.f, (float) T::MaxCode);
+  const float scale_max = (diff_mode == Display::DiffMode::LegacyAbs) ? -1.f : clamp_range(diff_max, 4.f, (float)T::MaxCode);
 
   for (int y = 0; y < height; y++) {
     process_difference_scanline<Bpc>(plane_left, plane_right, plane_difference, width_right, diff_mode, diff_luma_only, scale_max);
@@ -739,12 +757,7 @@ void process_difference_planes(const typename BitDepthTraits<Bpc>::P* plane_left
   }
 }
 
-void Display::update_difference(std::array<uint8_t*, 3> planes_left,
-                                std::array<size_t, 3> pitches_left,
-                                std::array<uint8_t*, 3> planes_right,
-                                std::array<size_t, 3> pitches_right,
-                                int split_x)
-{
+void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x) {
   constexpr int CHANNELS = 3;
 
   const int width_right = (video_width_ - split_x);
@@ -765,9 +778,7 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left,
       frame_max = calculate_frame_p99<10>(plane_left0, plane_right0, pitches_left[0], pitches_right[0], width_right, video_height_, diff_luma_only_);
     }
 
-    process_difference_planes<10>(plane_left0, plane_right0, plane_difference0,
-                                  pitches_left[0], pitches_right[0], diff_pitches_[0],
-                                  width_right, video_height_, diff_mode_, diff_luma_only_, frame_max);
+    process_difference_planes<10>(plane_left0, plane_right0, plane_difference0, pitches_left[0], pitches_right[0], diff_pitches_[0], width_right, video_height_, diff_mode_, diff_luma_only_, frame_max);
   } else {
     auto plane_left0 = planes_left[0] + split_x * CHANNELS;
     auto plane_right0 = planes_right[0] + split_x * CHANNELS;
@@ -777,9 +788,7 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left,
       frame_max = calculate_frame_p99<8>(plane_left0, plane_right0, pitches_left[0], pitches_right[0], width_right, video_height_, diff_luma_only_);
     }
 
-    process_difference_planes<8>(plane_left0, plane_right0, plane_difference0,
-                                 pitches_left[0], pitches_right[0], diff_pitches_[0],
-                                 width_right, video_height_, diff_mode_, diff_luma_only_, frame_max);
+    process_difference_planes<8>(plane_left0, plane_right0, plane_difference0, pitches_left[0], pitches_right[0], diff_pitches_[0], width_right, video_height_, diff_mode_, diff_luma_only_, frame_max);
   }
 }
 
@@ -2410,10 +2419,18 @@ void Display::input() {
             }
             std::cout << "Subtraction mode set to '";
             switch (diff_mode_) {
-              case DiffMode::LegacyAbs: std::cout << "ABSOLUTE LINEAR (FIXED GAIN)"; break;
-              case DiffMode::AbsLinear: std::cout << "ABSOLUTE LINEAR (ADAPTIVE)"; break;
-              case DiffMode::AbsSqrt: std::cout << "ABSOLUTE SQUARE ROOT"; break;
-              case DiffMode::SignedDiverging: std::cout << "SIGNED DIVERGING"; break;
+              case DiffMode::LegacyAbs:
+                std::cout << "ABSOLUTE LINEAR (FIXED GAIN)";
+                break;
+              case DiffMode::AbsLinear:
+                std::cout << "ABSOLUTE LINEAR (ADAPTIVE)";
+                break;
+              case DiffMode::AbsSqrt:
+                std::cout << "ABSOLUTE SQUARE ROOT";
+                break;
+              case DiffMode::SignedDiverging:
+                std::cout << "SIGNED DIVERGING";
+                break;
             }
             std::cout << "'" << std::endl;
             break;

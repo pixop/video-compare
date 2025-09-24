@@ -65,9 +65,8 @@ static inline int64_t time_ms_to_av_time(const double time_ms) {
 
 static inline int64_t calculate_dynamic_time_shift(const AVRational& multiplier, const int64_t original_pts, const bool inverse) {
   // Calculate the time shift as the difference between original and scaled PTS
-  const int64_t time_shift = inverse ?
-    (original_pts - av_rescale_q(original_pts, AVRational{multiplier.den, multiplier.num}, AVRational{1, 1})) :
-    (av_rescale_q(original_pts, AVRational{multiplier.num, multiplier.den}, AVRational{1, 1}) - original_pts);
+  const int64_t time_shift =
+      inverse ? (original_pts - av_rescale_q(original_pts, AVRational{multiplier.den, multiplier.num}, AVRational{1, 1})) : (av_rescale_q(original_pts, AVRational{multiplier.num, multiplier.den}, AVRational{1, 1}) - original_pts);
 
   return time_shift;
 }
