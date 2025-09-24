@@ -644,13 +644,7 @@ inline void process_difference_scanline(const typename BitDepthTraits<Bpc>::P* p
 }
 
 template <int Bpc>
-float calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_left,
-                          const typename BitDepthTraits<Bpc>::P* plane_right,
-                          const size_t pitch_left,
-                          const size_t pitch_right,
-                          const int width_right,
-                          const int height,
-                          const bool diff_luma_only) {
+float Display::calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_left, const typename BitDepthTraits<Bpc>::P* plane_right, const size_t pitch_left, const size_t pitch_right, const int width_right) const {
   using T = BitDepthTraits<Bpc>;
   static_assert(Bpc == 8 || Bpc == 10, "Bpc must be 8 or 10");
   constexpr int CHANNELS = 3;
@@ -662,11 +656,11 @@ float calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_left,
   const int bins = static_cast<int>(T::MaxCode) + 1;
   std::vector<uint32_t> hist(static_cast<size_t>(bins), 0u);
 
-  for (int y = 0; y < height; y += 1) {
+  for (int y = 0; y < video_height_; y++) {
     const typename T::P* row_l = plane_left + y * stride_l;
     const typename T::P* row_r = plane_right + y * stride_r;
 
-    for (int x = 0; x < width_right; x += 1) {
+    for (int x = 0; x < width_right; x++) {
       const int idx = x * CHANNELS;
 
       const int rl = row_l[idx + 0] >> T::PackShift;
@@ -679,7 +673,7 @@ float calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_left,
 
       int d;
 
-      if (diff_luma_only) {
+      if (diff_luma_only_) {
         const int yl = luma709(rl, gl, bl);
         const int yr = luma709(rr, gr, br);
 
@@ -731,25 +725,22 @@ float calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_left,
 }
 
 template <int Bpc>
-void process_difference_planes(const typename BitDepthTraits<Bpc>::P* plane_left0,
-                               const typename BitDepthTraits<Bpc>::P* plane_right0,
-                               typename BitDepthTraits<Bpc>::P* plane_difference0,
-                               const size_t pitch_left,
-                               const size_t pitch_right,
-                               const size_t pitch_difference,
-                               const int width_right,
-                               const int height,
-                               const Display::DiffMode diff_mode,
-                               const bool diff_luma_only,
-                               const float diff_max) {
+void Display::process_difference_planes(const typename BitDepthTraits<Bpc>::P* plane_left0,
+                                        const typename BitDepthTraits<Bpc>::P* plane_right0,
+                                        typename BitDepthTraits<Bpc>::P* plane_difference0,
+                                        const size_t pitch_left,
+                                        const size_t pitch_right,
+                                        const size_t pitch_difference,
+                                        const int width_right,
+                                        const float diff_max) const {
   using T = BitDepthTraits<Bpc>;
 
   auto plane_left = plane_left0, plane_right = plane_right0;
   auto plane_difference = plane_difference0;
-  const float scale_max = (diff_mode == Display::DiffMode::LegacyAbs) ? -1.f : clamp_range(diff_max, 4.f, (float)T::MaxCode);
+  const float scale_max = (diff_mode_ == Display::DiffMode::LegacyAbs) ? -1.f : clamp_range(diff_max, 4.f, (float)T::MaxCode);
 
-  for (int y = 0; y < height; y++) {
-    process_difference_scanline<Bpc>(plane_left, plane_right, plane_difference, width_right, diff_mode, diff_luma_only, scale_max);
+  for (int y = 0; y < video_height_; y++) {
+    process_difference_scanline<Bpc>(plane_left, plane_right, plane_difference, width_right, diff_mode_, diff_luma_only_, scale_max);
     plane_left += pitch_left / sizeof(typename T::P);
     plane_right += pitch_right / sizeof(typename T::P);
     plane_difference += pitch_difference / sizeof(typename T::P);
@@ -774,20 +765,20 @@ void Display::update_difference(std::array<uint8_t*, 3> planes_left, std::array<
     auto plane_difference0 = reinterpret_cast<uint16_t*>(diff_planes_[0]) + split_x * CHANNELS;
 
     if (update_frame_max) {
-      frame_max = calculate_frame_p99<10>(plane_left0, plane_right0, pitches_left[0], pitches_right[0], width_right, video_height_, diff_luma_only_);
+      frame_max = calculate_frame_p99<10>(plane_left0, plane_right0, pitches_left[0], pitches_right[0], width_right);
     }
 
-    process_difference_planes<10>(plane_left0, plane_right0, plane_difference0, pitches_left[0], pitches_right[0], diff_pitches_[0], width_right, video_height_, diff_mode_, diff_luma_only_, frame_max);
+    process_difference_planes<10>(plane_left0, plane_right0, plane_difference0, pitches_left[0], pitches_right[0], diff_pitches_[0], width_right, frame_max);
   } else {
     auto plane_left0 = planes_left[0] + split_x * CHANNELS;
     auto plane_right0 = planes_right[0] + split_x * CHANNELS;
     auto plane_difference0 = diff_planes_[0] + split_x * CHANNELS;
 
     if (update_frame_max) {
-      frame_max = calculate_frame_p99<8>(plane_left0, plane_right0, pitches_left[0], pitches_right[0], width_right, video_height_, diff_luma_only_);
+      frame_max = calculate_frame_p99<8>(plane_left0, plane_right0, pitches_left[0], pitches_right[0], width_right);
     }
 
-    process_difference_planes<8>(plane_left0, plane_right0, plane_difference0, pitches_left[0], pitches_right[0], diff_pitches_[0], width_right, video_height_, diff_mode_, diff_luma_only_, frame_max);
+    process_difference_planes<8>(plane_left0, plane_right0, plane_difference0, pitches_left[0], pitches_right[0], diff_pitches_[0], width_right, frame_max);
   }
 }
 

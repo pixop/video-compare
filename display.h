@@ -45,15 +45,16 @@ const size_t LONGEST = ConstexprStringUtils::longest_string_length<COUNT>(ALL);
 struct VideoMetadata {
   std::map<std::string, std::string> properties;
 
-  // Helper method to get a property value with default
   std::string get(const std::string& key, const std::string& default_value = "N/A") const {
     auto it = properties.find(key);
     return it != properties.end() ? it->second : default_value;
   }
 
-  // Helper method to set a property
   void set(const std::string& key, const std::string& value) { properties[key] = value; }
 };
+
+template <int Bpc>
+struct BitDepthTraits;
 
 struct SDL {
   SDL();
@@ -244,6 +245,19 @@ class Display {
   void convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi);
 
   void update_difference(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x);
+
+  template <int Bpc>
+  float calculate_frame_p99(const typename BitDepthTraits<Bpc>::P* plane_left, const typename BitDepthTraits<Bpc>::P* plane_right, const size_t pitch_left, const size_t pitch_right, const int width_right) const;
+
+  template <int Bpc>
+  void process_difference_planes(const typename BitDepthTraits<Bpc>::P* plane_left0,
+                                 const typename BitDepthTraits<Bpc>::P* plane_right0,
+                                 typename BitDepthTraits<Bpc>::P* plane_difference0,
+                                 const size_t pitch_left,
+                                 const size_t pitch_right,
+                                 const size_t pitch_difference,
+                                 const int width_right,
+                                 const float diff_max) const;
 
   void save_image_frames(const AVFrame* left_frame, const AVFrame* right_frame);
 
