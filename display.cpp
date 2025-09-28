@@ -69,7 +69,7 @@ inline T clamp_range(T v, T lo, T hi) {
 }
 
 inline int get_num_threads() {
-  return clamp_range(std::thread::hardware_concurrency(), 1u, 4u);
+  return clamp_range(std::thread::hardware_concurrency(), 1u, 8u);
 }
 
 template <typename Func>
