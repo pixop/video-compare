@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include "core_types.h"
+#include "row_workers.h"
 #include "string_utils.h"
 extern "C" {
 #include <libavutil/frame.h>
@@ -239,6 +240,9 @@ class Display {
   std::vector<SDL_Texture*> help_textures_;
   int help_total_height_{0};
   int help_y_offset_{0};
+
+  // Thread pool for parallel processing
+  RowWorkers row_workers_;
 
   void print_verbose_info();
 
