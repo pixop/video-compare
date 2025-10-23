@@ -22,7 +22,9 @@ Demuxer::Demuxer(const Side side, const std::string& demuxer_name, const std::st
   // Try to find best stream first
   video_stream_index_ = av_find_best_stream(format_context_, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
 
-  AVDictionary** opts_for_streams = (AVDictionary**)av_calloc(format_context_->nb_streams, sizeof(AVDictionary*));
+  const unsigned int nb_streams_before = format_context_->nb_streams;
+
+  AVDictionary** opts_for_streams = (AVDictionary**)av_calloc(nb_streams_before, sizeof(AVDictionary*));
 
   // User-specified options are only used if we have a valid video stream index
   if (video_stream_index_ >= 0) {
@@ -52,7 +54,7 @@ Demuxer::Demuxer(const Side side, const std::string& demuxer_name, const std::st
     }
   }
 
-  for (unsigned int i = 0; i < format_context_->nb_streams; i++) {
+  for (unsigned int i = 0; i < nb_streams_before; i++) {
     av_dict_free(&opts_for_streams[i]);
   }
 
