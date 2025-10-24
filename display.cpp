@@ -230,6 +230,17 @@ Display::Display(const int display_number,
   constexpr int min_width = 4;
   constexpr int min_height = 1;
 
+  // account for window frame and title bar
+  constexpr int border_width = 10;
+#ifdef __linux__
+  constexpr int border_height = 40;
+#else
+  constexpr int border_height = 34;
+#endif
+
+  SDL_Rect bounds;
+  check_sdl(SDL_GetDisplayUsableBounds(display_number, &bounds) == 0, "get display usable bounds");
+
   if (!fit_window_to_usable_bounds) {
     if (std::get<0>(window_size) < 0 && std::get<1>(window_size) < 0) {
       window_width = auto_width;
@@ -255,17 +266,6 @@ Display::Display(const int display_number,
       window_height /= 2;
     }
   } else {
-    SDL_Rect bounds;
-    check_sdl(SDL_GetDisplayUsableBounds(display_number, &bounds) == 0, "get display usable bounds");
-
-    // account for window frame and title bar
-    constexpr int border_width = 10;
-#ifdef __linux__
-    constexpr int border_height = 40;
-#else
-    constexpr int border_height = 34;
-#endif
-
     const int usable_width = std::max(bounds.w - border_width, min_width);
     const int usable_height = std::max(bounds.h - border_height, min_height);
 
@@ -321,6 +321,15 @@ Display::Display(const int display_number,
 
   SDL_GL_GetDrawableSize(window_, &drawable_width_, &drawable_height_);
   SDL_GetWindowSize(window_, &window_width_, &window_height_);
+
+  // Check if window is larger than display and warn user
+  const int usable_width = bounds.w - border_width;
+  const int usable_height = bounds.h - border_height;
+
+  if (window_width_ > usable_width || window_height_ > usable_height) {
+    std::cout << "WARNING: Window size (" << window_width_ << "x" << window_height_ << ") exceeds usable display area (" << usable_width << "x" << usable_height
+              << "). Consider reducing the window size (try -W flag) or using a larger display." << std::endl;
+  }
 
   drawable_to_window_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
   drawable_to_window_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);
