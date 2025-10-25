@@ -327,8 +327,10 @@ Display::Display(const int display_number,
   const int usable_height = bounds.h - border_height;
 
   if (window_width_ > usable_width || window_height_ > usable_height) {
-    std::cout << "WARNING: Window size (" << window_width_ << "x" << window_height_ << ") exceeds usable display area (" << usable_width << "x" << usable_height
-              << "). Consider reducing the window size (try -W flag) or using a larger display." << std::endl;
+    std::cout << "WARNING: Window size (" << window_width_ << "x" << window_height_ << ") exceeds display area (" << usable_width << "x" << usable_height
+              << "). Consider reducing the window size (use -W flag to resize) or using a larger display." << std::endl;
+
+    set_pending_message("Window exceeds display area (use -W flag to resize)");
   }
 
   drawable_to_window_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
@@ -1577,11 +1579,11 @@ void Display::save_selected_area(const AVFrame* left_frame, const AVFrame* right
   }
 }
 
-bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message) {
+bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable) {
   const bool has_updated_left_pts = previous_left_frame_pts_ != left_frame->pts;
   const bool has_updated_right_pts = previous_right_frame_pts_ != right_frame->pts;
 
-  if (!input_received_ && !has_updated_left_pts && !has_updated_right_pts && !timer_based_update_performed_ && message.empty()) {
+  if (!input_received_ && !has_updated_left_pts && !has_updated_right_pts && !timer_based_update_performed_ && pending_message_.empty()) {
     return false;
   }
 
@@ -1970,10 +1972,10 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     render_progress_dots(right_position, right_progress, false);
   }
 
-  // render (optional) error message
-  if (!message.empty()) {
+  // render (optional) message
+  if (!pending_message_.empty()) {
     message_shown_at_ = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-    text_surface = TTF_RenderText_Blended(big_font_, message.c_str(), TEXT_COLOR);
+    text_surface = TTF_RenderText_Blended(big_font_, pending_message_.c_str(), TEXT_COLOR);
 
     if (message_texture_ != nullptr) {
       SDL_DestroyTexture(message_texture_);
@@ -1983,6 +1985,8 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     message_width_ = text_surface->w;
     message_height_ = text_surface->h;
     SDL_FreeSurface(text_surface);
+
+    pending_message_.clear();
   }
   if (message_texture_ != nullptr) {
     std::chrono::milliseconds now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
@@ -2038,6 +2042,10 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   previous_right_frame_pts_ = right_frame->pts;
 
   return true;
+}
+
+void Display::set_pending_message(const std::string& message) {
+  pending_message_ = message;
 }
 
 float Display::compute_zoom_factor(const float zoom_level) const {

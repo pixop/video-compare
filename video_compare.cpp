@@ -657,7 +657,10 @@ void VideoCompare::compare() {
     double next_refresh_at = 0;
 
     for (uint64_t frame_number = 0;; ++frame_number) {
-      std::string message = display_->get_show_fps() ? fps_message : "";
+      // Set FPS message if needed
+      if (display_->get_show_fps()) {
+        display_->set_pending_message(fps_message);
+      }
 
       full_cycle_timer.update();
 
@@ -759,7 +762,7 @@ void VideoCompare::compare() {
 
         if ((!left_seek_result && !backward) || (!right_seek_result && !backward)) {
           // restore position if unable to perform forward seek
-          message = "Unable to seek past end of file";
+          display_->set_pending_message("Unable to seek past end of file");
 
           demuxers_[LEFT]->seek(left_position, true);
           demuxers_[RIGHT]->seek(right_position, true);
@@ -993,7 +996,7 @@ void VideoCompare::compare() {
             // conditionally update the display; otherwise, sleep to conserve resources
             display_refresh_timer.update();
 
-            if (display_->possibly_refresh(left_display_frame, right_display_frame, current_total_browsable, message)) {
+            if (display_->possibly_refresh(left_display_frame, right_display_frame, current_total_browsable)) {
               refresh_time_deque.push_back(-display_refresh_timer.us_until_target());
             } else {
               sleep_for_ms(refresh_time_deque.average() / 1000);

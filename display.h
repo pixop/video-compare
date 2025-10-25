@@ -210,6 +210,7 @@ class Display {
   int middle_y_;
   int max_text_width_;
 
+  std::string pending_message_;
   std::chrono::milliseconds message_shown_at_;
   SDL_Texture* message_texture_{nullptr};
   int message_width_;
@@ -341,7 +342,10 @@ class Display {
   ~Display();
 
   // Copy frame to display
-  bool possibly_refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable, const std::string& message);
+  bool possibly_refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable);
+
+  // Set a pending message to be displayed
+  void set_pending_message(const std::string& message);
 
   // Handle events
   void input();
