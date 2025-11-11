@@ -23,7 +23,6 @@ jobs:
           choco install 7zip -y
           choco install wget -y
           choco install unzip -y
-          choco install dos2unix -y
 
       - name: Setup PATH
         shell: powershell
@@ -31,10 +30,6 @@ jobs:
           $cygwinPath = "C:\cygwin64\bin"
           $mingwPath = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
           echo "$cygwinPath;$mingwPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - name: Fix download_and_extract_windows_deps.sh line endings
-        shell: bash
-        run: dos2unix download_and_extract_windows_deps.sh 2>&1 || sed -i 's/\r$//' download_and_extract_windows_deps.sh; chmod +x download_and_extract_windows_deps.sh
 
       - name: Download FFmpeg
         shell: powershell

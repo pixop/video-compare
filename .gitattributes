@@ -2,3 +2,4 @@
 source_code_pro_regular_ttf.h linguist-vendored
 stb_image_write.h linguist-vendored
 video_compare_icon.h linguist-vendored
+*.sh text eol=lf
