@@ -1220,7 +1220,7 @@ float Display::compute_ssim(const float* left_plane, const float* right_plane) {
   return ssim_sum / count;
 }
 
-float Display::compute_psnr(const float* left_plane, const float* right_plane) {
+std::string Display::compute_psnr(const float* left_plane, const float* right_plane) {
   // compute MSE
   float mse = 0.0;
 
@@ -1233,11 +1233,11 @@ float Display::compute_psnr(const float* left_plane, const float* right_plane) {
   mse /= (video_width_ * video_height_);
 
   if (mse == 0) {
-    return std::numeric_limits<float>::infinity();
+    return "inf";
   }
 
   // compute PSNR
-  return -10.f * log10f(mse);
+  return string_sprintf("%.3f", -10.f * log10f(mse));
 }
 
 void Display::render_help() {
@@ -1659,8 +1659,8 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     const float* left_gray = rgb_to_grayscale(planes_left[0], pitches_left[0]);
     const float* right_gray = rgb_to_grayscale(planes_right[0], pitches_right[0]);
 
-    std::cout << string_sprintf("Metrics: [%s|%s], PSNR(%.3f), SSIM(%.5f), VMAF(%s)", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(),
-                                compute_psnr(left_gray, right_gray), compute_ssim(left_gray, right_gray), VMAFCalculator::instance().compute(left_frame, right_frame).c_str())
+    std::cout << string_sprintf("Metrics: [%s|%s], PSNR(%s), SSIM(%.5f), VMAF(%s)", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(),
+                                compute_psnr(left_gray, right_gray).c_str(), compute_ssim(left_gray, right_gray), VMAFCalculator::instance().compute(left_frame, right_frame).c_str())
               << std::endl;
 
     delete left_gray;
