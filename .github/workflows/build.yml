@@ -1,5 +1,5 @@
 # .github/workflows/build.yml
-name: Build Windows
+name: Build
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
 
     steps:
@@ -112,5 +112,95 @@ jobs:
           path: |
             video-compare.exe
             *.dll
+            README.md
+          retention-days: 90
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libavformat-dev \
+            libavcodec-dev \
+            libavfilter-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libswresample-dev \
+            libsdl2-dev \
+            libsdl2-ttf-dev
+
+      - name: Build
+        run: make
+
+      - name: Verify build output
+        run: |
+          if [ -f "video-compare" ]; then
+            echo "Build successful!"
+            ls -lh video-compare
+            file video-compare
+          else
+            echo "Build failed: video-compare not found"
+            exit 1
+          fi
+
+      - name: Strip executable
+        run: |
+          strip video-compare
+          echo "Stripped executable. New size:"
+          ls -lh video-compare
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-compare-linux
+          path: |
+            video-compare
+            README.md
+          retention-days: 90
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies via Homebrew
+        run: |
+          brew install ffmpeg sdl2 sdl2_ttf
+
+      - name: Build
+        run: make
+
+      - name: Verify build output
+        run: |
+          if [ -f "video-compare" ]; then
+            echo "Build successful!"
+            ls -lh video-compare
+            file video-compare
+          else
+            echo "Build failed: video-compare not found"
+            exit 1
+          fi
+
+      - name: Strip executable
+        run: |
+          strip video-compare
+          echo "Stripped executable. New size:"
+          ls -lh video-compare
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-compare-macos
+          path: |
+            video-compare
             README.md
           retention-days: 90

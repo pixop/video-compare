@@ -295,7 +295,7 @@ class Display {
   float compute_ssim_block(const float* left_plane, const float* right_plane, const int x_offset, const int y_offset, const int block_size);
   float compute_ssim(const float* left_plane, const float* right_plane);
 
-  float compute_psnr(const float* left_plane, const float* right_plane);
+  std::string compute_psnr(const float* left_plane, const float* right_plane);
 
   void render_help();
   void render_metadata_overlay();
