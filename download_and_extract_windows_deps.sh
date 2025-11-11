@@ -106,15 +106,18 @@ download_sdl_library() {
     echo "$FILE_NAME win32-x64 and mingw-devel builds downloaded and extracted successfully."
 }
 
-case "$1" in
+ARG="${1%$'\r'}"
+TAG="${2%$'\r'}"
+
+case "$ARG" in
     ffmpeg)
         download_ffmpeg
         ;;
     sdl2)
-        download_sdl_library "SDL" "SDL2" "$2"
+        download_sdl_library "SDL" "SDL2" "$TAG"
         ;;
     sdl2_ttf)
-        download_sdl_library "SDL_ttf" "SDL2_ttf" "$2"
+        download_sdl_library "SDL_ttf" "SDL2_ttf" "$TAG"
         ;;
     *)
         echo "Usage: $0 {ffmpeg|sdl2|sdl2_ttf} [release_tag]"
