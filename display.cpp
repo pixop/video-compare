@@ -1204,7 +1204,7 @@ float Display::compute_ssim_block(const float* left_plane, const float* right_pl
   return luminance * contrast * structure;
 }
 
-float Display::compute_ssim(const float* left_plane, const float* right_plane) {
+std::string Display::compute_ssim(const float* left_plane, const float* right_plane) {
   static constexpr int overlap = 4;
   static constexpr int block_size = 8;
 
@@ -1217,7 +1217,8 @@ float Display::compute_ssim(const float* left_plane, const float* right_plane) {
     }
   }
 
-  return ssim_sum / count;
+  const float ssim = ssim_sum / count;
+  return string_sprintf("%.5f", ssim);
 }
 
 std::string Display::compute_psnr(const float* left_plane, const float* right_plane) {
@@ -1659,8 +1660,8 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     const float* left_gray = rgb_to_grayscale(planes_left[0], pitches_left[0]);
     const float* right_gray = rgb_to_grayscale(planes_right[0], pitches_right[0]);
 
-    std::cout << string_sprintf("Metrics: [%s|%s], PSNR(%s), SSIM(%.5f), VMAF(%s)", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(),
-                                compute_psnr(left_gray, right_gray).c_str(), compute_ssim(left_gray, right_gray), VMAFCalculator::instance().compute(left_frame, right_frame).c_str())
+    std::cout << string_sprintf("Metrics: [%s|%s], PSNR(%s), SSIM(%s), VMAF(%s)", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(),
+                                compute_psnr(left_gray, right_gray).c_str(), compute_ssim(left_gray, right_gray).c_str(), VMAFCalculator::instance().compute(left_frame, right_frame).c_str())
               << std::endl;
 
     delete left_gray;

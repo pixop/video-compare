@@ -293,7 +293,7 @@ class Display {
   float* rgb_to_grayscale(const uint8_t* plane, const size_t pitch);
 
   float compute_ssim_block(const float* left_plane, const float* right_plane, const int x_offset, const int y_offset, const int block_size);
-  float compute_ssim(const float* left_plane, const float* right_plane);
+  std::string compute_ssim(const float* left_plane, const float* right_plane);
 
   std::string compute_psnr(const float* left_plane, const float* right_plane);
 
