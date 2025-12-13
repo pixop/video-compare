@@ -190,6 +190,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                          max_height_,
                                          shortest_duration_,
                                          config.wheel_sensitivity,
+                                         config.start_in_subtraction_mode,
                                          config.left.file_name,
                                          config.right.file_name)},
       timer_{std::make_unique<Timer>()},

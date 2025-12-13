@@ -337,6 +337,7 @@ class Display {
           const unsigned height,
           const double duration,
           const float wheel_sensitivity,
+          const bool start_in_subtraction_mode,
           const std::string& left_file_name,
           const std::string& right_file_name);
   ~Display();
