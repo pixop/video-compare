@@ -196,12 +196,13 @@ class Display {
   std::array<uint32_t*, 3> right_planes_;
   std::array<size_t, 3> diff_pitches_;
 
-  SDL_Texture* left_text_texture_;
-  SDL_Texture* right_text_texture_;
-  int left_text_width_;
-  int left_text_height_;
-  int right_text_width_;
-  int right_text_height_;
+  struct SideUIState {
+    SDL_Texture* text_texture{nullptr};
+    int text_width{0};
+    int text_height{0};
+    std::string file_stem;
+  };
+  std::array<SideUIState, 2> side_ui_;
 
   int border_extension_;
   int double_border_extension_;
@@ -226,8 +227,6 @@ class Display {
   int mouse_y_;
   float wheel_sensitivity_;
 
-  const std::string left_file_stem_;
-  const std::string right_file_stem_;
   int saved_image_number_{1};
   int saved_selected_image_number_{1};
 
@@ -237,6 +236,8 @@ class Display {
   VideoMetadata left_metadata_;
   VideoMetadata right_metadata_;
   bool last_swap_left_right_state_{false};
+  Side displayed_left_side_{LEFT};
+  Side displayed_right_side_{RIGHT};
 
   std::vector<SDL_Texture*> help_textures_;
   int help_total_height_{0};
@@ -299,6 +300,7 @@ class Display {
 
   void render_help();
   void render_metadata_overlay();
+  void refresh_display_side_mapping();
 
   SDL_Rect get_left_selection_rect() const;
   void draw_selection_rect();
