@@ -236,6 +236,7 @@ class Display {
   VideoMetadata left_metadata_;
   VideoMetadata right_metadata_;
   bool last_swap_left_right_state_{false};
+  bool metadata_dirty_{true};
   Side displayed_left_side_{LEFT};
   Side displayed_right_side_{RIGHT};
 
@@ -300,6 +301,8 @@ class Display {
 
   void render_help();
   void render_metadata_overlay();
+  void build_metadata_textures(const VideoMetadata& left, const VideoMetadata& right);
+  void ensure_metadata_textures_current();
   void refresh_display_side_mapping();
 
   SDL_Rect get_left_selection_rect() const;

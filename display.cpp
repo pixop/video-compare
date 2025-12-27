@@ -1269,11 +1269,7 @@ void Display::render_help() {
 }
 
 void Display::render_metadata_overlay() {
-  // Check if swap state has changed and refresh metadata if needed
-  if (swap_left_right_ != last_swap_left_right_state_) {
-    last_swap_left_right_state_ = swap_left_right_;
-    update_metadata(right_metadata_, left_metadata_);
-  }
+  ensure_metadata_textures_current();
 
   SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 3 / 2);
@@ -1311,11 +1307,7 @@ void Display::refresh_display_side_mapping() {
   displayed_right_side_ = swap_left_right_ ? LEFT : RIGHT;
 }
 
-void Display::update_metadata(const VideoMetadata left_metadata, const VideoMetadata right_metadata) {
-  // Store the metadata for later use when swapping
-  left_metadata_ = left_metadata;
-  right_metadata_ = right_metadata;
-
+void Display::build_metadata_textures(const VideoMetadata& left_metadata, const VideoMetadata& right_metadata) {
   constexpr char TOKENIZER = ',';
 
   for (auto texture : metadata_textures_) {
@@ -1453,6 +1445,25 @@ void Display::update_metadata(const VideoMetadata left_metadata, const VideoMeta
 
       primary_color = !primary_color;
     }
+  }
+}
+
+void Display::update_metadata(const VideoMetadata left_metadata, const VideoMetadata right_metadata) {
+  left_metadata_ = left_metadata;
+  right_metadata_ = right_metadata;
+
+  metadata_dirty_ = true;
+}
+
+void Display::ensure_metadata_textures_current() {
+  if (metadata_dirty_ || (swap_left_right_ != last_swap_left_right_state_)) {
+    last_swap_left_right_state_ = swap_left_right_;
+
+    const VideoMetadata& left_meta = (displayed_left_side_ == LEFT) ? left_metadata_ : right_metadata_;
+    const VideoMetadata& right_meta = (displayed_right_side_ == RIGHT) ? right_metadata_ : left_metadata_;
+    build_metadata_textures(left_meta, right_meta);
+
+    metadata_dirty_ = false;
   }
 }
 
