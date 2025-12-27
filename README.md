@@ -220,6 +220,8 @@ clipboard and seek to that position.
 Use `Shift+F` to select a region; cutouts from both frames and their concatenation will be saved
 as PNGs.
 
+**Hold** `Shift` while pressing `1` to toggle the Histogram scope window, `2` for Vectorscope, and `3` for Waveform.
+
 ## Build
 
 ### Requirements

@@ -12,6 +12,7 @@
 #include "core_types.h"
 #include "row_workers.h"
 #include "string_utils.h"
+#include "scope_window.h"
 extern "C" {
 #include <libavutil/frame.h>
 }
@@ -163,6 +164,9 @@ class Display {
   // Subtraction mode settings
   DiffMode diff_mode_{DiffMode::AbsLinear};
   bool diff_luma_only_{false};
+
+  // Scope windows toggle requests (one-shot flags, reset each input() call)
+  std::array<bool, ScopeWindow::kNumScopes> toggle_scope_window_requested_{{false, false, false}};
 
   // Rectangle selection state
   enum class SelectionState { NONE, STARTED, COMPLETED };
@@ -375,4 +379,6 @@ class Display {
   bool get_show_fps() const;
 
   void update_metadata(const VideoMetadata left_metadata, const VideoMetadata right_metadata);
+
+  bool get_toggle_scope_window_requested(const ScopeWindow::Type type) const;
 };

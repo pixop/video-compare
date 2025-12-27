@@ -8,6 +8,7 @@
 #include "side_aware_logger.h"
 #include "sorted_flat_deque.h"
 #include "string_utils.h"
+#include "scope_window.h"
 extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/pixdesc.h>
@@ -113,6 +114,17 @@ static void sleep_for_ms(const uint32_t ms) {
   std::chrono::milliseconds sleep(ms);
   std::this_thread::sleep_for(sleep);
 }
+
+static std::unique_ptr<ScopeWindow> make_scope_window(const ScopesConfig& config, bool use_10_bpc, int display_number, ScopeWindow::Type type) {
+  return std::make_unique<ScopeWindow>(type,
+                                       config.width / 2,
+                                       config.height,
+                                       config.always_on_top,
+                                       display_number,
+                                       use_10_bpc);
+}
+
+VideoCompare::~VideoCompare() = default;
 
 VideoCompare::VideoCompare(const VideoCompareConfig& config)
     : same_decoded_video_both_sides_(produces_same_decoded_video(config)),
@@ -273,6 +285,25 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   display_->update_metadata(collect_metadata(LEFT), collect_metadata(RIGHT));
 
   update_decoder_mode(time_shift_offset_av_time_);
+
+  init_scopes(config);
+}
+
+void VideoCompare::init_scopes(const VideoCompareConfig& config) {
+  scopes_.config = config.scopes;
+  scopes_.use_10_bpc = config.use_10_bpc;
+  scopes_.display_number = config.display_number;
+
+  auto maybe_add = [&](const bool enabled, const ScopeWindow::Type type) {
+    if (enabled) {
+      const size_t idx = ScopeWindow::index(type);
+      scopes_.windows[idx] = make_scope_window(scopes_.config, scopes_.use_10_bpc, scopes_.display_number, type);
+    }
+  };
+
+  maybe_add(scopes_.config.histogram, ScopeWindow::Type::Histogram);
+  maybe_add(scopes_.config.vectorscope, ScopeWindow::Type::Vectorscope);
+  maybe_add(scopes_.config.waveform, ScopeWindow::Type::Waveform);
 }
 
 void VideoCompare::operator()() {
@@ -665,8 +696,29 @@ void VideoCompare::compare() {
 
       full_cycle_timer.update();
 
-      // sample keyboard and mouse input events
+      // Route scope-window events (mouse, resize/close) while forwarding unconsumed events for the main display
+      ScopeWindow::route_events(scopes_.windows);
+      // Now let the main window handle the rest
       display_->input();
+
+      // Handle scope window toggle requests (hotkeys)
+      for (const auto type : ScopeWindow::all_types()) {
+        auto toggle_scope = [&](const ScopeWindow::Type type, const bool requested) {
+          if (!requested) {
+            return;
+          }
+
+          const size_t idx = ScopeWindow::index(type);
+
+          if (scopes_.windows[idx]) {
+            scopes_.windows[idx].reset();
+          } else {
+            scopes_.windows[idx] = make_scope_window(scopes_.config, scopes_.use_10_bpc, scopes_.display_number, type);
+          }
+        };
+
+        toggle_scope(type, display_->get_toggle_scope_window_requested(type));
+      }
 
       if (!keep_running()) {
         break;
@@ -998,6 +1050,12 @@ void VideoCompare::compare() {
             display_refresh_timer.update();
 
             if (display_->possibly_refresh(left_display_frame, right_display_frame, current_total_browsable)) {
+              for (auto& window : scopes_.windows) {
+                if (window) {
+                  window->update(left_display_frame, right_display_frame);
+                }
+              }
+
               refresh_time_deque.push_back(-display_refresh_timer.us_until_target());
             } else {
               sleep_for_ms(refresh_time_deque.average() / 1000);

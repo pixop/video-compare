@@ -354,6 +354,11 @@ int main(int argc, char** argv) {
          {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
          {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
          {"find-filters", {"--find-filters"}, "find FFmpeg video filters that match the provided search term (e.g. 'scale', 'libvmaf' or 'dnn'; use \"\" to list all)", 1},
+         {"histogram-window", {"--histogram-window"}, "open always-on-top histogram scopes window", 0},
+         {"vectorscope-window", {"--vectorscope-window"}, "open always-on-top vectorscope scopes window", 0},
+         {"waveform-window", {"--waveform-window"}, "open always-on-top waveform scopes window", 0},
+         {"scope-size", {"--scope-size"}, "set scope window size as WxH (total width by height), default 1024x256", 1},
+         {"scope-notop", {"--scope-notop"}, "do not keep scope windows always on top", 0},
          {"find-protocols", {"--find-protocols"}, "find FFmpeg input protocols that match the provided search term (e.g. 'ipfs', 'srt', or 'rtmp'; use \"\" to list all)", 1},
          {"demuxer", {"--demuxer"}, "left FFmpeg video demuxer name for both sides, specified as [type?][:options?] (e.g. 'rawvideo:pixel_format=rgb24,video_size=320x240,framerate=10')", 1},
          {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name, specified as [type?][:options?]", 1},
@@ -549,6 +554,24 @@ int main(int argc, char** argv) {
 
         config.left.tone_mapping_mode = parse_tm_mode_arg(left_tone_mapping_mode);
         config.right.tone_mapping_mode = (tone_mapping_mode_spec == left_tone_mapping_mode) ? config.left.tone_mapping_mode : parse_tm_mode_arg(get_nth_token_or_empty(tone_mapping_mode_spec, ':', 1));
+      }
+
+      // scopes
+      config.scopes.histogram = args["histogram-window"];
+      config.scopes.vectorscope = args["vectorscope-window"];
+      config.scopes.waveform = args["waveform-window"];
+      if (args["scope-size"]) {
+        const std::string scope_size_arg = args["scope-size"];
+        const std::regex scope_size_re("^(\\d+)x(\\d+)$");
+        std::smatch sm;
+        if (!std::regex_match(scope_size_arg, sm, scope_size_re)) {
+          throw std::logic_error{"Cannot parse --scope-size argument (required format: [width]x[height], e.g. 1024x256)"};
+        }
+        config.scopes.width = std::stoi(sm[1].str());
+        config.scopes.height = std::stoi(sm[2].str());
+      }
+      if (args["scope-notop"]) {
+        config.scopes.always_on_top = false;
       }
 
       // video filters

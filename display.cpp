@@ -1,3 +1,4 @@
+#include "scope_window.h"
 #include "display.h"
 #include <libgen.h>
 #include <algorithm>
@@ -2147,6 +2148,7 @@ void Display::input() {
   shift_right_frames_ = 0;
   tick_playback_ = false;
   possibly_tick_playback_ = false;
+  toggle_scope_window_requested_.fill(false);
 
   while (SDL_PollEvent(&event_) != 0) {
     input_received_ = true;
@@ -2197,6 +2199,13 @@ void Display::input() {
     switch (event_.type) {
       case SDL_WINDOWEVENT:
         switch (event_.window.event) {
+          case SDL_WINDOWEVENT_CLOSE: {
+            // If the main application window is being closed, request application quit
+            if (event_.window.windowID == SDL_GetWindowID(window_)) {
+              quit_ = true;
+            }
+            break;
+          }
           case SDL_WINDOWEVENT_LEAVE:
             mouse_is_inside_window_ = false;
             break;
@@ -2297,15 +2306,27 @@ void Display::input() {
             break;
           case SDLK_1:
           case SDLK_KP_1:
-            show_left_ = !show_left_;
+            if (keymod & KMOD_SHIFT) {
+              toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Histogram)] = true;
+            } else {
+              show_left_ = !show_left_;
+            }
             break;
           case SDLK_2:
           case SDLK_KP_2:
-            show_right_ = !show_right_;
+            if (keymod & KMOD_SHIFT) {
+              toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Vectorscope)] = true;
+            } else {
+              show_right_ = !show_right_;
+            }
             break;
           case SDLK_3:
           case SDLK_KP_3:
-            show_hud_ = !show_hud_;
+            if (keymod & KMOD_SHIFT) {
+              toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Waveform)] = true;
+            } else {
+              show_hud_ = !show_hud_;
+            }
             break;
           case SDLK_0:
           case SDLK_KP_0:
@@ -2616,4 +2637,8 @@ bool Display::get_possibly_tick_playback() const {
 
 bool Display::get_show_fps() const {
   return show_fps_;
+}
+
+bool Display::get_toggle_scope_window_requested(const ScopeWindow::Type type) const {
+  return toggle_scope_window_requested_[ScopeWindow::index(type)];
 }

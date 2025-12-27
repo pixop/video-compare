@@ -19,6 +19,8 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
+class ScopeWindow;
+
 using AVPacketUniquePtr = std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>;
 using AVFrameSharedPtr = std::shared_ptr<AVFrame>;
 using AVFrameUniquePtr = std::unique_ptr<AVFrame, std::function<void(AVFrame*)>>;
@@ -93,9 +95,21 @@ class ExceptionHolder {
 class VideoCompare {
  public:
   VideoCompare(const VideoCompareConfig& config);
+  ~VideoCompare();
   void operator()();
 
  private:
+  struct ScopeWindows {
+    ScopesConfig config;
+
+    bool use_10_bpc{false};
+    int display_number{0};
+
+    std::array<std::unique_ptr<class ScopeWindow>, ScopeWindow::kNumScopes> windows;
+  };
+
+  void init_scopes(const VideoCompareConfig& config);
+
   void thread_demultiplex_left();
   void thread_demultiplex_right();
   void demultiplex(const Side side);
@@ -147,6 +161,8 @@ class VideoCompare {
   const std::array<std::shared_ptr<DecodedFrameQueue>, Side::Count> decoded_frame_queues_;
   const std::array<std::unique_ptr<FrameQueue>, Side::Count> filtered_frame_queues_;
   const std::array<std::unique_ptr<FrameQueue>, Side::Count> converted_frame_queues_;
+
+  ScopeWindows scopes_;
 
   std::vector<std::thread> stages_;
 
