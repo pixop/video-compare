@@ -326,8 +326,8 @@ int main(int argc, char** argv) {
 
   try {
     argagg::parser argparser{
-        {{"help", {"-h", "--help"}, "show help", 0},
-         {"show-controls", {"-c", "--show-controls"}, "show controls", 0},
+        {{"help", {"-h", "--help"}, "print help and exit", 0},
+         {"show-controls", {"-c", "--show-controls"}, "print controls and exit", 0},
          {"verbose", {"-v", "--verbose"}, "enable verbose output, including information such as library versions and rendering details", 0},
          {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
          {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
