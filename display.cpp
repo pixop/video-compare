@@ -1638,7 +1638,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
   const auto zoom_rect = compute_zoom_rect();
 
-  const Vector2D mouse_video_pos = get_mouse_video_position(mouse_x_, mouse_y_, zoom_rect);
+  const Vector2D mouse_video_pos = window_to_video_position(mouse_x_, mouse_y_, zoom_rect);
   const int mouse_video_x = mouse_video_pos.x();
   const int mouse_video_y = mouse_video_pos.y();
 
@@ -2078,6 +2078,12 @@ void Display::set_pending_message(const std::string& message) {
   pending_message_ = message;
 }
 
+void Display::focus_main_window() {
+  if (window_ != nullptr) {
+    SDL_RaiseWindow(window_);
+  }
+}
+
 float Display::compute_zoom_factor(const float zoom_level) const {
   return pow(ZOOM_STEP_SIZE, zoom_level);
 }
@@ -2119,18 +2125,35 @@ Display::ZoomRect Display::compute_zoom_rect() const {
   return {zoom_rect_start, zoom_rect_end, zoom_rect_size, global_zoom_factor_};
 }
 
-Vector2D Display::get_mouse_video_position(const int mouse_x, const int mouse_y, const Display::ZoomRect& zoom_rect) const {
-  const int mouse_video_x = std::floor((static_cast<float>(mouse_x) * video_to_window_width_factor_ - zoom_rect.start.x()) * static_cast<float>(video_width_) / zoom_rect.size.x());
-  const int mouse_video_y = std::floor((static_cast<float>(mouse_y) * video_to_window_height_factor_ - zoom_rect.start.y()) * static_cast<float>(video_height_) / zoom_rect.size.y());
+Vector2D Display::window_to_video_position(const int window_x_position, const int window_y_position, const Display::ZoomRect& zoom_rect) const {
+  const int video_x = std::floor((static_cast<float>(window_x_position) * video_to_window_width_factor_ - zoom_rect.start.x()) * static_cast<float>(video_width_) / zoom_rect.size.x());
+  const int video_y = std::floor((static_cast<float>(window_y_position) * video_to_window_height_factor_ - zoom_rect.start.y()) * static_cast<float>(video_height_) / zoom_rect.size.y());
 
-  return Vector2D(mouse_video_x, mouse_video_y);
+  return Vector2D(video_x, video_y);
 }
 
-SDL_FRect Display::video_to_zoom_space(const SDL_Rect& video_rect, const Display::ZoomRect& zoom_rect) {
+SDL_FRect Display::video_to_zoom_space(const SDL_Rect& video_rect, const Display::ZoomRect& zoom_rect) const {
   // transform video coordinates to the currently zoomed area space
   return SDL_FRect({zoom_rect.start.x() + float(video_rect.x) * zoom_rect.zoom_factor, zoom_rect.start.y() + float(video_rect.y) * zoom_rect.zoom_factor, std::min(float(video_rect.w) * zoom_rect.zoom_factor, zoom_rect.size.x()),
                     std::min(float(video_rect.h) * zoom_rect.zoom_factor, zoom_rect.size.y())});
 };
+
+SDL_Rect Display::get_visible_roi() const {
+  const auto zoom_rect = compute_zoom_rect();
+
+  const Vector2D top_left_video_position = window_to_video_position(0, 0, zoom_rect);
+  const Vector2D bottom_right_video_position = window_to_video_position(window_width_ - 1, window_height_ - 1, zoom_rect);
+
+  const int min_video_x = clamp_range(std::floor(top_left_video_position.x()), 0.0F, static_cast<float>(video_width_));
+  const int min_video_y = clamp_range(std::floor(top_left_video_position.y()), 0.0F, static_cast<float>(video_height_));
+  const int max_video_x = clamp_range(std::ceil(bottom_right_video_position.x()), 0.0F, static_cast<float>(video_width_));
+  const int max_video_y = clamp_range(std::ceil(bottom_right_video_position.y()), 0.0F, static_cast<float>(video_height_));
+
+  const int roi_width = max_video_x - min_video_x;
+  const int roi_height = max_video_y - min_video_y;
+
+  return {min_video_x, min_video_y, roi_width, roi_height};
+}
 
 void Display::update_playback_speed(const int playback_speed_level) {
   // allow 128x change of playback speed
@@ -2238,7 +2261,7 @@ void Display::input() {
         SDL_GetMouseState(&mouse_x_, &mouse_y_);
 
         if (selection_state_ == SelectionState::STARTED) {
-          selection_end_ = get_mouse_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
+          selection_end_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
 
           if (selection_wrap_) {
             selection_end_ = wrap_to_left_frame(selection_end_);
@@ -2262,7 +2285,7 @@ void Display::input() {
       case SDL_MOUSEBUTTONDOWN:
         if (event_.button.button == SDL_BUTTON_LEFT && save_selected_area_ && selection_state_ == SelectionState::NONE) {
           selection_state_ = SelectionState::STARTED;
-          selection_start_ = get_mouse_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
+          selection_start_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
 
           // Check if the selection is outside the left video frame
           selection_wrap_ = (mode_ == Mode::HSTACK && selection_start_.x() >= video_width_) || (mode_ == Mode::VSTACK && selection_start_.y() >= video_height_);

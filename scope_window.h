@@ -47,7 +47,7 @@ class ScopeWindow {
     }
   }
 
-  ScopeWindow(Type type, int pane_width, int pane_height, bool always_on_top, int display_number, bool use_10_bpc);
+  ScopeWindow(Type type, const int pane_width, const int pane_height, const bool always_on_top, const int display_number, const bool use_10_bpc);
   ~ScopeWindow();
 
   // Feed the current frames and update the scope window if an output is produced.
@@ -57,6 +57,15 @@ class ScopeWindow {
   Type get_type() const { return type_; }
 
   bool close_requested() const { return close_requested_; }
+
+  // Visible region of interest (ROI) in video coordinates
+  struct Roi {
+    int x;
+    int y;
+    int w;
+    int h;
+  };
+  void set_roi(const Roi& roi);
 
   // Global routing: consume scope-window events and request refresh if resizing occurred
   static void route_events(std::array<std::unique_ptr<ScopeWindow>, ScopeWindow::kNumScopes>& windows);
@@ -68,12 +77,12 @@ class ScopeWindow {
   void ensure_graph(const AVFrame* left_frame, const AVFrame* right_frame);
   void destroy_graph();
 
-  std::string build_filter_description(int pane_width,
-                                       int pane_height,
-                                       int left_colorspace,
-                                       int left_range,
-                                       int right_colorspace,
-                                       int right_range) const;
+  std::string build_filter_description(const int pane_width,
+                                       const int pane_height,
+                                       const int left_colorspace,
+                                       const int left_range,
+                                       const int right_colorspace,
+                                       const int right_range) const;
   static std::string format_filter_args(const AVFrame* frame);
 
   void present_frame(const AVFrame* filtered_frame);
@@ -118,6 +127,11 @@ class ScopeWindow {
   int64_t last_pts_left_{INT64_MIN};
   int64_t last_pts_right_{INT64_MIN};
   int64_t frame_counter_{0};
+
+  // ROI tracking
+  bool roi_enabled_{false};
+  Roi roi_{0, 0, 0, 0};
+  Roi prev_roi_{-1, -1, -1, -1};
 };
 
 

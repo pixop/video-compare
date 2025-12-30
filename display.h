@@ -165,7 +165,7 @@ class Display {
   DiffMode diff_mode_{DiffMode::AbsLinear};
   bool diff_luma_only_{false};
 
-  // Scope windows toggle requests (one-shot flags, reset each input() call)
+  // Scope windows toggle requests
   std::array<bool, ScopeWindow::kNumScopes> toggle_scope_window_requested_{{false, false, false}};
 
   // Rectangle selection state
@@ -327,8 +327,8 @@ class Display {
     float zoom_factor;
   };
   ZoomRect compute_zoom_rect() const;
-  Vector2D get_mouse_video_position(const int mouse_x, const int mouse_y, const ZoomRect& zoom_rect) const;
-  SDL_FRect video_to_zoom_space(const SDL_Rect& video_rect, const ZoomRect& zoom_rect);
+  Vector2D window_to_video_position(const int window_x_position, const int window_y_position, const ZoomRect& zoom_rect) const;
+  SDL_FRect video_to_zoom_space(const SDL_Rect& video_rect, const ZoomRect& zoom_rect) const;
 
   void update_playback_speed(const int playback_speed_level);
 
@@ -357,6 +357,9 @@ class Display {
   // Set a pending message to be displayed
   void set_pending_message(const std::string& message);
 
+  // Bring focus back to the main window (avoid scope windows stealing keyboard focus)
+  void focus_main_window();
+
   // Handle events
   void input();
 
@@ -380,5 +383,6 @@ class Display {
 
   void update_metadata(const VideoMetadata left_metadata, const VideoMetadata right_metadata);
 
+  SDL_Rect get_visible_roi() const;
   bool get_toggle_scope_window_requested(const ScopeWindow::Type type) const;
 };

@@ -1,4 +1,5 @@
 #include "scope_window.h"
+#include "string_utils.h"
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -8,28 +9,32 @@ extern "C" {
 }
 #include <SDL2/SDL.h>
 
+void ScopeWindow::set_roi(const Roi& roi) {
+  roi_ = roi;
+  roi_enabled_ = roi.w > 0 && roi.h > 0;
+}
+
 void ScopeWindow::route_events(std::array<std::unique_ptr<ScopeWindow>, ScopeWindow::kNumScopes>& windows) {
   std::vector<SDL_Event> deferred_events;
+
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
-    bool consumed_by_scope = false;
+    bool consumed_this_event = false;
     for (auto& w : windows) {
       if (w && w->handle_event(event)) {
-        consumed_by_scope = true;
+        consumed_this_event = true;
+
+        if (w->close_requested()) {
+          w.reset();
+        }
       }
     }
 
-    for (auto& w : windows) {
-      if (w && w->close_requested()) {
-        w.reset();
-        consumed_by_scope = true;
-      }
-    }
-
-    if (!consumed_by_scope) {
+    if (!consumed_this_event) {
       deferred_events.push_back(event);
     }
   }
+
   // Requeue events for the main display input to process
   for (auto it = deferred_events.rbegin(); it != deferred_events.rend(); ++it) {
     SDL_PushEvent(&(*it));
@@ -77,18 +82,19 @@ static void ffmpeg_check(const int error_code, const char* what) {
   }
 }
 
-ScopeWindow::ScopeWindow(Type type, int pane_width, int pane_height, bool always_on_top, int display_number, bool use_10_bpc)
+ScopeWindow::ScopeWindow(const Type type, const int pane_width, const int pane_height, const bool always_on_top, const int display_number, const bool use_10_bpc)
     : type_(type), pane_width_(pane_width), pane_height_(pane_height), always_on_top_(always_on_top), display_number_(display_number), use_10_bpc_(use_10_bpc) {
   const int window_width = pane_width_ * 2;
   const int window_height = pane_height_;
+
   Uint32 window_flags = SDL_WINDOW_SHOWN;
   window_flags |= SDL_WINDOW_RESIZABLE;
-#ifdef SDL_WINDOW_ALWAYS_ON_TOP
+
   if (always_on_top_) {
     window_flags |= SDL_WINDOW_ALWAYS_ON_TOP;
   }
-#endif
-  // Determine initial position based on display usable bounds and tool type index to avoid overlap.
+
+// Determine initial position based on display usable bounds and tool type index to avoid overlap.
   int initial_position_x = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number_);
   int initial_position_y = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number_);
   SDL_Rect usable_bounds;
@@ -112,18 +118,9 @@ ScopeWindow::ScopeWindow(Type type, int pane_width, int pane_height, bool always
                            initial_position_x, initial_position_y, window_width, window_height, window_flags),
                        "SDL_CreateWindow"));
 
-#if !defined(SDL_WINDOW_ALWAYS_ON_TOP)
-  if (always_on_top_) {
-    SDL_SetWindowAlwaysOnTop(window_, SDL_TRUE);
-  }
-#endif
-  SDL_SetWindowResizable(window_, SDL_TRUE);
+  renderer_ = static_cast<SDL_Renderer*>(sdl_check_ptr(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "SDL_CreateRenderer"));
 
-  renderer_ =
-      static_cast<SDL_Renderer*>(sdl_check_ptr(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "SDL_CreateRenderer"));
-  sdl_check_bool(SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255) == 0, "SDL_SetRenderDrawColor");
-  sdl_check_bool(SDL_RenderClear(renderer_) == 0, "SDL_RenderClear");
-  SDL_RenderPresent(renderer_);
+  present_frame(nullptr);
 
   window_width_ = window_width;
   window_height_ = window_height;
@@ -156,32 +153,43 @@ std::string ScopeWindow::format_filter_args(const AVFrame* frame) {
 #endif
 }
 
-std::string ScopeWindow::build_filter_description(int pane_width,
-                                                  int pane_height,
-                                                  int left_colorspace,
-                                                  int left_range,
-                                                  int right_colorspace,
-                                                  int right_range) const {
-  const char* tool_name = get_scope_info(type_).filter_name;
+std::string ScopeWindow::build_filter_description(const int pane_width,
+                                                  const int pane_height,
+                                                  const int left_colorspace,
+                                                  const int left_range,
+                                                  const int right_colorspace,
+                                                  const int right_range) const {
+  const std::string setparams_left = string_sprintf("setparams=colorspace=%d:range=%d", left_colorspace, left_range);
+  const std::string setparams_right = string_sprintf("setparams=colorspace=%d:range=%d", right_colorspace, right_range);
+  const std::string pane_scale = string_sprintf("scale=%d:%d", pane_width, pane_height);
 
-  // Choose higher-precision input formats for the tool when 10-bpc is enabled
-  const char* pre_format_filter = nullptr;
+  const std::string crop_left = roi_enabled_ ? string_sprintf("crop=%d:%d:%d:%d,", roi_.w, roi_.h, roi_.x, roi_.y) : "";
+  const std::string crop_right = crop_left;
+
+  const char* pre_format_filter;
   if (type_ == Type::Histogram) {
      pre_format_filter = use_10_bpc_ ? "format=gbrp10" : "format=gbrp";
   } else {
      pre_format_filter = use_10_bpc_ ? "format=yuv444p10le" : "format=yuv444p";
   }
-  const std::string setparams_left = std::string("setparams=colorspace=") + std::to_string(left_colorspace) + ":range=" + std::to_string(left_range);
-  const std::string setparams_right = std::string("setparams=colorspace=") + std::to_string(right_colorspace) + ":range=" + std::to_string(right_range);
-  const std::string pane_scale = std::string("scale=") + std::to_string(pane_width) + ":" + std::to_string(pane_height);
 
-  // Final output is rgb24 for efficient SDL upload
-  const char* final_format = "format=rgb24";
+  const char* tool_name = get_scope_info(type_).filter_name;
 
-  std::string filter_description =
-      std::string("[in_left]") + setparams_left + "," + pre_format_filter + "," + tool_name + "," + pane_scale + "[left_scope];" +
-      "[in_right]" + setparams_right + "," + pre_format_filter + "," + tool_name + "," + pane_scale + "[right_scope];" +
-      "[left_scope][right_scope]hstack=inputs=2," + final_format + "[out]";
+  std::string filter_description = string_sprintf(
+      "[in_left]%s,%s%s,%s,%s[left_scope];"
+      "[in_right]%s,%s%s,%s,%s[right_scope];"
+      "[left_scope][right_scope]hstack=inputs=2,%s[out]",
+      setparams_left.c_str(),
+      crop_left.c_str(),
+      pre_format_filter,
+      tool_name,
+      pane_scale.c_str(),
+      setparams_right.c_str(),
+      crop_right.c_str(),
+      pre_format_filter,
+      tool_name,
+      pane_scale.c_str(),
+      "format=rgb24");
 
   return filter_description;
 }
@@ -202,6 +210,11 @@ void ScopeWindow::ensure_graph(const AVFrame* left_frame, const AVFrame* right_f
       right_frame->height != input_height_right_ || right_frame->format != input_format_right_ || left_frame->colorspace != input_colorspace_left_ ||
       left_frame->color_range != input_range_left_ || right_frame->colorspace != input_colorspace_right_ || right_frame->color_range != input_range_right_;
 
+  // Trigger rebuild when ROI changes
+  const bool roi_changed = roi_enabled_ && (prev_roi_.x != roi_.x || prev_roi_.y != roi_.y || prev_roi_.w != roi_.w || prev_roi_.h != roi_.h);
+
+  must_reinitialize = must_reinitialize || roi_changed;
+
   if (!must_reinitialize && filter_graph_ != nullptr) {
     return;
   }
@@ -218,6 +231,7 @@ void ScopeWindow::ensure_graph(const AVFrame* left_frame, const AVFrame* right_f
   input_range_left_ = left_frame->color_range;
   input_colorspace_right_ = right_frame->colorspace;
   input_range_right_ = right_frame->color_range;
+  prev_roi_ = roi_enabled_ ? roi_ : Roi{-1, -1, -1, -1};
 
   const AVFilter* buffersrc = avfilter_get_by_name("buffer");
   const AVFilter* buffersink = avfilter_get_by_name("buffersink");
@@ -271,15 +285,26 @@ void ScopeWindow::ensure_graph(const AVFrame* left_frame, const AVFrame* right_f
 }
 
 void ScopeWindow::present_frame(const AVFrame* filtered_frame) {
-  sdl_check_bool(SDL_UpdateTexture(texture_, nullptr, filtered_frame->data[0], filtered_frame->linesize[0]) == 0, "SDL_UpdateTexture");
   sdl_check_bool(SDL_RenderClear(renderer_) == 0, "SDL_RenderClear");
-  sdl_check_bool(SDL_RenderCopy(renderer_, texture_, nullptr, nullptr) == 0, "SDL_RenderCopy");
+
+  if (filtered_frame != nullptr) {
+    sdl_check_bool(SDL_UpdateTexture(texture_, nullptr, filtered_frame->data[0], filtered_frame->linesize[0]) == 0, "SDL_UpdateTexture");
+    sdl_check_bool(SDL_RenderCopy(renderer_, texture_, nullptr, nullptr) == 0, "SDL_RenderCopy");
+  }
+
   SDL_RenderPresent(renderer_);
 }
 
 bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) {
   if (!left_frame || !right_frame) {
     return false;
+  }
+
+  // If the current visible ROI does not intersect the video, present a blank view.
+  if (!roi_enabled_) {
+    present_frame(nullptr);
+
+    return true;
   }
 
   // If the user is browsing backward or jumping around (non-monotonic PTS),
@@ -293,11 +318,14 @@ bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) 
   // Drain any pending frames to prevent lag and ensure one-to-one updates
   for (;;) {
     AVFrame* pending_frame = av_frame_alloc();
+
     if (!pending_frame) {
       throw std::runtime_error("av_frame_alloc failed (pending)");
     }
+
     const int pending_result = av_buffersink_get_frame(buffersink_ctx_, pending_frame);
     av_frame_free(&pending_frame);
+
     if (pending_result != 0) {
       break;
     }
@@ -306,6 +334,7 @@ bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) 
   // Use synthetic, matched PTS for framesync to pair both inputs
   AVFrame* left_clone = av_frame_clone(const_cast<AVFrame*>(left_frame));
   AVFrame* right_clone = av_frame_clone(const_cast<AVFrame*>(right_frame));
+
   if (!left_clone || !right_clone) {
     if (left_clone) {
       av_frame_free(&left_clone);
@@ -315,10 +344,13 @@ bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) 
     }
     throw std::runtime_error("av_frame_clone failed");
   }
+
   left_clone->pts = frame_counter_;
   right_clone->pts = frame_counter_;
+
   ffmpeg_check(av_buffersrc_add_frame_flags(buffersrc_left_ctx_, left_clone, AV_BUFFERSRC_FLAG_KEEP_REF), "feed left frame");
   ffmpeg_check(av_buffersrc_add_frame_flags(buffersrc_right_ctx_, right_clone, AV_BUFFERSRC_FLAG_KEEP_REF), "feed right frame");
+
   av_frame_free(&left_clone);
   av_frame_free(&right_clone);
 
@@ -329,7 +361,9 @@ bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) 
     if (!candidate_frame) {
       throw std::runtime_error("av_frame_alloc failed");
     }
+
     const int receive_result = av_buffersink_get_frame(buffersink_ctx_, candidate_frame);
+
     if (receive_result != 0) {
       av_frame_free(&candidate_frame);
       break;
@@ -337,15 +371,20 @@ bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) 
     if (latest_frame != nullptr) {
       av_frame_free(&latest_frame);
     }
+
     latest_frame = candidate_frame;
   }
 
   if (latest_frame != nullptr) {
     present_frame(latest_frame);
+
     av_frame_free(&latest_frame);
+
     frame_counter_++;
+
     last_pts_left_ = left_frame->pts;
     last_pts_right_ = right_frame->pts;
+
     return true;
   }
 
@@ -353,8 +392,8 @@ bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) 
 }
 
 bool ScopeWindow::handle_event(const SDL_Event& event) {
-  // Only process events directed to this window
   Uint32 event_window_id = 0;
+
   switch (event.type) {
     case SDL_WINDOWEVENT:
       event_window_id = event.window.windowID;
@@ -377,6 +416,7 @@ bool ScopeWindow::handle_event(const SDL_Event& event) {
       break;
   }
 
+  // Only process events directed to this window
   if (event_window_id == 0 || event_window_id != window_id_) {
     return false;
   }
@@ -385,48 +425,37 @@ bool ScopeWindow::handle_event(const SDL_Event& event) {
     case SDL_WINDOWEVENT:
       if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
         close_requested_ = true;
-        return true;  // consume
       } else if (event.window.event == SDL_WINDOWEVENT_RESIZED || event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
         // Update internal sizing and reinitialize resources to match
         const int new_width = event.window.data1;
         const int new_height = event.window.data2;
+
         if (new_width > 0 && new_height > 0) {
           window_width_ = new_width;
           window_height_ = new_height;
+
           pane_width_ = std::max(1, window_width_ / 2);
           pane_height_ = std::max(1, window_height_);
+
           // Recreate resources on next update
           if (texture_ != nullptr) {
             SDL_DestroyTexture(texture_);
             texture_ = nullptr;
           }
           destroy_graph();
+
+          // Let main display poll this event and trigger refresh
+          return false;
         }
-        return true;  // consume
-      } else if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
-        SDL_RaiseWindow(window_);
-        return true;  // consume
       }
-      break;
+      return true;
     case SDL_MOUSEBUTTONDOWN:
-      SDL_RaiseWindow(window_);
-      return true;  // consume
     case SDL_MOUSEBUTTONUP:
-      return true;  // consume
     case SDL_MOUSEMOTION:
-      return true;  // consume
     case SDL_MOUSEWHEEL:
-      return true;  // consume
-    case SDL_KEYDOWN:
-    case SDL_KEYUP:
-      // Do not consume keyboard events; let the main app handle hotkeys
-      return false;
-    default:
-      break;
+      return true;
   }
 
   // For other events to this window that we do not explicitly handle, do not consume by default
   return false;
 }
-
-

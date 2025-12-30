@@ -701,23 +701,34 @@ void VideoCompare::compare() {
       // Now let the main window handle the rest
       display_->input();
 
-      // Handle scope window toggle requests (hotkeys)
+      // Handle scope windows
+      const SDL_Rect roi = display_->get_visible_roi();
+      const ScopeWindow::Roi scope_window_roi{roi.x, roi.y, roi.w, roi.h};
+
       for (const auto type : ScopeWindow::all_types()) {
-        auto toggle_scope = [&](const ScopeWindow::Type type, const bool requested) {
+        auto& scope_window = scopes_.windows[ScopeWindow::index(type)];
+
+        auto maybe_toggle_scope = [&](const bool requested) {
           if (!requested) {
             return;
           }
 
-          const size_t idx = ScopeWindow::index(type);
-
-          if (scopes_.windows[idx]) {
-            scopes_.windows[idx].reset();
+          if (scope_window) {
+            scope_window.reset();
           } else {
-            scopes_.windows[idx] = make_scope_window(scopes_.config, scopes_.use_10_bpc, scopes_.display_number, type);
+            scope_window = make_scope_window(scopes_.config, scopes_.use_10_bpc, scopes_.display_number, type);
+            // Ensure the main window retains keyboard focus after opening a scope
+            display_->focus_main_window();
           }
         };
 
-        toggle_scope(type, display_->get_toggle_scope_window_requested(type));
+        // Toggle scope window
+        maybe_toggle_scope(display_->get_toggle_scope_window_requested(type));
+
+        // Update scope ROIs based on current pan/zoom before handling toggles/updates
+        if (scope_window) {
+          scope_window->set_roi(scope_window_roi);
+        }
       }
 
       if (!keep_running()) {
