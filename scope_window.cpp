@@ -307,12 +307,6 @@ bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) 
     return true;
   }
 
-  // If the user is browsing backward or jumping around (non-monotonic PTS),
-  // reset the filter graph to avoid stale frames lingering in internal FIFOs.
-  if ((last_pts_left_ != INT64_MIN && left_frame->pts < last_pts_left_) || (last_pts_right_ != INT64_MIN && right_frame->pts < last_pts_right_)) {
-    destroy_graph();
-  }
-
   ensure_graph(left_frame, right_frame);
 
   // Drain any pending frames to prevent lag and ensure one-to-one updates
