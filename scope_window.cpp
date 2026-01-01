@@ -9,38 +9,6 @@ extern "C" {
 }
 #include <SDL2/SDL.h>
 
-void ScopeWindow::set_roi(const Roi& roi) {
-  roi_ = roi;
-  roi_enabled_ = roi.w > 0 && roi.h > 0;
-}
-
-void ScopeWindow::route_events(std::array<std::unique_ptr<ScopeWindow>, ScopeWindow::kNumScopes>& windows) {
-  std::vector<SDL_Event> deferred_events;
-
-  SDL_Event event;
-  while (SDL_PollEvent(&event)) {
-    bool consumed_this_event = false;
-    for (auto& w : windows) {
-      if (w && w->handle_event(event)) {
-        consumed_this_event = true;
-
-        if (w->close_requested()) {
-          w.reset();
-        }
-      }
-    }
-
-    if (!consumed_this_event) {
-      deferred_events.push_back(event);
-    }
-  }
-
-  // Requeue events for the main display input to process
-  for (auto it = deferred_events.rbegin(); it != deferred_events.rend(); ++it) {
-    SDL_PushEvent(&(*it));
-  }
-}
-
 namespace {
 struct ScopeInfo {
   const char* title;
@@ -206,9 +174,10 @@ void ScopeWindow::destroy_graph() {
 
 void ScopeWindow::ensure_graph(const AVFrame* left_frame, const AVFrame* right_frame) {
   bool must_reinitialize =
-      left_frame->width != input_width_left_ || left_frame->height != input_height_left_ || left_frame->format != input_format_left_ || right_frame->width != input_width_right_ ||
-      right_frame->height != input_height_right_ || right_frame->format != input_format_right_ || left_frame->colorspace != input_colorspace_left_ ||
-      left_frame->color_range != input_range_left_ || right_frame->colorspace != input_colorspace_right_ || right_frame->color_range != input_range_right_;
+      left_frame->width != left_input_.width || left_frame->height != left_input_.height || left_frame->format != left_input_.format ||
+      right_frame->width != right_input_.width || right_frame->height != right_input_.height || right_frame->format != right_input_.format ||
+      left_frame->colorspace != left_input_.colorspace || left_frame->color_range != left_input_.range ||
+      right_frame->colorspace != right_input_.colorspace || right_frame->color_range != right_input_.range;
 
   // Trigger rebuild when ROI changes
   const bool roi_changed = roi_enabled_ && (prev_roi_.x != roi_.x || prev_roi_.y != roi_.y || prev_roi_.w != roi_.w || prev_roi_.h != roi_.h);
@@ -221,16 +190,16 @@ void ScopeWindow::ensure_graph(const AVFrame* left_frame, const AVFrame* right_f
 
   destroy_graph();
 
-  input_width_left_ = left_frame->width;
-  input_height_left_ = left_frame->height;
-  input_format_left_ = left_frame->format;
-  input_width_right_ = right_frame->width;
-  input_height_right_ = right_frame->height;
-  input_format_right_ = right_frame->format;
-  input_colorspace_left_ = left_frame->colorspace;
-  input_range_left_ = left_frame->color_range;
-  input_colorspace_right_ = right_frame->colorspace;
-  input_range_right_ = right_frame->color_range;
+  left_input_.width = left_frame->width;
+  left_input_.height = left_frame->height;
+  left_input_.format = left_frame->format;
+  right_input_.width = right_frame->width;
+  right_input_.height = right_frame->height;
+  right_input_.format = right_frame->format;
+  left_input_.colorspace = left_frame->colorspace;
+  left_input_.range = left_frame->color_range;
+  right_input_.colorspace = right_frame->colorspace;
+  right_input_.range = right_frame->color_range;
   prev_roi_ = roi_enabled_ ? roi_ : Roi{-1, -1, -1, -1};
 
   const AVFilter* buffersrc = avfilter_get_by_name("buffer");
@@ -245,7 +214,7 @@ void ScopeWindow::ensure_graph(const AVFrame* left_frame, const AVFrame* right_f
   ffmpeg_check(avfilter_graph_create_filter(&buffersink_ctx_, buffersink, "out", nullptr, nullptr, filter_graph_), "create sink");
 
   std::string filter_description =
-      build_filter_description(pane_width_, pane_height_, input_colorspace_left_, input_range_left_, input_colorspace_right_, input_range_right_);
+      build_filter_description(pane_width_, pane_height_, left_input_.colorspace, left_input_.range, right_input_.colorspace, right_input_.range);
 
   AVFilterInOut* inputs = avfilter_inout_alloc();
   AVFilterInOut* outputs_left = avfilter_inout_alloc();
@@ -275,13 +244,12 @@ void ScopeWindow::ensure_graph(const AVFrame* left_frame, const AVFrame* right_f
   avfilter_inout_free(&inputs);
   avfilter_inout_free(&outputs_left);
   // outputs_right is freed via the chained free of outputs_left->next
+}
 
-  if (texture_ != nullptr) {
-    SDL_DestroyTexture(texture_);
-    texture_ = nullptr;
+void ScopeWindow::ensure_texture() {
+  if (texture_ == nullptr) {
+    texture_ = static_cast<SDL_Texture*>(sdl_check_ptr(SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, pane_width_ * 2, pane_height_), "SDL_CreateTexture"));
   }
-
-  texture_ = static_cast<SDL_Texture*>(sdl_check_ptr(SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, pane_width_ * 2, pane_height_), "SDL_CreateTexture"));
 }
 
 void ScopeWindow::present_frame(const AVFrame* filtered_frame) {
@@ -295,31 +263,39 @@ void ScopeWindow::present_frame(const AVFrame* filtered_frame) {
   SDL_RenderPresent(renderer_);
 }
 
-bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) {
+bool ScopeWindow::prepare(const AVFrame* left_frame, const AVFrame* right_frame) {
   if (!left_frame || !right_frame) {
     return false;
   }
 
-  // If the current visible ROI does not intersect the video, present a blank view.
+  // If ROI is disabled, we still want to blank in render, but skip compute here.
   if (!roi_enabled_) {
-    present_frame(nullptr);
-
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (pending_frame_ != nullptr) {
+      av_frame_free(&pending_frame_);
+      pending_frame_ = nullptr;
+    }
     return true;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (graph_reset_pending_) {
+      destroy_graph();
+      graph_reset_pending_ = false;
+    }
   }
 
   ensure_graph(left_frame, right_frame);
 
   // Drain any pending frames to prevent lag and ensure one-to-one updates
   for (;;) {
-    AVFrame* pending_frame = av_frame_alloc();
-
-    if (!pending_frame) {
+    AVFrame* pending = av_frame_alloc();
+    if (!pending) {
       throw std::runtime_error("av_frame_alloc failed (pending)");
     }
-
-    const int pending_result = av_buffersink_get_frame(buffersink_ctx_, pending_frame);
-    av_frame_free(&pending_frame);
-
+    const int pending_result = av_buffersink_get_frame(buffersink_ctx_, pending);
+    av_frame_free(&pending);
     if (pending_result != 0) {
       break;
     }
@@ -328,7 +304,6 @@ bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) 
   // Use synthetic, matched PTS for framesync to pair both inputs
   AVFrame* left_clone = av_frame_clone(const_cast<AVFrame*>(left_frame));
   AVFrame* right_clone = av_frame_clone(const_cast<AVFrame*>(right_frame));
-
   if (!left_clone || !right_clone) {
     if (left_clone) {
       av_frame_free(&left_clone);
@@ -351,38 +326,76 @@ bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) 
   // Retrieve the freshest available frame, if any
   AVFrame* latest_frame = nullptr;
   for (;;) {
-    AVFrame* candidate_frame = av_frame_alloc();
-    if (!candidate_frame) {
+    AVFrame* candidate = av_frame_alloc();
+    if (!candidate) {
       throw std::runtime_error("av_frame_alloc failed");
     }
-
-    const int receive_result = av_buffersink_get_frame(buffersink_ctx_, candidate_frame);
-
+    const int receive_result = av_buffersink_get_frame(buffersink_ctx_, candidate);
     if (receive_result != 0) {
-      av_frame_free(&candidate_frame);
+      av_frame_free(&candidate);
       break;
     }
     if (latest_frame != nullptr) {
       av_frame_free(&latest_frame);
     }
-
-    latest_frame = candidate_frame;
+    latest_frame = candidate;
   }
 
   if (latest_frame != nullptr) {
-    present_frame(latest_frame);
-
-    av_frame_free(&latest_frame);
-
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (pending_frame_ != nullptr) {
+      av_frame_free(&pending_frame_);
+      pending_frame_ = nullptr;
+    }
+    pending_frame_ = latest_frame;
     frame_counter_++;
-
     last_pts_left_ = left_frame->pts;
     last_pts_right_ = right_frame->pts;
-
     return true;
   }
 
   return false;
+}
+
+void ScopeWindow::render() {
+  // Always clear/present to keep the window responsive.
+  if (!roi_enabled_) {
+    ensure_texture();
+    present_frame(nullptr);
+    return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (texture_reset_pending_) {
+      if (texture_ != nullptr) {
+        SDL_DestroyTexture(texture_);
+        texture_ = nullptr;
+      }
+      texture_reset_pending_ = false;
+    }
+  }
+
+  ensure_texture();
+
+  AVFrame* to_present = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    to_present = pending_frame_;
+    pending_frame_ = nullptr;
+  }
+
+  present_frame(to_present);
+
+  if (to_present != nullptr) {
+    av_frame_free(&to_present);
+  }
+}
+
+bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) {
+  const bool prepared = prepare(left_frame, right_frame);
+  render();
+  return prepared;
 }
 
 bool ScopeWindow::handle_event(const SDL_Event& event) {
@@ -431,12 +444,12 @@ bool ScopeWindow::handle_event(const SDL_Event& event) {
           pane_width_ = std::max(1, window_width_ / 2);
           pane_height_ = std::max(1, window_height_);
 
-          // Recreate resources on next update
-          if (texture_ != nullptr) {
-            SDL_DestroyTexture(texture_);
-            texture_ = nullptr;
+          // Recreate resources on next cycle to avoid cross-thread SDL calls
+          {
+            std::lock_guard<std::mutex> lock(state_mutex_);
+            texture_reset_pending_ = true;
+            graph_reset_pending_ = true;
           }
-          destroy_graph();
 
           // Let main display poll this event and trigger refresh
           return false;
@@ -452,4 +465,34 @@ bool ScopeWindow::handle_event(const SDL_Event& event) {
 
   // For other events to this window that we do not explicitly handle, do not consume by default
   return false;
+}
+
+void ScopeWindow::set_roi(const Roi& roi) {
+  roi_ = roi;
+  roi_enabled_ = roi.w > 0 && roi.h > 0;
+}
+
+void ScopeWindow::route_events(std::array<std::unique_ptr<ScopeWindow>, ScopeWindow::kNumScopes>& windows) {
+  std::vector<SDL_Event> deferred_events;
+
+  SDL_Event event;
+  while (SDL_PollEvent(&event)) {
+    bool consumed_this_event = false;
+    for (auto& window : windows) {
+      if (window && window->handle_event(event)) {
+        consumed_this_event = true;
+
+        // Defer actual destruction to the main loop to coordinate with worker threads
+      }
+    }
+
+    if (!consumed_this_event) {
+      deferred_events.push_back(event);
+    }
+  }
+
+  // Requeue events for the main display input to process
+  for (auto it = deferred_events.rbegin(); it != deferred_events.rend(); ++it) {
+    SDL_PushEvent(&(*it));
+  }
 }

@@ -9,6 +9,7 @@
 #include "sorted_flat_deque.h"
 #include "string_utils.h"
 #include "scope_window.h"
+#include "scope_manager.h"
 extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/pixdesc.h>
@@ -290,20 +291,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 }
 
 void VideoCompare::init_scopes(const VideoCompareConfig& config) {
-  scopes_.config = config.scopes;
-  scopes_.use_10_bpc = config.use_10_bpc;
-  scopes_.display_number = config.display_number;
-
-  auto maybe_add = [&](const bool enabled, const ScopeWindow::Type type) {
-    if (enabled) {
-      const size_t idx = ScopeWindow::index(type);
-      scopes_.windows[idx] = make_scope_window(scopes_.config, scopes_.use_10_bpc, scopes_.display_number, type);
-    }
-  };
-
-  maybe_add(scopes_.config.histogram, ScopeWindow::Type::Histogram);
-  maybe_add(scopes_.config.vectorscope, ScopeWindow::Type::Vectorscope);
-  maybe_add(scopes_.config.waveform, ScopeWindow::Type::Waveform);
+  scope_manager_ = std::make_unique<ScopeManager>(config.scopes, config.use_10_bpc, config.display_number);
 }
 
 void VideoCompare::operator()() {
@@ -697,7 +685,7 @@ void VideoCompare::compare() {
       full_cycle_timer.update();
 
       // Route scope-window events (mouse, resize/close) while forwarding unconsumed events for the main display
-      ScopeWindow::route_events(scopes_.windows);
+      scope_manager_->route_events();
       // Now let the main window handle the rest
       display_->input();
 
@@ -706,30 +694,17 @@ void VideoCompare::compare() {
       const ScopeWindow::Roi scope_window_roi{roi.x, roi.y, roi.w, roi.h};
 
       for (const auto type : ScopeWindow::all_types()) {
-        auto& scope_window = scopes_.windows[ScopeWindow::index(type)];
-
-        auto maybe_toggle_scope = [&](const bool requested) {
-          if (!requested) {
-            return;
-          }
-
-          if (scope_window) {
-            scope_window.reset();
-          } else {
-            scope_window = make_scope_window(scopes_.config, scopes_.use_10_bpc, scopes_.display_number, type);
+        if (display_->get_toggle_scope_window_requested(type)) {
+          const bool opened = scope_manager_->request_toggle(type);
+          if (opened) {
             // Ensure the main window retains keyboard focus after opening a scope
             display_->focus_main_window();
           }
-        };
-
-        // Toggle scope window
-        maybe_toggle_scope(display_->get_toggle_scope_window_requested(type));
-
-        // Update scope ROIs based on current pan/zoom before handling toggles/updates
-        if (scope_window) {
-          scope_window->set_roi(scope_window_roi);
         }
       }
+
+      scope_manager_->set_roi(scope_window_roi);
+      scope_manager_->reconcile();
 
       if (!keep_running()) {
         break;
@@ -1061,11 +1036,9 @@ void VideoCompare::compare() {
             display_refresh_timer.update();
 
             if (display_->possibly_refresh(left_display_frame, right_display_frame, current_total_browsable)) {
-              for (auto& window : scopes_.windows) {
-                if (window) {
-                  window->update(left_display_frame, right_display_frame);
-                }
-              }
+              scope_manager_->submit_jobs(left_display_frame, right_display_frame);
+              scope_manager_->wait_all();
+              scope_manager_->render_all();
 
               refresh_time_deque.push_back(-display_refresh_timer.us_until_target());
             } else {

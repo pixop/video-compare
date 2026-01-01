@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <cstdint>
 #include <array>
+#include <mutex>
 extern "C" {
 #include <libavfilter/avfilter.h>
 #include <libavfilter/buffersink.h>
@@ -31,9 +32,6 @@ class ScopeWindow {
     }
     return 0;
   }
-  static constexpr std::array<Type, kNumScopes> all_types() {
-    return {Type::Histogram, Type::Vectorscope, Type::Waveform};
-  }
   static constexpr Type type_for_index(const size_t idx) {
     switch (idx) {
       case 0:
@@ -46,12 +44,19 @@ class ScopeWindow {
         return Type::Histogram;
     }
   }
+  static constexpr std::array<Type, kNumScopes> all_types() {
+    return {Type::Histogram, Type::Vectorscope, Type::Waveform};
+  }
 
   ScopeWindow(Type type, const int pane_width, const int pane_height, const bool always_on_top, const int display_number, const bool use_10_bpc);
   ~ScopeWindow();
 
   // Feed the current frames and update the scope window if an output is produced.
   bool update(const AVFrame* left_frame, const AVFrame* right_frame);
+  // Compute-only phase: run FFmpeg filter graph and store the freshest frame for later rendering.
+  bool prepare(const AVFrame* left_frame, const AVFrame* right_frame);
+  // Render phase: must run on the main thread; uploads the pending frame (if any) and presents.
+  void render();
 
   // Accessor for this window's type
   Type get_type() const { return type_; }
@@ -75,6 +80,7 @@ class ScopeWindow {
   bool handle_event(const SDL_Event& event);
 
   void ensure_graph(const AVFrame* left_frame, const AVFrame* right_frame);
+  void ensure_texture();
   void destroy_graph();
 
   std::string build_filter_description(const int pane_width,
@@ -104,16 +110,15 @@ class ScopeWindow {
   AVFilterContext* buffersink_ctx_{nullptr};
 
   // Input tracking for reinitialization
-  int input_width_left_{0};
-  int input_height_left_{0};
-  int input_format_left_{-1};
-  int input_width_right_{0};
-  int input_height_right_{0};
-  int input_format_right_{-1};
-  int input_colorspace_left_{0};
-  int input_range_left_{0};
-  int input_colorspace_right_{0};
-  int input_range_right_{0};
+  struct InputState {
+    int width;
+    int height;
+    int format;
+    int colorspace;
+    int range;
+  };
+  InputState left_input_{0, 0, -1, 0, 0};
+  InputState right_input_{0, 0, -1, 0, 0};
 
   // Config
   Type type_;
@@ -132,6 +137,12 @@ class ScopeWindow {
   bool roi_enabled_{false};
   Roi roi_{0, 0, 0, 0};
   Roi prev_roi_{-1, -1, -1, -1};
+
+  // Cross-thread coordination
+  std::mutex state_mutex_;
+  AVFrame* pending_frame_{nullptr};  // Owned; freed on render
+  bool texture_reset_pending_{false};
+  bool graph_reset_pending_{false};
 };
 
 
