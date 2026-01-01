@@ -1,10 +1,10 @@
 #pragma once
-#include <memory>
-#include <string>
 #include <limits.h>
-#include <cstdint>
 #include <array>
+#include <cstdint>
+#include <memory>
 #include <mutex>
+#include <string>
 extern "C" {
 #include <libavfilter/avfilter.h>
 #include <libavfilter/buffersink.h>
@@ -44,9 +44,7 @@ class ScopeWindow {
         return Type::Histogram;
     }
   }
-  static constexpr std::array<Type, kNumScopes> all_types() {
-    return {Type::Histogram, Type::Vectorscope, Type::Waveform};
-  }
+  static constexpr std::array<Type, kNumScopes> all_types() { return {Type::Histogram, Type::Vectorscope, Type::Waveform}; }
 
   ScopeWindow(Type type, const int pane_width, const int pane_height, const bool always_on_top, const int display_number, const bool use_10_bpc);
   ~ScopeWindow();
@@ -83,12 +81,7 @@ class ScopeWindow {
   void ensure_texture();
   void destroy_graph();
 
-  std::string build_filter_description(const int pane_width,
-                                       const int pane_height,
-                                       const int left_colorspace,
-                                       const int left_range,
-                                       const int right_colorspace,
-                                       const int right_range) const;
+  std::string build_filter_description(const int pane_width, const int pane_height, const int left_colorspace, const int left_range, const int right_colorspace, const int right_range) const;
   static std::string format_filter_args(const AVFrame* frame);
 
   void present_frame(const AVFrame* filtered_frame);
@@ -144,5 +137,3 @@ class ScopeWindow {
   bool texture_reset_pending_{false};
   bool graph_reset_pending_{false};
 };
-
-

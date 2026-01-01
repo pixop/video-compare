@@ -12,8 +12,8 @@
 #include "display.h"
 #include "format_converter.h"
 #include "queue.h"
-#include "timer.h"
 #include "scope_manager.h"
+#include "timer.h"
 #include "video_decoder.h"
 #include "video_filterer.h"
 extern "C" {

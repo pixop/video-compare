@@ -11,8 +11,8 @@
 #include <vector>
 #include "core_types.h"
 #include "row_workers.h"
-#include "string_utils.h"
 #include "scope_window.h"
+#include "string_utils.h"
 extern "C" {
 #include <libavutil/frame.h>
 }

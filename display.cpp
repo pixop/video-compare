@@ -1,4 +1,3 @@
-#include "scope_window.h"
 #include "display.h"
 #include <libgen.h>
 #include <algorithm>
@@ -17,6 +16,7 @@
 #include "ffmpeg.h"
 #include "format_converter.h"
 #include "png_saver.h"
+#include "scope_window.h"
 #include "source_code_pro_regular_ttf.h"
 #include "version.h"
 #include "video_compare_icon.h"

@@ -4,16 +4,10 @@
 #include "scope_window.h"
 
 static std::unique_ptr<ScopeWindow> make_scope_window(const ScopesConfig& config, bool use_10_bpc, int display_number, ScopeWindow::Type type) {
-  return std::make_unique<ScopeWindow>(type,
-                                       config.width / 2,
-                                       config.height,
-                                       config.always_on_top,
-                                       display_number,
-                                       use_10_bpc);
+  return std::make_unique<ScopeWindow>(type, config.width / 2, config.height, config.always_on_top, display_number, use_10_bpc);
 }
 
-ScopeManager::ScopeManager(const ScopesConfig& config, const bool use_10_bpc, const int display_number)
-    : use_10_bpc_(use_10_bpc), display_number_(display_number), config_(config) {
+ScopeManager::ScopeManager(const ScopesConfig& config, const bool use_10_bpc, const int display_number) : use_10_bpc_(use_10_bpc), display_number_(display_number), config_(config) {
   auto maybe_add = [&](const bool enabled, const ScopeWindow::Type type) {
     if (!enabled) {
       return;
@@ -182,5 +176,3 @@ void ScopeManager::stop_worker(const size_t idx) {
   }
   workers_[idx].reset();
 }
-
-

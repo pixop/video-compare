@@ -1,8 +1,8 @@
 #include "scope_window.h"
-#include "string_utils.h"
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "string_utils.h"
 extern "C" {
 #include <libavutil/avutil.h>
 #include <libavutil/imgutils.h>
@@ -62,7 +62,7 @@ ScopeWindow::ScopeWindow(const Type type, const int pane_width, const int pane_h
     window_flags |= SDL_WINDOW_ALWAYS_ON_TOP;
   }
 
-// Determine initial position based on display usable bounds and tool type index to avoid overlap.
+  // Determine initial position based on display usable bounds and tool type index to avoid overlap.
   int initial_position_x = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number_);
   int initial_position_y = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number_);
   SDL_Rect usable_bounds;
@@ -82,9 +82,7 @@ ScopeWindow::ScopeWindow(const Type type, const int pane_width, const int pane_h
   const ScopeInfo scope_info_title = get_scope_info(type_);
   const char* window_title = scope_info_title.title;
 
-  window_ = static_cast<SDL_Window*>(sdl_check_ptr(SDL_CreateWindow(window_title,
-                           initial_position_x, initial_position_y, window_width, window_height, window_flags),
-                       "SDL_CreateWindow"));
+  window_ = static_cast<SDL_Window*>(sdl_check_ptr(SDL_CreateWindow(window_title, initial_position_x, initial_position_y, window_width, window_height, window_flags), "SDL_CreateWindow"));
 
   renderer_ = static_cast<SDL_Renderer*>(sdl_check_ptr(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "SDL_CreateRenderer"));
 
@@ -113,20 +111,14 @@ ScopeWindow::~ScopeWindow() {
 
 std::string ScopeWindow::format_filter_args(const AVFrame* frame) {
 #if (LIBAVFILTER_VERSION_INT < AV_VERSION_INT(10, 1, 100))
-  return std::string("video_size=") + std::to_string(frame->width) + "x" + std::to_string(frame->height) + ":pix_fmt=" + std::to_string(frame->format) +
-         ":time_base=1/1:pixel_aspect=0/1";
+  return std::string("video_size=") + std::to_string(frame->width) + "x" + std::to_string(frame->height) + ":pix_fmt=" + std::to_string(frame->format) + ":time_base=1/1:pixel_aspect=0/1";
 #else
-  return std::string("video_size=") + std::to_string(frame->width) + "x" + std::to_string(frame->height) + ":pix_fmt=" + std::to_string(frame->format) +
-         ":time_base=1/1:pixel_aspect=0/1:colorspace=" + std::to_string(frame->colorspace) + ":range=" + std::to_string(frame->color_range);
+  return std::string("video_size=") + std::to_string(frame->width) + "x" + std::to_string(frame->height) + ":pix_fmt=" + std::to_string(frame->format) + ":time_base=1/1:pixel_aspect=0/1:colorspace=" + std::to_string(frame->colorspace) +
+         ":range=" + std::to_string(frame->color_range);
 #endif
 }
 
-std::string ScopeWindow::build_filter_description(const int pane_width,
-                                                  const int pane_height,
-                                                  const int left_colorspace,
-                                                  const int left_range,
-                                                  const int right_colorspace,
-                                                  const int right_range) const {
+std::string ScopeWindow::build_filter_description(const int pane_width, const int pane_height, const int left_colorspace, const int left_range, const int right_colorspace, const int right_range) const {
   const std::string setparams_left = string_sprintf("setparams=colorspace=%d:range=%d", left_colorspace, left_range);
   const std::string setparams_right = string_sprintf("setparams=colorspace=%d:range=%d", right_colorspace, right_range);
   const std::string pane_scale = string_sprintf("scale=%d:%d", pane_width, pane_height);
@@ -136,9 +128,9 @@ std::string ScopeWindow::build_filter_description(const int pane_width,
 
   const char* pre_format_filter;
   if (type_ == Type::Histogram) {
-     pre_format_filter = use_10_bpc_ ? "format=gbrp10" : "format=gbrp";
+    pre_format_filter = use_10_bpc_ ? "format=gbrp10" : "format=gbrp";
   } else {
-     pre_format_filter = use_10_bpc_ ? "format=yuv444p10le" : "format=yuv444p";
+    pre_format_filter = use_10_bpc_ ? "format=yuv444p10le" : "format=yuv444p";
   }
 
   const char* tool_name = get_scope_info(type_).filter_name;
@@ -147,17 +139,7 @@ std::string ScopeWindow::build_filter_description(const int pane_width,
       "[in_left]%s,%s%s,%s,%s[left_scope];"
       "[in_right]%s,%s%s,%s,%s[right_scope];"
       "[left_scope][right_scope]hstack=inputs=2,%s[out]",
-      setparams_left.c_str(),
-      crop_left.c_str(),
-      pre_format_filter,
-      tool_name,
-      pane_scale.c_str(),
-      setparams_right.c_str(),
-      crop_right.c_str(),
-      pre_format_filter,
-      tool_name,
-      pane_scale.c_str(),
-      "format=rgb24");
+      setparams_left.c_str(), crop_left.c_str(), pre_format_filter, tool_name, pane_scale.c_str(), setparams_right.c_str(), crop_right.c_str(), pre_format_filter, tool_name, pane_scale.c_str(), "format=rgb24");
 
   return filter_description;
 }
@@ -173,11 +155,9 @@ void ScopeWindow::destroy_graph() {
 }
 
 void ScopeWindow::ensure_graph(const AVFrame* left_frame, const AVFrame* right_frame) {
-  bool must_reinitialize =
-      left_frame->width != left_input_.width || left_frame->height != left_input_.height || left_frame->format != left_input_.format ||
-      right_frame->width != right_input_.width || right_frame->height != right_input_.height || right_frame->format != right_input_.format ||
-      left_frame->colorspace != left_input_.colorspace || left_frame->color_range != left_input_.range ||
-      right_frame->colorspace != right_input_.colorspace || right_frame->color_range != right_input_.range;
+  bool must_reinitialize = left_frame->width != left_input_.width || left_frame->height != left_input_.height || left_frame->format != left_input_.format || right_frame->width != right_input_.width ||
+                           right_frame->height != right_input_.height || right_frame->format != right_input_.format || left_frame->colorspace != left_input_.colorspace || left_frame->color_range != left_input_.range ||
+                           right_frame->colorspace != right_input_.colorspace || right_frame->color_range != right_input_.range;
 
   // Trigger rebuild when ROI changes
   const bool roi_changed = roi_enabled_ && (prev_roi_.x != roi_.x || prev_roi_.y != roi_.y || prev_roi_.w != roi_.w || prev_roi_.h != roi_.h);
@@ -213,8 +193,7 @@ void ScopeWindow::ensure_graph(const AVFrame* left_frame, const AVFrame* right_f
   ffmpeg_check(avfilter_graph_create_filter(&buffersrc_right_ctx_, buffersrc, "in_right", format_filter_args(right_frame).c_str(), nullptr, filter_graph_), "create right buffer");
   ffmpeg_check(avfilter_graph_create_filter(&buffersink_ctx_, buffersink, "out", nullptr, nullptr, filter_graph_), "create sink");
 
-  std::string filter_description =
-      build_filter_description(pane_width_, pane_height_, left_input_.colorspace, left_input_.range, right_input_.colorspace, right_input_.range);
+  std::string filter_description = build_filter_description(pane_width_, pane_height_, left_input_.colorspace, left_input_.range, right_input_.colorspace, right_input_.range);
 
   AVFilterInOut* inputs = avfilter_inout_alloc();
   AVFilterInOut* outputs_left = avfilter_inout_alloc();

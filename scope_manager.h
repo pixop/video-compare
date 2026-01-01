@@ -65,5 +65,3 @@ class ScopeManager {
   std::array<std::unique_ptr<WorkerState>, ScopeWindow::kNumScopes> workers_;
   std::array<uint64_t, ScopeWindow::kNumScopes> last_submitted_seq_{};
 };
-
-

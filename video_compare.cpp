@@ -5,11 +5,11 @@
 #include <iostream>
 #include <thread>
 #include "ffmpeg.h"
+#include "scope_manager.h"
+#include "scope_window.h"
 #include "side_aware_logger.h"
 #include "sorted_flat_deque.h"
 #include "string_utils.h"
-#include "scope_window.h"
-#include "scope_manager.h"
 extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/pixdesc.h>
@@ -117,12 +117,7 @@ static void sleep_for_ms(const uint32_t ms) {
 }
 
 static std::unique_ptr<ScopeWindow> make_scope_window(const ScopesConfig& config, bool use_10_bpc, int display_number, ScopeWindow::Type type) {
-  return std::make_unique<ScopeWindow>(type,
-                                       config.width / 2,
-                                       config.height,
-                                       config.always_on_top,
-                                       display_number,
-                                       use_10_bpc);
+  return std::make_unique<ScopeWindow>(type, config.width / 2, config.height, config.always_on_top, display_number, use_10_bpc);
 }
 
 VideoCompare::~VideoCompare() = default;

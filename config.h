@@ -16,8 +16,8 @@ struct ScopesConfig {
   bool histogram{false};
   bool vectorscope{false};
   bool waveform{false};
-  int width{1024};    // total scope window width (two panes side-by-side)
-  int height{256};    // scope window height
+  int width{1024};  // total scope window width (two panes side-by-side)
+  int height{256};  // scope window height
   bool always_on_top{true};
 };
 
