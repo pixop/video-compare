@@ -35,6 +35,9 @@ static const std::vector<std::pair<std::string, std::string>> controls{{"H", "To
                                                                        {"8", "Zoom 400% (x4)"},
                                                                        {"9", "Zoom 800% (x8)"},
                                                                        {"0", "Toggle video/subtraction mode"},
+                                                                       {"F1", "Toggle Histogram window"},
+                                                                       {"F2", "Toggle Vectorscope window"},
+                                                                       {"F3", "Toggle Waveform window"},
                                                                        {"+", "Time-shift right video 1 frame forward"},
                                                                        {"-", "Time-shift right video 1 frame backward"},
                                                                        {"X", "Show the current video frame and UI update rates (in FPS)"},
@@ -48,8 +51,7 @@ static const std::vector<std::string> instructions{
     "Hold SHIFT while pressing D to decode and move to the next frame.",
     "Hold CTRL while time-shifting with +/- for faster increments/decrements of 10 frames per keystroke. Similarly, hold ALT for even larger time-shifts of 100 frames.",
     "Use CTRL+C (Windows/Linux) or CMD+C (macOS) to copy the current timestamp of the left video to the clipboard, and CTRL+V (Windows/Linux) or CMD+V (macOS) to paste a timestamp from the clipboard and seek to that position.",
-    "Use SHIFT+F to select a region; cutouts from both frames and their concatenation will be saved as PNGs.",
-    "Hold SHIFT while pressing 1 to toggle the Histogram scope window, 2 for Vectorscope, and 3 for Waveform."};
+    "Use SHIFT+F to select a region; cutouts from both frames and their concatenation will be saved as PNGs."};
 
 const std::vector<std::pair<std::string, std::string>> get_controls() {
   return controls;

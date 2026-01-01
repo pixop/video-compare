@@ -2175,7 +2175,7 @@ void Display::input() {
 
   while (SDL_PollEvent(&event_) != 0) {
     input_received_ = true;
-    const SDL_Keymod keymod = SDL_GetModState();
+    const SDL_Keymod keymod = static_cast<SDL_Keymod>(event_.key.keysym.mod);
     const SDL_Keycode keycode = event_.key.keysym.sym;
 
     auto is_clipboard_mod_pressed = [keymod]() -> bool {
@@ -2327,25 +2327,37 @@ void Display::input() {
           case SDLK_PERIOD:
             set_buffer_play_loop_mode(buffer_play_loop_mode_ != Loop::FORWARDONLY ? Loop::FORWARDONLY : Loop::OFF);
             break;
+          case SDLK_F1:
+            toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Histogram)] = true;
+            break;
           case SDLK_1:
           case SDLK_KP_1:
             if (keymod & KMOD_SHIFT) {
+              // Fallback for layouts where F-keys are inconvenient
               toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Histogram)] = true;
             } else {
               show_left_ = !show_left_;
             }
             break;
+          case SDLK_F2:
+            toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Vectorscope)] = true;
+            break;
           case SDLK_2:
           case SDLK_KP_2:
             if (keymod & KMOD_SHIFT) {
+              // Fallback for layouts where F-keys are inconvenient
               toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Vectorscope)] = true;
             } else {
               show_right_ = !show_right_;
             }
             break;
+          case SDLK_F3:
+            toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Waveform)] = true;
+            break;
           case SDLK_3:
           case SDLK_KP_3:
             if (keymod & KMOD_SHIFT) {
+              // Fallback for layouts where F-keys are inconvenient
               toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Waveform)] = true;
             } else {
               show_hud_ = !show_hud_;

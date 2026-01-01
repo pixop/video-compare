@@ -193,6 +193,9 @@ see all supported options.
 - 8: Zoom 400% (x4)
 - 9: Zoom 800% (x8)
 - 0: Toggle video/subtraction mode
+- F1: Toggle Histogram window
+- F2: Toggle Vectorscope window
+- F3: Toggle Waveform window
 - Plus `+`: Time-shift right video 1 frame forward
 - Minus `-`: Time-shift right video 1 frame backward
 - X: Show the current video frame and UI update rates (in FPS)
@@ -219,8 +222,6 @@ clipboard and seek to that position.
 
 Use `Shift+F` to select a region; cutouts from both frames and their concatenation will be saved
 as PNGs.
-
-**Hold** `Shift` while pressing `1` to toggle the Histogram scope window, `2` for Vectorscope, and `3` for Waveform.
 
 ## Build
 
