@@ -1,11 +1,11 @@
 ---
 Checks:          'clang-diagnostic-*,clang-analyzer-*,bugprone-*,readability-*,google-*'
 WarningsAsErrors: ''
-HeaderFilterRegex: ''
-AnalyzeTemporaryDtors: false
+HeaderFilterRegex: '.*'
 FormatStyle:     none
 User:            jon
 CheckOptions:
+  bugprone-use-after-move.AnalyzeTemporaryDtors: 'false'
   readability-suspicious-call-argument.PrefixSimilarAbove: '30'
   modernize-replace-auto-ptr.IncludeStyle: llvm
   readability-static-accessed-through-instance.NameSpecifierNestingThreshold: '3'
