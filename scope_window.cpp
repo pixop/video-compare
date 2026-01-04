@@ -10,24 +10,33 @@ extern "C" {
 #include <SDL2/SDL.h>
 
 namespace {
-struct ScopeInfo {
+struct ScopeInfoEntry {
+  ScopeWindow::Type type;
   const char* title;
   const char* filter_name;  // FFmpeg runtime filter name
+  const char* type_string;  // used for logging/CLI-facing messages
 };
 
-static constexpr ScopeInfo SCOPE_INFOS[] = {
-    {"Histogram", "histogram"},
-    {"Vectorscope", "vectorscope"},
-    {"Waveform", "waveform"},
+static constexpr ScopeInfoEntry kScopeInfos[] = {
+    {ScopeWindow::Type::Histogram, "Histogram", "histogram", "histogram"},
+    {ScopeWindow::Type::Vectorscope, "Vectorscope", "vectorscope", "vectorscope"},
+    {ScopeWindow::Type::Waveform, "Waveform", "waveform", "waveform"},
 };
 
-inline ScopeInfo get_scope_info(ScopeWindow::Type type) {
-  const size_t index = static_cast<size_t>(type);
-  if (index < (sizeof(SCOPE_INFOS) / sizeof(SCOPE_INFOS[0]))) {
-    return SCOPE_INFOS[index];
-  } else {
-    return {"Scope", "histogram"};
+inline const ScopeInfoEntry* find_scope_info(const ScopeWindow::Type type) {
+  for (const auto& entry : kScopeInfos) {
+    if (entry.type == type) {
+      return &entry;
+    }
   }
+  return nullptr;
+}
+
+inline const ScopeInfoEntry& get_scope_info(const ScopeWindow::Type type) {
+  if (const auto* info = find_scope_info(type)) {
+    return *info;
+  }
+  return kScopeInfos[0];
 }
 }  // namespace
 
@@ -50,8 +59,8 @@ static void ffmpeg_check(const int error_code, const char* what) {
   }
 }
 
-ScopeWindow::ScopeWindow(const Type type, const int pane_width, const int pane_height, const bool always_on_top, const int display_number, const bool use_10_bpc)
-    : type_(type), pane_width_(pane_width), pane_height_(pane_height), always_on_top_(always_on_top), display_number_(display_number), use_10_bpc_(use_10_bpc) {
+ScopeWindow::ScopeWindow(const Type type, const int pane_width, const int pane_height, const bool always_on_top, const int display_number, const bool use_10_bpc, const std::string& filter_options)
+    : type_(type), pane_width_(pane_width), pane_height_(pane_height), always_on_top_(always_on_top), display_number_(display_number), use_10_bpc_(use_10_bpc), filter_options_(filter_options) {
   const int window_width = pane_width_ * 2;
   const int window_height = pane_height_;
 
@@ -79,7 +88,7 @@ ScopeWindow::ScopeWindow(const Type type, const int pane_width, const int pane_h
     initial_position_y = std::min(std::max(proposed_y, usable_bounds.y + margin_pixels), max_y);
   }
 
-  const ScopeInfo scope_info_title = get_scope_info(type_);
+  const auto& scope_info_title = get_scope_info(type_);
   const char* window_title = scope_info_title.title;
 
   window_ = static_cast<SDL_Window*>(sdl_check_ptr(SDL_CreateWindow(window_title, initial_position_x, initial_position_y, window_width, window_height, window_flags), "SDL_CreateWindow"));
@@ -109,6 +118,37 @@ ScopeWindow::~ScopeWindow() {
   }
 }
 
+const char* ScopeWindow::type_to_string(const Type t) {
+  if (const auto* info = find_scope_info(t)) {
+    return info->type_string;
+  }
+  return "scope";
+}
+
+size_t ScopeWindow::index(const Type t) {
+  for (size_t i = 0; i < kNumScopes; ++i) {
+    if (kScopeInfos[i].type == t) {
+      return i;
+    }
+  }
+  return 0;
+}
+
+ScopeWindow::Type ScopeWindow::type_for_index(const size_t idx) {
+  if (idx < kNumScopes) {
+    return kScopeInfos[idx].type;
+  }
+  return Type::Histogram;
+}
+
+std::array<ScopeWindow::Type, ScopeWindow::kNumScopes> ScopeWindow::all_types() {
+  std::array<Type, kNumScopes> result{};
+  for (size_t i = 0; i < kNumScopes; ++i) {
+    result[i] = kScopeInfos[i].type;
+  }
+  return result;
+}
+
 std::string ScopeWindow::format_filter_args(const AVFrame* frame) {
 #if (LIBAVFILTER_VERSION_INT < AV_VERSION_INT(10, 1, 100))
   return std::string("video_size=") + std::to_string(frame->width) + "x" + std::to_string(frame->height) + ":pix_fmt=" + std::to_string(frame->format) + ":time_base=1/1:pixel_aspect=0/1";
@@ -134,12 +174,13 @@ std::string ScopeWindow::build_filter_description(const int pane_width, const in
   }
 
   const char* tool_name = get_scope_info(type_).filter_name;
+  const std::string tool_spec = filter_options_.empty() ? std::string(tool_name) : string_sprintf("%s=%s", tool_name, filter_options_.c_str());
 
   std::string filter_description = string_sprintf(
       "[in_left]%s,%s%s,%s,%s[left_scope];"
       "[in_right]%s,%s%s,%s,%s[right_scope];"
       "[left_scope][right_scope]hstack=inputs=2,%s[out]",
-      setparams_left.c_str(), crop_left.c_str(), pre_format_filter, tool_name, pane_scale.c_str(), setparams_right.c_str(), crop_right.c_str(), pre_format_filter, tool_name, pane_scale.c_str(), "format=rgb24");
+      setparams_left.c_str(), crop_left.c_str(), pre_format_filter, tool_spec.c_str(), pane_scale.c_str(), setparams_right.c_str(), crop_right.c_str(), pre_format_filter, tool_spec.c_str(), pane_scale.c_str(), "format=rgb24");
 
   return filter_description;
 }

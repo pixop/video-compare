@@ -3,8 +3,20 @@
 #include <utility>
 #include "scope_window.h"
 
+static const std::string& get_scope_filter_options(const ScopesConfig& config, const ScopeWindow::Type type) {
+  switch (type) {
+    case ScopeWindow::Type::Histogram:
+      return config.histogram_options;
+    case ScopeWindow::Type::Vectorscope:
+      return config.vectorscope_options;
+    case ScopeWindow::Type::Waveform:
+      return config.waveform_options;
+  }
+  return config.histogram_options;
+}
+
 static std::unique_ptr<ScopeWindow> make_scope_window(const ScopesConfig& config, bool use_10_bpc, int display_number, ScopeWindow::Type type) {
-  return std::make_unique<ScopeWindow>(type, config.width / 2, config.height, config.always_on_top, display_number, use_10_bpc);
+  return std::make_unique<ScopeWindow>(type, config.width / 2, config.height, config.always_on_top, display_number, use_10_bpc, get_scope_filter_options(config, type));
 }
 
 ScopeManager::ScopeManager(const ScopesConfig& config, const bool use_10_bpc, const int display_number) : use_10_bpc_(use_10_bpc), display_number_(display_number), config_(config) {
@@ -27,6 +39,20 @@ ScopeManager::~ScopeManager() {
     stop_worker(idx);
     destroy_window(idx);
   }
+}
+
+std::string ScopeManager::fatal_error_message() const {
+  std::lock_guard<std::mutex> lk(fatal_error_mutex_);
+  return fatal_error_message_;
+}
+
+void ScopeManager::set_fatal_error(const std::string& message) {
+  bool expected = false;
+  if (!fatal_error_.compare_exchange_strong(expected, true, std::memory_order_relaxed)) {
+    return;
+  }
+  std::lock_guard<std::mutex> lk(fatal_error_mutex_);
+  fatal_error_message_ = message;
 }
 
 void ScopeManager::route_events() {
@@ -150,7 +176,19 @@ void ScopeManager::start_worker(const size_t idx) {
       }
       auto& win = windows_[idx];
       if (win) {
-        win->prepare(left_frame_local, right_frame_local);
+        try {
+          if (!win->close_requested()) {
+            win->prepare(left_frame_local, right_frame_local);
+          }
+        } catch (const std::exception& e) {
+          set_fatal_error(std::string("Scope filtergraph error (") + ScopeWindow::type_to_string(win->get_type()) + "): " + e.what());
+          {
+            std::lock_guard<std::mutex> lk(worker_state->mutex_);
+            worker_state->done_seq_ = seq;
+          }
+          worker_state->cv_.notify_all();
+          break;
+        }
       }
       {
         std::lock_guard<std::mutex> lk(worker_state->mutex_);

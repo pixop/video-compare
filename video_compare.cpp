@@ -116,10 +116,6 @@ static void sleep_for_ms(const uint32_t ms) {
   std::this_thread::sleep_for(sleep);
 }
 
-static std::unique_ptr<ScopeWindow> make_scope_window(const ScopesConfig& config, bool use_10_bpc, int display_number, ScopeWindow::Type type) {
-  return std::make_unique<ScopeWindow>(type, config.width / 2, config.height, config.always_on_top, display_number, use_10_bpc);
-}
-
 VideoCompare::~VideoCompare() = default;
 
 VideoCompare::VideoCompare(const VideoCompareConfig& config)
@@ -282,10 +278,6 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 
   update_decoder_mode(time_shift_offset_av_time_);
 
-  init_scopes(config);
-}
-
-void VideoCompare::init_scopes(const VideoCompareConfig& config) {
   scope_manager_ = std::make_unique<ScopeManager>(config.scopes, config.use_10_bpc, config.display_number);
 }
 
@@ -700,6 +692,9 @@ void VideoCompare::compare() {
 
       scope_manager_->set_roi(scope_window_roi);
       scope_manager_->reconcile();
+      if (scope_manager_->has_fatal_error()) {
+        throw std::runtime_error(scope_manager_->fatal_error_message());
+      }
 
       if (!keep_running()) {
         break;
@@ -1033,6 +1028,9 @@ void VideoCompare::compare() {
             if (display_->possibly_refresh(left_display_frame, right_display_frame, current_total_browsable)) {
               scope_manager_->submit_jobs(left_display_frame, right_display_frame);
               scope_manager_->wait_all();
+              if (scope_manager_->has_fatal_error()) {
+                throw std::runtime_error(scope_manager_->fatal_error_message());
+              }
               scope_manager_->render_all();
 
               refresh_time_deque.push_back(-display_refresh_timer.us_until_target());

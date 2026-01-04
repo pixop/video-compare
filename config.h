@@ -16,6 +16,9 @@ struct ScopesConfig {
   bool histogram{false};
   bool vectorscope{false};
   bool waveform{false};
+  std::string histogram_options;
+  std::string vectorscope_options;
+  std::string waveform_options;
   int width{1024};  // total scope window width (two panes side-by-side)
   int height{256};  // scope window height
   bool always_on_top{true};

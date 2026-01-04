@@ -1,9 +1,11 @@
 #pragma once
 #include <array>
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
 #include "config.h"
 #include "scope_window.h"
@@ -38,6 +40,10 @@ class ScopeManager {
   // Returns true if any scope window is open
   bool has_any() const;
 
+  // Fatal error handling for scope worker threads (e.g. bad filter options causing avfilter parse/config failures)
+  bool has_fatal_error() const { return fatal_error_.load(std::memory_order_relaxed); }
+  std::string fatal_error_message() const;
+
  private:
   struct WorkerState {
     std::thread thread_;
@@ -55,6 +61,7 @@ class ScopeManager {
   void destroy_window(size_t idx);
   void start_worker(size_t idx);
   void stop_worker(size_t idx);
+  void set_fatal_error(const std::string& message);
 
  private:
   const bool use_10_bpc_;
@@ -64,4 +71,8 @@ class ScopeManager {
   std::array<std::unique_ptr<ScopeWindow>, ScopeWindow::kNumScopes> windows_;
   std::array<std::unique_ptr<WorkerState>, ScopeWindow::kNumScopes> workers_;
   std::array<uint64_t, ScopeWindow::kNumScopes> last_submitted_seq_{};
+
+  std::atomic_bool fatal_error_{false};
+  mutable std::mutex fatal_error_mutex_;
+  std::string fatal_error_message_;
 };

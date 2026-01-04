@@ -100,8 +100,6 @@ class VideoCompare {
   void operator()();
 
  private:
-  void init_scopes(const VideoCompareConfig& config);
-
   void thread_demultiplex_left();
   void thread_demultiplex_right();
   void demultiplex(const Side side);

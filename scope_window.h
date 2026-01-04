@@ -1,6 +1,7 @@
 #pragma once
 #include <limits.h>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -21,32 +22,12 @@ class ScopeWindow {
  public:
   enum class Type { Histogram, Vectorscope, Waveform };
   static constexpr size_t kNumScopes = 3;
-  static constexpr size_t index(const Type t) {
-    switch (t) {
-      case Type::Histogram:
-        return 0;
-      case Type::Vectorscope:
-        return 1;
-      case Type::Waveform:
-        return 2;
-    }
-    return 0;
-  }
-  static constexpr Type type_for_index(const size_t idx) {
-    switch (idx) {
-      case 0:
-        return Type::Histogram;
-      case 1:
-        return Type::Vectorscope;
-      case 2:
-        return Type::Waveform;
-      default:
-        return Type::Histogram;
-    }
-  }
-  static constexpr std::array<Type, kNumScopes> all_types() { return {Type::Histogram, Type::Vectorscope, Type::Waveform}; }
+  static const char* type_to_string(Type t);
+  static size_t index(Type t);
+  static Type type_for_index(size_t idx);
+  static std::array<Type, kNumScopes> all_types();
 
-  ScopeWindow(Type type, const int pane_width, const int pane_height, const bool always_on_top, const int display_number, const bool use_10_bpc);
+  ScopeWindow(Type type, const int pane_width, const int pane_height, const bool always_on_top, const int display_number, const bool use_10_bpc, const std::string& filter_options);
   ~ScopeWindow();
 
   // Feed the current frames and update the scope window if an output is produced.
@@ -59,7 +40,8 @@ class ScopeWindow {
   // Accessor for this window's type
   Type get_type() const { return type_; }
 
-  bool close_requested() const { return close_requested_; }
+  bool close_requested() const { return close_requested_.load(); }
+  void request_close() { close_requested_.store(true); }
 
   // Visible region of interest (ROI) in video coordinates
   struct Roi {
@@ -94,7 +76,7 @@ class ScopeWindow {
   int window_width_{0};
   int window_height_{0};
   uint32_t window_id_{0};
-  bool close_requested_{false};
+  std::atomic<bool> close_requested_{false};
 
   // FFmpeg filter graph
   AVFilterGraph* filter_graph_{nullptr};
@@ -120,6 +102,7 @@ class ScopeWindow {
   bool always_on_top_;
   int display_number_;
   bool use_10_bpc_;
+  std::string filter_options_;
 
   // PTS tracking to detect non-monotonic browsing and reset the graph
   int64_t last_pts_left_{INT64_MIN};
