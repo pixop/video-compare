@@ -360,7 +360,7 @@ int main(int argc, char** argv) {
          {"histogram-options", {"--histogram-options"}, "histogram FFmpeg filter options (e.g. 'display_mode=parade:colors_mode=coloronblack:level_height=256:levels_mode=logarithmic')", 1},
          {"vectorscope-options", {"--vectorscope-options"}, "vectorscope FFmpeg filter options (e.g. 'mode=color4:graticule=green:envelope=instant+peak:flags=name+white+black')", 1},
          {"waveform-options", {"--waveform-options"}, "waveform FFmpeg filter options (e.g. 'graticule=orange:display=stack:scale=ire:flags=numbers+dots:intensity=0.1:components=7:filter=lowpass')", 1},
-         {"scope-size", {"--scope-size"}, "set scope window size as WxH (total width by height), default 1024x256", 1},
+         {"scope-size", {"--scope-size"}, "set initial scope window size as WxH (total width by height); scope windows are resizable; default 1024x256", 1},
          {"scope-notop", {"--scope-notop"}, "do not keep scope windows always on top", 0},
          {"find-protocols", {"--find-protocols"}, "find FFmpeg input protocols that match the provided search term (e.g. 'ipfs', 'srt', or 'rtmp'; use \"\" to list all)", 1},
          {"demuxer", {"--demuxer"}, "left FFmpeg video demuxer name for both sides, specified as [type?][:options?] (e.g. 'rawvideo:pixel_format=rgb24,video_size=320x240,framerate=10')", 1},
