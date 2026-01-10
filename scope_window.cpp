@@ -10,6 +10,13 @@ extern "C" {
 #include <SDL2/SDL.h>
 
 namespace {
+constexpr int kFrameThickness = 2;
+constexpr int kDividerThickness = 3;
+constexpr int kOuterPad = kFrameThickness + kDividerThickness;  // frame + breathing room
+constexpr int kHalfDividerThickness = kDividerThickness / 2;
+constexpr int kHalfOuterPad = kOuterPad / 2;
+constexpr int kDividerGap = kOuterPad * 2;  // total empty gap between panes
+
 struct ScopeInfoEntry {
   ScopeWindow::Type type;
   const char* title;
@@ -37,6 +44,57 @@ inline const ScopeInfoEntry& get_scope_info(const ScopeWindow::Type type) {
     return *info;
   }
   return kScopeInfos[0];
+}
+
+static void draw_rect_thickness(SDL_Renderer* renderer, const SDL_Rect& rect, const int thickness) {
+  if (!renderer || thickness <= 0) {
+    return;
+  }
+  SDL_Rect r = rect;
+  for (int i = 0; i < thickness; ++i) {
+    SDL_RenderDrawRect(renderer, &r);
+    r.x += 1;
+    r.y += 1;
+    r.w = std::max(0, r.w - 2);
+    r.h = std::max(0, r.h - 2);
+    if (r.w <= 0 || r.h <= 0) {
+      break;
+    }
+  }
+}
+
+static void draw_left_right_overlay(SDL_Renderer* renderer, const int w, const int h, const int divider_x) {
+  if (!renderer || w <= 1 || h <= 1) {
+    return;
+  }
+
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+  const int x = std::min(std::max(divider_x, 0), w - 1);
+
+  SDL_Rect left_rect{0, 0, x, h};
+  SDL_Rect right_rect{x, 0, w - x, h};
+
+  SDL_SetRenderDrawColor(renderer, 255, 128, 128, 255);
+  draw_rect_thickness(renderer, left_rect, kFrameThickness);
+
+  SDL_SetRenderDrawColor(renderer, 128, 128, 255, 255);
+  draw_rect_thickness(renderer, right_rect, kFrameThickness);
+
+  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 140);
+  for (int dx = -kHalfOuterPad; dx <= kHalfOuterPad; ++dx) {
+    const int xi = x + dx;
+    if (xi >= 0 && xi < w) {
+      SDL_RenderDrawLine(renderer, xi, 0, xi, h - 1);
+    }
+  }
+  SDL_SetRenderDrawColor(renderer, 255, 255, 255, 220);
+  for (int dx = -kHalfDividerThickness; dx <= kHalfDividerThickness; ++dx) {
+    const int xi = x + dx;
+    if (xi >= 0 && xi < w) {
+      SDL_RenderDrawLine(renderer, xi, 0, xi, h - 1);
+    }
+  }
 }
 }  // namespace
 
@@ -161,7 +219,14 @@ std::string ScopeWindow::format_filter_args(const AVFrame* frame) {
 std::string ScopeWindow::build_filter_description(const int pane_width, const int pane_height, const int left_colorspace, const int left_range, const int right_colorspace, const int right_range) const {
   const std::string setparams_left = string_sprintf("setparams=colorspace=%d:range=%d", left_colorspace, left_range);
   const std::string setparams_right = string_sprintf("setparams=colorspace=%d:range=%d", right_colorspace, right_range);
-  const std::string pane_scale = string_sprintf("scale=%d:%d", pane_width, pane_height);
+
+  const int content_w = std::max(1, pane_width - kDividerGap);
+  const int content_h = std::max(1, pane_height - kDividerGap);
+
+  const std::string left_scale = string_sprintf("scale=%d:%d", content_w, content_h);
+  const std::string right_scale = string_sprintf("scale=%d:%d", content_w, content_h);
+  const std::string left_pad = string_sprintf("pad=%d:%d:%d:%d:color=black", pane_width, pane_height, kOuterPad, kOuterPad);
+  const std::string right_pad = string_sprintf("pad=%d:%d:%d:%d:color=black", pane_width, pane_height, kOuterPad, kOuterPad);
 
   const std::string crop_left = roi_enabled_ ? string_sprintf("crop=%d:%d:%d:%d,", roi_.w, roi_.h, roi_.x, roi_.y) : "";
   const std::string crop_right = crop_left;
@@ -177,10 +242,11 @@ std::string ScopeWindow::build_filter_description(const int pane_width, const in
   const std::string tool_spec = filter_options_.empty() ? std::string(tool_name) : string_sprintf("%s=%s", tool_name, filter_options_.c_str());
 
   std::string filter_description = string_sprintf(
-      "[in_left]%s,%s%s,%s,%s[left_scope];"
-      "[in_right]%s,%s%s,%s,%s[right_scope];"
+      "[in_left]%s,%s%s,%s,%s,%s[left_scope];"
+      "[in_right]%s,%s%s,%s,%s,%s[right_scope];"
       "[left_scope][right_scope]hstack=inputs=2,%s[out]",
-      setparams_left.c_str(), crop_left.c_str(), pre_format_filter, tool_spec.c_str(), pane_scale.c_str(), setparams_right.c_str(), crop_right.c_str(), pre_format_filter, tool_spec.c_str(), pane_scale.c_str(), "format=rgb24");
+      setparams_left.c_str(), crop_left.c_str(), pre_format_filter, tool_spec.c_str(), left_scale.c_str(), left_pad.c_str(), setparams_right.c_str(), crop_right.c_str(), pre_format_filter, tool_spec.c_str(), right_scale.c_str(),
+      right_pad.c_str(), "format=rgb24");
 
   return filter_description;
 }
@@ -273,12 +339,15 @@ void ScopeWindow::ensure_texture() {
 }
 
 void ScopeWindow::present_frame(const AVFrame* filtered_frame) {
+  SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 100);
   sdl_check_bool(SDL_RenderClear(renderer_) == 0, "SDL_RenderClear");
 
   if (filtered_frame != nullptr) {
     sdl_check_bool(SDL_UpdateTexture(texture_, nullptr, filtered_frame->data[0], filtered_frame->linesize[0]) == 0, "SDL_UpdateTexture");
     sdl_check_bool(SDL_RenderCopy(renderer_, texture_, nullptr, nullptr) == 0, "SDL_RenderCopy");
   }
+
+  draw_left_right_overlay(renderer_, window_width_, window_height_, window_width_ / 2);
 
   SDL_RenderPresent(renderer_);
 }
