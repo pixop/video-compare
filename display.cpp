@@ -2162,17 +2162,19 @@ SDL_Rect Display::get_visible_roi_in_single_frame_coordinates() const {
     return (hi > lo) ? std::make_pair(lo, hi) : std::make_pair(0, 0);
   };
 
-  auto union_span = [&](const std::pair<int, int>& s0, const std::pair<int, int>& s1) -> std::pair<int, int> {
-    return (s0.second <= s0.first) ? s1 : (s1.second <= s1.first) ? s0 : std::make_pair(std::min(s0.first, s1.first), std::max(s0.second, s1.second));
-  };
-
   if (mode_ == Mode::HSTACK) {
     const int w = video_width_;
     const auto left = intersect_1d(lx0, lx1, 0, w);
     const auto right_layout = intersect_1d(lx0, lx1, w, 2 * w);
     const std::pair<int, int> right = (right_layout.second > right_layout.first) ? std::make_pair(right_layout.first - w, right_layout.second - w) : std::make_pair(0, 0);
 
-    const auto x = union_span(left, right);
+    const float center_x_layout = (p0.x() + p1.x()) * 0.5F;
+    const bool prefer_right = center_x_layout >= static_cast<float>(w);
+
+    std::pair<int, int> x = prefer_right ? right : left;
+    if (x.second <= x.first) {
+      x = prefer_right ? left : right;
+    }
     if (x.second <= x.first) {
       return {0, 0, 0, 0};
     }
@@ -2188,7 +2190,13 @@ SDL_Rect Display::get_visible_roi_in_single_frame_coordinates() const {
     const auto bottom_layout = intersect_1d(ly0, ly1, h, 2 * h);
     const std::pair<int, int> bottom = (bottom_layout.second > bottom_layout.first) ? std::make_pair(bottom_layout.first - h, bottom_layout.second - h) : std::make_pair(0, 0);
 
-    const auto y = union_span(top, bottom);
+    const float center_y_layout = (p0.y() + p1.y()) * 0.5F;
+    const bool prefer_bottom = center_y_layout >= static_cast<float>(h);
+
+    std::pair<int, int> y = prefer_bottom ? bottom : top;
+    if (y.second <= y.first) {
+      y = prefer_bottom ? top : bottom;
+    }
     if (y.second <= y.first) {
       return {0, 0, 0, 0};
     }
