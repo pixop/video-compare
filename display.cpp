@@ -2080,7 +2080,7 @@ void Display::set_pending_message(const std::string& message) {
 
 void Display::focus_main_window() {
   if (window_ != nullptr) {
-    SDL_RaiseWindow(window_);
+    SDL_SetWindowInputFocus(window_);
   }
 }
 
@@ -2138,21 +2138,72 @@ SDL_FRect Display::video_to_zoom_space(const SDL_Rect& video_rect, const Display
                     std::min(float(video_rect.h) * zoom_rect.zoom_factor, zoom_rect.size.y())});
 };
 
-SDL_Rect Display::get_visible_roi() const {
+SDL_Rect Display::get_visible_roi_in_single_frame_coordinates() const {
   const auto zoom_rect = compute_zoom_rect();
 
-  const Vector2D top_left_video_position = window_to_video_position(0, 0, zoom_rect);
-  const Vector2D bottom_right_video_position = window_to_video_position(window_width_ - 1, window_height_ - 1, zoom_rect);
+  // in hstack/vstack modes, window_to_video_position() returns positions in the
+  // *layout texture space* (2x width or 2x height). However, expect a
+  // ROI in *single-frame* coordinates, which is applied equally to both left/right frames.
+  const Vector2D p0 = window_to_video_position(0, 0, zoom_rect);
+  const Vector2D p1 = window_to_video_position(window_width_ - 1, window_height_ - 1, zoom_rect);
 
-  const int min_video_x = clamp_range(std::floor(top_left_video_position.x()), 0.0F, static_cast<float>(video_width_));
-  const int min_video_y = clamp_range(std::floor(top_left_video_position.y()), 0.0F, static_cast<float>(video_height_));
-  const int max_video_x = clamp_range(std::ceil(bottom_right_video_position.x()), 0.0F, static_cast<float>(video_width_));
-  const int max_video_y = clamp_range(std::ceil(bottom_right_video_position.y()), 0.0F, static_cast<float>(video_height_));
+  const int lx0 = static_cast<int>(std::floor(std::min(p0.x(), p1.x())));
+  const int ly0 = static_cast<int>(std::floor(std::min(p0.y(), p1.y())));
+  const int lx1 = static_cast<int>(std::ceil(std::max(p0.x(), p1.x())));
+  const int ly1 = static_cast<int>(std::ceil(std::max(p0.y(), p1.y())));
 
-  const int roi_width = max_video_x - min_video_x;
-  const int roi_height = max_video_y - min_video_y;
+  auto clamp_x = [&](int x) { return clamp_range(x, 0, video_width_); };
+  auto clamp_y = [&](int y) { return clamp_range(y, 0, video_height_); };
 
-  return {min_video_x, min_video_y, roi_width, roi_height};
+  // Intersect [a0, a1) with [b0, b1) in layout space. Returns empty when no overlap.
+  auto intersect_1d = [&](int a0, int a1, int b0, int b1) -> std::pair<int, int> {
+    const int lo = std::max(a0, b0);
+    const int hi = std::min(a1, b1);
+    return (hi > lo) ? std::make_pair(lo, hi) : std::make_pair(0, 0);
+  };
+
+  auto union_span = [&](const std::pair<int, int>& s0, const std::pair<int, int>& s1) -> std::pair<int, int> {
+    return (s0.second <= s0.first) ? s1 : (s1.second <= s1.first) ? s0 : std::make_pair(std::min(s0.first, s1.first), std::max(s0.second, s1.second));
+  };
+
+  if (mode_ == Mode::HSTACK) {
+    const int w = video_width_;
+    const auto left = intersect_1d(lx0, lx1, 0, w);
+    const auto right_layout = intersect_1d(lx0, lx1, w, 2 * w);
+    const std::pair<int, int> right = (right_layout.second > right_layout.first) ? std::make_pair(right_layout.first - w, right_layout.second - w) : std::make_pair(0, 0);
+
+    const auto x = union_span(left, right);
+    if (x.second <= x.first) {
+      return {0, 0, 0, 0};
+    }
+
+    const int y0 = clamp_y(ly0);
+    const int y1 = clamp_y(ly1);
+    return {clamp_x(x.first), y0, std::max(0, clamp_x(x.second) - clamp_x(x.first)), std::max(0, y1 - y0)};
+  }
+
+  if (mode_ == Mode::VSTACK) {
+    const int h = video_height_;
+    const auto top = intersect_1d(ly0, ly1, 0, h);
+    const auto bottom_layout = intersect_1d(ly0, ly1, h, 2 * h);
+    const std::pair<int, int> bottom = (bottom_layout.second > bottom_layout.first) ? std::make_pair(bottom_layout.first - h, bottom_layout.second - h) : std::make_pair(0, 0);
+
+    const auto y = union_span(top, bottom);
+    if (y.second <= y.first) {
+      return {0, 0, 0, 0};
+    }
+
+    const int x0 = clamp_x(lx0);
+    const int x1 = clamp_x(lx1);
+    return {x0, clamp_y(y.first), std::max(0, x1 - x0), std::max(0, clamp_y(y.second) - clamp_y(y.first))};
+  }
+
+  // layout space is single-frame
+  const int x0 = clamp_x(lx0);
+  const int y0 = clamp_y(ly0);
+  const int x1 = clamp_x(lx1);
+  const int y1 = clamp_y(ly1);
+  return {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
 }
 
 void Display::update_playback_speed(const int playback_speed_level) {

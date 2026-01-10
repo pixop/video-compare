@@ -677,7 +677,7 @@ void VideoCompare::compare() {
       display_->input();
 
       // Handle scope windows
-      const SDL_Rect roi = display_->get_visible_roi();
+      const SDL_Rect roi = display_->get_visible_roi_in_single_frame_coordinates();
       const ScopeWindow::Roi scope_window_roi{roi.x, roi.y, roi.w, roi.h};
 
       for (const auto type : ScopeWindow::all_types()) {

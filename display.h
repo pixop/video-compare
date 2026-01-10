@@ -383,6 +383,6 @@ class Display {
 
   void update_metadata(const VideoMetadata left_metadata, const VideoMetadata right_metadata);
 
-  SDL_Rect get_visible_roi() const;
+  SDL_Rect get_visible_roi_in_single_frame_coordinates() const;
   bool get_toggle_scope_window_requested(const ScopeWindow::Type type) const;
 };
