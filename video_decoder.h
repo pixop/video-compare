@@ -11,7 +11,7 @@ extern "C" {
 
 class VideoDecoder : public SideAware {
  public:
-  explicit VideoDecoder(const Side side,
+  explicit VideoDecoder(const Side& side,
                         const std::string& decoder_name,
                         const std::string& hw_accel_spec,
                         const AVCodecParameters* codec_parameters,

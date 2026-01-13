@@ -21,25 +21,19 @@ Side previously_logged_side = NONE;
 void* previously_logged_ptr = nullptr;
 bool previously_logged_trailing_newline = true;
 
-const char* to_string(Side side) {
-  switch (side) {
-    case LEFT:
-      return "LEFT";
-    case RIGHT:
-      return "RIGHT";
-    default:
-      return "UNKNN";
-  }
+std::string to_string(const Side& side) {
+  return side.to_string();
 }
 
 std::string sa_format_string(const std::string& message) {
   std::string formatted_string;
 
-  if (log_side > NONE) {
+  if (log_side.is_valid()) {
+    std::string side_label = log_side.to_string();
     if (message.empty()) {
-      formatted_string = string_sprintf("[%s]", to_string(log_side));
+      formatted_string = string_sprintf("[%s]", side_label.c_str());
     } else {
-      formatted_string = string_sprintf("[%s] %s", to_string(log_side), message.c_str());
+      formatted_string = string_sprintf("[%s] %s", side_label.c_str(), message.c_str());
     }
   } else {
     formatted_string = message;
@@ -74,7 +68,7 @@ void sa_av_log_callback(void* ptr, int level, const char* fmt, va_list args) {
     }
   }
 
-  if (log_side > NONE) {
+  if (log_side.is_valid()) {
     // FFmpeg might log partially in two or more calls. Avoid inserting the side prefix if a newline was not logged previously
     bool must_print_side = previously_logged_trailing_newline;
 
@@ -110,26 +104,26 @@ void sa_invoke_av_log_callback(void* ptr, int level, const char* fmt, ...) {
   va_end(args);
 }
 
-void sa_log(const Side side, int level, const std::string& message) {
+void sa_log(const Side& side, int level, const std::string& message) {
   std::lock_guard<std::recursive_mutex> lock(log_mutex);
   ScopedLogSide scoped_log_side(side);
 
   sa_invoke_av_log_callback(nullptr, level, "%s\n", message.c_str());
 }
 
-void sa_log_info(const Side side, const std::string& message) {
+void sa_log_info(const Side& side, const std::string& message) {
   sa_log(side, AV_LOG_INFO, message);
 }
 
-void sa_log_warning(const Side side, const std::string& message) {
+void sa_log_warning(const Side& side, const std::string& message) {
   sa_log(side, AV_LOG_WARNING, message);
 }
 
-void sa_log_error(const Side side, const std::string& message) {
+void sa_log_error(const Side& side, const std::string& message) {
   sa_log(side, AV_LOG_ERROR, message);
 }
 
-ScopedLogSide::ScopedLogSide(const Side new_side) : previous_side_(log_side) {
+ScopedLogSide::ScopedLogSide(const Side& new_side) : previous_side_(log_side) {
   log_side = new_side;
 }
 ScopedLogSide::~ScopedLogSide() {

@@ -6,7 +6,7 @@
 
 class SideAware {
  public:
-  SideAware(const Side side) : side_(side) {}
+  SideAware(const Side& side) : side_(side) {}
   virtual ~SideAware() = default;
 
   Side get_side() const { return side_; }

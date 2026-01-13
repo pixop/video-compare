@@ -126,12 +126,23 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       time_shift_offset_av_time_(time_ms_to_av_time(static_cast<double>(config.time_shift.offset_ms))),
       demuxers_{std::make_unique<Demuxer>(LEFT, config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options),
                 std::make_unique<Demuxer>(RIGHT, config.right.demuxer, config.right.file_name, config.right.demuxer_options, config.right.decoder_options)},
-      video_decoders_{
-          std::make_unique<VideoDecoder>(LEFT, config.left.decoder, config.left.hw_accel_spec, demuxers_[LEFT]->video_codec_parameters(), config.left.peak_luminance_nits, config.left.hw_accel_options, config.left.decoder_options),
-          std::make_unique<VideoDecoder>(RIGHT, config.right.decoder, config.right.hw_accel_spec, demuxers_[RIGHT]->video_codec_parameters(), config.right.peak_luminance_nits, config.right.hw_accel_options, config.right.decoder_options)},
+      video_decoders_{std::make_unique<VideoDecoder>(LEFT,
+                                                     config.left.decoder,
+                                                     config.left.hw_accel_spec,
+                                                     demuxers_[LEFT.as_simple_index()]->video_codec_parameters(),
+                                                     config.left.peak_luminance_nits,
+                                                     config.left.hw_accel_options,
+                                                     config.left.decoder_options),
+                      std::make_unique<VideoDecoder>(RIGHT,
+                                                     config.right.decoder,
+                                                     config.right.hw_accel_spec,
+                                                     demuxers_[RIGHT.as_simple_index()]->video_codec_parameters(),
+                                                     config.right.peak_luminance_nits,
+                                                     config.right.hw_accel_options,
+                                                     config.right.decoder_options)},
       video_filterers_{std::make_unique<VideoFilterer>(LEFT,
-                                                       demuxers_[LEFT].get(),
-                                                       video_decoders_[LEFT].get(),
+                                                       demuxers_[LEFT.as_simple_index()].get(),
+                                                       video_decoders_[LEFT.as_simple_index()].get(),
                                                        config.left.tone_mapping_mode,
                                                        config.left.boost_tone,
                                                        config.left.video_filters,
@@ -139,13 +150,13 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                        config.left.color_range,
                                                        config.left.color_primaries,
                                                        config.left.color_trc,
-                                                       demuxers_[RIGHT].get(),
-                                                       video_decoders_[RIGHT].get(),
+                                                       demuxers_[RIGHT.as_simple_index()].get(),
+                                                       video_decoders_[RIGHT.as_simple_index()].get(),
                                                        config.right.color_trc,
                                                        config.disable_auto_filters),
                        std::make_unique<VideoFilterer>(RIGHT,
-                                                       demuxers_[RIGHT].get(),
-                                                       video_decoders_[RIGHT].get(),
+                                                       demuxers_[RIGHT.as_simple_index()].get(),
+                                                       video_decoders_[RIGHT.as_simple_index()].get(),
                                                        config.right.tone_mapping_mode,
                                                        config.right.boost_tone,
                                                        config.right.video_filters,
@@ -153,32 +164,32 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                        config.right.color_range,
                                                        config.right.color_primaries,
                                                        config.right.color_trc,
-                                                       demuxers_[LEFT].get(),
-                                                       video_decoders_[LEFT].get(),
+                                                       demuxers_[LEFT.as_simple_index()].get(),
+                                                       video_decoders_[LEFT.as_simple_index()].get(),
                                                        config.left.color_trc,
                                                        config.disable_auto_filters)},
-      max_width_{std::max(video_filterers_[LEFT]->dest_width(), video_filterers_[RIGHT]->dest_width())},
-      max_height_{std::max(video_filterers_[LEFT]->dest_height(), video_filterers_[RIGHT]->dest_height())},
+      max_width_{std::max(video_filterers_[LEFT.as_simple_index()]->dest_width(), video_filterers_[RIGHT.as_simple_index()]->dest_width())},
+      max_height_{std::max(video_filterers_[LEFT.as_simple_index()]->dest_height(), video_filterers_[RIGHT.as_simple_index()]->dest_height())},
       initial_fast_input_alignment_{use_fast_input_alignment(config)},
-      shortest_duration_{std::min(demuxers_[LEFT]->duration(), demuxers_[RIGHT]->duration()) * AV_TIME_TO_SEC},
-      format_converters_{std::make_unique<FormatConverter>(video_filterers_[LEFT]->dest_width(),
-                                                           video_filterers_[LEFT]->dest_height(),
+      shortest_duration_{std::min(demuxers_[LEFT.as_simple_index()]->duration(), demuxers_[RIGHT.as_simple_index()]->duration()) * AV_TIME_TO_SEC},
+      format_converters_{std::make_unique<FormatConverter>(video_filterers_[LEFT.as_simple_index()]->dest_width(),
+                                                           video_filterers_[LEFT.as_simple_index()]->dest_height(),
                                                            max_width_,
                                                            max_height_,
-                                                           video_filterers_[LEFT]->dest_pixel_format(),
+                                                           video_filterers_[LEFT.as_simple_index()]->dest_pixel_format(),
                                                            determine_pixel_format(config),
-                                                           video_decoders_[LEFT]->color_space(),
-                                                           video_decoders_[LEFT]->color_range(),
+                                                           video_decoders_[LEFT.as_simple_index()]->color_space(),
+                                                           video_decoders_[LEFT.as_simple_index()]->color_range(),
                                                            LEFT,
                                                            determine_sws_flags(initial_fast_input_alignment_)),
-                         std::make_unique<FormatConverter>(video_filterers_[RIGHT]->dest_width(),
-                                                           video_filterers_[RIGHT]->dest_height(),
+                         std::make_unique<FormatConverter>(video_filterers_[RIGHT.as_simple_index()]->dest_width(),
+                                                           video_filterers_[RIGHT.as_simple_index()]->dest_height(),
                                                            max_width_,
                                                            max_height_,
-                                                           video_filterers_[RIGHT]->dest_pixel_format(),
+                                                           video_filterers_[RIGHT.as_simple_index()]->dest_pixel_format(),
                                                            determine_pixel_format(config),
-                                                           video_decoders_[RIGHT]->color_space(),
-                                                           video_decoders_[RIGHT]->color_range(),
+                                                           video_decoders_[RIGHT.as_simple_index()]->color_space(),
+                                                           video_decoders_[RIGHT.as_simple_index()]->color_range(),
                                                            RIGHT,
                                                            determine_sws_flags(initial_fast_input_alignment_))},
       display_{std::make_unique<Display>(config.display_number,
@@ -202,15 +213,16 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       decoded_frame_queues_{std::make_unique<DecodedFrameQueue>(QUEUE_SIZE), std::make_unique<DecodedFrameQueue>(QUEUE_SIZE)},
       filtered_frame_queues_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)},
       converted_frame_queues_{std::make_unique<FrameQueue>(QUEUE_SIZE), std::make_unique<FrameQueue>(QUEUE_SIZE)} {
-  auto dump_video_info = [&](const Side side, const std::string& file_name) {
-    const std::string dimensions = string_sprintf("%dx%d", video_decoders_[side]->width(), video_decoders_[side]->height());
+  auto dump_video_info = [&](const Side& side, const std::string& file_name) {
+    const std::string dimensions = string_sprintf("%dx%d", video_decoders_[side.as_simple_index()]->width(), video_decoders_[side.as_simple_index()]->height());
     const std::string pixel_format_and_color_space =
-        stringify_pixel_format(video_decoders_[side]->pixel_format(), video_decoders_[side]->color_range(), video_decoders_[side]->color_space(), video_decoders_[side]->color_primaries(), video_decoders_[side]->color_trc());
+        stringify_pixel_format(video_decoders_[side.as_simple_index()]->pixel_format(), video_decoders_[side.as_simple_index()]->color_range(), video_decoders_[side.as_simple_index()]->color_space(),
+                               video_decoders_[side.as_simple_index()]->color_primaries(), video_decoders_[side.as_simple_index()]->color_trc());
 
     std::string aspect_ratio;
 
-    if (video_decoders_[side]->is_anamorphic()) {
-      const AVRational display_aspect_ratio = video_decoders_[side]->display_aspect_ratio();
+    if (video_decoders_[side.as_simple_index()]->is_anamorphic()) {
+      const AVRational display_aspect_ratio = video_decoders_[side.as_simple_index()]->display_aspect_ratio();
 
       aspect_ratio = string_sprintf(" [DAR %d:%d]", display_aspect_ratio.num, display_aspect_ratio.den);
     }
@@ -220,15 +232,15 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       "Input: %9s%s, %s, %s, %s, %s, %s, %s, %s, %s, %s",
       dimensions.c_str(),
       aspect_ratio.c_str(),
-      format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC).c_str(),
-      stringify_frame_rate(demuxers_[side]->guess_frame_rate(), video_decoders_[side]->codec_context()->field_order).c_str(),
-      stringify_decoder(video_decoders_[side].get()).c_str(),
+      format_duration(demuxers_[side.as_simple_index()]->duration() * AV_TIME_TO_SEC).c_str(),
+      stringify_frame_rate(demuxers_[side.as_simple_index()]->guess_frame_rate(), video_decoders_[side.as_simple_index()]->codec_context()->field_order).c_str(),
+      stringify_decoder(video_decoders_[side.as_simple_index()].get()).c_str(),
       pixel_format_and_color_space.c_str(),
-      demuxers_[side]->format_name().c_str(),
+      demuxers_[side.as_simple_index()]->format_name().c_str(),
       file_name.c_str(),
-      stringify_file_size(demuxers_[side]->file_size(), 2).c_str(),
-      stringify_bit_rate(demuxers_[side]->bit_rate(), 1).c_str(),
-      video_filterers_[side]->filter_description().c_str()
+      stringify_file_size(demuxers_[side.as_simple_index()]->file_size(), 2).c_str(),
+      stringify_bit_rate(demuxers_[side.as_simple_index()]->bit_rate(), 1).c_str(),
+      video_filterers_[side.as_simple_index()]->filter_description().c_str()
     );
     // clang-format on
 
@@ -239,14 +251,14 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   dump_video_info(RIGHT, config.right.file_name.c_str());
 
   // Initialize metadata overlay
-  auto collect_metadata = [&](const Side side) -> VideoMetadata {
+  auto collect_metadata = [&](const Side& side) -> VideoMetadata {
     VideoMetadata metadata;
 
-    const std::string dimensions = string_sprintf("%dx%d", video_decoders_[side]->width(), video_decoders_[side]->height());
+    const std::string dimensions = string_sprintf("%dx%d", video_decoders_[side.as_simple_index()]->width(), video_decoders_[side.as_simple_index()]->height());
     metadata.set(MetadataProperties::RESOLUTION, dimensions);
 
-    const AVRational sample_aspect_ratio = video_decoders_[side]->sample_aspect_ratio(true);
-    const AVRational display_aspect_ratio = video_decoders_[side]->display_aspect_ratio();
+    const AVRational sample_aspect_ratio = video_decoders_[side.as_simple_index()]->sample_aspect_ratio(true);
+    const AVRational display_aspect_ratio = video_decoders_[side.as_simple_index()]->display_aspect_ratio();
 
     if (sample_aspect_ratio.num > 0) {
       metadata.set(MetadataProperties::SAMPLE_ASPECT_RATIO, string_sprintf("%d:%d", sample_aspect_ratio.num, sample_aspect_ratio.den));
@@ -256,20 +268,20 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       metadata.set(MetadataProperties::DISPLAY_ASPECT_RATIO, "unknown");
     }
 
-    metadata.set(MetadataProperties::CODEC, video_decoders_[side].get()->codec()->name);
-    metadata.set(MetadataProperties::FRAME_RATE, stringify_frame_rate_only(demuxers_[side]->guess_frame_rate()));
-    metadata.set(MetadataProperties::FIELD_ORDER, stringify_field_order(video_decoders_[side]->codec_context()->field_order, "unknown"));
-    metadata.set(MetadataProperties::DURATION, format_duration(demuxers_[side]->duration() * AV_TIME_TO_SEC));
-    metadata.set(MetadataProperties::BIT_RATE, stringify_bit_rate(demuxers_[side]->bit_rate(), 1));
-    metadata.set(MetadataProperties::FILE_SIZE, stringify_file_size(demuxers_[side]->file_size(), 2));
-    metadata.set(MetadataProperties::CONTAINER, demuxers_[side]->format_name());
-    metadata.set(MetadataProperties::PIXEL_FORMAT, av_get_pix_fmt_name(video_decoders_[side]->pixel_format()));
-    metadata.set(MetadataProperties::COLOR_SPACE, av_color_space_name(video_decoders_[side]->color_space()));
-    metadata.set(MetadataProperties::COLOR_PRIMARIES, av_color_primaries_name(video_decoders_[side]->color_primaries()));
-    metadata.set(MetadataProperties::TRANSFER_CURVE, av_color_transfer_name(video_decoders_[side]->color_trc()));
-    metadata.set(MetadataProperties::COLOR_RANGE, av_color_range_name(video_decoders_[side]->color_range()));
-    metadata.set(MetadataProperties::HARDWARE_ACCELERATION, video_decoders_[side]->is_hw_accelerated() ? video_decoders_[side]->hw_accel_name() : "None");
-    metadata.set(MetadataProperties::FILTERS, video_filterers_[side]->filter_description());
+    metadata.set(MetadataProperties::CODEC, video_decoders_[side.as_simple_index()].get()->codec()->name);
+    metadata.set(MetadataProperties::FRAME_RATE, stringify_frame_rate_only(demuxers_[side.as_simple_index()]->guess_frame_rate()));
+    metadata.set(MetadataProperties::FIELD_ORDER, stringify_field_order(video_decoders_[side.as_simple_index()]->codec_context()->field_order, "unknown"));
+    metadata.set(MetadataProperties::DURATION, format_duration(demuxers_[side.as_simple_index()]->duration() * AV_TIME_TO_SEC));
+    metadata.set(MetadataProperties::BIT_RATE, stringify_bit_rate(demuxers_[side.as_simple_index()]->bit_rate(), 1));
+    metadata.set(MetadataProperties::FILE_SIZE, stringify_file_size(demuxers_[side.as_simple_index()]->file_size(), 2));
+    metadata.set(MetadataProperties::CONTAINER, demuxers_[side.as_simple_index()]->format_name());
+    metadata.set(MetadataProperties::PIXEL_FORMAT, av_get_pix_fmt_name(video_decoders_[side.as_simple_index()]->pixel_format()));
+    metadata.set(MetadataProperties::COLOR_SPACE, av_color_space_name(video_decoders_[side.as_simple_index()]->color_space()));
+    metadata.set(MetadataProperties::COLOR_PRIMARIES, av_color_primaries_name(video_decoders_[side.as_simple_index()]->color_primaries()));
+    metadata.set(MetadataProperties::TRANSFER_CURVE, av_color_transfer_name(video_decoders_[side.as_simple_index()]->color_trc()));
+    metadata.set(MetadataProperties::COLOR_RANGE, av_color_range_name(video_decoders_[side.as_simple_index()]->color_range()));
+    metadata.set(MetadataProperties::HARDWARE_ACCELERATION, video_decoders_[side.as_simple_index()]->is_hw_accelerated() ? video_decoders_[side.as_simple_index()]->hw_accel_name() : "None");
+    metadata.set(MetadataProperties::FILTERS, video_filterers_[side.as_simple_index()]->filter_description());
 
     return metadata;
   };
@@ -308,7 +320,7 @@ void VideoCompare::thread_demultiplex_right() {
   demultiplex(RIGHT);
 }
 
-void VideoCompare::demultiplex(const Side side) {
+void VideoCompare::demultiplex(const Side& side) {
   ScopedLogSide scoped_log_side(side);
 
   try {
@@ -321,7 +333,7 @@ void VideoCompare::demultiplex(const Side side) {
         continue;
       }
       // Sleep if we are finished for now
-      if (packet_queues_[side]->is_stopped() || (side == RIGHT && single_decoder_mode_)) {
+      if (packet_queues_[side.as_simple_index()]->is_stopped() || (side.is_right() && single_decoder_mode_)) {
         sleep_for_ms(SLEEP_PERIOD_MS);
         continue;
       }
@@ -332,15 +344,15 @@ void VideoCompare::demultiplex(const Side side) {
       packet->data = nullptr;
 
       // Read frame into AVPacket
-      if (!(*demuxers_[side])(*packet)) {
+      if (!(*demuxers_[side.as_simple_index()])(*packet)) {
         // Enter wait state if EOF
-        packet_queues_[side]->stop();
+        packet_queues_[side.as_simple_index()]->stop();
         continue;
       }
 
       // Move into queue if first video stream
-      if (packet->stream_index == demuxers_[side]->video_stream_index()) {
-        packet_queues_[side]->push(std::move(packet));
+      if (packet->stream_index == demuxers_[side.as_simple_index()]->video_stream_index()) {
+        packet_queues_[side.as_simple_index()]->push(std::move(packet));
       }
     }
   } catch (...) {
@@ -357,16 +369,16 @@ void VideoCompare::thread_decode_video_right() {
   decode_video(RIGHT);
 }
 
-void VideoCompare::decode_video(const Side side) {
+void VideoCompare::decode_video(const Side& side) {
   ScopedLogSide scoped_log_side(side);
 
   try {
     while (keep_running()) {
       // Sleep if we are finished for now
-      if (decoded_frame_queues_[side]->is_stopped() || (side == RIGHT && single_decoder_mode_)) {
+      if (decoded_frame_queues_[side.as_simple_index()]->is_stopped() || (side.is_right() && single_decoder_mode_)) {
         if (seeking_) {
           // Flush the decoder
-          video_decoders_[side]->flush();
+          video_decoders_[side.as_simple_index()]->flush();
 
           // Seeks are now OK
           ready_to_seek_.set(ReadyToSeek::DECODER, side);
@@ -379,17 +391,17 @@ void VideoCompare::decode_video(const Side side) {
       AVPacketUniquePtr packet{nullptr, avpacket_deleter};
 
       // Read packet from queue
-      if (!packet_queues_[side]->pop(packet)) {
+      if (!packet_queues_[side.as_simple_index()]->pop(packet)) {
         // Flush remaining frames cached in the decoder
         while (process_packet(side, packet.get())) {
           ;
         }
 
         // Enter wait state
-        decoded_frame_queues_[side]->stop();
+        decoded_frame_queues_[side.as_simple_index()]->stop();
 
         if (single_decoder_mode_) {
-          decoded_frame_queues_[RIGHT]->stop();
+          decoded_frame_queues_[RIGHT.as_simple_index()]->stop();
         }
         continue;
       }
@@ -405,20 +417,20 @@ void VideoCompare::decode_video(const Side side) {
   }
 }
 
-bool VideoCompare::process_packet(const Side side, AVPacket* packet) {
-  bool sent = video_decoders_[side]->send(packet);
+bool VideoCompare::process_packet(const Side& side, AVPacket* packet) {
+  bool sent = video_decoders_[side.as_simple_index()]->send(packet);
 
   while (true) {
     AVFrameSharedPtr frame_decoded{av_frame_alloc(), avframe_deleter};
 
     // If a whole frame has been decoded, adjust time stamps and add to queue
-    if (!video_decoders_[side]->receive(frame_decoded.get(), demuxers_[side].get())) {
+    if (!video_decoders_[side.as_simple_index()]->receive(frame_decoded.get(), demuxers_[side.as_simple_index()].get())) {
       break;
     }
 
     AVFrameSharedPtr frame_for_filtering;
 
-    if (frame_decoded->format == video_decoders_[side]->hw_pixel_format()) {
+    if (frame_decoded->format == video_decoders_[side.as_simple_index()]->hw_pixel_format()) {
       AVFrameSharedPtr sw_frame_decoded{av_frame_alloc(), avframe_deleter};
 
       // Transfer data from GPU to CPU
@@ -434,13 +446,13 @@ bool VideoCompare::process_packet(const Side side, AVPacket* packet) {
       frame_for_filtering = frame_decoded;
     }
 
-    if (!decoded_frame_queues_[side]->push(frame_for_filtering)) {
+    if (!decoded_frame_queues_[side.as_simple_index()]->push(frame_for_filtering)) {
       return sent;
     }
 
     // Send the decoded frame to the right filterer, as well, if in single decoder mode
     if (single_decoder_mode_) {
-      decoded_frame_queues_[RIGHT]->push(frame_for_filtering);
+      decoded_frame_queues_[RIGHT.as_simple_index()]->push(frame_for_filtering);
     }
   }
 
@@ -455,12 +467,12 @@ void VideoCompare::thread_filter_right() {
   filter_video(RIGHT);
 }
 
-void VideoCompare::filter_video(const Side side) {
+void VideoCompare::filter_video(const Side& side) {
   ScopedLogSide scoped_log_side(side);
 
   try {
     while (keep_running()) {
-      if (filtered_frame_queues_[side]->is_stopped()) {
+      if (filtered_frame_queues_[side.as_simple_index()]->is_stopped()) {
         if (seeking_) {
           ready_to_seek_.set(ReadyToSeek::FILTERER, side);
         }
@@ -471,17 +483,17 @@ void VideoCompare::filter_video(const Side side) {
 
       AVFrameSharedPtr frame_to_filter;
 
-      if (decoded_frame_queues_[side]->pop(frame_to_filter)) {
+      if (decoded_frame_queues_[side.as_simple_index()]->pop(frame_to_filter)) {
         filter_decoded_frame(side, frame_to_filter);
-      } else if (decoded_frame_queues_[side]->is_stopped() || seeking_) {
+      } else if (decoded_frame_queues_[side.as_simple_index()]->is_stopped() || seeking_) {
         // Close the filter source
-        video_filterers_[side]->close_src();
+        video_filterers_[side.as_simple_index()]->close_src();
 
         // Flush the filter graph
         filter_decoded_frame(side, nullptr);
 
         // Stop filtering
-        filtered_frame_queues_[side]->stop();
+        filtered_frame_queues_[side.as_simple_index()]->stop();
       }
     }
   } catch (...) {
@@ -490,9 +502,9 @@ void VideoCompare::filter_video(const Side side) {
   }
 }
 
-void VideoCompare::filter_decoded_frame(const Side side, AVFrameSharedPtr frame_decoded) {
+void VideoCompare::filter_decoded_frame(const Side& side, AVFrameSharedPtr frame_decoded) {
   // send decoded frame to filterer
-  if (!video_filterers_[side]->send(frame_decoded.get())) {
+  if (!video_filterers_[side.as_simple_index()]->send(frame_decoded.get())) {
     throw std::runtime_error("Error while feeding the filter graph");
   }
 
@@ -500,11 +512,11 @@ void VideoCompare::filter_decoded_frame(const Side side, AVFrameSharedPtr frame_
     AVFrameUniquePtr frame_filtered{av_frame_alloc(), avframe_deleter};
 
     // get next filtered frame
-    if (!video_filterers_[side]->receive(frame_filtered.get())) {
+    if (!video_filterers_[side.as_simple_index()]->receive(frame_filtered.get())) {
       break;
     }
 
-    if (!filtered_frame_queues_[side]->push(std::move(frame_filtered))) {
+    if (!filtered_frame_queues_[side.as_simple_index()]->push(std::move(frame_filtered))) {
       return;
     }
   }
@@ -520,12 +532,12 @@ void VideoCompare::thread_format_converter_right() {
   format_convert_video(RIGHT);
 }
 
-void VideoCompare::format_convert_video(const Side side) {
+void VideoCompare::format_convert_video(const Side& side) {
   ScopedLogSide scoped_log_side(side);
 
   try {
     while (keep_running()) {
-      if (converted_frame_queues_[side]->is_stopped()) {
+      if (converted_frame_queues_[side.as_simple_index()]->is_stopped()) {
         if (seeking_) {
           ready_to_seek_.set(ReadyToSeek::CONVERTER, side);
         }
@@ -536,22 +548,23 @@ void VideoCompare::format_convert_video(const Side side) {
 
       AVFrameUniquePtr frame_filtered{av_frame_alloc(), avframe_deleter};
 
-      if (filtered_frame_queues_[side]->pop(frame_filtered)) {
+      if (filtered_frame_queues_[side.as_simple_index()]->pop(frame_filtered)) {
         // scale and convert pixel format before pushing to frame queue for displaying
         AVFrameUniquePtr frame_converted{av_frame_alloc(), avframe_and_data_deleter};
 
         if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
           throw std::runtime_error("Copying filtered frame properties");
         }
-        if (av_image_alloc(frame_converted->data, frame_converted->linesize, format_converters_[side]->dest_width(), format_converters_[side]->dest_height(), format_converters_[side]->dest_pixel_format(), 64) < 0) {
+        if (av_image_alloc(frame_converted->data, frame_converted->linesize, format_converters_[side.as_simple_index()]->dest_width(), format_converters_[side.as_simple_index()]->dest_height(),
+                           format_converters_[side.as_simple_index()]->dest_pixel_format(), 64) < 0) {
           throw std::runtime_error("Allocating converted picture");
         }
-        (*format_converters_[side])(frame_filtered.get(), frame_converted.get());
+        (*format_converters_[side.as_simple_index()])(frame_filtered.get(), frame_converted.get());
 
-        converted_frame_queues_[side]->push(std::move(frame_converted));
-      } else if (filtered_frame_queues_[side]->is_stopped() || seeking_) {
+        converted_frame_queues_[side.as_simple_index()]->push(std::move(frame_converted));
+      } else if (filtered_frame_queues_[side.as_simple_index()]->is_stopped() || seeking_) {
         // Stop filtering
-        converted_frame_queues_[side]->stop();
+        converted_frame_queues_[side.as_simple_index()]->stop();
       }
     }
   } catch (...) {
@@ -564,11 +577,11 @@ bool VideoCompare::keep_running() const {
   return !display_->get_quit() && !exception_holder_.has_exception();
 }
 
-void VideoCompare::quit_queues(const Side side) {
-  converted_frame_queues_[side]->quit();
-  filtered_frame_queues_[side]->quit();
-  decoded_frame_queues_[side]->quit();
-  packet_queues_[side]->quit();
+void VideoCompare::quit_queues(const Side& side) {
+  converted_frame_queues_[side.as_simple_index()]->quit();
+  filtered_frame_queues_[side.as_simple_index()]->quit();
+  decoded_frame_queues_[side.as_simple_index()]->quit();
+  packet_queues_[side.as_simple_index()]->quit();
 }
 
 void VideoCompare::update_decoder_mode(const int right_time_shift) {
@@ -576,8 +589,8 @@ void VideoCompare::update_decoder_mode(const int right_time_shift) {
 }
 
 void VideoCompare::dump_debug_info(const int frame_number, const int effective_right_time_shift, const int average_refresh_time) {
-  auto dump_queue_side = [&](const std::string& name, const std::string side_name, const Side side, const auto& queue) {
-    std::cout << side_name << " " << name << ": size=" << queue[side]->size() << ", is_stopped=" << queue[side]->is_stopped() << ", quit=" << queue[side]->is_quit() << std::endl;
+  auto dump_queue_side = [&](const std::string& name, const std::string side_name, const Side& side, const auto& queue) {
+    std::cout << side_name << " " << name << ": size=" << queue[side.as_simple_index()]->size() << ", is_stopped=" << queue[side.as_simple_index()]->is_stopped() << ", quit=" << queue[side.as_simple_index()]->is_quit() << std::endl;
   };
 
   auto dump_queues = [&](const std::string& name, const auto& queue) {
@@ -604,7 +617,7 @@ void VideoCompare::dump_debug_info(const int frame_number, const int effective_r
 }
 
 struct SideState {
-  SideState(const Side side, const std::string side_desc, const Demuxer* demuxer) : side_(side), side_desc_(std::move(side_desc)), start_time_(demuxer->start_time() * AV_TIME_TO_SEC), frame_duration_deque_(8) {
+  SideState(const Side& side, const std::string side_desc, const Demuxer* demuxer) : side_(side), side_desc_(std::move(side_desc)), start_time_(demuxer->start_time() * AV_TIME_TO_SEC), frame_duration_deque_(8) {
     if (start_time_ > 0) {
       sa_log_info(side, string_sprintf("Video has a start time of %s - timestamps will be shifted so they start at zero!", format_position(start_time_, true).c_str()));
     }
@@ -633,8 +646,8 @@ void VideoCompare::compare() {
     std::string previous_state;
 #endif
 
-    SideState left(LEFT, "left", demuxers_[LEFT].get());
-    SideState right(RIGHT, "right", demuxers_[RIGHT].get());
+    SideState left(LEFT, "left", demuxers_[LEFT.as_simple_index()].get());
+    SideState right(RIGHT, "right", demuxers_[RIGHT.as_simple_index()].get());
 
     int frame_offset = 0;
 
@@ -707,8 +720,8 @@ void VideoCompare::compare() {
 #endif
 
       const int format_conversion_sws_flags = determine_sws_flags(display_->get_fast_input_alignment());
-      format_converters_[LEFT]->set_pending_flags(format_conversion_sws_flags);
-      format_converters_[RIGHT]->set_pending_flags(format_conversion_sws_flags);
+      format_converters_[LEFT.as_simple_index()]->set_pending_flags(format_conversion_sws_flags);
+      format_converters_[RIGHT.as_simple_index()]->set_pending_flags(format_conversion_sws_flags);
 
       // allow 50 ms of lag without resetting timer (and ticking playback)
       if (display_->get_tick_playback() || (display_->get_possibly_tick_playback() && (timer_->us_until_target() < -50000))) {
@@ -729,21 +742,21 @@ void VideoCompare::compare() {
         seeking_ = true;
 
         // drain packet and frame queues
-        auto stop_and_empty_packet_queue = [&](const Side side) {
-          packet_queues_[side]->stop();
-          packet_queues_[side]->empty();
+        auto stop_and_empty_packet_queue = [&](const Side& side) {
+          packet_queues_[side.as_simple_index()]->stop();
+          packet_queues_[side.as_simple_index()]->empty();
         };
 
         stop_and_empty_packet_queue(LEFT);
         stop_and_empty_packet_queue(RIGHT);
 
         auto empty_frame_queues = [&]() {
-          decoded_frame_queues_[LEFT]->empty();
-          decoded_frame_queues_[RIGHT]->empty();
-          filtered_frame_queues_[LEFT]->empty();
-          filtered_frame_queues_[RIGHT]->empty();
-          converted_frame_queues_[LEFT]->empty();
-          converted_frame_queues_[RIGHT]->empty();
+          decoded_frame_queues_[LEFT.as_simple_index()]->empty();
+          decoded_frame_queues_[RIGHT.as_simple_index()]->empty();
+          filtered_frame_queues_[LEFT.as_simple_index()]->empty();
+          filtered_frame_queues_[RIGHT.as_simple_index()]->empty();
+          converted_frame_queues_[LEFT.as_simple_index()]->empty();
+          converted_frame_queues_[RIGHT.as_simple_index()]->empty();
         };
 
         while (!ready_to_seek_.all_are_idle()) {
@@ -758,8 +771,8 @@ void VideoCompare::compare() {
         empty_frame_queues();
 
         // reinit filter graphs
-        video_filterers_[LEFT]->reinit();
-        video_filterers_[RIGHT]->reinit();
+        video_filterers_[LEFT.as_simple_index()]->reinit();
+        video_filterers_[RIGHT.as_simple_index()]->reinit();
 
         update_decoder_mode(static_right_time_shift);
 
@@ -786,32 +799,32 @@ void VideoCompare::compare() {
 #ifdef _DEBUG
         std::cout << "SEEK: next_left_position=" << (int)(next_left_position * 1000) << ", next_right_position=" << (int)(next_right_position * 1000) << ", backward=" << backward << std::endl;
 #endif
-        const bool left_seek_result = demuxers_[LEFT]->seek(next_left_position, backward);
-        const bool right_seek_result = demuxers_[RIGHT]->seek(next_right_position, backward);
+        const bool left_seek_result = demuxers_[LEFT.as_simple_index()]->seek(next_left_position, backward);
+        const bool right_seek_result = demuxers_[RIGHT.as_simple_index()]->seek(next_right_position, backward);
 
         if ((!left_seek_result && !backward) || (!right_seek_result && !backward)) {
           // restore position if unable to perform forward seek
           display_->set_pending_message("Unable to seek past end of file");
 
-          demuxers_[LEFT]->seek(left_position, true);
-          demuxers_[RIGHT]->seek(right_position, true);
+          demuxers_[LEFT.as_simple_index()]->seek(left_position, true);
+          demuxers_[RIGHT.as_simple_index()]->seek(right_position, true);
         };
 
         seeking_ = false;
 
         // allow packet and frame queues to receive data again
-        auto reset_queues = [&](const Side side) {
-          packet_queues_[side]->restart();
-          decoded_frame_queues_[side]->restart();
-          filtered_frame_queues_[side]->restart();
-          converted_frame_queues_[side]->restart();
+        auto reset_queues = [&](const Side& side) {
+          packet_queues_[side.as_simple_index()]->restart();
+          decoded_frame_queues_[side.as_simple_index()]->restart();
+          filtered_frame_queues_[side.as_simple_index()]->restart();
+          converted_frame_queues_[side.as_simple_index()]->restart();
         };
 
         reset_queues(LEFT);
         reset_queues(RIGHT);
 
         auto pop_and_reset = [&](SideState& side_state, int64_t* effective_time_shift = nullptr) {
-          converted_frame_queues_[side_state.side_]->pop(side_state.frame_);
+          converted_frame_queues_[side_state.side_.as_simple_index()]->pop(side_state.frame_);
 
           if (side_state.frame_ != nullptr) {
             side_state.pts_ = side_state.frame_->pts;
@@ -866,7 +879,7 @@ void VideoCompare::compare() {
       previous_state = current_state;
 #endif
       auto pop_frame = [&](SideState& side_state) {
-        const bool result = converted_frame_queues_[side_state.side_]->pop(side_state.frame_);
+        const bool result = converted_frame_queues_[side_state.side_.as_simple_index()]->pop(side_state.frame_);
 
         if (result) {
           side_state.decoded_picture_number_++;
@@ -974,7 +987,7 @@ void VideoCompare::compare() {
       manage_frame_buffer(right);
 
       const bool no_activity = !skip_update && !adjusting && !store_frames;
-      const bool end_of_file = no_activity && (converted_frame_queues_[LEFT]->is_stopped() || converted_frame_queues_[RIGHT]->is_stopped());
+      const bool end_of_file = no_activity && (converted_frame_queues_[LEFT.as_simple_index()]->is_stopped() || converted_frame_queues_[RIGHT.as_simple_index()]->is_stopped());
       const bool buffer_is_full = left.frames_.size() == frame_buffer_size_ && right.frames_.size() == frame_buffer_size_;
 
       const int last_common_frame_index = static_cast<int>(std::min(left.frames_.size(), right.frames_.size()) - 1);

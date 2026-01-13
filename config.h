@@ -71,8 +71,8 @@ struct VideoCompareConfig {
 
   float wheel_sensitivity{1};
 
-  InputVideo left{Side::LEFT, "Left"};
-  InputVideo right{Side::RIGHT, "Right"};
+  InputVideo left{LEFT, "Left"};
+  InputVideo right{RIGHT, "Right"};
 
   ScopesConfig scopes;
 };

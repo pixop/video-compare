@@ -44,7 +44,7 @@ DynamicRange dynamic_range_from_av_enum(const AVColorTransferCharacteristic colo
   }
 }
 
-VideoDecoder::VideoDecoder(const Side side,
+VideoDecoder::VideoDecoder(const Side& side,
                            const std::string& decoder_name,
                            const std::string& hw_accel_spec,
                            const AVCodecParameters* codec_parameters,

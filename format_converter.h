@@ -15,7 +15,7 @@ class FormatConverter : public SideAware {
                   const AVPixelFormat dest_pixel_format,
                   const AVColorSpace src_color_space,
                   const AVColorRange src_color_range,
-                  const Side side = NONE,
+                  const Side& side = NONE,
                   const int flags = SWS_FAST_BILINEAR);
   ~FormatConverter();
 

@@ -19,7 +19,7 @@ static unsigned get_content_light_level_or_zero(const AVFrame* frame) {
   return UNSET_PEAK_LUMINANCE;
 }
 
-VideoFilterer::VideoFilterer(const Side side,
+VideoFilterer::VideoFilterer(const Side& side,
                              const Demuxer* demuxer,
                              const VideoDecoder* video_decoder,
                              const ToneMapping tone_mapping_mode,

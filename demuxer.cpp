@@ -3,7 +3,7 @@
 #include "ffmpeg.h"
 #include "string_utils.h"
 
-Demuxer::Demuxer(const Side side, const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options) : SideAware(side) {
+Demuxer::Demuxer(const Side& side, const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options) : SideAware(side) {
   ScopedLogSide scoped_log_side(side);
 
   const AVInputFormat* input_format = nullptr;

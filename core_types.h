@@ -1,7 +1,68 @@
 #pragma once
 
+#include <cstddef>
+#include <functional>
+#include <string>
+
 constexpr unsigned UNSET_PEAK_LUMINANCE = 0;
 
-enum Side { NONE = -1, LEFT, RIGHT, Count };
 enum ToneMapping { AUTO, OFF, FULLRANGE, RELATIVE };
 enum DynamicRange { STANDARD, PQ, HLG };
+
+enum class SideType { NONE = -1, LEFT, RIGHT };
+
+class Side {
+ public:
+  // Constructors
+  Side();
+  explicit Side(SideType type, size_t right_index = 0);
+
+  // Static factory methods for convenience
+  static Side Left();
+  static Side Right(size_t index = 0);
+  static Side None();
+
+  // Accessors (kept inline for performance)
+  SideType type() const { return type_; }
+  size_t right_index() const { return right_index_; }
+  bool is_left() const { return type_ == SideType::LEFT; }
+  bool is_right() const { return type_ == SideType::RIGHT; }
+  bool is_none() const { return type_ == SideType::NONE; }
+  bool is_valid() const { return type_ != SideType::NONE; }
+
+  // Convert to array index (for backward compatibility)
+  // LEFT -> 0, RIGHT -> 1 (for first right video), or use right_index for multiple
+  size_t as_index() const;
+
+  // For use in arrays that only have LEFT/RIGHT (backward compatibility)
+  size_t as_simple_index() const;
+
+  // Comparison operators
+  bool operator==(const Side& other) const;
+  bool operator!=(const Side& other) const;
+  bool operator<(const Side& other) const;
+
+  // Hash support
+  size_t hash() const;
+
+  // String representation
+  std::string to_string() const;
+
+ private:
+  SideType type_;
+  size_t right_index_;  // Only meaningful for RIGHT, 0-based
+};
+
+// Hash function for use in unordered_map
+namespace std {
+template <>
+struct hash<Side> {
+  size_t operator()(const Side& side) const { return side.hash(); }
+};
+}  // namespace std
+
+extern const Side NONE;
+extern const Side LEFT;
+extern const Side RIGHT;
+
+constexpr size_t SideCount = 2;  // For arrays that only have LEFT/RIGHT

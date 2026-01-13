@@ -44,9 +44,9 @@ class ReadyToSeek {
     }
   }
 
-  bool get(const ProcessorThread i, const Side j) const { return load(ready_to_seek_[i][j]); }
+  bool get(const ProcessorThread i, const Side& j) const { return load(ready_to_seek_[i][j.as_simple_index()]); }
 
-  void set(const ProcessorThread i, const Side j) { store(ready_to_seek_[i][j], true); }
+  void set(const ProcessorThread i, const Side& j) { store(ready_to_seek_[i][j.as_simple_index()], true); }
 
   bool all_are_idle() const {
     for (const auto& thread_array : ready_to_seek_) {
@@ -66,7 +66,7 @@ class ReadyToSeek {
   static inline void store(std::atomic_bool& atomic_flag, const bool value) { atomic_flag.store(value, std::memory_order_relaxed); }
 
  private:
-  std::array<std::array<std::atomic_bool, Side::Count>, ProcessorThread::Count> ready_to_seek_;
+  std::array<std::array<std::atomic_bool, SideCount>, ProcessorThread::Count> ready_to_seek_;
 };
 
 class ExceptionHolder {
@@ -102,24 +102,24 @@ class VideoCompare {
  private:
   void thread_demultiplex_left();
   void thread_demultiplex_right();
-  void demultiplex(const Side side);
+  void demultiplex(const Side& side);
 
   void thread_decode_video_left();
   void thread_decode_video_right();
-  void decode_video(const Side side);
-  bool process_packet(const Side side, AVPacket* packet);
+  void decode_video(const Side& side);
+  bool process_packet(const Side& side, AVPacket* packet);
 
   void thread_filter_left();
   void thread_filter_right();
-  void filter_video(const Side side);
-  void filter_decoded_frame(const Side side, AVFrameSharedPtr frame_decoded);
+  void filter_video(const Side& side);
+  void filter_decoded_frame(const Side& side, AVFrameSharedPtr frame_decoded);
 
   void thread_format_converter_left();
   void thread_format_converter_right();
-  void format_convert_video(const Side side);
+  void format_convert_video(const Side& side);
 
   bool keep_running() const;
-  void quit_queues(const Side side);
+  void quit_queues(const Side& side);
 
   void update_decoder_mode(const int right_time_shift);
 
@@ -135,22 +135,22 @@ class VideoCompare {
   const TimeShiftConfig time_shift_;
   const int64_t time_shift_offset_av_time_;
 
-  const std::array<std::unique_ptr<Demuxer>, Side::Count> demuxers_;
-  const std::array<std::unique_ptr<VideoDecoder>, Side::Count> video_decoders_;
-  const std::array<std::unique_ptr<VideoFilterer>, Side::Count> video_filterers_;
+  const std::array<std::unique_ptr<Demuxer>, SideCount> demuxers_;
+  const std::array<std::unique_ptr<VideoDecoder>, SideCount> video_decoders_;
+  const std::array<std::unique_ptr<VideoFilterer>, SideCount> video_filterers_;
 
   const size_t max_width_;
   const size_t max_height_;
   const bool initial_fast_input_alignment_;
   const double shortest_duration_;
 
-  const std::array<std::unique_ptr<FormatConverter>, Side::Count> format_converters_;
+  const std::array<std::unique_ptr<FormatConverter>, SideCount> format_converters_;
   const std::unique_ptr<Display> display_;
   const std::unique_ptr<Timer> timer_;
-  const std::array<std::unique_ptr<PacketQueue>, Side::Count> packet_queues_;
-  const std::array<std::shared_ptr<DecodedFrameQueue>, Side::Count> decoded_frame_queues_;
-  const std::array<std::unique_ptr<FrameQueue>, Side::Count> filtered_frame_queues_;
-  const std::array<std::unique_ptr<FrameQueue>, Side::Count> converted_frame_queues_;
+  const std::array<std::unique_ptr<PacketQueue>, SideCount> packet_queues_;
+  const std::array<std::shared_ptr<DecodedFrameQueue>, SideCount> decoded_frame_queues_;
+  const std::array<std::unique_ptr<FrameQueue>, SideCount> filtered_frame_queues_;
+  const std::array<std::unique_ptr<FrameQueue>, SideCount> converted_frame_queues_;
 
   std::unique_ptr<ScopeManager> scope_manager_;
 

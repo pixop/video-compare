@@ -12,7 +12,7 @@ extern "C" {
 
 class VideoFilterer : public SideAware {
  public:
-  VideoFilterer(const Side side,
+  VideoFilterer(const Side& side,
                 const Demuxer* demuxer,
                 const VideoDecoder* video_decoder,
                 const ToneMapping tone_mapping_mode,

@@ -389,19 +389,19 @@ Display::Display(const int display_number,
   };
 
   // Initialize per-side UI state (file stems and file name textures)
-  side_ui_[LEFT].file_stem = strip_ffmpeg_patterns(get_file_stem(left_file_name));
-  side_ui_[RIGHT].file_stem = strip_ffmpeg_patterns(get_file_stem(right_file_name));
+  side_ui_[LEFT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(left_file_name));
+  side_ui_[RIGHT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(right_file_name));
 
   SDL_Surface* text_surface = render_text_with_fallback(left_file_name);
-  side_ui_[LEFT].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-  side_ui_[LEFT].text_width = text_surface->w;
-  side_ui_[LEFT].text_height = text_surface->h;
+  side_ui_[LEFT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+  side_ui_[LEFT.as_simple_index()].text_width = text_surface->w;
+  side_ui_[LEFT.as_simple_index()].text_height = text_surface->h;
   SDL_FreeSurface(text_surface);
 
   text_surface = render_text_with_fallback(right_file_name);
-  side_ui_[RIGHT].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-  side_ui_[RIGHT].text_width = text_surface->w;
-  side_ui_[RIGHT].text_height = text_surface->h;
+  side_ui_[RIGHT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+  side_ui_[RIGHT.as_simple_index()].text_width = text_surface->w;
+  side_ui_[RIGHT.as_simple_index()].text_height = text_surface->h;
   SDL_FreeSurface(text_surface);
 
   refresh_display_side_mapping();
@@ -451,8 +451,8 @@ Display::Display(const int display_number,
 Display::~Display() {
   SDL_DestroyTexture(video_texture_linear_);
   SDL_DestroyTexture(video_texture_nn_);
-  SDL_DestroyTexture(side_ui_[LEFT].text_texture);
-  SDL_DestroyTexture(side_ui_[RIGHT].text_texture);
+  SDL_DestroyTexture(side_ui_[LEFT.as_simple_index()].text_texture);
+  SDL_DestroyTexture(side_ui_[RIGHT.as_simple_index()].text_texture);
 
   if (message_texture_ != nullptr) {
     SDL_DestroyTexture(message_texture_);
@@ -909,8 +909,8 @@ void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_
 
   const auto osd_frame = create_onscreen_display_avframe();
 
-  const std::string& left_stem = side_ui_[displayed_left_side_].file_stem;
-  const std::string& right_stem = side_ui_[displayed_right_side_].file_stem;
+  const std::string& left_stem = side_ui_[displayed_left_side_.as_simple_index()].file_stem;
+  const std::string& right_stem = side_ui_[displayed_right_side_.as_simple_index()].file_stem;
   const bool stems_equal = (left_stem == right_stem);
   const std::string left_filename = string_sprintf("%s%s_%04d.png", left_stem.c_str(), stems_equal ? "_left" : "", saved_image_number_);
   const std::string right_filename = string_sprintf("%s%s_%04d.png", right_stem.c_str(), stems_equal ? "_right" : "", saved_image_number_);
@@ -1460,8 +1460,8 @@ void Display::ensure_metadata_textures_current() {
   if (metadata_dirty_ || (swap_left_right_ != last_swap_left_right_state_)) {
     last_swap_left_right_state_ = swap_left_right_;
 
-    const VideoMetadata& left_meta = (displayed_left_side_ == LEFT) ? left_metadata_ : right_metadata_;
-    const VideoMetadata& right_meta = (displayed_right_side_ == RIGHT) ? right_metadata_ : left_metadata_;
+    const VideoMetadata& left_meta = (displayed_left_side_.is_left()) ? left_metadata_ : right_metadata_;
+    const VideoMetadata& right_meta = (displayed_right_side_.is_right()) ? right_metadata_ : left_metadata_;
     build_metadata_textures(left_meta, right_meta);
 
     metadata_dirty_ = false;
@@ -1581,8 +1581,8 @@ void Display::save_selected_area(const AVFrame* left_frame, const AVFrame* right
     memcpy(concatenated->data[0] + dst_y * concatenated->linesize[0] + selection_rect.w * pixel_size, right_frame->data[0] + src_y * right_frame->linesize[0] + selection_rect.x * pixel_size, selection_rect.w * pixel_size);
   }
 
-  const std::string& left_stem = side_ui_[displayed_left_side_].file_stem;
-  const std::string& right_stem = side_ui_[displayed_right_side_].file_stem;
+  const std::string& left_stem = side_ui_[displayed_left_side_.as_simple_index()].file_stem;
+  const std::string& right_stem = side_ui_[displayed_right_side_.as_simple_index()].file_stem;
   const bool stems_equal = (left_stem == right_stem);
   const std::string left_filename = string_sprintf("%s%s_cutout_%04d.png", left_stem.c_str(), stems_equal ? "_left" : "", saved_selected_image_number_);
   const std::string right_filename = string_sprintf("%s%s_cutout_%04d.png", right_stem.c_str(), stems_equal ? "_right" : "", saved_selected_image_number_);
@@ -1826,9 +1826,11 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
       if (mode_ == Mode::VSTACK) {
         render_text(line1_y_, line1_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
-        render_text(line1_y_, line2_y_, side_ui_[displayed_left_side_].text_texture, side_ui_[displayed_left_side_].text_width, side_ui_[displayed_left_side_].text_height, border_extension_, true);
+        render_text(line1_y_, line2_y_, side_ui_[displayed_left_side_.as_simple_index()].text_texture, side_ui_[displayed_left_side_.as_simple_index()].text_width, side_ui_[displayed_left_side_.as_simple_index()].text_height,
+                    border_extension_, true);
       } else {
-        render_text(line1_y_, line1_y_, side_ui_[displayed_left_side_].text_texture, side_ui_[displayed_left_side_].text_width, side_ui_[displayed_left_side_].text_height, border_extension_, true);
+        render_text(line1_y_, line1_y_, side_ui_[displayed_left_side_.as_simple_index()].text_texture, side_ui_[displayed_left_side_.as_simple_index()].text_width, side_ui_[displayed_left_side_.as_simple_index()].text_height,
+                    border_extension_, true);
         render_text(line1_y_, line2_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
       }
 
@@ -1851,17 +1853,18 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
       if (mode_ == Mode::VSTACK) {
         text1_x = line1_y_;
-        text1_y = drawable_height_ - line2_y_ - side_ui_[displayed_right_side_].text_height;
+        text1_y = drawable_height_ - line2_y_ - side_ui_[displayed_right_side_.as_simple_index()].text_height;
         text2_x = line1_y_;
-        text2_y = drawable_height_ - line1_y_ - side_ui_[displayed_right_side_].text_height;
+        text2_y = drawable_height_ - line1_y_ - side_ui_[displayed_right_side_.as_simple_index()].text_height;
       } else {
-        text1_x = drawable_width_ - line1_y_ - side_ui_[displayed_right_side_].text_width;
+        text1_x = drawable_width_ - line1_y_ - side_ui_[displayed_right_side_.as_simple_index()].text_width;
         text1_y = line1_y_;
         text2_x = drawable_width_ - line1_y_ - right_position_text_width;
         text2_y = line2_y_;
       }
 
-      render_text(text1_x, text1_y, side_ui_[displayed_right_side_].text_texture, side_ui_[displayed_right_side_].text_width, side_ui_[displayed_right_side_].text_height, border_extension_, false);
+      render_text(text1_x, text1_y, side_ui_[displayed_right_side_.as_simple_index()].text_texture, side_ui_[displayed_right_side_.as_simple_index()].text_width, side_ui_[displayed_right_side_.as_simple_index()].text_height,
+                  border_extension_, false);
       render_text(text2_x, text2_y, right_position_text_texture, right_position_text_width, right_position_text_height, border_extension_, false);
 
       SDL_DestroyTexture(right_position_text_texture);
