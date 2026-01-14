@@ -38,6 +38,7 @@ static const std::vector<std::pair<std::string, std::string>> controls{{"H", "To
                                                                        {"F1", "Toggle Histogram window"},
                                                                        {"F2", "Toggle Vectorscope window"},
                                                                        {"F3", "Toggle Waveform window"},
+                                                                       {"Tab", "Cycle through right videos"},
                                                                        {"+", "Time-shift right video 1 frame forward"},
                                                                        {"-", "Time-shift right video 1 frame backward"},
                                                                        {"X", "Show the current video frame and UI update rates (in FPS)"},

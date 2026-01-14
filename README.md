@@ -196,6 +196,7 @@ see all supported options.
 - F1: Toggle Histogram window
 - F2: Toggle Vectorscope window
 - F3: Toggle Waveform window
+- Tab: Cycle through right videos
 - Plus `+`: Time-shift right video 1 frame forward
 - Minus `-`: Time-shift right video 1 frame backward
 - X: Show the current video frame and UI update rates (in FPS)

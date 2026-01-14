@@ -138,6 +138,10 @@ std::string get_file_stem(const std::string& file_path) {
   return tmp;
 }
 
+std::string format_window_title(const std::string& left_file_name, const std::string& right_file_name) {
+  return string_sprintf("%s  |  %s", get_file_name_and_extension(left_file_name).c_str(), get_file_name_and_extension(right_file_name).c_str());
+}
+
 std::string strip_ffmpeg_patterns(const std::string& input) {
   static const std::regex pattern_regex(R"(%\d*d|\*|\?)");
 
@@ -296,8 +300,7 @@ Display::Display(const int display_number,
   }
 
   const int create_window_flags = SDL_WINDOW_SHOWN;
-  window_ = check_sdl(SDL_CreateWindow(string_sprintf("%s  |  %s", get_file_name_and_extension(left_file_name).c_str(), get_file_name_and_extension(right_file_name).c_str()).c_str(), window_x, window_y, window_width, window_height,
-                                       high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
+  window_ = check_sdl(SDL_CreateWindow(format_window_title(left_file_name, right_file_name).c_str(), window_x, window_y, window_width, window_height, high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
                       "window");
 
   SDL_RWops* embedded_icon = check_sdl(SDL_RWFromConstMem(VIDEO_COMPARE_ICON_BMP, VIDEO_COMPARE_ICON_BMP_LEN), "get pointer to icon");
@@ -376,17 +379,8 @@ Display::Display(const int display_number,
     print_verbose_info();
   }
 
-  auto render_text_with_fallback = [&](const std::string& text) {
-    SDL_Surface* surface = TTF_RenderUTF8_Blended(small_font_, text.c_str(), TEXT_COLOR);
-
-    if (!surface) {
-      std::cerr << "Falling back to lower-quality rendering for '" << text << "'" << std::endl;
-
-      surface = check_sdl(TTF_RenderUTF8_Solid(small_font_, text.c_str(), TEXT_COLOR), "text surface");
-    }
-
-    return surface;
-  };
+  // Store left file name for window title updates
+  left_file_name_ = left_file_name;
 
   // Initialize per-side UI state (file stems and file name textures)
   side_ui_[LEFT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(left_file_name));
@@ -1456,6 +1450,42 @@ void Display::update_metadata(const VideoMetadata left_metadata, const VideoMeta
   metadata_dirty_ = true;
 }
 
+void Display::update_right_video(const std::string& right_file_name, const VideoMetadata right_metadata) {
+  // Update right metadata
+  right_metadata_ = right_metadata;
+  metadata_dirty_ = true;
+
+  // Update right file stem
+  side_ui_[RIGHT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(right_file_name));
+
+  // Destroy old right texture
+  if (side_ui_[RIGHT.as_simple_index()].text_texture != nullptr) {
+    SDL_DestroyTexture(side_ui_[RIGHT.as_simple_index()].text_texture);
+  }
+
+  // Create new right texture
+  SDL_Surface* text_surface = render_text_with_fallback(right_file_name);
+  side_ui_[RIGHT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+  side_ui_[RIGHT.as_simple_index()].text_width = text_surface->w;
+  side_ui_[RIGHT.as_simple_index()].text_height = text_surface->h;
+  SDL_FreeSurface(text_surface);
+
+  // Update window title
+  SDL_SetWindowTitle(window_, format_window_title(left_file_name_, right_file_name).c_str());
+}
+
+SDL_Surface* Display::render_text_with_fallback(const std::string& text) {
+  SDL_Surface* surface = TTF_RenderUTF8_Blended(small_font_, text.c_str(), TEXT_COLOR);
+
+  if (!surface) {
+    std::cerr << "Falling back to lower-quality rendering for '" << text << "'" << std::endl;
+
+    surface = check_sdl(TTF_RenderUTF8_Solid(small_font_, text.c_str(), TEXT_COLOR), "text surface");
+  }
+
+  return surface;
+}
+
 void Display::ensure_metadata_textures_current() {
   if (metadata_dirty_ || (swap_left_right_ != last_swap_left_right_state_)) {
     last_swap_left_right_state_ = swap_left_right_;
@@ -2517,6 +2547,9 @@ void Display::input() {
           case SDLK_p:
             print_mouse_position_and_color_ = mouse_is_inside_window_;
             break;
+          case SDLK_TAB:
+            cycle_right_video();
+            break;
           case SDLK_m:
             print_image_similarity_metrics_ = true;
             break;
@@ -2738,4 +2771,20 @@ bool Display::get_show_fps() const {
 
 bool Display::get_toggle_scope_window_requested(const ScopeWindow::Type type) const {
   return toggle_scope_window_requested_[ScopeWindow::index(type)];
+}
+
+void Display::set_num_right_videos(size_t num_right_videos) {
+  num_right_videos_ = num_right_videos;
+}
+
+size_t Display::get_num_right_videos() const {
+  return num_right_videos_;
+}
+
+size_t Display::get_active_right_index() const {
+  return active_right_index_;
+}
+
+void Display::cycle_right_video() {
+  active_right_index_ = (active_right_index_ + 1) % num_right_videos_;
 }

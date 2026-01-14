@@ -1,7 +1,8 @@
 #pragma once
 #include <atomic>
+#include <map>
 #include <memory>
-#include <shared_mutex>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -34,24 +35,31 @@ class ReadyToSeek {
  public:
   enum ProcessorThread { DEMULTIPLEXER, DECODER, FILTERER, CONVERTER, Count };
 
-  ReadyToSeek() { reset(); }
+  bool get(const ProcessorThread i, const Side& j) const {
+    auto it = ready_to_seek_[i].find(j);
+    if (it != ready_to_seek_[i].end()) {
+      return load(it->second);
+    }
+    // If not found, return false (not ready)
+    return false;
+  }
 
-  void reset() {
-    for (auto& thread_array : ready_to_seek_) {
-      for (auto& flag : thread_array) {
-        store(flag, false);
+  void init(const ProcessorThread i, const Side& j) { ready_to_seek_[i][j].store(false, std::memory_order_relaxed); }
+
+  void set(const ProcessorThread i, const Side& j) { store(ready_to_seek_[i][j], true); }
+
+  void reset_all() {
+    for (auto& thread_map : ready_to_seek_) {
+      for (auto& pair : thread_map) {
+        store(pair.second, false);
       }
     }
   }
 
-  bool get(const ProcessorThread i, const Side& j) const { return load(ready_to_seek_[i][j.as_simple_index()]); }
-
-  void set(const ProcessorThread i, const Side& j) { store(ready_to_seek_[i][j.as_simple_index()], true); }
-
   bool all_are_idle() const {
-    for (const auto& thread_array : ready_to_seek_) {
-      for (const auto& flag : thread_array) {
-        if (!load(flag)) {
+    for (const auto& thread_map : ready_to_seek_) {
+      for (const auto& pair : thread_map) {
+        if (!load(pair.second)) {
           return false;
         }
       }
@@ -66,31 +74,36 @@ class ReadyToSeek {
   static inline void store(std::atomic_bool& atomic_flag, const bool value) { atomic_flag.store(value, std::memory_order_relaxed); }
 
  private:
-  std::array<std::array<std::atomic_bool, SideCount>, ProcessorThread::Count> ready_to_seek_;
+  std::array<std::map<Side, std::atomic_bool>, ProcessorThread::Count> ready_to_seek_;
 };
 
 class ExceptionHolder {
  public:
   void store_current_exception() {
-    std::unique_lock<std::shared_timed_mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     exception_ = std::current_exception();
   }
 
   bool has_exception() const {
-    std::shared_lock<std::shared_timed_mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     return exception_ != nullptr;
   }
 
   void rethrow_stored_exception() const {
-    std::shared_lock<std::shared_timed_mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     if (exception_) {
       std::rethrow_exception(exception_);
     }
   }
 
  private:
-  mutable std::shared_timed_mutex mutex_;
+  mutable std::mutex mutex_;
   std::exception_ptr exception_{nullptr};
+};
+
+struct RightVideoInfo {
+  std::string file_name;
+  VideoMetadata metadata;
 };
 
 class VideoCompare {
@@ -100,22 +113,18 @@ class VideoCompare {
   void operator()();
 
  private:
-  void thread_demultiplex_left();
-  void thread_demultiplex_right();
+  void thread_demultiplex(const Side& side);
   void demultiplex(const Side& side);
 
-  void thread_decode_video_left();
-  void thread_decode_video_right();
+  void thread_decode_video(const Side& side);
   void decode_video(const Side& side);
   bool process_packet(const Side& side, AVPacket* packet);
 
-  void thread_filter_left();
-  void thread_filter_right();
+  void thread_filter(const Side& side);
   void filter_video(const Side& side);
   void filter_decoded_frame(const Side& side, AVFrameSharedPtr frame_decoded);
 
-  void thread_format_converter_left();
-  void thread_format_converter_right();
+  void thread_format_converter(const Side& side);
   void format_convert_video(const Side& side);
 
   bool keep_running() const;
@@ -135,22 +144,26 @@ class VideoCompare {
   const TimeShiftConfig time_shift_;
   const int64_t time_shift_offset_av_time_;
 
-  const std::array<std::unique_ptr<Demuxer>, SideCount> demuxers_;
-  const std::array<std::unique_ptr<VideoDecoder>, SideCount> video_decoders_;
-  const std::array<std::unique_ptr<VideoFilterer>, SideCount> video_filterers_;
+  std::map<Side, std::unique_ptr<Demuxer>> demuxers_;
+  std::map<Side, std::unique_ptr<VideoDecoder>> video_decoders_;
+  std::map<Side, std::unique_ptr<VideoFilterer>> video_filterers_;
+  std::map<Side, std::unique_ptr<FormatConverter>> format_converters_;
 
-  const size_t max_width_;
-  const size_t max_height_;
+  std::map<Side, std::unique_ptr<PacketQueue>> packet_queues_;
+  std::map<Side, std::shared_ptr<DecodedFrameQueue>> decoded_frame_queues_;
+  std::map<Side, std::unique_ptr<FrameQueue>> filtered_frame_queues_;
+  std::map<Side, std::unique_ptr<FrameQueue>> converted_frame_queues_;
+
+  size_t max_width_;
+  size_t max_height_;
   const bool initial_fast_input_alignment_;
-  const double shortest_duration_;
+  double shortest_duration_;
 
-  const std::array<std::unique_ptr<FormatConverter>, SideCount> format_converters_;
-  const std::unique_ptr<Display> display_;
-  const std::unique_ptr<Timer> timer_;
-  const std::array<std::unique_ptr<PacketQueue>, SideCount> packet_queues_;
-  const std::array<std::shared_ptr<DecodedFrameQueue>, SideCount> decoded_frame_queues_;
-  const std::array<std::unique_ptr<FrameQueue>, SideCount> filtered_frame_queues_;
-  const std::array<std::unique_ptr<FrameQueue>, SideCount> converted_frame_queues_;
+  std::unique_ptr<Display> display_;
+  std::unique_ptr<Timer> timer_;
+
+  size_t active_right_index_{0};
+  std::map<Side, RightVideoInfo> right_video_info_;
 
   std::unique_ptr<ScopeManager> scope_manager_;
 

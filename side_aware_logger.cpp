@@ -82,7 +82,7 @@ void sa_av_log_callback(void* ptr, int level, const char* fmt, va_list args) {
     }
 
     if (must_print_side) {
-      std::cerr << std::setw(8) << std::left;
+      std::cerr << std::setw(9) << std::left;
       std::cerr << sa_format_string();
       std::cerr << std::setw(0) << std::right;
     }

@@ -243,6 +243,9 @@ class Display {
   bool metadata_dirty_{true};
   Side displayed_left_side_{LEFT};
   Side displayed_right_side_{RIGHT};
+  size_t num_right_videos_{1};
+  size_t active_right_index_{0};
+  std::string left_file_name_;  // Store left file name for window title updates
 
   std::vector<SDL_Texture*> help_textures_;
   int help_total_height_{0};
@@ -284,6 +287,8 @@ class Display {
   void render_text(int x, int y, SDL_Texture* texture, int texture_width, int texture_height, int border_extension, bool left_adjust);
 
   void render_progress_dots(const float position, const float progress, const bool is_top);
+
+  SDL_Surface* render_text_with_fallback(const std::string& text);
 
   SDL_Texture* get_video_texture() const;
   void update_texture(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& message);
@@ -382,7 +387,14 @@ class Display {
   bool get_show_fps() const;
 
   void update_metadata(const VideoMetadata left_metadata, const VideoMetadata right_metadata);
+  void update_right_video(const std::string& right_file_name, const VideoMetadata right_metadata);
 
   SDL_Rect get_visible_roi_in_single_frame_coordinates() const;
   bool get_toggle_scope_window_requested(const ScopeWindow::Type type) const;
+
+  // Multiple right video support
+  void set_num_right_videos(size_t num_right_videos);
+  size_t get_num_right_videos() const;
+  size_t get_active_right_index() const;
+  void cycle_right_video();
 };
