@@ -393,8 +393,7 @@ class Display {
   bool get_toggle_scope_window_requested(const ScopeWindow::Type type) const;
 
   // Multiple right video support
-  void set_num_right_videos(size_t num_right_videos);
+  void set_num_right_videos(const size_t num_right_videos);
   size_t get_num_right_videos() const;
   size_t get_active_right_index() const;
-  void cycle_right_video();
 };

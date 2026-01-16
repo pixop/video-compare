@@ -2548,7 +2548,8 @@ void Display::input() {
             print_mouse_position_and_color_ = mouse_is_inside_window_;
             break;
           case SDLK_TAB:
-            cycle_right_video();
+            active_right_index_ = (active_right_index_ + 1) % num_right_videos_;
+            std::cout << string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_) << std::endl;
             break;
           case SDLK_m:
             print_image_similarity_metrics_ = true;
@@ -2773,7 +2774,7 @@ bool Display::get_toggle_scope_window_requested(const ScopeWindow::Type type) co
   return toggle_scope_window_requested_[ScopeWindow::index(type)];
 }
 
-void Display::set_num_right_videos(size_t num_right_videos) {
+void Display::set_num_right_videos(const size_t num_right_videos) {
   num_right_videos_ = num_right_videos;
 }
 
@@ -2783,8 +2784,4 @@ size_t Display::get_num_right_videos() const {
 
 size_t Display::get_active_right_index() const {
   return active_right_index_;
-}
-
-void Display::cycle_right_video() {
-  active_right_index_ = (active_right_index_ + 1) % num_right_videos_;
 }
