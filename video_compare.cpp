@@ -164,10 +164,13 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 
   // Initialize filterers (need to reference other side's demuxer/decoder)
   // For left, use first right as the other side
-  install_processor(
-      video_filterers_, ReadyToSeek::FILTERER, LEFT,
-      std::make_unique<VideoFilterer>(LEFT, demuxers_[LEFT].get(), video_decoders_[LEFT].get(), config.left.tone_mapping_mode, config.left.boost_tone, config.left.video_filters, config.left.color_space, config.left.color_range,
-                                      config.left.color_primaries, config.left.color_trc, demuxers_[Side::Right(0)].get(), video_decoders_[Side::Right(0)].get(), first_right.color_trc, config.disable_auto_filters));
+  if (config.right_videos.size() > 1 && !config.disable_auto_filters) {
+    sa_log_info(LEFT, string_sprintf("Multi-right mode: using right video 1/%zu as auto-filter reference (%s)", config.right_videos.size(), first_right.file_name.c_str()));
+  }
+
+  install_processor(video_filterers_, ReadyToSeek::FILTERER, LEFT,
+                    std::make_unique<VideoFilterer>(LEFT, demuxers_[LEFT].get(), video_decoders_[LEFT].get(), config.left.tone_mapping_mode, config.left.boost_tone, config.left.video_filters, config.left.color_space,
+                                                    config.left.color_range, config.left.color_primaries, config.left.color_trc, demuxers_[RIGHT].get(), video_decoders_[RIGHT].get(), first_right.color_trc, config.disable_auto_filters));
 
   // For each right video, use left as the other side
   for (size_t i = 0; i < config.right_videos.size(); ++i) {
@@ -302,7 +305,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
     right_video_info_[right_side].metadata = collect_metadata(right_side);
   }
 
-  display_->update_metadata(collect_metadata(LEFT), right_video_info_[Side::Right(0)].metadata);
+  display_->update_metadata(collect_metadata(LEFT), right_video_info_[RIGHT].metadata);
 
   update_decoder_mode(time_shift_offset_av_time_);
 
