@@ -502,7 +502,7 @@ void ScopeWindow::render() {
     const Roi effective_roi = clamp_roi_to_frame(roi_local, source_width, source_height);
     const bool is_full = (effective_roi.w == source_width && effective_roi.h == source_height);
     if (!is_full) {
-      title += string_sprintf(" (%d,%d)-(%d,%d)", effective_roi.x, effective_roi.y, effective_roi.x + effective_roi.w - 1, effective_roi.y + effective_roi.h - 1);
+      title += string_sprintf("   (%d,%d)-(%d,%d)", effective_roi.x, effective_roi.y, effective_roi.x + effective_roi.w - 1, effective_roi.y + effective_roi.h - 1);
     }
   }
   if (title != last_window_title_) {
