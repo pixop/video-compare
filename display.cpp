@@ -1510,6 +1510,8 @@ void Display::update_window_title_with_current_roi() {
 
   std::string title = base_title;
 
+  auto format_roi_bbox = [](const char* label, const SDL_Rect& r) -> std::string { return string_sprintf("%s(%d,%d)-(%d,%d)", label, r.x, r.y, r.x + r.w - 1, r.y + r.h - 1); };
+
   if (mode_ == Mode::HSTACK || mode_ == Mode::VSTACK) {
     const auto rois = get_visible_rois_in_single_frame_coordinates();
     const SDL_Rect left_roi = rois.first;
@@ -1524,8 +1526,6 @@ void Display::update_window_title_with_current_roi() {
     if (left_off || right_off || !left_full || !right_full) {
       title += "   ";
 
-      auto format_roi_bbox = [](const char* label, const SDL_Rect& r) -> std::string { return string_sprintf("%s(%d,%d)-(%d,%d)", label, r.x, r.y, r.x + r.w - 1, r.y + r.h - 1); };
-
       const std::string left_roi_str = (!left_off && !left_full) ? format_roi_bbox("L", left_roi) : "";
       const std::string right_roi_str = (!right_off && !right_full) ? format_roi_bbox("R", right_roi) : "";
 
@@ -1539,7 +1539,7 @@ void Display::update_window_title_with_current_roi() {
     const SDL_Rect roi = get_visible_roi_in_single_frame_coordinates();
     const bool roi_is_full = (roi.x == 0 && roi.y == 0 && roi.w == video_width_ && roi.h == video_height_);
     if (!roi_is_full && roi.w > 0 && roi.h > 0) {
-      title += string_sprintf("   (%d,%d)-(%d,%d)", roi.x, roi.y, roi.x + roi.w - 1, roi.y + roi.h - 1);
+      title += string_sprintf("   %s", format_roi_bbox("", roi).c_str());
     }
   }
 
