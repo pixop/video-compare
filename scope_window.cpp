@@ -46,6 +46,18 @@ inline const ScopeInfoEntry& get_scope_info(const ScopeWindow::Type type) {
   return kScopeInfos[0];
 }
 
+inline ScopeWindow::Roi clamp_roi_to_frame(const ScopeWindow::Roi& roi, const int frame_w, const int frame_h) {
+  if (frame_w <= 0 || frame_h <= 0) {
+    return {0, 0, 0, 0};
+  }
+  // Make sure crop width/height are positive and within bounds.
+  const int x = std::max(0, std::min(roi.x, frame_w - 1));
+  const int y = std::max(0, std::min(roi.y, frame_h - 1));
+  const int w = std::max(1, std::min(roi.w, frame_w - x));
+  const int h = std::max(1, std::min(roi.h, frame_h - y));
+  return {x, y, w, h};
+}
+
 static void draw_rect_thickness(SDL_Renderer* renderer, const SDL_Rect& rect, const int thickness) {
   if (!renderer || thickness <= 0) {
     return;
@@ -148,6 +160,8 @@ ScopeWindow::ScopeWindow(const Type type, const int pane_width, const int pane_h
 
   const auto& scope_info_title = get_scope_info(type_);
   const char* window_title = scope_info_title.title;
+  base_title_ = window_title;
+  last_window_title_ = window_title;
 
   window_ = static_cast<SDL_Window*>(sdl_check_ptr(SDL_CreateWindow(window_title, initial_position_x, initial_position_y, window_width, window_height, window_flags), "SDL_CreateWindow"));
 
@@ -216,7 +230,8 @@ std::string ScopeWindow::format_filter_args(const AVFrame* frame) {
 #endif
 }
 
-std::string ScopeWindow::build_filter_description(const int pane_width, const int pane_height, const int left_colorspace, const int left_range, const int right_colorspace, const int right_range) const {
+std::string ScopeWindow::build_filter_description(const int pane_width, const int pane_height, const int left_colorspace, const int left_range, const int right_colorspace, const int right_range, const bool roi_enabled, const Roi& roi)
+    const {
   const std::string setparams_left = string_sprintf("setparams=colorspace=%d:range=%d", left_colorspace, left_range);
   const std::string setparams_right = string_sprintf("setparams=colorspace=%d:range=%d", right_colorspace, right_range);
 
@@ -228,7 +243,7 @@ std::string ScopeWindow::build_filter_description(const int pane_width, const in
   const std::string left_pad = string_sprintf("pad=%d:%d:%d:%d:color=black", pane_width, pane_height, kOuterPad, kOuterPad);
   const std::string right_pad = string_sprintf("pad=%d:%d:%d:%d:color=black", pane_width, pane_height, kOuterPad, kOuterPad);
 
-  const std::string crop_left = roi_enabled_ ? string_sprintf("crop=%d:%d:%d:%d,", roi_.w, roi_.h, roi_.x, roi_.y) : "";
+  const std::string crop_left = roi_enabled ? string_sprintf("crop=%d:%d:%d:%d,", roi.w, roi.h, roi.x, roi.y) : "";
   const std::string crop_right = crop_left;
 
   const char* pre_format_filter;
@@ -262,12 +277,26 @@ void ScopeWindow::destroy_graph() {
 }
 
 void ScopeWindow::ensure_graph(const AVFrame* left_frame, const AVFrame* right_frame) {
+  Roi roi_local;
+  bool roi_enabled_local = false;
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    roi_local = roi_;
+    roi_enabled_local = roi_enabled_;
+  }
+
+  Roi roi_effective{0, 0, 0, 0};
+  if (roi_enabled_local) {
+    roi_effective = clamp_roi_to_frame(roi_local, left_frame->width, left_frame->height);
+    roi_enabled_local = roi_effective.w > 0 && roi_effective.h > 0;
+  }
+
   bool must_reinitialize = left_frame->width != left_input_.width || left_frame->height != left_input_.height || left_frame->format != left_input_.format || right_frame->width != right_input_.width ||
                            right_frame->height != right_input_.height || right_frame->format != right_input_.format || left_frame->colorspace != left_input_.colorspace || left_frame->color_range != left_input_.range ||
                            right_frame->colorspace != right_input_.colorspace || right_frame->color_range != right_input_.range;
 
   // Trigger rebuild when ROI changes
-  const bool roi_changed = roi_enabled_ && (prev_roi_.x != roi_.x || prev_roi_.y != roi_.y || prev_roi_.w != roi_.w || prev_roi_.h != roi_.h);
+  const bool roi_changed = roi_enabled_local && (prev_roi_.x != roi_effective.x || prev_roi_.y != roi_effective.y || prev_roi_.w != roi_effective.w || prev_roi_.h != roi_effective.h);
 
   must_reinitialize = must_reinitialize || roi_changed;
 
@@ -287,7 +316,12 @@ void ScopeWindow::ensure_graph(const AVFrame* left_frame, const AVFrame* right_f
   left_input_.range = left_frame->color_range;
   right_input_.colorspace = right_frame->colorspace;
   right_input_.range = right_frame->color_range;
-  prev_roi_ = roi_enabled_ ? roi_ : Roi{-1, -1, -1, -1};
+  prev_roi_ = roi_enabled_local ? roi_effective : Roi{-1, -1, -1, -1};
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    source_width_ = left_frame->width;
+    source_height_ = left_frame->height;
+  }
 
   const AVFilter* buffersrc = avfilter_get_by_name("buffer");
   const AVFilter* buffersink = avfilter_get_by_name("buffersink");
@@ -300,7 +334,7 @@ void ScopeWindow::ensure_graph(const AVFrame* left_frame, const AVFrame* right_f
   ffmpeg_check(avfilter_graph_create_filter(&buffersrc_right_ctx_, buffersrc, "in_right", format_filter_args(right_frame).c_str(), nullptr, filter_graph_), "create right buffer");
   ffmpeg_check(avfilter_graph_create_filter(&buffersink_ctx_, buffersink, "out", nullptr, nullptr, filter_graph_), "create sink");
 
-  std::string filter_description = build_filter_description(pane_width_, pane_height_, left_input_.colorspace, left_input_.range, right_input_.colorspace, right_input_.range);
+  std::string filter_description = build_filter_description(pane_width_, pane_height_, left_input_.colorspace, left_input_.range, right_input_.colorspace, right_input_.range, roi_enabled_local, roi_effective);
 
   AVFilterInOut* inputs = avfilter_inout_alloc();
   AVFilterInOut* outputs_left = avfilter_inout_alloc();
@@ -357,22 +391,25 @@ bool ScopeWindow::prepare(const AVFrame* left_frame, const AVFrame* right_frame)
     return false;
   }
 
+  bool roi_enabled_local = false;
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    roi_enabled_local = roi_enabled_;
+
+    if (graph_reset_pending_) {
+      destroy_graph();
+      graph_reset_pending_ = false;
+    }
+  }
+
   // If ROI is disabled, we still want to blank in render, but skip compute here.
-  if (!roi_enabled_) {
+  if (!roi_enabled_local) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     if (pending_frame_ != nullptr) {
       av_frame_free(&pending_frame_);
       pending_frame_ = nullptr;
     }
     return true;
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    if (graph_reset_pending_) {
-      destroy_graph();
-      graph_reset_pending_ = false;
-    }
   }
 
   ensure_graph(left_frame, right_frame);
@@ -447,8 +484,36 @@ bool ScopeWindow::prepare(const AVFrame* left_frame, const AVFrame* right_frame)
 }
 
 void ScopeWindow::render() {
+  Roi roi_local;
+  bool roi_enabled_local = false;
+  int source_width = 0;
+  int source_height = 0;
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    roi_local = roi_;
+    roi_enabled_local = roi_enabled_;
+    source_width = source_width_;
+    source_height = source_height_;
+  }
+
+  // Update title (main thread only) when ROI is smaller than the full frame.
+  std::string title = base_title_;
+  if (roi_enabled_local && source_width > 0 && source_height > 0) {
+    const Roi effective_roi = clamp_roi_to_frame(roi_local, source_width, source_height);
+    const bool is_full = (effective_roi.w == source_width && effective_roi.h == source_height);
+    if (!is_full) {
+      // minimal indication of ROI, the full ROI is on the main window title
+      title += " (ROI)";
+      // title += string_sprintf(" (%d,%d)-(%d,%d)", effective_roi.x, effective_roi.y, effective_roi.x + effective_roi.w - 1, effective_roi.y + effective_roi.h - 1);
+    }
+  }
+  if (title != last_window_title_) {
+    SDL_SetWindowTitle(window_, title.c_str());
+    last_window_title_ = title;
+  }
+
   // Always clear/present to keep the window responsive.
-  if (!roi_enabled_) {
+  if (!roi_enabled_local) {
     ensure_texture();
     present_frame(nullptr);
     return;
@@ -557,8 +622,10 @@ bool ScopeWindow::handle_event(const SDL_Event& event) {
 }
 
 void ScopeWindow::set_roi(const Roi& roi) {
+  std::lock_guard<std::mutex> lock(state_mutex_);
   roi_ = roi;
   roi_enabled_ = roi.w > 0 && roi.h > 0;
+  graph_reset_pending_ = true;
 }
 
 void ScopeWindow::route_events(std::array<std::unique_ptr<ScopeWindow>, ScopeWindow::kNumScopes>& windows) {

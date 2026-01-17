@@ -245,7 +245,9 @@ class Display {
   Side displayed_right_side_{RIGHT};
   size_t num_right_videos_{1};
   size_t active_right_index_{0};
-  std::string left_file_name_;  // Store left file name for window title updates
+  std::string left_file_name_;
+  std::string right_file_name_;
+  std::string last_window_title_;
 
   std::vector<SDL_Texture*> help_textures_;
   int help_total_height_{0};
@@ -301,16 +303,17 @@ class Display {
   std::string format_pixel(const std::array<int, 3>& rgb);
   std::string get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const AVFrame* frame, const int x, const int y);
 
-  float* rgb_to_grayscale(const uint8_t* plane, const size_t pitch);
+  float* rgb_to_grayscale(const uint8_t* plane, const size_t pitch, const int width, const int height);
 
-  float compute_ssim_block(const float* left_plane, const float* right_plane, const int x_offset, const int y_offset, const int block_size);
-  std::string compute_ssim(const float* left_plane, const float* right_plane);
+  float compute_ssim_block(const float* left_plane, const float* right_plane, const int width, const int x_offset, const int y_offset, const int block_size);
+  std::string compute_ssim(const float* left_plane, const float* right_plane, const int width, const int height);
 
-  std::string compute_psnr(const float* left_plane, const float* right_plane);
+  std::string compute_psnr(const float* left_plane, const float* right_plane, const int width, const int height);
 
   void render_help();
   void render_metadata_overlay();
   void build_metadata_textures(const VideoMetadata& left, const VideoMetadata& right);
+  void update_window_title_with_current_roi();
   void ensure_metadata_textures_current();
   void refresh_display_side_mapping();
 
@@ -332,7 +335,7 @@ class Display {
     float zoom_factor;
   };
   ZoomRect compute_zoom_rect() const;
-  Vector2D window_to_video_position(const int window_x_position, const int window_y_position, const ZoomRect& zoom_rect) const;
+  Vector2D window_to_video_position(const int window_x_position, const int window_y_position, const ZoomRect& zoom_rect, const bool floor_result = true) const;
   SDL_FRect video_to_zoom_space(const SDL_Rect& video_rect, const ZoomRect& zoom_rect) const;
 
   void update_playback_speed(const int playback_speed_level);

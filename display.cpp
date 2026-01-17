@@ -381,6 +381,8 @@ Display::Display(const int display_number,
 
   // Store left file name for window title updates
   left_file_name_ = left_file_name;
+  right_file_name_ = right_file_name;
+  last_window_title_.clear();
 
   // Initialize per-side UI state (file stems and file name textures)
   side_ui_[LEFT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(left_file_name));
@@ -1114,51 +1116,76 @@ std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size
   return "RGB" + format_pixel(rgb) + ", YUV" + format_pixel(yuv);
 }
 
-float* Display::rgb_to_grayscale(const uint8_t* plane, const size_t pitch) {
-  float* grayscale_image = new float[video_width_ * video_height_];
+AVFrame* crop_rgb_frame(const AVFrame* src, const SDL_Rect& roi, SDL_Rect* out_effective_roi = nullptr) {
+  AVFrame* cropped_frame = av_frame_clone(src);
+
+  if (!cropped_frame) {
+    throw std::runtime_error("Unable to clone source frame");
+  }
+
+  int bpp = 0;
+  if (src->format == AV_PIX_FMT_RGB24) {
+    bpp = 3;
+  } else if (src->format == AV_PIX_FMT_RGB48LE) {
+    bpp = 6;
+  } else {
+    throw std::runtime_error("Unknown packed RGB format");
+  }
+
+  const int x = clamp_range(roi.x, 0, src->width - 1);
+  const int y = clamp_range(roi.y, 0, src->height - 1);
+  const int w = clamp_range(roi.w, 1, src->width - x);
+  const int h = clamp_range(roi.h, 1, src->height - y);
+
+  if (out_effective_roi != nullptr) {
+    *out_effective_roi = {x, y, w, h};
+  }
+
+  cropped_frame->data[0] = cropped_frame->data[0] + y * cropped_frame->linesize[0] + x * bpp;
+  cropped_frame->width = w;
+  cropped_frame->height = h;
+  return cropped_frame;
+}
+
+float* Display::rgb_to_grayscale(const uint8_t* plane, const size_t pitch, const int width, const int height) {
+  float* grayscale_image = new float[width * height];
   float* p_out = grayscale_image;
 
   auto to_grayscale = [](const float r, const float g, const float b, const float normalization_factor) -> float { return (r * 0.299f + g * 0.587f + b * 0.114f) * normalization_factor; };
 
   if (use_10_bpc_) {
-    const uint16_t* p_in = reinterpret_cast<const uint16_t*>(plane);
-
-    for (int y = 0; y < video_height_; y++) {
-      for (int x = 0; x < (video_width_ * 3); x += 3) {
-        const float r = p_in[x] >> 6;
-        const float g = p_in[x + 1] >> 6;
-        const float b = p_in[x + 2] >> 6;
-
+    for (int y = 0; y < height; y++) {
+      const uint16_t* row = reinterpret_cast<const uint16_t*>(plane + y * pitch);
+      for (int x = 0; x < (width * 3); x += 3) {
+        const float r = row[x] >> 6;
+        const float g = row[x + 1] >> 6;
+        const float b = row[x + 2] >> 6;
         *(p_out++) = to_grayscale(r, g, b, 1.f / 1023.f);
       }
-
-      p_in += pitch / sizeof(uint16_t);
     }
   } else {
-    for (int y = 0; y < video_height_; y++) {
-      for (int x = 0; x < (video_width_ * 3); x += 3) {
-        const float r = plane[x];
-        const float g = plane[x + 1];
-        const float b = plane[x + 2];
-
+    for (int y = 0; y < height; y++) {
+      const uint8_t* row = plane + y * pitch;
+      for (int x = 0; x < (width * 3); x += 3) {
+        const float r = row[x];
+        const float g = row[x + 1];
+        const float b = row[x + 2];
         *(p_out++) = to_grayscale(r, g, b, 1.f / 255.f);
       }
-
-      plane += pitch;
     }
   }
 
   return grayscale_image;
 }
 
-float Display::compute_ssim_block(const float* left_plane, const float* right_plane, const int x_offset, const int y_offset, const int block_size) {
+float Display::compute_ssim_block(const float* left_plane, const float* right_plane, const int width, const int x_offset, const int y_offset, const int block_size) {
   const int block_elements = block_size * block_size;
 
   auto compute_mean = [&](const float* plane) {
     float sum = 0;
 
     for (int y = y_offset; y < (y_offset + block_size); y++) {
-      const float* row = plane + y * video_width_ + x_offset;
+      const float* row = plane + y * width + x_offset;
 
       for (int x = 0; x < block_size; x++) {
         sum += *(row++);
@@ -1175,8 +1202,8 @@ float Display::compute_ssim_block(const float* left_plane, const float* right_pl
   float sum_var1 = 0, sum_var2 = 0, sum_covar = 0;
 
   for (int y = y_offset; y < (y_offset + block_size); y++) {
-    const float* row1 = left_plane + y * video_width_ + x_offset;
-    const float* row2 = right_plane + y * video_width_ + x_offset;
+    const float* row1 = left_plane + y * width + x_offset;
+    const float* row2 = right_plane + y * width + x_offset;
 
     for (int x = 0; x < block_size; x++) {
       float diff1 = *(row1++) - mean1;
@@ -1208,41 +1235,44 @@ float Display::compute_ssim_block(const float* left_plane, const float* right_pl
   return luminance * contrast * structure;
 }
 
-std::string Display::compute_ssim(const float* left_plane, const float* right_plane) {
+std::string Display::compute_ssim(const float* left_plane, const float* right_plane, const int width, const int height) {
   static constexpr int overlap = 4;
   static constexpr int block_size = 8;
 
   float ssim_sum = 0.0;
   int count = 0;
 
-  for (int y = 0; y < video_height_ - (block_size - 1); y += block_size - overlap) {
-    for (int x = 0; x < video_width_ - (block_size - 1); count++, x += block_size - overlap) {
-      ssim_sum += compute_ssim_block(left_plane, right_plane, x, y, block_size);
+  for (int y = 0; y < height - (block_size - 1); y += block_size - overlap) {
+    for (int x = 0; x < width - (block_size - 1); count++, x += block_size - overlap) {
+      ssim_sum += compute_ssim_block(left_plane, right_plane, width, x, y, block_size);
     }
   }
 
-  const float ssim = ssim_sum / count;
+  if (count == 0) {
+    return "n/a";
+  }
+
+  const float ssim = ssim_sum / static_cast<float>(count);
   return string_sprintf("%.5f", ssim);
 }
 
-std::string Display::compute_psnr(const float* left_plane, const float* right_plane) {
+std::string Display::compute_psnr(const float* left_plane, const float* right_plane, const int width, const int height) {
   // compute MSE
-  float mse = 0.0;
+  double mse = 0.0;
 
-  for (int i = 0; i < (video_width_ * video_height_); i++) {
+  for (int i = 0; i < (width * height); i++) {
     const float diff = *(left_plane++) - *(right_plane++);
-
-    mse += diff * diff;
+    mse += static_cast<double>(diff) * static_cast<double>(diff);
   }
 
-  mse /= (video_width_ * video_height_);
+  mse /= static_cast<double>(width) * static_cast<double>(height);
 
   if (mse == 0) {
     return "inf";
   }
 
   // compute PSNR
-  return string_sprintf("%.3f", -10.f * log10f(mse));
+  return string_sprintf("%.3f", -10.f * log10f(static_cast<float>(mse)));
 }
 
 void Display::render_help() {
@@ -1454,6 +1484,7 @@ void Display::update_right_video(const std::string& right_file_name, const Video
   // Update right metadata
   right_metadata_ = right_metadata;
   metadata_dirty_ = true;
+  right_file_name_ = right_file_name;
 
   // Update right file stem
   side_ui_[RIGHT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(right_file_name));
@@ -1470,8 +1501,24 @@ void Display::update_right_video(const std::string& right_file_name, const Video
   side_ui_[RIGHT.as_simple_index()].text_height = text_surface->h;
   SDL_FreeSurface(text_surface);
 
-  // Update window title
-  SDL_SetWindowTitle(window_, format_window_title(left_file_name_, right_file_name).c_str());
+  // Update window title (may include ROI)
+  update_window_title_with_current_roi();
+}
+
+void Display::update_window_title_with_current_roi() {
+  const SDL_Rect roi = get_visible_roi_in_single_frame_coordinates();
+  const std::string base_title = format_window_title(left_file_name_, right_file_name_);
+
+  std::string title = base_title;
+  const bool roi_is_full = (roi.w == video_width_ && roi.h == video_height_);
+  if (!roi_is_full) {
+    title += string_sprintf("   (%d,%d)-(%d,%d)", roi.x, roi.y, roi.x + roi.w - 1, roi.y + roi.h - 1);
+  }
+
+  if (title != last_window_title_) {
+    SDL_SetWindowTitle(window_, title.c_str());
+    last_window_title_ = title;
+  }
 }
 
 SDL_Surface* Display::render_text_with_fallback(const std::string& text) {
@@ -1668,6 +1715,8 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
   const auto zoom_rect = compute_zoom_rect();
 
+  update_window_title_with_current_roi();
+
   const Vector2D mouse_video_pos = window_to_video_position(mouse_x_, mouse_y_, zoom_rect);
   const int mouse_video_x = mouse_video_pos.x();
   const int mouse_video_y = mouse_video_pos.y();
@@ -1716,15 +1765,43 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
   // print image similarity metrics
   if (print_image_similarity_metrics_) {
-    const float* left_gray = rgb_to_grayscale(planes_left[0], pitches_left[0]);
-    const float* right_gray = rgb_to_grayscale(planes_right[0], pitches_right[0]);
+    SDL_Rect roi = get_visible_roi_in_single_frame_coordinates();
+    SDL_Rect effective_roi_left{}, effective_roi_right{};
 
-    std::cout << string_sprintf("Metrics: [%s|%s], PSNR(%s), SSIM(%s), VMAF(%s)", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(),
-                                compute_psnr(left_gray, right_gray).c_str(), compute_ssim(left_gray, right_gray).c_str(), VMAFCalculator::instance().compute(left_frame, right_frame).c_str())
-              << std::endl;
+    AVFrame* left_crop = crop_rgb_frame(left_frame, roi, &effective_roi_left);
+    AVFrame* right_crop = crop_rgb_frame(right_frame, roi, &effective_roi_right);
 
-    delete left_gray;
-    delete right_gray;
+    // assert dimensions are the same
+    if (!SDL_RectEquals(&effective_roi_left, &effective_roi_right)) {
+      std::cerr << "Error: Left and right effective ROIs are different." << std::endl;
+    } else {
+      // compute metrics
+      const int crop_width = effective_roi_left.w;
+      const int crop_height = effective_roi_left.h;
+
+      float* left_gray = rgb_to_grayscale(left_crop->data[0], left_crop->linesize[0], crop_width, crop_height);
+      float* right_gray = rgb_to_grayscale(right_crop->data[0], right_crop->linesize[0], crop_width, crop_height);
+
+      const std::string psnr = compute_psnr(left_gray, right_gray, crop_width, crop_height);
+      const std::string ssim = compute_ssim(left_gray, right_gray, crop_width, crop_height);
+      const std::string vmaf = (left_crop && right_crop) ? VMAFCalculator::instance().compute(left_crop, right_crop) : "n/a";
+
+      const std::string roi_str = (crop_width < video_width_ || crop_height < video_height_) ? string_sprintf("|x=%d,y=%d,w=%d,h=%d", effective_roi_left.x, effective_roi_left.y, crop_width, crop_height) : "";
+
+      std::cout << string_sprintf("Metrics: [%s|%s%s] PSNR(%s), SSIM(%s), VMAF(%s)", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(), roi_str.c_str(),
+                                  psnr.c_str(), ssim.c_str(), vmaf.c_str())
+                << std::endl;
+
+      delete[] left_gray;
+      delete[] right_gray;
+    }
+
+    if (left_crop) {
+      av_frame_free(&left_crop);
+    }
+    if (right_crop) {
+      av_frame_free(&right_crop);
+    }
 
     print_image_similarity_metrics_ = false;
   }
@@ -2158,9 +2235,11 @@ Display::ZoomRect Display::compute_zoom_rect() const {
   return {zoom_rect_start, zoom_rect_end, zoom_rect_size, global_zoom_factor_};
 }
 
-Vector2D Display::window_to_video_position(const int window_x_position, const int window_y_position, const Display::ZoomRect& zoom_rect) const {
-  const int video_x = std::floor((static_cast<float>(window_x_position) * video_to_window_width_factor_ - zoom_rect.start.x()) * static_cast<float>(video_width_) / zoom_rect.size.x());
-  const int video_y = std::floor((static_cast<float>(window_y_position) * video_to_window_height_factor_ - zoom_rect.start.y()) * static_cast<float>(video_height_) / zoom_rect.size.y());
+Vector2D Display::window_to_video_position(const int window_x_position, const int window_y_position, const Display::ZoomRect& zoom_rect, const bool floor_result) const {
+  auto floor_or_ceil = [&](const float value) -> int { return floor_result ? std::floor(value) : std::ceil(value); };
+
+  const int video_x = floor_or_ceil((static_cast<float>(window_x_position) * video_to_window_width_factor_ - zoom_rect.start.x()) * static_cast<float>(video_width_) / zoom_rect.size.x());
+  const int video_y = floor_or_ceil((static_cast<float>(window_y_position) * video_to_window_height_factor_ - zoom_rect.start.y()) * static_cast<float>(video_height_) / zoom_rect.size.y());
 
   return Vector2D(video_x, video_y);
 }
@@ -2177,13 +2256,13 @@ SDL_Rect Display::get_visible_roi_in_single_frame_coordinates() const {
   // in hstack/vstack modes, window_to_video_position() returns positions in the
   // *layout texture space* (2x width or 2x height). However, expect a
   // ROI in *single-frame* coordinates, which is applied equally to both left/right frames.
-  const Vector2D p0 = window_to_video_position(0, 0, zoom_rect);
-  const Vector2D p1 = window_to_video_position(window_width_ - 1, window_height_ - 1, zoom_rect);
+  const Vector2D p0 = window_to_video_position(0, 0, zoom_rect, true);
+  const Vector2D p1 = window_to_video_position(window_width_, window_height_, zoom_rect, false);
 
-  const int lx0 = static_cast<int>(std::floor(std::min(p0.x(), p1.x())));
-  const int ly0 = static_cast<int>(std::floor(std::min(p0.y(), p1.y())));
-  const int lx1 = static_cast<int>(std::ceil(std::max(p0.x(), p1.x())));
-  const int ly1 = static_cast<int>(std::ceil(std::max(p0.y(), p1.y())));
+  const int lx0 = static_cast<int>(std::min(p0.x(), p1.x()));
+  const int ly0 = static_cast<int>(std::min(p0.y(), p1.y()));
+  const int lx1 = static_cast<int>(std::max(p0.x(), p1.x()));
+  const int ly1 = static_cast<int>(std::max(p0.y(), p1.y()));
 
   auto clamp_x = [&](int x) { return clamp_range(x, 0, video_width_); };
   auto clamp_y = [&](int y) { return clamp_range(y, 0, video_height_); };
