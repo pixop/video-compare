@@ -28,6 +28,20 @@ std::string VMAFCalculator::compute(const AVFrame* distorted_frame, const AVFram
   std::string result = "n/a";
 
   if (!disabled_) {
+    // libvmaf (via FFmpeg filter) errors out on very small frames and our catch path
+    // would permanently disable VMAF until restart. Avoid running it in that case.
+    static constexpr int kMinDim = 32;
+
+    if (distorted_frame->width < kMinDim || distorted_frame->height < kMinDim || reference_frame->width < kMinDim || reference_frame->height < kMinDim) {
+      const int dw = distorted_frame->width;
+      const int dh = distorted_frame->height;
+      const int rw = reference_frame->width;
+      const int rh = reference_frame->height;
+      std::cerr << "Warning: skipping VMAF computation for small frame(s). "
+                << "distorted=" << dw << "x" << dh << ", reference=" << rw << "x" << rh << " (minimum " << kMinDim << "x" << kMinDim << ")." << std::endl;
+      return result;
+    }
+
     try {
       FilteredLogger::instance().reset();
 
