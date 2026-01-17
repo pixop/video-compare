@@ -1510,13 +1510,6 @@ void Display::update_window_title_with_current_roi() {
 
   std::string title = base_title;
 
-  auto format_bbox_or_off = [](const char* label, const SDL_Rect& r) -> std::string {
-    if (r.w <= 0 || r.h <= 0) {
-      return "";
-    }
-    return string_sprintf("%s(%d,%d)-(%d,%d)", label, r.x, r.y, r.x + r.w - 1, r.y + r.h - 1);
-  };
-
   if (mode_ == Mode::HSTACK || mode_ == Mode::VSTACK) {
     const auto rois = get_visible_rois_in_single_frame_coordinates();
     const SDL_Rect left_roi = rois.first;
@@ -1531,8 +1524,10 @@ void Display::update_window_title_with_current_roi() {
     if (left_off || right_off || !left_full || !right_full) {
       title += "   ";
 
-      const std::string left_roi_str = format_bbox_or_off("L", left_roi);
-      const std::string right_roi_str = format_bbox_or_off("R", right_roi);
+      auto format_roi_bbox = [](const char* label, const SDL_Rect& r) -> std::string { return string_sprintf("%s(%d,%d)-(%d,%d)", label, r.x, r.y, r.x + r.w - 1, r.y + r.h - 1); };
+
+      const std::string left_roi_str = (!left_off && !left_full) ? format_roi_bbox("L", left_roi) : "";
+      const std::string right_roi_str = (!right_off && !right_full) ? format_roi_bbox("R", right_roi) : "";
 
       title += left_roi_str;
       if (!left_roi_str.empty() && !right_roi_str.empty()) {
