@@ -2701,7 +2701,11 @@ void Display::input() {
             print_mouse_position_and_color_ = mouse_is_inside_window_;
             break;
           case SDLK_TAB:
-            active_right_index_ = (active_right_index_ + 1) % num_right_videos_;
+            if (keymod & KMOD_SHIFT) {
+              active_right_index_ = (active_right_index_ + num_right_videos_ - 1) % num_right_videos_;
+            } else {
+              active_right_index_ = (active_right_index_ + 1) % num_right_videos_;
+            }
             std::cout << string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_) << std::endl;
             break;
           case SDLK_m:
