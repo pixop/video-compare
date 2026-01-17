@@ -392,7 +392,9 @@ class Display {
   void update_metadata(const VideoMetadata left_metadata, const VideoMetadata right_metadata);
   void update_right_video(const std::string& right_file_name, const VideoMetadata right_metadata);
 
+  std::pair<SDL_Rect, SDL_Rect> get_visible_rois_in_single_frame_coordinates() const;
   SDL_Rect get_visible_roi_in_single_frame_coordinates() const;
+
   bool get_toggle_scope_window_requested(const ScopeWindow::Type type) const;
 
   // Multiple right video support

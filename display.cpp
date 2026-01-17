@@ -1506,13 +1506,46 @@ void Display::update_right_video(const std::string& right_file_name, const Video
 }
 
 void Display::update_window_title_with_current_roi() {
-  const SDL_Rect roi = get_visible_roi_in_single_frame_coordinates();
   const std::string base_title = format_window_title(left_file_name_, right_file_name_);
 
   std::string title = base_title;
-  const bool roi_is_full = (roi.w == video_width_ && roi.h == video_height_);
-  if (!roi_is_full) {
-    title += string_sprintf("   (%d,%d)-(%d,%d)", roi.x, roi.y, roi.x + roi.w - 1, roi.y + roi.h - 1);
+
+  auto format_bbox_or_off = [](const char* label, const SDL_Rect& r) -> std::string {
+    if (r.w <= 0 || r.h <= 0) {
+      return "";
+    }
+    return string_sprintf("%s(%d,%d)-(%d,%d)", label, r.x, r.y, r.x + r.w - 1, r.y + r.h - 1);
+  };
+
+  if (mode_ == Mode::HSTACK || mode_ == Mode::VSTACK) {
+    const auto rois = get_visible_rois_in_single_frame_coordinates();
+    const SDL_Rect left_roi = rois.first;
+    const SDL_Rect right_roi = rois.second;
+
+    const bool left_off = left_roi.w <= 0 || left_roi.h <= 0;
+    const bool right_off = right_roi.w <= 0 || right_roi.h <= 0;
+
+    const bool left_full = !left_off && left_roi.x == 0 && left_roi.y == 0 && left_roi.w == video_width_ && left_roi.h == video_height_;
+    const bool right_full = !right_off && right_roi.x == 0 && right_roi.y == 0 && right_roi.w == video_width_ && right_roi.h == video_height_;
+
+    if (left_off || right_off || !left_full || !right_full) {
+      title += "   ";
+
+      const std::string left_roi_str = format_bbox_or_off("L", left_roi);
+      const std::string right_roi_str = format_bbox_or_off("R", right_roi);
+
+      title += left_roi_str;
+      if (!left_roi_str.empty() && !right_roi_str.empty()) {
+        title += " ";
+      }
+      title += right_roi_str;
+    }
+  } else {
+    const SDL_Rect roi = get_visible_roi_in_single_frame_coordinates();
+    const bool roi_is_full = (roi.x == 0 && roi.y == 0 && roi.w == video_width_ && roi.h == video_height_);
+    if (!roi_is_full && roi.w > 0 && roi.h > 0) {
+      title += string_sprintf("   (%d,%d)-(%d,%d)", roi.x, roi.y, roi.x + roi.w - 1, roi.y + roi.h - 1);
+    }
   }
 
   if (title != last_window_title_) {
@@ -2250,12 +2283,10 @@ SDL_FRect Display::video_to_zoom_space(const SDL_Rect& video_rect, const Display
                     std::min(float(video_rect.h) * zoom_rect.zoom_factor, zoom_rect.size.y())});
 };
 
-SDL_Rect Display::get_visible_roi_in_single_frame_coordinates() const {
+std::pair<SDL_Rect, SDL_Rect> Display::get_visible_rois_in_single_frame_coordinates() const {
   const auto zoom_rect = compute_zoom_rect();
 
-  // in hstack/vstack modes, window_to_video_position() returns positions in the
-  // *layout texture space* (2x width or 2x height). However, expect a
-  // ROI in *single-frame* coordinates, which is applied equally to both left/right frames.
+  // p0/p1 are in *layout* coordinates in hstack/vstack, single-frame in split.
   const Vector2D p0 = window_to_video_position(0, 0, zoom_rect, true);
   const Vector2D p1 = window_to_video_position(window_width_, window_height_, zoom_rect, false);
 
@@ -2267,63 +2298,106 @@ SDL_Rect Display::get_visible_roi_in_single_frame_coordinates() const {
   auto clamp_x = [&](int x) { return clamp_range(x, 0, video_width_); };
   auto clamp_y = [&](int y) { return clamp_range(y, 0, video_height_); };
 
-  // Intersect [a0, a1) with [b0, b1) in layout space. Returns empty when no overlap.
   auto intersect_1d = [&](int a0, int a1, int b0, int b1) -> std::pair<int, int> {
     const int lo = std::max(a0, b0);
     const int hi = std::min(a1, b1);
     return (hi > lo) ? std::make_pair(lo, hi) : std::make_pair(0, 0);
   };
 
+  // Default: single-frame layout (split) => both sides share the same ROI.
+  if (mode_ != Mode::HSTACK && mode_ != Mode::VSTACK) {
+    const int x0 = clamp_x(lx0);
+    const int y0 = clamp_y(ly0);
+    const int x1 = clamp_x(lx1);
+    const int y1 = clamp_y(ly1);
+    const SDL_Rect roi = {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
+    return {roi, roi};
+  }
+
   if (mode_ == Mode::HSTACK) {
     const int w = video_width_;
-    const auto left = intersect_1d(lx0, lx1, 0, w);
-    const auto right_layout = intersect_1d(lx0, lx1, w, 2 * w);
-    const std::pair<int, int> right = (right_layout.second > right_layout.first) ? std::make_pair(right_layout.first - w, right_layout.second - w) : std::make_pair(0, 0);
-
-    const float center_x_layout = (p0.x() + p1.x()) * 0.5F;
-    const bool prefer_right = center_x_layout >= static_cast<float>(w);
-
-    std::pair<int, int> x = prefer_right ? right : left;
-    if (x.second <= x.first) {
-      x = prefer_right ? left : right;
-    }
-    if (x.second <= x.first) {
-      return {0, 0, 0, 0};
-    }
+    const auto left_x = intersect_1d(lx0, lx1, 0, w);
+    const auto right_x_layout = intersect_1d(lx0, lx1, w, 2 * w);
+    const std::pair<int, int> right_x = (right_x_layout.second > right_x_layout.first) ? std::make_pair(right_x_layout.first - w, right_x_layout.second - w) : std::make_pair(0, 0);
 
     const int y0 = clamp_y(ly0);
     const int y1 = clamp_y(ly1);
-    return {clamp_x(x.first), y0, std::max(0, clamp_x(x.second) - clamp_x(x.first)), std::max(0, y1 - y0)};
-  }
 
-  if (mode_ == Mode::VSTACK) {
-    const int h = video_height_;
-    const auto top = intersect_1d(ly0, ly1, 0, h);
-    const auto bottom_layout = intersect_1d(ly0, ly1, h, 2 * h);
-    const std::pair<int, int> bottom = (bottom_layout.second > bottom_layout.first) ? std::make_pair(bottom_layout.first - h, bottom_layout.second - h) : std::make_pair(0, 0);
-
-    const float center_y_layout = (p0.y() + p1.y()) * 0.5F;
-    const bool prefer_bottom = center_y_layout >= static_cast<float>(h);
-
-    std::pair<int, int> y = prefer_bottom ? bottom : top;
-    if (y.second <= y.first) {
-      y = prefer_bottom ? top : bottom;
-    }
-    if (y.second <= y.first) {
-      return {0, 0, 0, 0};
+    SDL_Rect left{0, 0, 0, 0};
+    if (left_x.second > left_x.first) {
+      const int x0 = clamp_x(left_x.first);
+      const int x1 = clamp_x(left_x.second);
+      left = {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
     }
 
-    const int x0 = clamp_x(lx0);
-    const int x1 = clamp_x(lx1);
-    return {x0, clamp_y(y.first), std::max(0, x1 - x0), std::max(0, clamp_y(y.second) - clamp_y(y.first))};
+    SDL_Rect right{0, 0, 0, 0};
+    if (right_x.second > right_x.first) {
+      const int x0 = clamp_x(right_x.first);
+      const int x1 = clamp_x(right_x.second);
+      right = {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
+    }
+
+    return {left, right};
   }
 
-  // layout space is single-frame
+  // VSTACK
+  const int h = video_height_;
+  const auto top_y = intersect_1d(ly0, ly1, 0, h);
+  const auto bottom_y_layout = intersect_1d(ly0, ly1, h, 2 * h);
+  const std::pair<int, int> bottom_y = (bottom_y_layout.second > bottom_y_layout.first) ? std::make_pair(bottom_y_layout.first - h, bottom_y_layout.second - h) : std::make_pair(0, 0);
+
   const int x0 = clamp_x(lx0);
-  const int y0 = clamp_y(ly0);
   const int x1 = clamp_x(lx1);
-  const int y1 = clamp_y(ly1);
-  return {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
+
+  SDL_Rect left{0, 0, 0, 0};
+  if (top_y.second > top_y.first) {
+    const int y0 = clamp_y(top_y.first);
+    const int y1 = clamp_y(top_y.second);
+    left = {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
+  }
+
+  SDL_Rect right{0, 0, 0, 0};
+  if (bottom_y.second > bottom_y.first) {
+    const int y0 = clamp_y(bottom_y.first);
+    const int y1 = clamp_y(bottom_y.second);
+    right = {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
+  }
+
+  return {left, right};
+}
+
+SDL_Rect Display::get_visible_roi_in_single_frame_coordinates() const {
+  const auto rois = get_visible_rois_in_single_frame_coordinates();
+  const SDL_Rect left_roi = rois.first;
+  const SDL_Rect right_roi = rois.second;
+
+  const bool left_off = left_roi.w <= 0 || left_roi.h <= 0;
+  const bool right_off = right_roi.w <= 0 || right_roi.h <= 0;
+
+  if (mode_ == Mode::HSTACK || mode_ == Mode::VSTACK) {
+    // Prefer the side that the view center is currently over, but fall back to the other
+    // if that side is not visible.
+    const auto zoom_rect = compute_zoom_rect();
+    const Vector2D center_layout = window_to_video_position(window_width_ / 2, window_height_ / 2, zoom_rect, true);
+
+    const bool prefer_right = (mode_ == Mode::HSTACK) ? (center_layout.x() >= static_cast<float>(video_width_)) : (center_layout.y() >= static_cast<float>(video_height_));
+    const SDL_Rect preferred = prefer_right ? right_roi : left_roi;
+    const SDL_Rect other = prefer_right ? left_roi : right_roi;
+
+    const bool preferred_off = prefer_right ? right_off : left_off;
+    const bool other_off = prefer_right ? left_off : right_off;
+
+    if (!preferred_off) {
+      return preferred;
+    }
+    if (!other_off) {
+      return other;
+    }
+    return {0, 0, 0, 0};
+  }
+
+  // SPLIT (single-frame layout): both ROIs are identical.
+  return left_roi;
 }
 
 void Display::update_playback_speed(const int playback_speed_level) {
