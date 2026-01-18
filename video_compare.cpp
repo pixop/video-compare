@@ -629,14 +629,13 @@ void VideoCompare::dump_debug_info(const int frame_number, const int64_t effecti
 }
 
 struct SideState {
-  SideState(const Side& side, const std::string side_desc, const Demuxer* demuxer) : side_(side), side_desc_(std::move(side_desc)), start_time_(demuxer->start_time() * AV_TIME_TO_SEC), frame_duration_deque_(8) {
+  SideState(const Side& side, const Demuxer* demuxer) : side_(side), start_time_(demuxer->start_time() * AV_TIME_TO_SEC), frame_duration_deque_(8) {
     if (start_time_ > 0) {
       sa_log_info(side, string_sprintf("Video has a start time of %s - timestamps will be shifted so they start at zero!", format_position(start_time_, true).c_str()));
     }
   }
 
   const Side side_;
-  const std::string side_desc_;
 
   const float start_time_;
 
@@ -664,10 +663,8 @@ void VideoCompare::compare() {
     for (const auto& pair : demuxers_) {
       const Side& side = pair.first;
       const auto& demuxer = pair.second;
-      std::string side_desc = side.is_left() ? "left" : ("right" + std::to_string(side.right_index() + 1));
-      // Use emplace with piecewise_construct to construct in place
-      // Note: SideState has const members, so we must construct in place
-      side_states.emplace(std::piecewise_construct, std::forward_as_tuple(side), std::forward_as_tuple(side, std::move(side_desc), demuxer.get()));
+
+      side_states.emplace(std::piecewise_construct, std::forward_as_tuple(side), std::forward_as_tuple(side, demuxer.get()));
     }
 
     SideState& left = side_states.at(LEFT);
