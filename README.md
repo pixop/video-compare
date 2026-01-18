@@ -155,8 +155,8 @@ acceleration settings:
 
 Compare a reference (left) video to multiple candidate (right) videos by specifying more than two input paths.
 Useful for comparing a reference encode to multiple candidates (e.g. different bitrates or encoder settings),
-or for comparing ground truth, input, and model output in one session. Filters are shared for all right videos,
-and the active right video can be switched within the UI:
+or for comparing ground truth, input, and model output in one session. Command-line settings are shared for all
+right videos, and the active right video can be switched within the UI:
 
     video-compare reference.mp4 candidate1.mp4 candidate2.mp4
 
