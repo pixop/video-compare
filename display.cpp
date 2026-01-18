@@ -1794,41 +1794,47 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   // print image similarity metrics
   if (print_image_similarity_metrics_) {
     SDL_Rect roi = get_visible_roi_in_single_frame_coordinates();
-    SDL_Rect effective_roi_left{}, effective_roi_right{};
 
-    AVFrame* left_crop = crop_rgb_frame(left_frame, roi, &effective_roi_left);
-    AVFrame* right_crop = crop_rgb_frame(right_frame, roi, &effective_roi_right);
-
-    // assert dimensions are the same
-    if (!SDL_RectEquals(&effective_roi_left, &effective_roi_right)) {
-      std::cerr << "Error: Left and right effective ROIs are different." << std::endl;
+    if (roi.w <= 0 || roi.h <= 0) {
+      std::cerr << "ROI is empty, skipping metrics calculation" << std::endl;
     } else {
-      // compute metrics
-      const int crop_width = effective_roi_left.w;
-      const int crop_height = effective_roi_left.h;
+      SDL_Rect effective_roi_left{}, effective_roi_right{};
 
-      float* left_gray = rgb_to_grayscale(left_crop->data[0], left_crop->linesize[0], crop_width, crop_height);
-      float* right_gray = rgb_to_grayscale(right_crop->data[0], right_crop->linesize[0], crop_width, crop_height);
+      AVFrame* left_crop = crop_rgb_frame(left_frame, roi, &effective_roi_left);
+      AVFrame* right_crop = crop_rgb_frame(right_frame, roi, &effective_roi_right);
 
-      const std::string psnr = compute_psnr(left_gray, right_gray, crop_width, crop_height);
-      const std::string ssim = compute_ssim(left_gray, right_gray, crop_width, crop_height);
-      const std::string vmaf = (left_crop && right_crop) ? VMAFCalculator::instance().compute(left_crop, right_crop) : "n/a";
+      // assert dimensions are the same
+      if (!SDL_RectEquals(&effective_roi_left, &effective_roi_right)) {
+        std::cerr << "Error: Left and right effective ROIs are different" << std::endl;
+      } else {
+        // compute metrics
+        const int crop_width = effective_roi_left.w;
+        const int crop_height = effective_roi_left.h;
 
-      const std::string roi_str = (crop_width < video_width_ || crop_height < video_height_) ? string_sprintf("|x=%d,y=%d,w=%d,h=%d", effective_roi_left.x, effective_roi_left.y, crop_width, crop_height) : "";
+        float* left_gray = rgb_to_grayscale(left_crop->data[0], left_crop->linesize[0], crop_width, crop_height);
+        float* right_gray = rgb_to_grayscale(right_crop->data[0], right_crop->linesize[0], crop_width, crop_height);
 
-      std::cout << string_sprintf("Metrics: [%s|%s%s] PSNR(%s), SSIM(%s), VMAF(%s)", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(), roi_str.c_str(),
-                                  psnr.c_str(), ssim.c_str(), vmaf.c_str())
-                << std::endl;
+        const std::string psnr = compute_psnr(left_gray, right_gray, crop_width, crop_height);
+        const std::string ssim = compute_ssim(left_gray, right_gray, crop_width, crop_height);
+        const std::string vmaf = (left_crop && right_crop) ? VMAFCalculator::instance().compute(left_crop, right_crop) : "n/a";
 
-      delete[] left_gray;
-      delete[] right_gray;
-    }
+        const std::string roi_str =
+            (crop_width < video_width_ || crop_height < video_height_) ? string_sprintf("  (%d,%d)-(%d,%d)", effective_roi_left.x, effective_roi_left.y, effective_roi_left.x + crop_width - 1, effective_roi_left.y + crop_height - 1) : "";
 
-    if (left_crop) {
-      av_frame_free(&left_crop);
-    }
-    if (right_crop) {
-      av_frame_free(&right_crop);
+        std::cout << string_sprintf("Metrics: [%s|%s] PSNR(%s), SSIM(%s), VMAF(%s)%s", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(), psnr.c_str(),
+                                    ssim.c_str(), vmaf.c_str(), roi_str.c_str())
+                  << std::endl;
+
+        delete[] left_gray;
+        delete[] right_gray;
+      }
+
+      if (left_crop) {
+        av_frame_free(&left_crop);
+      }
+      if (right_crop) {
+        av_frame_free(&right_crop);
+      }
     }
 
     print_image_similarity_metrics_ = false;
