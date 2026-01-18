@@ -135,7 +135,7 @@ class VideoCompare {
 
   void update_decoder_mode(const int right_time_shift);
 
-  void dump_debug_info(const int frame_number, const int right_time_shift, const int average_refresh_time);
+  void dump_debug_info(const int frame_number, const int64_t effective_right_time_shift, const int average_refresh_time);
 
   void compare();
 

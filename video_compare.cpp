@@ -600,7 +600,7 @@ void VideoCompare::update_decoder_mode(const int right_time_shift) {
   single_decoder_mode_ = same_decoded_video_both_sides_ && (av_q2d(time_shift_.multiplier) == 1.0) && (abs(right_time_shift) < NEAR_ZERO_TIME_SHIFT_THRESHOLD);
 }
 
-void VideoCompare::dump_debug_info(const int frame_number, const int effective_right_time_shift, const int average_refresh_time) {
+void VideoCompare::dump_debug_info(const int frame_number, const int64_t effective_right_time_shift, const int average_refresh_time) {
   std::cout << "FRAME: " << frame_number << std::endl;
   std::cout << "keep_running()=" << keep_running() << std::endl;
   std::cout << "has_exception()=" << exception_holder_.has_exception() << std::endl;
@@ -740,7 +740,7 @@ void VideoCompare::compare() {
 
 #ifdef _DEBUG
       if ((frame_number % 100) == 0) {
-        dump_debug_info(frame_number, effective_right_time_shift, refresh_time_deque.average());
+        dump_debug_info(frame_number, right_ptr->effective_time_shift_, refresh_time_deque.average());
       }
 #endif
 
@@ -799,7 +799,7 @@ void VideoCompare::compare() {
           empty_frame_queues();
           sleep_for_ms(SLEEP_PERIOD_MS);
 #ifdef _DEBUG
-          dump_debug_info(frame_number, effective_right_time_shift, refresh_time_deque.average());
+          dump_debug_info(frame_number, right_ptr->effective_time_shift_, refresh_time_deque.average());
 #endif
         }
 
@@ -951,7 +951,7 @@ void VideoCompare::compare() {
 
 #ifdef _DEBUG
       const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, effective_right_time_shift=%5d", left.pts_ / 1000, is_behind(left.pts_, right_ptr->pts_, min_delta),
-                                                       (right_ptr->pts_ + static_right_time_shift) / 1000, is_behind(right_ptr->pts_, left.pts_, min_delta), min_delta / 1000, effective_right_time_shift / 1000);
+                                                       (right_ptr->pts_ + static_right_time_shift) / 1000, is_behind(right_ptr->pts_, left.pts_, min_delta), min_delta / 1000, right_ptr->effective_time_shift_ / 1000);
 
       if (current_state != previous_state) {
         std::cout << current_state << std::endl;
