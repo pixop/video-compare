@@ -375,8 +375,8 @@ void VideoCompare::demultiplex(const Side& side) {
       }
     }
   } catch (...) {
-    exception_holder_.rethrow_stored_exception();
-    quit_queues(side);
+    exception_holder_.store_current_exception();
+    quit_all_queues();
   }
 }
 
@@ -427,8 +427,8 @@ void VideoCompare::decode_video(const Side& side) {
       }
     }
   } catch (...) {
-    exception_holder_.rethrow_stored_exception();
-    quit_queues(side);
+    exception_holder_.store_current_exception();
+    quit_all_queues();
   }
 }
 
@@ -530,8 +530,8 @@ void VideoCompare::filter_video(const Side& side) {
       }
     }
   } catch (...) {
-    exception_holder_.rethrow_stored_exception();
-    quit_queues(side);
+    exception_holder_.store_current_exception();
+    quit_all_queues();
   }
 }
 
@@ -574,8 +574,8 @@ void VideoCompare::format_convert_video(const Side& side) {
       }
     }
   } catch (...) {
-    exception_holder_.rethrow_stored_exception();
-    quit_queues(side);
+    exception_holder_.store_current_exception();
+    quit_all_queues();
   }
 }
 
@@ -588,6 +588,12 @@ void VideoCompare::quit_queues(const Side& side) {
   filtered_frame_queues_[side]->quit();
   decoded_frame_queues_[side]->quit();
   packet_queues_[side]->quit();
+}
+
+void VideoCompare::quit_all_queues() {
+  for (const auto& pair : demuxers_) {
+    quit_queues(pair.first);
+  }
 }
 
 void VideoCompare::update_decoder_mode(const int right_time_shift) {
@@ -1237,7 +1243,5 @@ void VideoCompare::compare() {
   }
 
   // Quit queues for all videos (left and all right videos)
-  for (const auto& pair : demuxers_) {
-    quit_queues(pair.first);
-  }
+  quit_all_queues();
 }
