@@ -2553,7 +2553,28 @@ void Display::input() {
         }
         update_cursor();
         break;
-      case SDL_KEYDOWN:
+      case SDL_KEYDOWN: {
+        // Handle CTRL+SHIFT+1..0 for direct right video selection
+        if ((keymod & KMOD_CTRL) && (keymod & KMOD_SHIFT)) {
+          size_t target_index = SIZE_MAX;
+
+          if (keycode >= SDLK_1 && keycode <= SDLK_9) {
+            target_index = keycode - SDLK_1;
+          } else if (keycode >= SDLK_KP_1 && keycode <= SDLK_KP_9) {
+            target_index = keycode - SDLK_KP_1;
+          } else if ((keycode == SDLK_KP_0) || (keycode == SDLK_0)) {
+            target_index = 9;
+          }
+
+          if (target_index != SIZE_MAX) {
+            if (target_index < num_right_videos_) {
+              active_right_index_ = target_index;
+              std::cout << string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_) << std::endl;
+            }
+            break;
+          }
+        }
+
         switch (keycode) {
           case SDLK_h:
             show_help_ = !show_help_;
@@ -2832,6 +2853,7 @@ void Display::input() {
             break;
         }
         break;
+      }
       case SDL_KEYUP:
         switch (keycode) {
           case SDLK_z:

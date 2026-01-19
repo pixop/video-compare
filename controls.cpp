@@ -52,7 +52,8 @@ static const std::vector<std::string> instructions{
     "Hold SHIFT while pressing D to decode and move to the next frame.",
     "Hold CTRL while time-shifting with +/- for faster increments/decrements of 10 frames per keystroke. Similarly, hold ALT for even larger time-shifts of 100 frames.",
     "Use CTRL+C (Windows/Linux) or CMD+C (macOS) to copy the current timestamp of the left video to the clipboard, and CTRL+V (Windows/Linux) or CMD+V (macOS) to paste a timestamp from the clipboard and seek to that position.",
-    "Use SHIFT+F to select a region; cutouts from both frames and their concatenation will be saved as PNGs."};
+    "Use SHIFT+F to select a region; cutouts from both frames and their concatenation will be saved as PNGs.",
+    "Use CTRL+SHIFT+1..0 to switch directly to right video 1-10."};
 
 const std::vector<std::pair<std::string, std::string>> get_controls() {
   return controls;
