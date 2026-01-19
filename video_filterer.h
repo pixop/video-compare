@@ -4,6 +4,7 @@
 #include "demuxer.h"
 #include "side_aware.h"
 #include "video_decoder.h"
+#include "video_filter_context.h"
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavfilter/buffersink.h>
@@ -22,9 +23,7 @@ class VideoFilterer : public SideAware {
                 const std::string& custom_color_range,
                 const std::string& custom_color_primaries,
                 const std::string& custom_color_trc,
-                const Demuxer* other_demuxer,
-                const VideoDecoder* other_video_decoder,
-                const std::string& other_custom_color_trc,
+                const VideoFilterContext* video_filter_context,
                 const bool disable_auto_filters);
   ~VideoFilterer();
 

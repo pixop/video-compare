@@ -11,6 +11,7 @@
 #include "side_aware_logger.h"
 #include "sorted_flat_deque.h"
 #include "string_utils.h"
+#include "video_filter_context.h"
 extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/pixdesc.h>
@@ -162,24 +163,29 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                      right_config.decoder_options));
   }
 
-  // Initialize filterers (need to reference other side's demuxer/decoder)
-  // For left, use first right as the other side
-  if (config.right_videos.size() > 1 && !config.disable_auto_filters) {
-    sa_log_info(LEFT, string_sprintf("Multi-right mode: using right video 1/%zu as auto-filter reference (%s)", config.right_videos.size(), first_right.file_name.c_str()));
+  // Create VideoFilterContext to manage all videos for consistent auto-filter determination
+  VideoFilterContext video_filter_context;
+  video_filter_context.add(LEFT, demuxers_[LEFT].get(), video_decoders_[LEFT].get(), config.left.color_trc);
+
+  for (size_t i = 0; i < config.right_videos.size(); ++i) {
+    const auto& right_config = config.right_videos[i];
+    Side right_side = Side::Right(i);
+    video_filter_context.add(right_side, demuxers_[right_side].get(), video_decoders_[right_side].get(), right_config.color_trc);
   }
 
+  // Initialize filterers using VideoFilterContext for consistent auto-filter determination
   install_processor(video_filterers_, ReadyToSeek::FILTERER, LEFT,
                     std::make_unique<VideoFilterer>(LEFT, demuxers_[LEFT].get(), video_decoders_[LEFT].get(), config.left.tone_mapping_mode, config.left.boost_tone, config.left.video_filters, config.left.color_space,
-                                                    config.left.color_range, config.left.color_primaries, config.left.color_trc, demuxers_[RIGHT].get(), video_decoders_[RIGHT].get(), first_right.color_trc, config.disable_auto_filters));
+                                                    config.left.color_range, config.left.color_primaries, config.left.color_trc, &video_filter_context, config.disable_auto_filters));
 
-  // For each right video, use left as the other side
+  // For each right video, use VideoFilterContext for auto-filter determination
   for (size_t i = 0; i < config.right_videos.size(); ++i) {
     const auto& right_config = config.right_videos[i];
     Side right_side = Side::Right(i);
 
     install_processor(video_filterers_, ReadyToSeek::FILTERER, right_side,
                       std::make_unique<VideoFilterer>(right_side, demuxers_[right_side].get(), video_decoders_[right_side].get(), right_config.tone_mapping_mode, right_config.boost_tone, right_config.video_filters, right_config.color_space,
-                                                      right_config.color_range, right_config.color_primaries, right_config.color_trc, demuxers_[LEFT].get(), video_decoders_[LEFT].get(), config.left.color_trc, config.disable_auto_filters));
+                                                      right_config.color_range, right_config.color_primaries, right_config.color_trc, &video_filter_context, config.disable_auto_filters));
   }
 
   // Calculate max dimensions from all videos

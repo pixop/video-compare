@@ -4,6 +4,7 @@
 #include <string>
 #include "ffmpeg.h"
 #include "string_utils.h"
+#include "video_filter_context.h"
 
 static constexpr char VIDEO_FILTER_GROUP_DELIMITER = '|';
 
@@ -29,9 +30,7 @@ VideoFilterer::VideoFilterer(const Side& side,
                              const std::string& custom_color_range,
                              const std::string& custom_color_primaries,
                              const std::string& custom_color_trc,
-                             const Demuxer* other_demuxer,
-                             const VideoDecoder* other_video_decoder,
-                             const std::string& other_custom_color_trc,
+                             const VideoFilterContext* video_filter_context,
                              const bool disable_auto_filters)
     : SideAware(side),
       demuxer_(demuxer),
@@ -72,20 +71,16 @@ VideoFilterer::VideoFilterer(const Side& side,
   if (!disable_auto_filters) {
     // deinterlacing
     const bool this_is_interlaced = video_decoder->codec_context()->field_order != AV_FIELD_PROGRESSIVE && video_decoder->codec_context()->field_order != AV_FIELD_UNKNOWN;
-    const bool other_is_interlaced = other_video_decoder->codec_context()->field_order != AV_FIELD_PROGRESSIVE && other_video_decoder->codec_context()->field_order != AV_FIELD_UNKNOWN;
 
     if (this_is_interlaced) {
       filters.push_back("bwdif");
     }
 
     double this_frame_rate_dbl = av_q2d(demuxer->guess_frame_rate());
-    double other_frame_rate_dbl = av_q2d(other_demuxer->guess_frame_rate());
+    double max_other_frame_rate_dbl = video_filter_context->get_max_frame_rate_excluding(side);
 
     if (this_is_interlaced) {
       this_frame_rate_dbl *= 2.0;
-    }
-    if (other_is_interlaced) {
-      other_frame_rate_dbl *= 2.0;
     }
 
     // stretch to display aspect ratio
@@ -100,8 +95,8 @@ VideoFilterer::VideoFilterer(const Side& side,
     }
 
     // harmonize the frame rate to the most frames per second
-    if (this_frame_rate_dbl < (other_frame_rate_dbl * 0.9995)) {
-      filters.push_back(string_sprintf("fps=%.3f", other_frame_rate_dbl));
+    if (this_frame_rate_dbl < (max_other_frame_rate_dbl * 0.9995)) {
+      filters.push_back(string_sprintf("fps=%.3f", max_other_frame_rate_dbl));
     }
 
     // rotation
@@ -187,7 +182,7 @@ VideoFilterer::VideoFilterer(const Side& side,
     }
 
     if (warnings.empty()) {
-      const unsigned other_peak_luminance_nits = other_video_decoder->safe_peak_luminance_nits(other_video_decoder->infer_dynamic_range(other_custom_color_trc));
+      const unsigned other_peak_luminance_nits = video_filter_context->get_max_peak_luminance_excluding(side);
 
       float tone_adjustment = (tone_mapping_mode == ToneMapping::RELATIVE && peak_luminance_nits_ < other_peak_luminance_nits) ? static_cast<float>(peak_luminance_nits_) / other_peak_luminance_nits : 1.0F;
       tone_adjustment *= boost_tone;
