@@ -231,7 +231,7 @@ clipboard and seek to that position.
 Use `Shift+F` to select a region; cutouts from both frames and their concatenation will be saved
 as PNGs.
 
-Use `Ctrl+Shift+1..0` to switch directly to right video 1-10.
+**Hold** `Ctrl+Shift` while pressing `1..0` to switch directly to right video 1–10.
 
 ## Build
 
