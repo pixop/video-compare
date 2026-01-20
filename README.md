@@ -153,7 +153,7 @@ acceleration settings:
 
     video-compare -i yadif,hqdn3d -l setfield=bff,__ -r __,scale=iw/2:ih/2 video1.mp4 video2.mp4
 
-Compare a reference (left) video to multiple candidate (right) videos by specifying more than two input paths.
+Compare a reference (left) video against multiple renditions (right) by specifying more than two input paths.
 Useful for comparing a reference encode to multiple renditions (e.g. different bitrates or encoder settings),
 or for comparing ground truth, input, and model output in one session. Command-line settings are shared for all
 right videos, and the active right video can be switched within the UI:
