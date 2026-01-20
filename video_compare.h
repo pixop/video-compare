@@ -130,7 +130,6 @@ class VideoCompare {
   void format_convert_video(const Side& side);
 
   bool keep_running() const;
-  void quit_queues(const Side& side);
   void quit_all_queues();
 
   void update_decoder_mode(const int right_time_shift);

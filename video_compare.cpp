@@ -320,16 +320,12 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 
 void VideoCompare::operator()() {
   for (const auto& pair : demuxers_) {
-    stages_.emplace_back([this, side = pair.first]() { thread_demultiplex(side); });
-  }
-  for (const auto& pair : video_decoders_) {
-    stages_.emplace_back([this, side = pair.first]() { thread_decode_video(side); });
-  }
-  for (const auto& pair : video_filterers_) {
-    stages_.emplace_back([this, side = pair.first]() { thread_filter(side); });
-  }
-  for (const auto& pair : format_converters_) {
-    stages_.emplace_back([this, side = pair.first]() { thread_format_converter(side); });
+    const Side& side = pair.first;
+
+    stages_.emplace_back([this, side]() { thread_demultiplex(side); });
+    stages_.emplace_back([this, side]() { thread_decode_video(side); });
+    stages_.emplace_back([this, side]() { thread_filter(side); });
+    stages_.emplace_back([this, side]() { thread_format_converter(side); });
   }
 
   compare();
@@ -589,16 +585,14 @@ bool VideoCompare::keep_running() const {
   return !display_->get_quit() && !exception_holder_.has_exception();
 }
 
-void VideoCompare::quit_queues(const Side& side) {
-  converted_frame_queues_[side]->quit();
-  filtered_frame_queues_[side]->quit();
-  decoded_frame_queues_[side]->quit();
-  packet_queues_[side]->quit();
-}
-
 void VideoCompare::quit_all_queues() {
   for (const auto& pair : demuxers_) {
-    quit_queues(pair.first);
+    const Side& side = pair.first;
+
+    converted_frame_queues_[side]->quit();
+    filtered_frame_queues_[side]->quit();
+    decoded_frame_queues_[side]->quit();
+    packet_queues_[side]->quit();
   }
 }
 
