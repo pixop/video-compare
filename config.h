@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 #include "core_types.h"
 #include "display.h"
 extern "C" {
@@ -71,8 +72,8 @@ struct VideoCompareConfig {
 
   float wheel_sensitivity{1};
 
-  InputVideo left{Side::LEFT, "Left"};
-  InputVideo right{Side::RIGHT, "Right"};
+  InputVideo left{LEFT, "Left"};
+  std::vector<InputVideo> right_videos;
 
   ScopesConfig scopes;
 };

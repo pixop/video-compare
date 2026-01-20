@@ -8,7 +8,7 @@ extern "C" {
 
 class Demuxer : public SideAware {
  public:
-  explicit Demuxer(const Side side, const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options);
+  explicit Demuxer(const Side& side, const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options);
   ~Demuxer();
 
   AVCodecParameters* video_codec_parameters();

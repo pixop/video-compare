@@ -138,6 +138,10 @@ std::string get_file_stem(const std::string& file_path) {
   return tmp;
 }
 
+std::string format_window_title(const std::string& left_file_name, const std::string& right_file_name) {
+  return string_sprintf("%s  |  %s", get_file_name_and_extension(left_file_name).c_str(), get_file_name_and_extension(right_file_name).c_str());
+}
+
 std::string strip_ffmpeg_patterns(const std::string& input) {
   static const std::regex pattern_regex(R"(%\d*d|\*|\?)");
 
@@ -296,8 +300,7 @@ Display::Display(const int display_number,
   }
 
   const int create_window_flags = SDL_WINDOW_SHOWN;
-  window_ = check_sdl(SDL_CreateWindow(string_sprintf("%s  |  %s", get_file_name_and_extension(left_file_name).c_str(), get_file_name_and_extension(right_file_name).c_str()).c_str(), window_x, window_y, window_width, window_height,
-                                       high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
+  window_ = check_sdl(SDL_CreateWindow(format_window_title(left_file_name, right_file_name).c_str(), window_x, window_y, window_width, window_height, high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
                       "window");
 
   SDL_RWops* embedded_icon = check_sdl(SDL_RWFromConstMem(VIDEO_COMPARE_ICON_BMP, VIDEO_COMPARE_ICON_BMP_LEN), "get pointer to icon");
@@ -376,32 +379,25 @@ Display::Display(const int display_number,
     print_verbose_info();
   }
 
-  auto render_text_with_fallback = [&](const std::string& text) {
-    SDL_Surface* surface = TTF_RenderUTF8_Blended(small_font_, text.c_str(), TEXT_COLOR);
-
-    if (!surface) {
-      std::cerr << "Falling back to lower-quality rendering for '" << text << "'" << std::endl;
-
-      surface = check_sdl(TTF_RenderUTF8_Solid(small_font_, text.c_str(), TEXT_COLOR), "text surface");
-    }
-
-    return surface;
-  };
+  // Store left file name for window title updates
+  left_file_name_ = left_file_name;
+  right_file_name_ = right_file_name;
+  last_window_title_.clear();
 
   // Initialize per-side UI state (file stems and file name textures)
-  side_ui_[LEFT].file_stem = strip_ffmpeg_patterns(get_file_stem(left_file_name));
-  side_ui_[RIGHT].file_stem = strip_ffmpeg_patterns(get_file_stem(right_file_name));
+  side_ui_[LEFT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(left_file_name));
+  side_ui_[RIGHT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(right_file_name));
 
   SDL_Surface* text_surface = render_text_with_fallback(left_file_name);
-  side_ui_[LEFT].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-  side_ui_[LEFT].text_width = text_surface->w;
-  side_ui_[LEFT].text_height = text_surface->h;
+  side_ui_[LEFT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+  side_ui_[LEFT.as_simple_index()].text_width = text_surface->w;
+  side_ui_[LEFT.as_simple_index()].text_height = text_surface->h;
   SDL_FreeSurface(text_surface);
 
   text_surface = render_text_with_fallback(right_file_name);
-  side_ui_[RIGHT].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-  side_ui_[RIGHT].text_width = text_surface->w;
-  side_ui_[RIGHT].text_height = text_surface->h;
+  side_ui_[RIGHT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+  side_ui_[RIGHT.as_simple_index()].text_width = text_surface->w;
+  side_ui_[RIGHT.as_simple_index()].text_height = text_surface->h;
   SDL_FreeSurface(text_surface);
 
   refresh_display_side_mapping();
@@ -451,8 +447,8 @@ Display::Display(const int display_number,
 Display::~Display() {
   SDL_DestroyTexture(video_texture_linear_);
   SDL_DestroyTexture(video_texture_nn_);
-  SDL_DestroyTexture(side_ui_[LEFT].text_texture);
-  SDL_DestroyTexture(side_ui_[RIGHT].text_texture);
+  SDL_DestroyTexture(side_ui_[LEFT.as_simple_index()].text_texture);
+  SDL_DestroyTexture(side_ui_[RIGHT.as_simple_index()].text_texture);
 
   if (message_texture_ != nullptr) {
     SDL_DestroyTexture(message_texture_);
@@ -909,8 +905,8 @@ void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_
 
   const auto osd_frame = create_onscreen_display_avframe();
 
-  const std::string& left_stem = side_ui_[displayed_left_side_].file_stem;
-  const std::string& right_stem = side_ui_[displayed_right_side_].file_stem;
+  const std::string& left_stem = side_ui_[displayed_left_side_.as_simple_index()].file_stem;
+  const std::string& right_stem = side_ui_[displayed_right_side_.as_simple_index()].file_stem;
   const bool stems_equal = (left_stem == right_stem);
   const std::string left_filename = string_sprintf("%s%s_%04d.png", left_stem.c_str(), stems_equal ? "_left" : "", saved_image_number_);
   const std::string right_filename = string_sprintf("%s%s_%04d.png", right_stem.c_str(), stems_equal ? "_right" : "", saved_image_number_);
@@ -1120,51 +1116,76 @@ std::string Display::get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size
   return "RGB" + format_pixel(rgb) + ", YUV" + format_pixel(yuv);
 }
 
-float* Display::rgb_to_grayscale(const uint8_t* plane, const size_t pitch) {
-  float* grayscale_image = new float[video_width_ * video_height_];
+AVFrame* crop_rgb_frame(const AVFrame* src, const SDL_Rect& roi, SDL_Rect* out_effective_roi = nullptr) {
+  AVFrame* cropped_frame = av_frame_clone(src);
+
+  if (!cropped_frame) {
+    throw std::runtime_error("Unable to clone source frame");
+  }
+
+  int bpp = 0;
+  if (src->format == AV_PIX_FMT_RGB24) {
+    bpp = 3;
+  } else if (src->format == AV_PIX_FMT_RGB48LE) {
+    bpp = 6;
+  } else {
+    throw std::runtime_error("Unknown packed RGB format");
+  }
+
+  const int x = clamp_range(roi.x, 0, src->width - 1);
+  const int y = clamp_range(roi.y, 0, src->height - 1);
+  const int w = clamp_range(roi.w, 1, src->width - x);
+  const int h = clamp_range(roi.h, 1, src->height - y);
+
+  if (out_effective_roi != nullptr) {
+    *out_effective_roi = {x, y, w, h};
+  }
+
+  cropped_frame->data[0] = cropped_frame->data[0] + y * cropped_frame->linesize[0] + x * bpp;
+  cropped_frame->width = w;
+  cropped_frame->height = h;
+  return cropped_frame;
+}
+
+float* Display::rgb_to_grayscale(const uint8_t* plane, const size_t pitch, const int width, const int height) {
+  float* grayscale_image = new float[width * height];
   float* p_out = grayscale_image;
 
   auto to_grayscale = [](const float r, const float g, const float b, const float normalization_factor) -> float { return (r * 0.299f + g * 0.587f + b * 0.114f) * normalization_factor; };
 
   if (use_10_bpc_) {
-    const uint16_t* p_in = reinterpret_cast<const uint16_t*>(plane);
-
-    for (int y = 0; y < video_height_; y++) {
-      for (int x = 0; x < (video_width_ * 3); x += 3) {
-        const float r = p_in[x] >> 6;
-        const float g = p_in[x + 1] >> 6;
-        const float b = p_in[x + 2] >> 6;
-
+    for (int y = 0; y < height; y++) {
+      const uint16_t* row = reinterpret_cast<const uint16_t*>(plane + y * pitch);
+      for (int x = 0; x < (width * 3); x += 3) {
+        const float r = row[x] >> 6;
+        const float g = row[x + 1] >> 6;
+        const float b = row[x + 2] >> 6;
         *(p_out++) = to_grayscale(r, g, b, 1.f / 1023.f);
       }
-
-      p_in += pitch / sizeof(uint16_t);
     }
   } else {
-    for (int y = 0; y < video_height_; y++) {
-      for (int x = 0; x < (video_width_ * 3); x += 3) {
-        const float r = plane[x];
-        const float g = plane[x + 1];
-        const float b = plane[x + 2];
-
+    for (int y = 0; y < height; y++) {
+      const uint8_t* row = plane + y * pitch;
+      for (int x = 0; x < (width * 3); x += 3) {
+        const float r = row[x];
+        const float g = row[x + 1];
+        const float b = row[x + 2];
         *(p_out++) = to_grayscale(r, g, b, 1.f / 255.f);
       }
-
-      plane += pitch;
     }
   }
 
   return grayscale_image;
 }
 
-float Display::compute_ssim_block(const float* left_plane, const float* right_plane, const int x_offset, const int y_offset, const int block_size) {
+float Display::compute_ssim_block(const float* left_plane, const float* right_plane, const int width, const int x_offset, const int y_offset, const int block_size) {
   const int block_elements = block_size * block_size;
 
   auto compute_mean = [&](const float* plane) {
     float sum = 0;
 
     for (int y = y_offset; y < (y_offset + block_size); y++) {
-      const float* row = plane + y * video_width_ + x_offset;
+      const float* row = plane + y * width + x_offset;
 
       for (int x = 0; x < block_size; x++) {
         sum += *(row++);
@@ -1181,8 +1202,8 @@ float Display::compute_ssim_block(const float* left_plane, const float* right_pl
   float sum_var1 = 0, sum_var2 = 0, sum_covar = 0;
 
   for (int y = y_offset; y < (y_offset + block_size); y++) {
-    const float* row1 = left_plane + y * video_width_ + x_offset;
-    const float* row2 = right_plane + y * video_width_ + x_offset;
+    const float* row1 = left_plane + y * width + x_offset;
+    const float* row2 = right_plane + y * width + x_offset;
 
     for (int x = 0; x < block_size; x++) {
       float diff1 = *(row1++) - mean1;
@@ -1214,41 +1235,44 @@ float Display::compute_ssim_block(const float* left_plane, const float* right_pl
   return luminance * contrast * structure;
 }
 
-std::string Display::compute_ssim(const float* left_plane, const float* right_plane) {
+std::string Display::compute_ssim(const float* left_plane, const float* right_plane, const int width, const int height) {
   static constexpr int overlap = 4;
   static constexpr int block_size = 8;
 
   float ssim_sum = 0.0;
   int count = 0;
 
-  for (int y = 0; y < video_height_ - (block_size - 1); y += block_size - overlap) {
-    for (int x = 0; x < video_width_ - (block_size - 1); count++, x += block_size - overlap) {
-      ssim_sum += compute_ssim_block(left_plane, right_plane, x, y, block_size);
+  for (int y = 0; y < height - (block_size - 1); y += block_size - overlap) {
+    for (int x = 0; x < width - (block_size - 1); count++, x += block_size - overlap) {
+      ssim_sum += compute_ssim_block(left_plane, right_plane, width, x, y, block_size);
     }
   }
 
-  const float ssim = ssim_sum / count;
+  if (count == 0) {
+    return "n/a";
+  }
+
+  const float ssim = ssim_sum / static_cast<float>(count);
   return string_sprintf("%.5f", ssim);
 }
 
-std::string Display::compute_psnr(const float* left_plane, const float* right_plane) {
+std::string Display::compute_psnr(const float* left_plane, const float* right_plane, const int width, const int height) {
   // compute MSE
-  float mse = 0.0;
+  double mse = 0.0;
 
-  for (int i = 0; i < (video_width_ * video_height_); i++) {
+  for (int i = 0; i < (width * height); i++) {
     const float diff = *(left_plane++) - *(right_plane++);
-
-    mse += diff * diff;
+    mse += static_cast<double>(diff) * static_cast<double>(diff);
   }
 
-  mse /= (video_width_ * video_height_);
+  mse /= static_cast<double>(width) * static_cast<double>(height);
 
   if (mse == 0) {
     return "inf";
   }
 
   // compute PSNR
-  return string_sprintf("%.3f", -10.f * log10f(mse));
+  return string_sprintf("%.3f", -10.f * log10f(static_cast<float>(mse)));
 }
 
 void Display::render_help() {
@@ -1456,12 +1480,93 @@ void Display::update_metadata(const VideoMetadata left_metadata, const VideoMeta
   metadata_dirty_ = true;
 }
 
+void Display::update_right_video(const std::string& right_file_name, const VideoMetadata right_metadata) {
+  // Update right metadata
+  right_metadata_ = right_metadata;
+  metadata_dirty_ = true;
+  right_file_name_ = right_file_name;
+
+  // Update right file stem
+  side_ui_[RIGHT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(right_file_name));
+
+  // Destroy old right texture
+  if (side_ui_[RIGHT.as_simple_index()].text_texture != nullptr) {
+    SDL_DestroyTexture(side_ui_[RIGHT.as_simple_index()].text_texture);
+  }
+
+  // Create new right texture
+  SDL_Surface* text_surface = render_text_with_fallback(right_file_name);
+  side_ui_[RIGHT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+  side_ui_[RIGHT.as_simple_index()].text_width = text_surface->w;
+  side_ui_[RIGHT.as_simple_index()].text_height = text_surface->h;
+  SDL_FreeSurface(text_surface);
+
+  // Update window title (may include ROI)
+  update_window_title_with_current_roi();
+}
+
+void Display::update_window_title_with_current_roi() {
+  const std::string base_title = format_window_title(left_file_name_, right_file_name_);
+
+  std::string title = base_title;
+
+  auto format_roi_bbox = [](const char* label, const SDL_Rect& r) -> std::string { return string_sprintf("%s(%d,%d)-(%d,%d)", label, r.x, r.y, r.x + r.w - 1, r.y + r.h - 1); };
+
+  if (mode_ == Mode::HSTACK || mode_ == Mode::VSTACK) {
+    const auto rois = get_visible_rois_in_single_frame_coordinates();
+    const SDL_Rect left_roi = rois.first;
+    const SDL_Rect right_roi = rois.second;
+
+    const bool left_off = left_roi.w <= 0 || left_roi.h <= 0;
+    const bool right_off = right_roi.w <= 0 || right_roi.h <= 0;
+
+    const bool left_full = !left_off && left_roi.x == 0 && left_roi.y == 0 && left_roi.w == video_width_ && left_roi.h == video_height_;
+    const bool right_full = !right_off && right_roi.x == 0 && right_roi.y == 0 && right_roi.w == video_width_ && right_roi.h == video_height_;
+
+    if (left_off || right_off || !left_full || !right_full) {
+      title += "   ";
+
+      const std::string left_roi_str = (!left_off && !left_full) ? format_roi_bbox("L", left_roi) : "";
+      const std::string right_roi_str = (!right_off && !right_full) ? format_roi_bbox("R", right_roi) : "";
+
+      title += left_roi_str;
+      if (!left_roi_str.empty() && !right_roi_str.empty()) {
+        title += " ";
+      }
+      title += right_roi_str;
+    }
+  } else {
+    const SDL_Rect roi = get_visible_roi_in_single_frame_coordinates();
+    const bool roi_is_full = (roi.x == 0 && roi.y == 0 && roi.w == video_width_ && roi.h == video_height_);
+    if (!roi_is_full && roi.w > 0 && roi.h > 0) {
+      title += string_sprintf("   %s", format_roi_bbox("", roi).c_str());
+    }
+  }
+
+  if (title != last_window_title_) {
+    SDL_SetWindowTitle(window_, title.c_str());
+    last_window_title_ = title;
+  }
+}
+
+SDL_Surface* Display::render_text_with_fallback(const std::string& text) {
+  SDL_Surface* surface = TTF_RenderUTF8_Blended(small_font_, text.c_str(), TEXT_COLOR);
+
+  if (!surface) {
+    std::cerr << "Falling back to lower-quality rendering for '" << text << "'" << std::endl;
+
+    surface = check_sdl(TTF_RenderUTF8_Solid(small_font_, text.c_str(), TEXT_COLOR), "text surface");
+  }
+
+  return surface;
+}
+
 void Display::ensure_metadata_textures_current() {
   if (metadata_dirty_ || (swap_left_right_ != last_swap_left_right_state_)) {
     last_swap_left_right_state_ = swap_left_right_;
 
-    const VideoMetadata& left_meta = (displayed_left_side_ == LEFT) ? left_metadata_ : right_metadata_;
-    const VideoMetadata& right_meta = (displayed_right_side_ == RIGHT) ? right_metadata_ : left_metadata_;
+    const VideoMetadata& left_meta = (displayed_left_side_.is_left()) ? left_metadata_ : right_metadata_;
+    const VideoMetadata& right_meta = (displayed_right_side_.is_right()) ? right_metadata_ : left_metadata_;
     build_metadata_textures(left_meta, right_meta);
 
     metadata_dirty_ = false;
@@ -1581,8 +1686,8 @@ void Display::save_selected_area(const AVFrame* left_frame, const AVFrame* right
     memcpy(concatenated->data[0] + dst_y * concatenated->linesize[0] + selection_rect.w * pixel_size, right_frame->data[0] + src_y * right_frame->linesize[0] + selection_rect.x * pixel_size, selection_rect.w * pixel_size);
   }
 
-  const std::string& left_stem = side_ui_[displayed_left_side_].file_stem;
-  const std::string& right_stem = side_ui_[displayed_right_side_].file_stem;
+  const std::string& left_stem = side_ui_[displayed_left_side_.as_simple_index()].file_stem;
+  const std::string& right_stem = side_ui_[displayed_right_side_.as_simple_index()].file_stem;
   const bool stems_equal = (left_stem == right_stem);
   const std::string left_filename = string_sprintf("%s%s_cutout_%04d.png", left_stem.c_str(), stems_equal ? "_left" : "", saved_selected_image_number_);
   const std::string right_filename = string_sprintf("%s%s_cutout_%04d.png", right_stem.c_str(), stems_equal ? "_right" : "", saved_selected_image_number_);
@@ -1638,6 +1743,8 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
   const auto zoom_rect = compute_zoom_rect();
 
+  update_window_title_with_current_roi();
+
   const Vector2D mouse_video_pos = window_to_video_position(mouse_x_, mouse_y_, zoom_rect);
   const int mouse_video_x = mouse_video_pos.x();
   const int mouse_video_y = mouse_video_pos.y();
@@ -1686,15 +1793,49 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
   // print image similarity metrics
   if (print_image_similarity_metrics_) {
-    const float* left_gray = rgb_to_grayscale(planes_left[0], pitches_left[0]);
-    const float* right_gray = rgb_to_grayscale(planes_right[0], pitches_right[0]);
+    SDL_Rect roi = get_visible_roi_in_single_frame_coordinates();
 
-    std::cout << string_sprintf("Metrics: [%s|%s], PSNR(%s), SSIM(%s), VMAF(%s)", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(),
-                                compute_psnr(left_gray, right_gray).c_str(), compute_ssim(left_gray, right_gray).c_str(), VMAFCalculator::instance().compute(left_frame, right_frame).c_str())
-              << std::endl;
+    if (roi.w <= 0 || roi.h <= 0) {
+      std::cerr << "ROI is empty, skipping metrics calculation" << std::endl;
+    } else {
+      SDL_Rect effective_roi_left{}, effective_roi_right{};
 
-    delete left_gray;
-    delete right_gray;
+      AVFrame* left_crop = crop_rgb_frame(left_frame, roi, &effective_roi_left);
+      AVFrame* right_crop = crop_rgb_frame(right_frame, roi, &effective_roi_right);
+
+      // assert dimensions are the same
+      if (!SDL_RectEquals(&effective_roi_left, &effective_roi_right)) {
+        std::cerr << "Error: Left and right effective ROIs are different" << std::endl;
+      } else {
+        // compute metrics
+        const int crop_width = effective_roi_left.w;
+        const int crop_height = effective_roi_left.h;
+
+        float* left_gray = rgb_to_grayscale(left_crop->data[0], left_crop->linesize[0], crop_width, crop_height);
+        float* right_gray = rgb_to_grayscale(right_crop->data[0], right_crop->linesize[0], crop_width, crop_height);
+
+        const std::string psnr = compute_psnr(left_gray, right_gray, crop_width, crop_height);
+        const std::string ssim = compute_ssim(left_gray, right_gray, crop_width, crop_height);
+        const std::string vmaf = (left_crop && right_crop) ? VMAFCalculator::instance().compute(left_crop, right_crop) : "n/a";
+
+        const std::string roi_str =
+            (crop_width < video_width_ || crop_height < video_height_) ? string_sprintf("  (%d,%d)-(%d,%d)", effective_roi_left.x, effective_roi_left.y, effective_roi_left.x + crop_width - 1, effective_roi_left.y + crop_height - 1) : "";
+
+        std::cout << string_sprintf("Metrics: [%s|%s] PSNR(%s), SSIM(%s), VMAF(%s)%s", format_position(ffmpeg::pts_in_secs(left_frame), false).c_str(), format_position(ffmpeg::pts_in_secs(right_frame), false).c_str(), psnr.c_str(),
+                                    ssim.c_str(), vmaf.c_str(), roi_str.c_str())
+                  << std::endl;
+
+        delete[] left_gray;
+        delete[] right_gray;
+      }
+
+      if (left_crop) {
+        av_frame_free(&left_crop);
+      }
+      if (right_crop) {
+        av_frame_free(&right_crop);
+      }
+    }
 
     print_image_similarity_metrics_ = false;
   }
@@ -1826,9 +1967,11 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
       if (mode_ == Mode::VSTACK) {
         render_text(line1_y_, line1_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
-        render_text(line1_y_, line2_y_, side_ui_[displayed_left_side_].text_texture, side_ui_[displayed_left_side_].text_width, side_ui_[displayed_left_side_].text_height, border_extension_, true);
+        render_text(line1_y_, line2_y_, side_ui_[displayed_left_side_.as_simple_index()].text_texture, side_ui_[displayed_left_side_.as_simple_index()].text_width, side_ui_[displayed_left_side_.as_simple_index()].text_height,
+                    border_extension_, true);
       } else {
-        render_text(line1_y_, line1_y_, side_ui_[displayed_left_side_].text_texture, side_ui_[displayed_left_side_].text_width, side_ui_[displayed_left_side_].text_height, border_extension_, true);
+        render_text(line1_y_, line1_y_, side_ui_[displayed_left_side_.as_simple_index()].text_texture, side_ui_[displayed_left_side_.as_simple_index()].text_width, side_ui_[displayed_left_side_.as_simple_index()].text_height,
+                    border_extension_, true);
         render_text(line1_y_, line2_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
       }
 
@@ -1851,17 +1994,18 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
       if (mode_ == Mode::VSTACK) {
         text1_x = line1_y_;
-        text1_y = drawable_height_ - line2_y_ - side_ui_[displayed_right_side_].text_height;
+        text1_y = drawable_height_ - line2_y_ - side_ui_[displayed_right_side_.as_simple_index()].text_height;
         text2_x = line1_y_;
-        text2_y = drawable_height_ - line1_y_ - side_ui_[displayed_right_side_].text_height;
+        text2_y = drawable_height_ - line1_y_ - side_ui_[displayed_right_side_.as_simple_index()].text_height;
       } else {
-        text1_x = drawable_width_ - line1_y_ - side_ui_[displayed_right_side_].text_width;
+        text1_x = drawable_width_ - line1_y_ - side_ui_[displayed_right_side_.as_simple_index()].text_width;
         text1_y = line1_y_;
         text2_x = drawable_width_ - line1_y_ - right_position_text_width;
         text2_y = line2_y_;
       }
 
-      render_text(text1_x, text1_y, side_ui_[displayed_right_side_].text_texture, side_ui_[displayed_right_side_].text_width, side_ui_[displayed_right_side_].text_height, border_extension_, false);
+      render_text(text1_x, text1_y, side_ui_[displayed_right_side_.as_simple_index()].text_texture, side_ui_[displayed_right_side_.as_simple_index()].text_width, side_ui_[displayed_right_side_.as_simple_index()].text_height,
+                  border_extension_, false);
       render_text(text2_x, text2_y, right_position_text_texture, right_position_text_width, right_position_text_height, border_extension_, false);
 
       SDL_DestroyTexture(right_position_text_texture);
@@ -2125,9 +2269,11 @@ Display::ZoomRect Display::compute_zoom_rect() const {
   return {zoom_rect_start, zoom_rect_end, zoom_rect_size, global_zoom_factor_};
 }
 
-Vector2D Display::window_to_video_position(const int window_x_position, const int window_y_position, const Display::ZoomRect& zoom_rect) const {
-  const int video_x = std::floor((static_cast<float>(window_x_position) * video_to_window_width_factor_ - zoom_rect.start.x()) * static_cast<float>(video_width_) / zoom_rect.size.x());
-  const int video_y = std::floor((static_cast<float>(window_y_position) * video_to_window_height_factor_ - zoom_rect.start.y()) * static_cast<float>(video_height_) / zoom_rect.size.y());
+Vector2D Display::window_to_video_position(const int window_x_position, const int window_y_position, const Display::ZoomRect& zoom_rect, const bool floor_result) const {
+  auto floor_or_ceil = [&](const float value) -> int { return floor_result ? std::floor(value) : std::ceil(value); };
+
+  const int video_x = floor_or_ceil((static_cast<float>(window_x_position) * video_to_window_width_factor_ - zoom_rect.start.x()) * static_cast<float>(video_width_) / zoom_rect.size.x());
+  const int video_y = floor_or_ceil((static_cast<float>(window_y_position) * video_to_window_height_factor_ - zoom_rect.start.y()) * static_cast<float>(video_height_) / zoom_rect.size.y());
 
   return Vector2D(video_x, video_y);
 }
@@ -2138,80 +2284,121 @@ SDL_FRect Display::video_to_zoom_space(const SDL_Rect& video_rect, const Display
                     std::min(float(video_rect.h) * zoom_rect.zoom_factor, zoom_rect.size.y())});
 };
 
-SDL_Rect Display::get_visible_roi_in_single_frame_coordinates() const {
+std::pair<SDL_Rect, SDL_Rect> Display::get_visible_rois_in_single_frame_coordinates() const {
   const auto zoom_rect = compute_zoom_rect();
 
-  // in hstack/vstack modes, window_to_video_position() returns positions in the
-  // *layout texture space* (2x width or 2x height). However, expect a
-  // ROI in *single-frame* coordinates, which is applied equally to both left/right frames.
-  const Vector2D p0 = window_to_video_position(0, 0, zoom_rect);
-  const Vector2D p1 = window_to_video_position(window_width_ - 1, window_height_ - 1, zoom_rect);
+  // p0/p1 are in *layout* coordinates in hstack/vstack, single-frame in split.
+  const Vector2D p0 = window_to_video_position(0, 0, zoom_rect, true);
+  const Vector2D p1 = window_to_video_position(window_width_, window_height_, zoom_rect, false);
 
-  const int lx0 = static_cast<int>(std::floor(std::min(p0.x(), p1.x())));
-  const int ly0 = static_cast<int>(std::floor(std::min(p0.y(), p1.y())));
-  const int lx1 = static_cast<int>(std::ceil(std::max(p0.x(), p1.x())));
-  const int ly1 = static_cast<int>(std::ceil(std::max(p0.y(), p1.y())));
+  const int lx0 = static_cast<int>(std::min(p0.x(), p1.x()));
+  const int ly0 = static_cast<int>(std::min(p0.y(), p1.y()));
+  const int lx1 = static_cast<int>(std::max(p0.x(), p1.x()));
+  const int ly1 = static_cast<int>(std::max(p0.y(), p1.y()));
 
   auto clamp_x = [&](int x) { return clamp_range(x, 0, video_width_); };
   auto clamp_y = [&](int y) { return clamp_range(y, 0, video_height_); };
 
-  // Intersect [a0, a1) with [b0, b1) in layout space. Returns empty when no overlap.
   auto intersect_1d = [&](int a0, int a1, int b0, int b1) -> std::pair<int, int> {
     const int lo = std::max(a0, b0);
     const int hi = std::min(a1, b1);
     return (hi > lo) ? std::make_pair(lo, hi) : std::make_pair(0, 0);
   };
 
+  // Default: single-frame layout (split) => both sides share the same ROI.
+  if (mode_ != Mode::HSTACK && mode_ != Mode::VSTACK) {
+    const int x0 = clamp_x(lx0);
+    const int y0 = clamp_y(ly0);
+    const int x1 = clamp_x(lx1);
+    const int y1 = clamp_y(ly1);
+    const SDL_Rect roi = {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
+    return {roi, roi};
+  }
+
   if (mode_ == Mode::HSTACK) {
     const int w = video_width_;
-    const auto left = intersect_1d(lx0, lx1, 0, w);
-    const auto right_layout = intersect_1d(lx0, lx1, w, 2 * w);
-    const std::pair<int, int> right = (right_layout.second > right_layout.first) ? std::make_pair(right_layout.first - w, right_layout.second - w) : std::make_pair(0, 0);
-
-    const float center_x_layout = (p0.x() + p1.x()) * 0.5F;
-    const bool prefer_right = center_x_layout >= static_cast<float>(w);
-
-    std::pair<int, int> x = prefer_right ? right : left;
-    if (x.second <= x.first) {
-      x = prefer_right ? left : right;
-    }
-    if (x.second <= x.first) {
-      return {0, 0, 0, 0};
-    }
+    const auto left_x = intersect_1d(lx0, lx1, 0, w);
+    const auto right_x_layout = intersect_1d(lx0, lx1, w, 2 * w);
+    const std::pair<int, int> right_x = (right_x_layout.second > right_x_layout.first) ? std::make_pair(right_x_layout.first - w, right_x_layout.second - w) : std::make_pair(0, 0);
 
     const int y0 = clamp_y(ly0);
     const int y1 = clamp_y(ly1);
-    return {clamp_x(x.first), y0, std::max(0, clamp_x(x.second) - clamp_x(x.first)), std::max(0, y1 - y0)};
-  }
 
-  if (mode_ == Mode::VSTACK) {
-    const int h = video_height_;
-    const auto top = intersect_1d(ly0, ly1, 0, h);
-    const auto bottom_layout = intersect_1d(ly0, ly1, h, 2 * h);
-    const std::pair<int, int> bottom = (bottom_layout.second > bottom_layout.first) ? std::make_pair(bottom_layout.first - h, bottom_layout.second - h) : std::make_pair(0, 0);
-
-    const float center_y_layout = (p0.y() + p1.y()) * 0.5F;
-    const bool prefer_bottom = center_y_layout >= static_cast<float>(h);
-
-    std::pair<int, int> y = prefer_bottom ? bottom : top;
-    if (y.second <= y.first) {
-      y = prefer_bottom ? top : bottom;
-    }
-    if (y.second <= y.first) {
-      return {0, 0, 0, 0};
+    SDL_Rect left{0, 0, 0, 0};
+    if (left_x.second > left_x.first) {
+      const int x0 = clamp_x(left_x.first);
+      const int x1 = clamp_x(left_x.second);
+      left = {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
     }
 
-    const int x0 = clamp_x(lx0);
-    const int x1 = clamp_x(lx1);
-    return {x0, clamp_y(y.first), std::max(0, x1 - x0), std::max(0, clamp_y(y.second) - clamp_y(y.first))};
+    SDL_Rect right{0, 0, 0, 0};
+    if (right_x.second > right_x.first) {
+      const int x0 = clamp_x(right_x.first);
+      const int x1 = clamp_x(right_x.second);
+      right = {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
+    }
+
+    return {left, right};
   }
 
-  // layout space is single-frame
+  // VSTACK
+  const int h = video_height_;
+  const auto top_y = intersect_1d(ly0, ly1, 0, h);
+  const auto bottom_y_layout = intersect_1d(ly0, ly1, h, 2 * h);
+  const std::pair<int, int> bottom_y = (bottom_y_layout.second > bottom_y_layout.first) ? std::make_pair(bottom_y_layout.first - h, bottom_y_layout.second - h) : std::make_pair(0, 0);
+
   const int x0 = clamp_x(lx0);
-  const int y0 = clamp_y(ly0);
   const int x1 = clamp_x(lx1);
-  const int y1 = clamp_y(ly1);
-  return {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
+
+  SDL_Rect left{0, 0, 0, 0};
+  if (top_y.second > top_y.first) {
+    const int y0 = clamp_y(top_y.first);
+    const int y1 = clamp_y(top_y.second);
+    left = {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
+  }
+
+  SDL_Rect right{0, 0, 0, 0};
+  if (bottom_y.second > bottom_y.first) {
+    const int y0 = clamp_y(bottom_y.first);
+    const int y1 = clamp_y(bottom_y.second);
+    right = {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
+  }
+
+  return {left, right};
+}
+
+SDL_Rect Display::get_visible_roi_in_single_frame_coordinates() const {
+  const auto rois = get_visible_rois_in_single_frame_coordinates();
+  const SDL_Rect left_roi = rois.first;
+  const SDL_Rect right_roi = rois.second;
+
+  const bool left_off = left_roi.w <= 0 || left_roi.h <= 0;
+  const bool right_off = right_roi.w <= 0 || right_roi.h <= 0;
+
+  if (mode_ == Mode::HSTACK || mode_ == Mode::VSTACK) {
+    // Prefer the side that the view center is currently over, but fall back to the other
+    // if that side is not visible.
+    const auto zoom_rect = compute_zoom_rect();
+    const Vector2D center_layout = window_to_video_position(window_width_ / 2, window_height_ / 2, zoom_rect, true);
+
+    const bool prefer_right = (mode_ == Mode::HSTACK) ? (center_layout.x() >= static_cast<float>(video_width_)) : (center_layout.y() >= static_cast<float>(video_height_));
+    const SDL_Rect preferred = prefer_right ? right_roi : left_roi;
+    const SDL_Rect other = prefer_right ? left_roi : right_roi;
+
+    const bool preferred_off = prefer_right ? right_off : left_off;
+    const bool other_off = prefer_right ? left_off : right_off;
+
+    if (!preferred_off) {
+      return preferred;
+    }
+    if (!other_off) {
+      return other;
+    }
+    return {0, 0, 0, 0};
+  }
+
+  // SPLIT (single-frame layout): both ROIs are identical.
+  return left_roi;
 }
 
 void Display::update_playback_speed(const int playback_speed_level) {
@@ -2366,7 +2553,28 @@ void Display::input() {
         }
         update_cursor();
         break;
-      case SDL_KEYDOWN:
+      case SDL_KEYDOWN: {
+        // Handle CTRL+SHIFT+1..0 for direct right video selection
+        if ((keymod & KMOD_CTRL) && (keymod & KMOD_SHIFT)) {
+          size_t target_index = SIZE_MAX;
+
+          if (keycode >= SDLK_1 && keycode <= SDLK_9) {
+            target_index = keycode - SDLK_1;
+          } else if (keycode >= SDLK_KP_1 && keycode <= SDLK_KP_9) {
+            target_index = keycode - SDLK_KP_1;
+          } else if ((keycode == SDLK_KP_0) || (keycode == SDLK_0)) {
+            target_index = 9;
+          }
+
+          if (target_index != SIZE_MAX) {
+            if (target_index < num_right_videos_) {
+              active_right_index_ = target_index;
+              std::cout << string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_) << std::endl;
+            }
+            break;
+          }
+        }
+
         switch (keycode) {
           case SDLK_h:
             show_help_ = !show_help_;
@@ -2514,6 +2722,14 @@ void Display::input() {
           case SDLK_p:
             print_mouse_position_and_color_ = mouse_is_inside_window_;
             break;
+          case SDLK_TAB:
+            if (keymod & KMOD_SHIFT) {
+              active_right_index_ = (active_right_index_ + num_right_videos_ - 1) % num_right_videos_;
+            } else {
+              active_right_index_ = (active_right_index_ + 1) % num_right_videos_;
+            }
+            std::cout << string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_) << std::endl;
+            break;
           case SDLK_m:
             print_image_similarity_metrics_ = true;
             break;
@@ -2637,6 +2853,7 @@ void Display::input() {
             break;
         }
         break;
+      }
       case SDL_KEYUP:
         switch (keycode) {
           case SDLK_z:
@@ -2735,4 +2952,16 @@ bool Display::get_show_fps() const {
 
 bool Display::get_toggle_scope_window_requested(const ScopeWindow::Type type) const {
   return toggle_scope_window_requested_[ScopeWindow::index(type)];
+}
+
+void Display::set_num_right_videos(const size_t num_right_videos) {
+  num_right_videos_ = num_right_videos;
+}
+
+size_t Display::get_num_right_videos() const {
+  return num_right_videos_;
+}
+
+size_t Display::get_active_right_index() const {
+  return active_right_index_;
 }

@@ -396,15 +396,19 @@ int main(int argc, char** argv) {
     } else if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
       usage << "video-compare " << VersionInfo::version << " " << VersionInfo::copyright << std::endl << std::endl;
-      usage << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2" << std::endl << std::endl;
+      usage << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2 [FILE3] [FILE4] ..." << std::endl << std::endl;
       argagg::fmt_ostream fmt(std::cerr);
       fmt << usage.str() << argparser;
     } else {
       VideoCompareConfig config;
 
-      if (args.pos.size() != 2) {
-        throw std::logic_error{"Two FFmpeg compatible video files must be supplied"};
+      if (args.pos.size() < 2) {
+        throw std::logic_error{"Two or more FFmpeg compatible video files must be supplied (left and at least one right)"};
       }
+
+      // Create a temporary right video for parsing command-line options
+      // This will be used as a template for all right videos
+      InputVideo right_template{RIGHT, "Right"};
 
       config.verbose = args["verbose"];
       config.fit_window_to_usable_bounds = args["window-fit-display"];
@@ -443,28 +447,28 @@ int main(int argc, char** argv) {
         auto left_color_space = get_nth_token_or_empty(color_space_spec, ':', 0);
 
         config.left.color_space = left_color_space;
-        config.right.color_space = (color_space_spec == left_color_space) ? color_space_spec : get_nth_token_or_empty(color_space_spec, ':', 1);
+        right_template.color_space = (color_space_spec == left_color_space) ? color_space_spec : get_nth_token_or_empty(color_space_spec, ':', 1);
       }
       if (args["color-range"]) {
         auto color_range_spec = static_cast<const std::string&>(args["color-range"]);
         auto left_color_range = get_nth_token_or_empty(color_range_spec, ':', 0);
 
         config.left.color_range = left_color_range;
-        config.right.color_range = (color_range_spec == left_color_range) ? color_range_spec : get_nth_token_or_empty(color_range_spec, ':', 1);
+        right_template.color_range = (color_range_spec == left_color_range) ? color_range_spec : get_nth_token_or_empty(color_range_spec, ':', 1);
       }
       if (args["color-primaries"]) {
         auto color_primaries_spec = static_cast<const std::string&>(args["color-primaries"]);
         auto left_primaries = get_nth_token_or_empty(color_primaries_spec, ':', 0);
 
         config.left.color_primaries = left_primaries;
-        config.right.color_primaries = (color_primaries_spec == left_primaries) ? color_primaries_spec : get_nth_token_or_empty(color_primaries_spec, ':', 1);
+        right_template.color_primaries = (color_primaries_spec == left_primaries) ? color_primaries_spec : get_nth_token_or_empty(color_primaries_spec, ':', 1);
       }
       if (args["color-trc"]) {
         auto color_trc_spec = static_cast<const std::string&>(args["color-trc"]);
         auto left_trc = get_nth_token_or_empty(color_trc_spec, ':', 0);
 
         config.left.color_trc = left_trc;
-        config.right.color_trc = (color_trc_spec == left_trc) ? color_trc_spec : get_nth_token_or_empty(color_trc_spec, ':', 1);
+        right_template.color_trc = (color_trc_spec == left_trc) ? color_trc_spec : get_nth_token_or_empty(color_trc_spec, ':', 1);
       }
       if (args["window-size"]) {
         if (config.fit_window_to_usable_bounds) {
@@ -556,7 +560,7 @@ int main(int argc, char** argv) {
         auto left_tone_mapping_mode = get_nth_token_or_empty(tone_mapping_mode_spec, ':', 0);
 
         config.left.tone_mapping_mode = parse_tm_mode_arg(left_tone_mapping_mode);
-        config.right.tone_mapping_mode = (tone_mapping_mode_spec == left_tone_mapping_mode) ? config.left.tone_mapping_mode : parse_tm_mode_arg(get_nth_token_or_empty(tone_mapping_mode_spec, ':', 1));
+        right_template.tone_mapping_mode = (tone_mapping_mode_spec == left_tone_mapping_mode) ? config.left.tone_mapping_mode : parse_tm_mode_arg(get_nth_token_or_empty(tone_mapping_mode_spec, ':', 1));
       }
 
       // scopes
@@ -589,72 +593,72 @@ int main(int argc, char** argv) {
       // video filters
       if (args["filters"]) {
         config.left.video_filters = static_cast<const std::string&>(args["filters"]);
-        config.right.video_filters = static_cast<const std::string&>(args["filters"]);
+        right_template.video_filters = static_cast<const std::string&>(args["filters"]);
       }
       if (args["left-filters"]) {
         config.left.video_filters = safe_replace_placeholder(static_cast<const std::string&>(args["left-filters"]), config.left.video_filters, "filter specification");
       }
       if (args["right-filters"]) {
-        config.right.video_filters = safe_replace_placeholder(static_cast<const std::string&>(args["right-filters"]), config.right.video_filters, "filter specification");
+        right_template.video_filters = safe_replace_placeholder(static_cast<const std::string&>(args["right-filters"]), right_template.video_filters, "filter specification");
       }
-      resolve_mutual_placeholders(config.left.video_filters, config.right.video_filters, "filter specification");
+      resolve_mutual_placeholders(config.left.video_filters, right_template.video_filters, "filter specification");
 
       // demuxer
       config.left.demuxer_options = create_default_demuxer_options();
-      config.right.demuxer_options = create_default_demuxer_options();
+      right_template.demuxer_options = create_default_demuxer_options();
 
       if (args["demuxer"]) {
         config.left.demuxer = static_cast<const std::string&>(args["demuxer"]);
-        config.right.demuxer = static_cast<const std::string&>(args["demuxer"]);
+        right_template.demuxer = static_cast<const std::string&>(args["demuxer"]);
       }
       if (args["left-demuxer"]) {
         config.left.demuxer = safe_replace_placeholder(static_cast<const std::string&>(args["left-demuxer"]), config.left.demuxer, "demuxer");
       }
       if (args["right-demuxer"]) {
-        config.right.demuxer = safe_replace_placeholder(static_cast<const std::string&>(args["right-demuxer"]), config.right.demuxer, "demuxer");
+        right_template.demuxer = safe_replace_placeholder(static_cast<const std::string&>(args["right-demuxer"]), right_template.demuxer, "demuxer");
       }
-      resolve_mutual_placeholders(config.left.demuxer, config.right.demuxer, "demuxer");
+      resolve_mutual_placeholders(config.left.demuxer, right_template.demuxer, "demuxer");
 
       config.left.demuxer_options = upsert_avdict_options(config.left.demuxer_options, get_nth_token_or_empty(config.left.demuxer, ':', 1));
-      config.right.demuxer_options = upsert_avdict_options(config.right.demuxer_options, get_nth_token_or_empty(config.right.demuxer, ':', 1));
+      right_template.demuxer_options = upsert_avdict_options(right_template.demuxer_options, get_nth_token_or_empty(right_template.demuxer, ':', 1));
       config.left.demuxer = get_nth_token_or_empty(config.left.demuxer, ':', 0);
-      config.right.demuxer = get_nth_token_or_empty(config.right.demuxer, ':', 0);
+      right_template.demuxer = get_nth_token_or_empty(right_template.demuxer, ':', 0);
 
       // decder
       if (args["decoder"]) {
         config.left.decoder = static_cast<const std::string&>(args["decoder"]);
-        config.right.decoder = static_cast<const std::string&>(args["decoder"]);
+        right_template.decoder = static_cast<const std::string&>(args["decoder"]);
       }
       if (args["left-decoder"]) {
         config.left.decoder = safe_replace_placeholder(static_cast<const std::string&>(args["left-decoder"]), config.left.decoder, "decoder");
       }
       if (args["right-decoder"]) {
-        config.right.decoder = safe_replace_placeholder(static_cast<const std::string&>(args["right-decoder"]), config.right.decoder, "decoder");
+        right_template.decoder = safe_replace_placeholder(static_cast<const std::string&>(args["right-decoder"]), right_template.decoder, "decoder");
       }
-      resolve_mutual_placeholders(config.left.decoder, config.right.decoder, "decoder");
+      resolve_mutual_placeholders(config.left.decoder, right_template.decoder, "decoder");
 
       config.left.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.left.decoder, ':', 1));
-      config.right.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.right.decoder, ':', 1));
+      right_template.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(right_template.decoder, ':', 1));
       config.left.decoder = get_nth_token_or_empty(config.left.decoder, ':', 0);
-      config.right.decoder = get_nth_token_or_empty(config.right.decoder, ':', 0);
+      right_template.decoder = get_nth_token_or_empty(right_template.decoder, ':', 0);
 
       // HW acceleration
       if (args["hwaccel"]) {
         config.left.hw_accel_spec = static_cast<const std::string&>(args["hwaccel"]);
-        config.right.hw_accel_spec = static_cast<const std::string&>(args["hwaccel"]);
+        right_template.hw_accel_spec = static_cast<const std::string&>(args["hwaccel"]);
       }
       if (args["left-hwaccel"]) {
         config.left.hw_accel_spec = safe_replace_placeholder(static_cast<const std::string&>(args["left-hwaccel"]), config.left.hw_accel_spec, "hardware acceleration");
       }
       if (args["right-hwaccel"]) {
-        config.right.hw_accel_spec = safe_replace_placeholder(static_cast<const std::string&>(args["right-hwaccel"]), config.right.hw_accel_spec, "hardware acceleration");
+        right_template.hw_accel_spec = safe_replace_placeholder(static_cast<const std::string&>(args["right-hwaccel"]), right_template.hw_accel_spec, "hardware acceleration");
       }
-      resolve_mutual_placeholders(config.left.hw_accel_spec, config.right.hw_accel_spec, "hardware acceleration");
+      resolve_mutual_placeholders(config.left.hw_accel_spec, right_template.hw_accel_spec, "hardware acceleration");
 
       config.left.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.left.hw_accel_spec, ':', 2));
-      config.right.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.right.hw_accel_spec, ':', 2));
+      right_template.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(right_template.hw_accel_spec, ':', 2));
       config.left.hw_accel_spec = string_join({get_nth_token_or_empty(config.left.hw_accel_spec, ':', 0), get_nth_token_or_empty(config.left.hw_accel_spec, ':', 1)}, ":");
-      config.right.hw_accel_spec = string_join({get_nth_token_or_empty(config.right.hw_accel_spec, ':', 0), get_nth_token_or_empty(config.right.hw_accel_spec, ':', 1)}, ":");
+      right_template.hw_accel_spec = string_join({get_nth_token_or_empty(right_template.hw_accel_spec, ':', 0), get_nth_token_or_empty(right_template.hw_accel_spec, ':', 1)}, ":");
 
       if (args["left-peak-nits"] || args["right-peak-nits"]) {
         const std::regex peak_nits_re("(\\d*)");
@@ -690,7 +694,7 @@ int main(int argc, char** argv) {
           config.left.peak_luminance_nits = parse_peak_nits(left_peak_nits, config.left);
         }
         if (!right_peak_nits.empty()) {
-          config.right.peak_luminance_nits = parse_peak_nits(right_peak_nits, config.right);
+          right_template.peak_luminance_nits = parse_peak_nits(right_peak_nits, right_template);
         }
       }
       if (args["boost-tone"]) {
@@ -712,13 +716,37 @@ int main(int argc, char** argv) {
         auto left_boost_tone = get_nth_token_or_empty(boost_tone_spec, ':', 0);
 
         config.left.boost_tone = parse_boost_tone(left_boost_tone, config.left);
-        config.right.boost_tone = (boost_tone_spec == left_boost_tone) ? config.left.boost_tone : parse_boost_tone(get_nth_token_or_empty(boost_tone_spec, ':', 1), config.right);
+        right_template.boost_tone = (boost_tone_spec == left_boost_tone) ? config.left.boost_tone : parse_boost_tone(get_nth_token_or_empty(boost_tone_spec, ':', 1), right_template);
       }
 
       config.left.file_name = args.pos[0];
-      config.right.file_name = args.pos[1];
 
-      resolve_mutual_placeholders(config.left.file_name, config.right.file_name, "video file", true);
+      // Parse multiple right videos
+      // right_template already has all the parsed options
+      right_template.file_name = args.pos[1];
+
+      // Resolve placeholders for first right video
+      resolve_mutual_placeholders(config.left.file_name, right_template.file_name, "video file", true);
+
+      // Create right videos from all remaining file arguments
+      for (size_t i = 1; i < args.pos.size(); ++i) {
+        InputVideo right_video = right_template;
+        right_video.file_name = args.pos[i];
+        right_video.side = Side::Right(static_cast<size_t>(i - 1));
+        right_video.side_description = i == 1 ? "Right" : "Right" + std::to_string(i);
+        right_video.demuxer_options = nullptr;
+        av_dict_copy(&right_video.demuxer_options, right_template.demuxer_options, 0);
+        right_video.decoder_options = nullptr;
+        av_dict_copy(&right_video.decoder_options, right_template.decoder_options, 0);
+        right_video.hw_accel_options = nullptr;
+        av_dict_copy(&right_video.hw_accel_options, right_template.hw_accel_options, 0);
+
+        // Resolve placeholders for this right video
+        std::string left_file = config.left.file_name;
+        resolve_mutual_placeholders(left_file, right_video.file_name, "video file", true);
+
+        config.right_videos.push_back(right_video);
+      }
 
       if (args["libvmaf-options"]) {
         VMAFCalculator::instance().set_libvmaf_options(args["libvmaf-options"]);

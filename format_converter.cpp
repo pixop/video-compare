@@ -36,7 +36,7 @@ FormatConverter::FormatConverter(const size_t src_width,
                                  const AVPixelFormat dest_pixel_format,
                                  const AVColorSpace src_color_space,
                                  const AVColorRange src_color_range,
-                                 const Side side,
+                                 const Side& side,
                                  const int flags)
     : SideAware(side),
       src_width_{src_width},

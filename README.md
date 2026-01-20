@@ -153,6 +153,13 @@ acceleration settings:
 
     video-compare -i yadif,hqdn3d -l setfield=bff,__ -r __,scale=iw/2:ih/2 video1.mp4 video2.mp4
 
+Compare a reference (left) video to multiple candidate (right) videos by specifying more than two input paths.
+Useful for comparing a reference encode to multiple renditions (e.g. different bitrates or encoder settings),
+or for comparing ground truth, input, and model output in one session. Command-line settings are shared for all
+right videos, and the active right video can be switched within the UI:
+
+    video-compare reference.mp4 rendition1.mp4 rendition2.mp4
+
 The above features can be combined in any order, of course. Launch `video-compare` without any arguments to
 see all supported options.
 
@@ -196,6 +203,7 @@ see all supported options.
 - F1: Toggle Histogram window
 - F2: Toggle Vectorscope window
 - F3: Toggle Waveform window
+- Tab: Cycle through right videos
 - Plus `+`: Time-shift right video 1 frame forward
 - Minus `-`: Time-shift right video 1 frame backward
 - X: Show the current video frame and UI update rates (in FPS)
@@ -222,6 +230,8 @@ clipboard and seek to that position.
 
 Use `Shift+F` to select a region; cutouts from both frames and their concatenation will be saved
 as PNGs.
+
+Use `Ctrl+Shift+1..0` to switch directly to right video 1-10.
 
 ## Build
 

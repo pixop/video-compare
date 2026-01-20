@@ -63,7 +63,7 @@ class ScopeWindow {
   void ensure_texture();
   void destroy_graph();
 
-  std::string build_filter_description(const int pane_width, const int pane_height, const int left_colorspace, const int left_range, const int right_colorspace, const int right_range) const;
+  std::string build_filter_description(const int pane_width, const int pane_height, const int left_colorspace, const int left_range, const int right_colorspace, const int right_range, const bool roi_enabled, const Roi& roi) const;
   static std::string format_filter_args(const AVFrame* frame);
 
   void present_frame(const AVFrame* filtered_frame);
@@ -103,6 +103,8 @@ class ScopeWindow {
   int display_number_;
   bool use_10_bpc_;
   std::string filter_options_;
+  std::string base_title_;
+  std::string last_window_title_;
 
   // PTS tracking to detect non-monotonic browsing and reset the graph
   int64_t last_pts_left_{INT64_MIN};
@@ -113,6 +115,8 @@ class ScopeWindow {
   bool roi_enabled_{false};
   Roi roi_{0, 0, 0, 0};
   Roi prev_roi_{-1, -1, -1, -1};
+  int source_width_{0};
+  int source_height_{0};
 
   // Cross-thread coordination
   std::mutex state_mutex_;

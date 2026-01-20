@@ -243,6 +243,11 @@ class Display {
   bool metadata_dirty_{true};
   Side displayed_left_side_{LEFT};
   Side displayed_right_side_{RIGHT};
+  size_t num_right_videos_{1};
+  size_t active_right_index_{0};
+  std::string left_file_name_;
+  std::string right_file_name_;
+  std::string last_window_title_;
 
   std::vector<SDL_Texture*> help_textures_;
   int help_total_height_{0};
@@ -285,6 +290,8 @@ class Display {
 
   void render_progress_dots(const float position, const float progress, const bool is_top);
 
+  SDL_Surface* render_text_with_fallback(const std::string& text);
+
   SDL_Texture* get_video_texture() const;
   void update_texture(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& message);
 
@@ -296,16 +303,17 @@ class Display {
   std::string format_pixel(const std::array<int, 3>& rgb);
   std::string get_and_format_rgb_yuv_pixel(uint8_t* rgb_plane, const size_t pitch, const AVFrame* frame, const int x, const int y);
 
-  float* rgb_to_grayscale(const uint8_t* plane, const size_t pitch);
+  float* rgb_to_grayscale(const uint8_t* plane, const size_t pitch, const int width, const int height);
 
-  float compute_ssim_block(const float* left_plane, const float* right_plane, const int x_offset, const int y_offset, const int block_size);
-  std::string compute_ssim(const float* left_plane, const float* right_plane);
+  float compute_ssim_block(const float* left_plane, const float* right_plane, const int width, const int x_offset, const int y_offset, const int block_size);
+  std::string compute_ssim(const float* left_plane, const float* right_plane, const int width, const int height);
 
-  std::string compute_psnr(const float* left_plane, const float* right_plane);
+  std::string compute_psnr(const float* left_plane, const float* right_plane, const int width, const int height);
 
   void render_help();
   void render_metadata_overlay();
   void build_metadata_textures(const VideoMetadata& left, const VideoMetadata& right);
+  void update_window_title_with_current_roi();
   void ensure_metadata_textures_current();
   void refresh_display_side_mapping();
 
@@ -327,7 +335,7 @@ class Display {
     float zoom_factor;
   };
   ZoomRect compute_zoom_rect() const;
-  Vector2D window_to_video_position(const int window_x_position, const int window_y_position, const ZoomRect& zoom_rect) const;
+  Vector2D window_to_video_position(const int window_x_position, const int window_y_position, const ZoomRect& zoom_rect, const bool floor_result = true) const;
   SDL_FRect video_to_zoom_space(const SDL_Rect& video_rect, const ZoomRect& zoom_rect) const;
 
   void update_playback_speed(const int playback_speed_level);
@@ -382,7 +390,15 @@ class Display {
   bool get_show_fps() const;
 
   void update_metadata(const VideoMetadata left_metadata, const VideoMetadata right_metadata);
+  void update_right_video(const std::string& right_file_name, const VideoMetadata right_metadata);
 
+  std::pair<SDL_Rect, SDL_Rect> get_visible_rois_in_single_frame_coordinates() const;
   SDL_Rect get_visible_roi_in_single_frame_coordinates() const;
+
   bool get_toggle_scope_window_requested(const ScopeWindow::Type type) const;
+
+  // Multiple right video support
+  void set_num_right_videos(const size_t num_right_videos);
+  size_t get_num_right_videos() const;
+  size_t get_active_right_index() const;
 };
