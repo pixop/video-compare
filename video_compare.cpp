@@ -75,6 +75,28 @@ static inline int64_t calculate_dynamic_time_shift(const AVRational& multiplier,
   return time_shift;
 }
 
+static inline std::pair<size_t, size_t> calculate_max_dest_dimensions(const std::map<Side, std::unique_ptr<VideoFilterer>>& video_filterers) {
+  size_t max_w = 0;
+  size_t max_h = 0;
+
+  for (const auto& pair : video_filterers) {
+    max_w = std::max(max_w, pair.second->dest_width());
+    max_h = std::max(max_h, pair.second->dest_height());
+  }
+
+  return {max_w, max_h};
+}
+
+static inline double calculate_shortest_duration_seconds(const std::map<Side, std::unique_ptr<Demuxer>>& demuxers) {
+  double shortest = std::numeric_limits<double>::max();
+
+  for (const auto& pair : demuxers) {
+    shortest = std::min(shortest, pair.second->duration() * AV_TIME_TO_SEC);
+  }
+
+  return shortest;
+}
+
 static const int64_t NEAR_ZERO_TIME_SHIFT_THRESHOLD = time_ms_to_av_time(0.5);
 
 static bool compare_av_dictionaries(AVDictionary* dict1, AVDictionary* dict2) {
@@ -189,21 +211,14 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   }
 
   // Calculate max dimensions from all videos
-  size_t max_w = 0;
-  size_t max_h = 0;
-  for (const auto& pair : video_filterers_) {
-    max_w = std::max(max_w, pair.second->dest_width());
-    max_h = std::max(max_h, pair.second->dest_height());
+  {
+    const auto dims = calculate_max_dest_dimensions(video_filterers_);
+    max_width_ = dims.first;
+    max_height_ = dims.second;
   }
-  max_width_ = max_w;
-  max_height_ = max_h;
 
   // Calculate shortest duration
-  double shortest = std::numeric_limits<double>::max();
-  for (const auto& pair : demuxers_) {
-    shortest = std::min(shortest, pair.second->duration() * AV_TIME_TO_SEC);
-  }
-  shortest_duration_ = shortest;
+  shortest_duration_ = calculate_shortest_duration_seconds(demuxers_);
 
   // Initialize format converters
   for (const auto& pair : video_filterers_) {
@@ -319,13 +334,14 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 }
 
 void VideoCompare::operator()() {
+  // Launch all threads
   for (const auto& pair : demuxers_) {
     const Side& side = pair.first;
 
-    stages_.emplace_back([this, side]() { thread_demultiplex(side); });
-    stages_.emplace_back([this, side]() { thread_decode_video(side); });
-    stages_.emplace_back([this, side]() { thread_filter(side); });
-    stages_.emplace_back([this, side]() { thread_format_converter(side); });
+    stages_.emplace_back([this, side]() { demultiplex(side); });
+    stages_.emplace_back([this, side]() { decode_video(side); });
+    stages_.emplace_back([this, side]() { filter_video(side); });
+    stages_.emplace_back([this, side]() { format_convert_video(side); });
   }
 
   compare();
@@ -335,10 +351,6 @@ void VideoCompare::operator()() {
   }
 
   exception_holder_.rethrow_stored_exception();
-}
-
-void VideoCompare::thread_demultiplex(const Side& side) {
-  demultiplex(side);
 }
 
 void VideoCompare::demultiplex(const Side& side) {
@@ -380,10 +392,6 @@ void VideoCompare::demultiplex(const Side& side) {
     exception_holder_.store_current_exception();
     quit_all_queues();
   }
-}
-
-void VideoCompare::thread_decode_video(const Side& side) {
-  decode_video(side);
 }
 
 void VideoCompare::decode_video(const Side& side) {
@@ -498,10 +506,6 @@ void VideoCompare::filter_decoded_frame(const Side& side, AVFrameSharedPtr frame
   return;
 }
 
-void VideoCompare::thread_filter(const Side& side) {
-  filter_video(side);
-}
-
 void VideoCompare::filter_video(const Side& side) {
   ScopedLogSide scoped_log_side(side);
 
@@ -535,10 +539,6 @@ void VideoCompare::filter_video(const Side& side) {
     exception_holder_.store_current_exception();
     quit_all_queues();
   }
-}
-
-void VideoCompare::thread_format_converter(const Side& side) {
-  format_convert_video(side);
 }
 
 void VideoCompare::format_convert_video(const Side& side) {

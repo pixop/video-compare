@@ -115,18 +115,14 @@ class VideoCompare {
   void operator()();
 
  private:
-  void thread_demultiplex(const Side& side);
   void demultiplex(const Side& side);
 
-  void thread_decode_video(const Side& side);
   void decode_video(const Side& side);
   bool process_packet(const Side& side, AVPacket* packet);
 
-  void thread_filter(const Side& side);
   void filter_video(const Side& side);
   void filter_decoded_frame(const Side& side, AVFrameSharedPtr frame_decoded);
 
-  void thread_format_converter(const Side& side);
   void format_convert_video(const Side& side);
 
   bool keep_running() const;
