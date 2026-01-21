@@ -603,4 +603,3 @@ void ScopeWindow::set_roi(const Roi& roi) {
   roi_enabled_ = roi.w > 0 && roi.h > 0;
   graph_reset_pending_ = true;
 }
-
