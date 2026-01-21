@@ -1,7 +1,9 @@
 #include "scope_manager.h"
+#include <SDL2/SDL.h>
 #include <algorithm>
 #include <utility>
 #include "scope_window.h"
+#include "sdl_event_info.h"
 
 static const std::string& get_scope_filter_options(const ScopesConfig& config, const ScopeWindow::Type type) {
   switch (type) {
@@ -55,8 +57,19 @@ void ScopeManager::set_fatal_error(const std::string& message) {
   fatal_error_message_ = message;
 }
 
-void ScopeManager::route_events() {
-  ScopeWindow::route_events(windows_);
+bool ScopeManager::handle_event(const SDL_Event& event) {
+  const uint32_t event_window_id = SDLEventInfo::window_id(event);
+  if (event_window_id == 0) {
+    return false;
+  }
+
+  for (auto& window : windows_) {
+    if (window && window->window_id() == event_window_id) {
+      return window->handle_event(event);
+    }
+  }
+
+  return false;
 }
 
 bool ScopeManager::request_toggle(ScopeWindow::Type type) {

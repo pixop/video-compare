@@ -18,8 +18,9 @@ class ScopeManager {
   ScopeManager(const ScopesConfig& config, bool use_10_bpc, int display_number);
   ~ScopeManager();
 
-  // Route SDL events to scope windows; windows with close requests are handled by reconcile()
-  void route_events();
+  // Dispatch a single SDL event to scope windows; returns true if consumed.
+  // Windows that request close are destroyed later by reconcile() at a safe sync point.
+  bool handle_event(const SDL_Event& event);
 
   // Request toggle; returns true if a window was opened (so caller can refocus main window)
   bool request_toggle(ScopeWindow::Type type);

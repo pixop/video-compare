@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "sdl_event_info.h"
 #include "string_utils.h"
 extern "C" {
 #include <libavutil/avutil.h>
@@ -553,29 +554,7 @@ bool ScopeWindow::update(const AVFrame* left_frame, const AVFrame* right_frame) 
 }
 
 bool ScopeWindow::handle_event(const SDL_Event& event) {
-  Uint32 event_window_id = 0;
-
-  switch (event.type) {
-    case SDL_WINDOWEVENT:
-      event_window_id = event.window.windowID;
-      break;
-    case SDL_MOUSEBUTTONDOWN:
-    case SDL_MOUSEBUTTONUP:
-      event_window_id = event.button.windowID;
-      break;
-    case SDL_MOUSEMOTION:
-      event_window_id = event.motion.windowID;
-      break;
-    case SDL_MOUSEWHEEL:
-      event_window_id = event.wheel.windowID;
-      break;
-    case SDL_KEYDOWN:
-    case SDL_KEYUP:
-      event_window_id = event.key.windowID;
-      break;
-    default:
-      break;
-  }
+  const Uint32 event_window_id = SDLEventInfo::window_id(event);
 
   // Only process events directed to this window
   if (event_window_id == 0 || event_window_id != window_id_) {
@@ -604,9 +583,6 @@ bool ScopeWindow::handle_event(const SDL_Event& event) {
             texture_reset_pending_ = true;
             graph_reset_pending_ = true;
           }
-
-          // Let main display poll this event and trigger refresh
-          return false;
         }
       }
       return true;
@@ -628,33 +604,3 @@ void ScopeWindow::set_roi(const Roi& roi) {
   graph_reset_pending_ = true;
 }
 
-void ScopeWindow::route_events(std::array<std::unique_ptr<ScopeWindow>, ScopeWindow::kNumScopes>& windows) {
-  std::vector<SDL_Event> deferred_events;
-
-  SDL_Event event;
-  while (SDL_PollEvent(&event)) {
-    bool consumed_this_event = false;
-    for (auto& window : windows) {
-      if (window && window->handle_event(event)) {
-        consumed_this_event = true;
-
-        // Defer actual destruction to the main loop to coordinate with worker threads
-      }
-    }
-
-    if (!consumed_this_event) {
-      deferred_events.push_back(event);
-    }
-  }
-
-  // Requeue events for the main display input to process
-  for (const auto& deferred_event : deferred_events) {
-    SDL_Event event_copy;
-    std::memset(&event_copy, 0, sizeof(event_copy));
-    std::memcpy(&event_copy, &deferred_event, sizeof(SDL_Event));
-    const int result = SDL_PushEvent(&event_copy);
-    if (result != 1) {
-      continue;
-    }
-  }
-}

@@ -2409,7 +2409,7 @@ void Display::update_playback_speed(const int playback_speed_level) {
   }
 }
 
-void Display::input() {
+void Display::begin_input_frame() {
   seek_relative_ = 0.0F;
   seek_from_start_ = false;
   frame_buffer_offset_delta_ = 0;
@@ -2418,461 +2418,467 @@ void Display::input() {
   tick_playback_ = false;
   possibly_tick_playback_ = false;
   toggle_scope_window_requested_.fill(false);
+}
 
-  while (SDL_PollEvent(&event_) != 0) {
-    input_received_ = true;
-    const SDL_Keymod keymod = static_cast<SDL_Keymod>(event_.key.keysym.mod);
-    const SDL_Keycode keycode = event_.key.keysym.sym;
+void Display::mark_input_received() {
+  input_received_ = true;
+}
 
-    auto is_clipboard_mod_pressed = [keymod]() -> bool {
-#ifdef __APPLE__
-      return (keymod & KMOD_GUI);
-#else
-      return (keymod & KMOD_CTRL);
-#endif
-    };
+void Display::handle_event(const SDL_Event& event) {
+  event_ = event;
+  input_received_ = true;
 
-    auto update_cursor = [&]() {
-      SDL_Cursor* cursor;
+  auto update_cursor = [&]() {
+    SDL_Cursor* cursor;
 
-      if (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_RMASK) {
-        cursor = pan_mode_cursor_;
-      } else if (save_selected_area_ && selection_state_ != SelectionState::COMPLETED) {
-        cursor = selection_mode_cursor_;
-      } else {
-        cursor = normal_mode_cursor_;
-      }
+    if (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_RMASK) {
+      cursor = pan_mode_cursor_;
+    } else if (save_selected_area_ && selection_state_ != SelectionState::COMPLETED) {
+      cursor = selection_mode_cursor_;
+    } else {
+      cursor = normal_mode_cursor_;
+    }
 
-      SDL_SetCursor(cursor);
-    };
+    SDL_SetCursor(cursor);
+  };
 
-    auto wrap_to_left_frame = [&](Vector2D& video_position) -> Vector2D {
-      switch (mode_) {
-        case Mode::HSTACK:
-          return video_position - Vector2D(video_width_, 0);
-        case Mode::VSTACK:
-          return video_position - Vector2D(0, video_height_);
-        default:
-          break;
-      }
-
-      return video_position;
-    };
-
-    auto handle_scroll = [&](int& y_offset, const int total_height, std::vector<SDL_Texture*>& textures) {
-      y_offset += (-event_.motion.yrel * total_height * 3) / drawable_height_;
-      y_offset = std::max(y_offset, drawable_height_ - total_height - static_cast<int>(textures.size()) * HELP_TEXT_LINE_SPACING);
-      y_offset = std::min(y_offset, 0);
-    };
-
-    switch (event_.type) {
-      case SDL_WINDOWEVENT:
-        switch (event_.window.event) {
-          case SDL_WINDOWEVENT_CLOSE: {
-            // If the main application window is being closed, request application quit
-            if (event_.window.windowID == SDL_GetWindowID(window_)) {
-              quit_ = true;
-            }
-            break;
-          }
-          case SDL_WINDOWEVENT_LEAVE:
-            mouse_is_inside_window_ = false;
-            break;
-          case SDL_WINDOWEVENT_ENTER:
-            mouse_is_inside_window_ = true;
-            break;
-        }
-        break;
-      case SDL_MOUSEWHEEL:
-        if (mouse_is_inside_window_ && event_.wheel.y != 0) {
-          float delta_zoom = wheel_sensitivity_ * event_.wheel.y * (event_.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -1 : 1);
-
-          if (delta_zoom > 0) {
-            delta_zoom /= 2.0F;
-          }
-
-          const float new_global_zoom_factor = compute_zoom_factor(global_zoom_level_ - delta_zoom);
-
-          // logic ported from YUView's MoveAndZoomableView.cpp with thanks :)
-          if (new_global_zoom_factor >= 0.001 && new_global_zoom_factor <= 10000) {
-            const Vector2D zoom_point = Vector2D(static_cast<float>(mouse_x_) * video_to_window_width_factor_, static_cast<float>(mouse_y_) * video_to_window_height_factor_);
-            update_move_offset(compute_relative_move_offset(zoom_point, new_global_zoom_factor));
-
-            global_zoom_level_ -= delta_zoom;
-            global_zoom_factor_ = new_global_zoom_factor;
-          }
-        }
-        break;
-      case SDL_MOUSEMOTION:
-        SDL_GetMouseState(&mouse_x_, &mouse_y_);
-
-        if (selection_state_ == SelectionState::STARTED) {
-          selection_end_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
-
-          if (selection_wrap_) {
-            selection_end_ = wrap_to_left_frame(selection_end_);
-          }
-        }
-
-        if (event_.motion.state & SDL_BUTTON_RMASK) {
-          const auto pan_offset = Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_) / Vector2D(drawable_to_window_width_factor_, drawable_to_window_height_factor_);
-
-          update_move_offset(move_offset_ + pan_offset);
-        }
-
-        if (show_metadata_) {
-          handle_scroll(metadata_y_offset_, metadata_total_height_, metadata_textures_);
-        }
-
-        if (show_help_) {
-          handle_scroll(help_y_offset_, help_total_height_, help_textures_);
-        }
-        break;
-      case SDL_MOUSEBUTTONDOWN:
-        if (event_.button.button == SDL_BUTTON_LEFT && save_selected_area_ && selection_state_ == SelectionState::NONE) {
-          selection_state_ = SelectionState::STARTED;
-          selection_start_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
-
-          // Check if the selection is outside the left video frame
-          selection_wrap_ = (mode_ == Mode::HSTACK && selection_start_.x() >= video_width_) || (mode_ == Mode::VSTACK && selection_start_.y() >= video_height_);
-
-          if (selection_wrap_) {
-            selection_start_ = wrap_to_left_frame(selection_start_);
-          }
-
-          selection_end_ = selection_start_;
-        } else if (event_.button.button != SDL_BUTTON_RIGHT) {
-          seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
-          seek_from_start_ = true;
-        }
-        update_cursor();
-        break;
-      case SDL_MOUSEBUTTONUP:
-        if (event_.button.button == SDL_BUTTON_LEFT && selection_state_ == SelectionState::STARTED) {
-          selection_state_ = SelectionState::COMPLETED;
-        }
-        update_cursor();
-        break;
-      case SDL_KEYDOWN: {
-        // Handle CTRL+SHIFT+1..0 for direct right video selection
-        if ((keymod & KMOD_CTRL) && (keymod & KMOD_SHIFT)) {
-          size_t target_index = SIZE_MAX;
-
-          if (keycode >= SDLK_1 && keycode <= SDLK_9) {
-            target_index = keycode - SDLK_1;
-          } else if (keycode >= SDLK_KP_1 && keycode <= SDLK_KP_9) {
-            target_index = keycode - SDLK_KP_1;
-          } else if ((keycode == SDLK_KP_0) || (keycode == SDLK_0)) {
-            target_index = 9;
-          }
-
-          if (target_index != SIZE_MAX) {
-            if (target_index < num_right_videos_) {
-              active_right_index_ = target_index;
-              std::cout << string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_) << std::endl;
-            }
-            break;
-          }
-        }
-
-        switch (keycode) {
-          case SDLK_h:
-            show_help_ = !show_help_;
-            break;
-          case SDLK_ESCAPE:
-            quit_ = true;
-            break;
-          case SDLK_SPACE:
-            play_ = !play_;
-            buffer_play_loop_mode_ = Loop::OFF;
-            tick_playback_ = play_;
-            break;
-          case SDLK_COMMA:
-          case SDLK_KP_COMMA:
-            set_buffer_play_loop_mode(buffer_play_loop_mode_ != Loop::PINGPONG ? Loop::PINGPONG : Loop::OFF);
-            break;
-          case SDLK_PERIOD:
-            set_buffer_play_loop_mode(buffer_play_loop_mode_ != Loop::FORWARDONLY ? Loop::FORWARDONLY : Loop::OFF);
-            break;
-          case SDLK_F1:
-            toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Histogram)] = true;
-            break;
-          case SDLK_1:
-          case SDLK_KP_1:
-            if (keymod & KMOD_SHIFT) {
-              // Fallback for layouts where F-keys are inconvenient
-              toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Histogram)] = true;
-            } else {
-              show_left_ = !show_left_;
-            }
-            break;
-          case SDLK_F2:
-            toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Vectorscope)] = true;
-            break;
-          case SDLK_2:
-          case SDLK_KP_2:
-            if (keymod & KMOD_SHIFT) {
-              // Fallback for layouts where F-keys are inconvenient
-              toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Vectorscope)] = true;
-            } else {
-              show_right_ = !show_right_;
-            }
-            break;
-          case SDLK_F3:
-            toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Waveform)] = true;
-            break;
-          case SDLK_3:
-          case SDLK_KP_3:
-            if (keymod & KMOD_SHIFT) {
-              // Fallback for layouts where F-keys are inconvenient
-              toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Waveform)] = true;
-            } else {
-              show_hud_ = !show_hud_;
-            }
-            break;
-          case SDLK_0:
-          case SDLK_KP_0:
-            subtraction_mode_ = !subtraction_mode_;
-            break;
-          case SDLK_z:
-            zoom_left_ = true;
-            break;
-          case SDLK_c: {
-            if (is_clipboard_mod_pressed()) {
-              const float previous_left_frame_secs = previous_left_frame_pts_ * AV_TIME_TO_SEC;
-              const std::string previous_left_frame_secs_str = format_position(previous_left_frame_secs, false);
-
-              SDL_SetClipboardText(previous_left_frame_secs_str.c_str());
-
-              std::cout << "Copied to clipboard: " << previous_left_frame_secs_str << std::endl;
-            } else {
-              zoom_right_ = true;
-            }
-            break;
-          }
-          case SDLK_v: {
-            if (is_clipboard_mod_pressed()) {
-              char* clip_text = SDL_GetClipboardText();
-
-              if (!clip_text) {
-                std::cerr << "Failed to get clipboard text: " << SDL_GetError() << std::endl;
-                return;
-              }
-
-              std::string clipboard_str(clip_text);
-              SDL_free(clip_text);
-
-              static const std::regex timestamp_regex(R"((?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?))");
-              std::smatch match;
-
-              if (std::regex_search(clipboard_str, match, timestamp_regex)) {
-                std::string timestamp = match.str();
-                std::cout << "Timestamp pasted: " << timestamp << std::endl;
-
-                seek_relative_ = parse_timestamps_to_seconds(timestamp) / static_cast<float>(duration_);
-                seek_from_start_ = true;
-              } else {
-                std::cout << "No valid timestamp found in clipboard." << std::endl;
-              }
-            } else {
-              show_metadata_ = !show_metadata_;
-            }
-            break;
-          }
-          case SDLK_a:
-            if (keymod & KMOD_SHIFT) {
-              std::cerr << "Frame-accurate backward navigation has not yet been implemented" << std::endl;
-            } else {
-              frame_buffer_offset_delta_++;
-            }
-            break;
-          case SDLK_d:
-            if (keymod & KMOD_SHIFT) {
-              frame_navigation_delta_++;
-            } else {
-              frame_buffer_offset_delta_--;
-            }
-            break;
-          case SDLK_i:
-            fast_input_alignment_ = !fast_input_alignment_;
-            std::cout << "Input alignment resizing filter set to '" << (fast_input_alignment_ ? "BILINEAR (fast)" : "BICUBIC (high-quality)") << "' (takes effect for the next decoded frame)" << std::endl;
-            break;
-          case SDLK_t:
-            bilinear_texture_filtering_ = !bilinear_texture_filtering_;
-            std::cout << "Video texture filter set to '" << (bilinear_texture_filtering_ ? "BILINEAR" : "NEAREST NEIGHBOR") << "'" << std::endl;
-            break;
-          case SDLK_s: {
-            swap_left_right_ = !swap_left_right_;
-            refresh_display_side_mapping();
-            break;
-          }
-          case SDLK_f:
-            if (keymod & KMOD_SHIFT) {
-              if (!save_selected_area_) {
-                save_selected_area_ = true;
-              } else {
-                save_selected_area_ = false;
-                selection_state_ = SelectionState::NONE;
-              }
-              update_cursor();
-            } else {
-              save_image_frames_ = true;
-            }
-            break;
-          case SDLK_p:
-            print_mouse_position_and_color_ = mouse_is_inside_window_;
-            break;
-          case SDLK_TAB:
-            if (keymod & KMOD_SHIFT) {
-              active_right_index_ = (active_right_index_ + num_right_videos_ - 1) % num_right_videos_;
-            } else {
-              active_right_index_ = (active_right_index_ + 1) % num_right_videos_;
-            }
-            std::cout << string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_) << std::endl;
-            break;
-          case SDLK_m:
-            print_image_similarity_metrics_ = true;
-            break;
-          case SDLK_4:
-          case SDLK_KP_4:
-            update_zoom_factor_and_move_offset(std::min(video_to_window_width_factor_ / drawable_to_window_width_factor_, video_to_window_height_factor_ / drawable_to_window_height_factor_));
-            break;
-          case SDLK_5:
-          case SDLK_KP_5:
-            update_zoom_factor_and_move_offset(0.5F);
-            break;
-          case SDLK_6:
-          case SDLK_KP_6:
-            update_zoom_factor_and_move_offset(1.0F);
-            break;
-          case SDLK_7:
-          case SDLK_KP_7:
-            update_zoom_factor_and_move_offset(2.0F);
-            break;
-          case SDLK_8:
-          case SDLK_KP_8:
-            update_zoom_factor_and_move_offset(4.0F);
-            break;
-          case SDLK_9:
-          case SDLK_KP_9:
-            update_zoom_factor_and_move_offset(8.0F);
-            break;
-          case SDLK_r:
-            update_zoom_factor(1.0F);
-            move_offset_ = Vector2D(0.0F, 0.0F);
-            global_center_ = Vector2D(0.5F, 0.5F);
-            break;
-          case SDLK_LEFT:
-            seek_relative_ -= 1.0F;
-            break;
-          case SDLK_DOWN:
-            seek_relative_ -= 10.0F;
-            break;
-          case SDLK_PAGEDOWN:
-            seek_relative_ -= 600.0F;
-            break;
-          case SDLK_RIGHT:
-            seek_relative_ += 1.0F;
-            break;
-          case SDLK_UP:
-            seek_relative_ += 10.0F;
-            break;
-          case SDLK_PAGEUP:
-            seek_relative_ += 600.0F;
-            break;
-          case SDLK_j:
-            update_playback_speed(playback_speed_level_ - 1);
-            possibly_tick_playback_ = true;
-            break;
-          case SDLK_l:
-            update_playback_speed(playback_speed_level_ + 1);
-            tick_playback_ = true;
-            break;
-          case SDLK_x:
-            show_fps_ = true;
-            break;
-          case SDLK_PLUS:
-          case SDLK_KP_PLUS:
-          case SDLK_EQUALS:  // for tenkeyless keyboards
-            if (keymod & KMOD_ALT) {
-              shift_right_frames_ += 100;
-            } else if (keymod & KMOD_CTRL) {
-              shift_right_frames_ += 10;
-            } else {
-              shift_right_frames_++;
-            }
-            break;
-          case SDLK_MINUS:
-          case SDLK_KP_MINUS:
-            if (keymod & KMOD_ALT) {
-              shift_right_frames_ -= 100;
-            } else if (keymod & KMOD_CTRL) {
-              shift_right_frames_ -= 10;
-            } else {
-              shift_right_frames_--;
-            }
-            break;
-          case SDLK_y:
-            // Cycle through subtraction modes
-            switch (diff_mode_) {
-              case DiffMode::LegacyAbs:
-                diff_mode_ = DiffMode::AbsLinear;
-                break;
-              case DiffMode::AbsLinear:
-                diff_mode_ = DiffMode::AbsSqrt;
-                break;
-              case DiffMode::AbsSqrt:
-                diff_mode_ = DiffMode::SignedDiverging;
-                break;
-              case DiffMode::SignedDiverging:
-                diff_mode_ = DiffMode::LegacyAbs;
-                break;
-            }
-            std::cout << "Subtraction mode set to '";
-            switch (diff_mode_) {
-              case DiffMode::LegacyAbs:
-                std::cout << "ABSOLUTE LINEAR (FIXED GAIN)";
-                break;
-              case DiffMode::AbsLinear:
-                std::cout << "ABSOLUTE LINEAR (ADAPTIVE)";
-                break;
-              case DiffMode::AbsSqrt:
-                std::cout << "ABSOLUTE SQUARE ROOT";
-                break;
-              case DiffMode::SignedDiverging:
-                std::cout << "SIGNED DIVERGING";
-                break;
-            }
-            std::cout << "'" << std::endl;
-            break;
-          case SDLK_u:
-            diff_luma_only_ = !diff_luma_only_;
-            std::cout << "Subtraction luminance-only set to '" << (diff_luma_only_ ? "ON" : "OFF") << "'" << std::endl;
-            break;
-          default:
-            break;
-        }
-        break;
-      }
-      case SDL_KEYUP:
-        switch (keycode) {
-          case SDLK_z:
-            zoom_left_ = false;
-            break;
-          case SDLK_c:
-            zoom_right_ = false;
-            break;
-          case SDLK_x:
-            show_fps_ = false;
-            break;
-        }
-        break;
-      case SDL_QUIT:
-        quit_ = true;
-        break;
+  auto wrap_to_left_frame = [&](Vector2D& video_position) -> Vector2D {
+    switch (mode_) {
+      case Mode::HSTACK:
+        return video_position - Vector2D(video_width_, 0);
+      case Mode::VSTACK:
+        return video_position - Vector2D(0, video_height_);
       default:
         break;
     }
+
+    return video_position;
+  };
+
+  auto handle_scroll = [&](int& y_offset, const int total_height, std::vector<SDL_Texture*>& textures) {
+    y_offset += (-event_.motion.yrel * total_height * 3) / drawable_height_;
+    y_offset = std::max(y_offset, drawable_height_ - total_height - static_cast<int>(textures.size()) * HELP_TEXT_LINE_SPACING);
+    y_offset = std::min(y_offset, 0);
+  };
+
+  switch (event_.type) {
+    case SDL_WINDOWEVENT:
+      switch (event_.window.event) {
+        case SDL_WINDOWEVENT_CLOSE: {
+          // If the main application window is being closed, request application quit
+          if (event_.window.windowID == SDL_GetWindowID(window_)) {
+            quit_ = true;
+          }
+          break;
+        }
+        case SDL_WINDOWEVENT_LEAVE:
+          mouse_is_inside_window_ = false;
+          break;
+        case SDL_WINDOWEVENT_ENTER:
+          mouse_is_inside_window_ = true;
+          break;
+      }
+      break;
+    case SDL_MOUSEWHEEL:
+      if (mouse_is_inside_window_ && event_.wheel.y != 0) {
+        float delta_zoom = wheel_sensitivity_ * event_.wheel.y * (event_.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -1 : 1);
+
+        if (delta_zoom > 0) {
+          delta_zoom /= 2.0F;
+        }
+
+        const float new_global_zoom_factor = compute_zoom_factor(global_zoom_level_ - delta_zoom);
+
+        // logic ported from YUView's MoveAndZoomableView.cpp with thanks :)
+        if (new_global_zoom_factor >= 0.001 && new_global_zoom_factor <= 10000) {
+          const Vector2D zoom_point = Vector2D(static_cast<float>(mouse_x_) * video_to_window_width_factor_, static_cast<float>(mouse_y_) * video_to_window_height_factor_);
+          update_move_offset(compute_relative_move_offset(zoom_point, new_global_zoom_factor));
+
+          global_zoom_level_ -= delta_zoom;
+          global_zoom_factor_ = new_global_zoom_factor;
+        }
+      }
+      break;
+    case SDL_MOUSEMOTION:
+      SDL_GetMouseState(&mouse_x_, &mouse_y_);
+
+      if (selection_state_ == SelectionState::STARTED) {
+        selection_end_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
+
+        if (selection_wrap_) {
+          selection_end_ = wrap_to_left_frame(selection_end_);
+        }
+      }
+
+      if (event_.motion.state & SDL_BUTTON_RMASK) {
+        const auto pan_offset = Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_) / Vector2D(drawable_to_window_width_factor_, drawable_to_window_height_factor_);
+
+        update_move_offset(move_offset_ + pan_offset);
+      }
+
+      if (show_metadata_) {
+        handle_scroll(metadata_y_offset_, metadata_total_height_, metadata_textures_);
+      }
+
+      if (show_help_) {
+        handle_scroll(help_y_offset_, help_total_height_, help_textures_);
+      }
+      break;
+    case SDL_MOUSEBUTTONDOWN:
+      if (event_.button.button == SDL_BUTTON_LEFT && save_selected_area_ && selection_state_ == SelectionState::NONE) {
+        selection_state_ = SelectionState::STARTED;
+        selection_start_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
+
+        // Check if the selection is outside the left video frame
+        selection_wrap_ = (mode_ == Mode::HSTACK && selection_start_.x() >= video_width_) || (mode_ == Mode::VSTACK && selection_start_.y() >= video_height_);
+
+        if (selection_wrap_) {
+          selection_start_ = wrap_to_left_frame(selection_start_);
+        }
+
+        selection_end_ = selection_start_;
+      } else if (event_.button.button != SDL_BUTTON_RIGHT) {
+        seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
+        seek_from_start_ = true;
+      }
+      update_cursor();
+      break;
+    case SDL_MOUSEBUTTONUP:
+      if (event_.button.button == SDL_BUTTON_LEFT && selection_state_ == SelectionState::STARTED) {
+        selection_state_ = SelectionState::COMPLETED;
+      }
+      update_cursor();
+      break;
+    case SDL_KEYDOWN: {
+      const SDL_Keymod keymod = static_cast<SDL_Keymod>(event_.key.keysym.mod);
+      const SDL_Keycode keycode = event_.key.keysym.sym;
+
+      auto is_clipboard_mod_pressed = [keymod]() -> bool {
+#ifdef __APPLE__
+        return (keymod & KMOD_GUI);
+#else
+        return (keymod & KMOD_CTRL);
+#endif
+      };
+
+      // Handle CTRL+SHIFT+1..0 for direct right video selection
+      if ((keymod & KMOD_CTRL) && (keymod & KMOD_SHIFT)) {
+        size_t target_index = SIZE_MAX;
+
+        if (keycode >= SDLK_1 && keycode <= SDLK_9) {
+          target_index = keycode - SDLK_1;
+        } else if (keycode >= SDLK_KP_1 && keycode <= SDLK_KP_9) {
+          target_index = keycode - SDLK_KP_1;
+        } else if ((keycode == SDLK_KP_0) || (keycode == SDLK_0)) {
+          target_index = 9;
+        }
+
+        if (target_index != SIZE_MAX) {
+          if (target_index < num_right_videos_) {
+            active_right_index_ = target_index;
+            std::cout << string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_) << std::endl;
+          }
+          break;
+        }
+      }
+
+      switch (keycode) {
+        case SDLK_h:
+          show_help_ = !show_help_;
+          break;
+        case SDLK_ESCAPE:
+          quit_ = true;
+          break;
+        case SDLK_SPACE:
+          play_ = !play_;
+          buffer_play_loop_mode_ = Loop::OFF;
+          tick_playback_ = play_;
+          break;
+        case SDLK_COMMA:
+        case SDLK_KP_COMMA:
+          set_buffer_play_loop_mode(buffer_play_loop_mode_ != Loop::PINGPONG ? Loop::PINGPONG : Loop::OFF);
+          break;
+        case SDLK_PERIOD:
+          set_buffer_play_loop_mode(buffer_play_loop_mode_ != Loop::FORWARDONLY ? Loop::FORWARDONLY : Loop::OFF);
+          break;
+        case SDLK_F1:
+          toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Histogram)] = true;
+          break;
+        case SDLK_1:
+        case SDLK_KP_1:
+          if (keymod & KMOD_SHIFT) {
+            // Fallback for layouts where F-keys are inconvenient
+            toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Histogram)] = true;
+          } else {
+            show_left_ = !show_left_;
+          }
+          break;
+        case SDLK_F2:
+          toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Vectorscope)] = true;
+          break;
+        case SDLK_2:
+        case SDLK_KP_2:
+          if (keymod & KMOD_SHIFT) {
+            // Fallback for layouts where F-keys are inconvenient
+            toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Vectorscope)] = true;
+          } else {
+            show_right_ = !show_right_;
+          }
+          break;
+        case SDLK_F3:
+          toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Waveform)] = true;
+          break;
+        case SDLK_3:
+        case SDLK_KP_3:
+          if (keymod & KMOD_SHIFT) {
+            // Fallback for layouts where F-keys are inconvenient
+            toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Waveform)] = true;
+          } else {
+            show_hud_ = !show_hud_;
+          }
+          break;
+        case SDLK_0:
+        case SDLK_KP_0:
+          subtraction_mode_ = !subtraction_mode_;
+          break;
+        case SDLK_z:
+          zoom_left_ = true;
+          break;
+        case SDLK_c: {
+          if (is_clipboard_mod_pressed()) {
+            const float previous_left_frame_secs = previous_left_frame_pts_ * AV_TIME_TO_SEC;
+            const std::string previous_left_frame_secs_str = format_position(previous_left_frame_secs, false);
+
+            SDL_SetClipboardText(previous_left_frame_secs_str.c_str());
+
+            std::cout << "Copied to clipboard: " << previous_left_frame_secs_str << std::endl;
+          } else {
+            zoom_right_ = true;
+          }
+          break;
+        }
+        case SDLK_v: {
+          if (is_clipboard_mod_pressed()) {
+            char* clip_text = SDL_GetClipboardText();
+
+            if (!clip_text) {
+              std::cerr << "Failed to get clipboard text: " << SDL_GetError() << std::endl;
+              return;
+            }
+
+            std::string clipboard_str(clip_text);
+            SDL_free(clip_text);
+
+            static const std::regex timestamp_regex(R"((?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?))");
+            std::smatch match;
+
+            if (std::regex_search(clipboard_str, match, timestamp_regex)) {
+              std::string timestamp = match.str();
+              std::cout << "Timestamp pasted: " << timestamp << std::endl;
+
+              seek_relative_ = parse_timestamps_to_seconds(timestamp) / static_cast<float>(duration_);
+              seek_from_start_ = true;
+            } else {
+              std::cout << "No valid timestamp found in clipboard." << std::endl;
+            }
+          } else {
+            show_metadata_ = !show_metadata_;
+          }
+          break;
+        }
+        case SDLK_a:
+          if (keymod & KMOD_SHIFT) {
+            std::cerr << "Frame-accurate backward navigation has not yet been implemented" << std::endl;
+          } else {
+            frame_buffer_offset_delta_++;
+          }
+          break;
+        case SDLK_d:
+          if (keymod & KMOD_SHIFT) {
+            frame_navigation_delta_++;
+          } else {
+            frame_buffer_offset_delta_--;
+          }
+          break;
+        case SDLK_i:
+          fast_input_alignment_ = !fast_input_alignment_;
+          std::cout << "Input alignment resizing filter set to '" << (fast_input_alignment_ ? "BILINEAR (fast)" : "BICUBIC (high-quality)") << "' (takes effect for the next decoded frame)" << std::endl;
+          break;
+        case SDLK_t:
+          bilinear_texture_filtering_ = !bilinear_texture_filtering_;
+          std::cout << "Video texture filter set to '" << (bilinear_texture_filtering_ ? "BILINEAR" : "NEAREST NEIGHBOR") << "'" << std::endl;
+          break;
+        case SDLK_s: {
+          swap_left_right_ = !swap_left_right_;
+          refresh_display_side_mapping();
+          break;
+        }
+        case SDLK_f:
+          if (keymod & KMOD_SHIFT) {
+            if (!save_selected_area_) {
+              save_selected_area_ = true;
+            } else {
+              save_selected_area_ = false;
+              selection_state_ = SelectionState::NONE;
+            }
+            update_cursor();
+          } else {
+            save_image_frames_ = true;
+          }
+          break;
+        case SDLK_p:
+          print_mouse_position_and_color_ = mouse_is_inside_window_;
+          break;
+        case SDLK_TAB:
+          if (keymod & KMOD_SHIFT) {
+            active_right_index_ = (active_right_index_ + num_right_videos_ - 1) % num_right_videos_;
+          } else {
+            active_right_index_ = (active_right_index_ + 1) % num_right_videos_;
+          }
+          std::cout << string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_) << std::endl;
+          break;
+        case SDLK_m:
+          print_image_similarity_metrics_ = true;
+          break;
+        case SDLK_4:
+        case SDLK_KP_4:
+          update_zoom_factor_and_move_offset(std::min(video_to_window_width_factor_ / drawable_to_window_width_factor_, video_to_window_height_factor_ / drawable_to_window_height_factor_));
+          break;
+        case SDLK_5:
+        case SDLK_KP_5:
+          update_zoom_factor_and_move_offset(0.5F);
+          break;
+        case SDLK_6:
+        case SDLK_KP_6:
+          update_zoom_factor_and_move_offset(1.0F);
+          break;
+        case SDLK_7:
+        case SDLK_KP_7:
+          update_zoom_factor_and_move_offset(2.0F);
+          break;
+        case SDLK_8:
+        case SDLK_KP_8:
+          update_zoom_factor_and_move_offset(4.0F);
+          break;
+        case SDLK_9:
+        case SDLK_KP_9:
+          update_zoom_factor_and_move_offset(8.0F);
+          break;
+        case SDLK_r:
+          update_zoom_factor(1.0F);
+          move_offset_ = Vector2D(0.0F, 0.0F);
+          global_center_ = Vector2D(0.5F, 0.5F);
+          break;
+        case SDLK_LEFT:
+          seek_relative_ -= 1.0F;
+          break;
+        case SDLK_DOWN:
+          seek_relative_ -= 10.0F;
+          break;
+        case SDLK_PAGEDOWN:
+          seek_relative_ -= 600.0F;
+          break;
+        case SDLK_RIGHT:
+          seek_relative_ += 1.0F;
+          break;
+        case SDLK_UP:
+          seek_relative_ += 10.0F;
+          break;
+        case SDLK_PAGEUP:
+          seek_relative_ += 600.0F;
+          break;
+        case SDLK_j:
+          update_playback_speed(playback_speed_level_ - 1);
+          possibly_tick_playback_ = true;
+          break;
+        case SDLK_l:
+          update_playback_speed(playback_speed_level_ + 1);
+          tick_playback_ = true;
+          break;
+        case SDLK_x:
+          show_fps_ = true;
+          break;
+        case SDLK_PLUS:
+        case SDLK_KP_PLUS:
+        case SDLK_EQUALS:  // for tenkeyless keyboards
+          if (keymod & KMOD_ALT) {
+            shift_right_frames_ += 100;
+          } else if (keymod & KMOD_CTRL) {
+            shift_right_frames_ += 10;
+          } else {
+            shift_right_frames_++;
+          }
+          break;
+        case SDLK_MINUS:
+        case SDLK_KP_MINUS:
+          if (keymod & KMOD_ALT) {
+            shift_right_frames_ -= 100;
+          } else if (keymod & KMOD_CTRL) {
+            shift_right_frames_ -= 10;
+          } else {
+            shift_right_frames_--;
+          }
+          break;
+        case SDLK_y:
+          // Cycle through subtraction modes
+          switch (diff_mode_) {
+            case DiffMode::LegacyAbs:
+              diff_mode_ = DiffMode::AbsLinear;
+              break;
+            case DiffMode::AbsLinear:
+              diff_mode_ = DiffMode::AbsSqrt;
+              break;
+            case DiffMode::AbsSqrt:
+              diff_mode_ = DiffMode::SignedDiverging;
+              break;
+            case DiffMode::SignedDiverging:
+              diff_mode_ = DiffMode::LegacyAbs;
+              break;
+          }
+          std::cout << "Subtraction mode set to '";
+          switch (diff_mode_) {
+            case DiffMode::LegacyAbs:
+              std::cout << "ABSOLUTE LINEAR (FIXED GAIN)";
+              break;
+            case DiffMode::AbsLinear:
+              std::cout << "ABSOLUTE LINEAR (ADAPTIVE)";
+              break;
+            case DiffMode::AbsSqrt:
+              std::cout << "ABSOLUTE SQUARE ROOT";
+              break;
+            case DiffMode::SignedDiverging:
+              std::cout << "SIGNED DIVERGING";
+              break;
+          }
+          std::cout << "'" << std::endl;
+          break;
+        case SDLK_u:
+          diff_luma_only_ = !diff_luma_only_;
+          std::cout << "Subtraction luminance-only set to '" << (diff_luma_only_ ? "ON" : "OFF") << "'" << std::endl;
+          break;
+        default:
+          break;
+      }
+      break;
+    }
+    case SDL_KEYUP:
+      switch (event_.key.keysym.sym) {
+        case SDLK_z:
+          zoom_left_ = false;
+          break;
+        case SDLK_c:
+          zoom_right_ = false;
+          break;
+        case SDLK_x:
+          show_fps_ = false;
+          break;
+      }
+      break;
+    case SDL_QUIT:
+      quit_ = true;
+      break;
+    default:
+      break;
   }
 }
 

@@ -1,6 +1,7 @@
 #include "video_compare.h"
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <deque>
 #include <iostream>
 #include <limits>
@@ -8,6 +9,7 @@
 #include "ffmpeg.h"
 #include "scope_manager.h"
 #include "scope_window.h"
+#include "sdl_event_info.h"
 #include "side_aware_logger.h"
 #include "sorted_flat_deque.h"
 #include "string_utils.h"
@@ -25,6 +27,14 @@ static constexpr uint32_t SLEEP_PERIOD_MS = 10;
 static constexpr uint32_t ONE_SECOND_US = 1000 * 1000;
 static constexpr uint32_t RESYNC_UPDATE_RATE_US = ONE_SECOND_US / 10;
 static constexpr uint32_t NOMINAL_FPS_UPDATE_RATE_US = 1 * ONE_SECOND_US;
+
+static bool env_flag_enabled(const char* name) {
+  const char* v = std::getenv(name);
+  if (v == nullptr) {
+    return false;
+  }
+  return (v[0] == '1') || (v[0] == 'y') || (v[0] == 'Y') || (v[0] == 't') || (v[0] == 'T');
+}
 
 static auto avpacket_deleter = [](AVPacket* packet) {
   av_packet_unref(packet);
@@ -698,6 +708,8 @@ void VideoCompare::compare() {
 
     double next_refresh_at = 0;
 
+    const bool log_event_routing = env_flag_enabled("VIDEO_COMPARE_LOG_EVENT_ROUTING");
+
     for (uint64_t frame_number = 0;; ++frame_number) {
       // Set FPS message if needed
       if (display_->get_show_fps()) {
@@ -706,10 +718,26 @@ void VideoCompare::compare() {
 
       full_cycle_timer.update();
 
-      // Route scope-window events (mouse, resize/close) while forwarding unconsumed events for the main display
-      scope_manager_->route_events();
-      // Now let the main window handle the rest
-      display_->input();
+      // Event model:
+      // - Only *one* place pumps SDL events (this main loop).
+      // - Scope windows may consume events.
+      // - Destruction is deferred: scope windows set close_requested_ and are destroyed later by reconcile().
+      display_->begin_input_frame();
+      SDL_Event event;
+      while (SDL_PollEvent(&event) != 0) {
+        display_->mark_input_received();
+
+        const uint32_t wid = SDLEventInfo::window_id(event);
+        const bool consumed_by_scope = scope_manager_->handle_event(event);
+        if (!consumed_by_scope) {
+          display_->handle_event(event);
+        }
+
+        if (log_event_routing) {
+          std::cerr << "[event] type=" << SDLEventInfo::type_name(event.type) << " (" << event.type << ")"
+                    << " windowID=" << wid << " -> " << (consumed_by_scope ? "scope" : "display") << std::endl;
+        }
+      }
 
       // Handle scope windows
       const SDL_Rect roi = display_->get_visible_roi_in_single_frame_coordinates();

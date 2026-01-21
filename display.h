@@ -368,8 +368,15 @@ class Display {
   // Bring focus back to the main window (avoid scope windows stealing keyboard focus)
   void focus_main_window();
 
-  // Handle events
-  void input();
+  // Input model:
+  // - The main loop centrally pumps SDL events (single SDL_PollEvent loop).
+  // - The main loop calls begin_input_frame(), then dispatches each event via handle_event().
+  void begin_input_frame();
+  void handle_event(const SDL_Event& event);
+
+  // Mark that *some* input/event occurred this frame (even if consumed by a scope window),
+  // so the display refresh logic can behave the same as when Display used to poll events itself.
+  void mark_input_received();
 
   bool get_quit() const;
   bool get_play() const;

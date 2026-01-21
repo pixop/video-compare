@@ -52,13 +52,12 @@ class ScopeWindow {
   };
   void set_roi(const Roi& roi);
 
-  // Global routing: consume scope-window events and request refresh if resizing occurred
-  static void route_events(std::array<std::unique_ptr<ScopeWindow>, ScopeWindow::kNumScopes>& windows);
+  uint32_t window_id() const { return window_id_; }
 
- private:
   // Handle SDL events targeted to this window; returns true if consumed.
   bool handle_event(const SDL_Event& event);
 
+ private:
   void ensure_graph(const AVFrame* left_frame, const AVFrame* right_frame);
   void ensure_texture();
   void destroy_graph();
