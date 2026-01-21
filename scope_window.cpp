@@ -647,6 +647,7 @@ void ScopeWindow::route_events(std::array<std::unique_ptr<ScopeWindow>, ScopeWin
 
   // Requeue events for the main display input to process
   for (auto it = deferred_events.rbegin(); it != deferred_events.rend(); ++it) {
-    SDL_PushEvent(&(*it));
+    SDL_Event event_copy = *it;
+    SDL_PushEvent(&event_copy);
   }
 }
