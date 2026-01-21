@@ -1,4 +1,6 @@
 #include "scope_window.h"
+#include <cstring>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -646,8 +648,13 @@ void ScopeWindow::route_events(std::array<std::unique_ptr<ScopeWindow>, ScopeWin
   }
 
   // Requeue events for the main display input to process
-  for (auto it = deferred_events.rbegin(); it != deferred_events.rend(); ++it) {
-    SDL_Event event_copy = *it;
-    SDL_PushEvent(&event_copy);
+  for (const auto& deferred_event : deferred_events) {
+    SDL_Event event_copy;
+    std::memset(&event_copy, 0, sizeof(event_copy));
+    std::memcpy(&event_copy, &deferred_event, sizeof(SDL_Event));
+    const int result = SDL_PushEvent(&event_copy);
+    if (result != 1) {
+      continue;
+    }
   }
 }
