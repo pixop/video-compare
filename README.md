@@ -163,10 +163,9 @@ right videos, and the active right video can be switched within the UI:
 Override any command-line option for individual right videos using the `::` separator. Global settings
 apply to all right videos by default, but can be overridden per-video:
 
-    video-compare -r yadif input.mp4 \
-        output1.mp4 \
+    video-compare -r yadif input.mp4 output1.mp4 \
         output2.mp4::filters=__,scale=1920:-1 \
-        output3.mp4::hwaccel=videotoolbox
+        output3.mp4::filters=::hwaccel=videotoolbox
 
 The above features can be combined in any order, of course. Launch `video-compare` without any arguments to
 see all supported options.
