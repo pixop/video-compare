@@ -138,6 +138,18 @@ std::string get_file_stem(const std::string& file_path) {
   return tmp;
 }
 
+static bool should_suffix_right_file_number_1(const std::string& left_file_name, const std::string& right_file_name) {
+  return get_file_name_and_extension(left_file_name) == get_file_name_and_extension(right_file_name);
+}
+
+static std::string format_right_file_label(const std::string& left_file_name, const std::string& right_file_name, const size_t right_file_number) {
+  if (right_file_number >= 2 || (right_file_number == 1 && should_suffix_right_file_number_1(left_file_name, right_file_name))) {
+    return right_file_name + string_sprintf(" <%zu>", right_file_number);
+  }
+
+  return right_file_name;
+}
+
 std::string format_window_title(const std::string& left_file_name, const std::string& right_file_name) {
   return string_sprintf("%s  |  %s", get_file_name_and_extension(left_file_name).c_str(), get_file_name_and_extension(right_file_name).c_str());
 }
@@ -394,7 +406,7 @@ Display::Display(const int display_number,
   side_ui_[LEFT.as_simple_index()].text_height = text_surface->h;
   SDL_FreeSurface(text_surface);
 
-  text_surface = render_text_with_fallback(right_file_name);
+  text_surface = render_text_with_fallback(format_right_file_label(left_file_name, right_file_name, 1));
   side_ui_[RIGHT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
   side_ui_[RIGHT.as_simple_index()].text_width = text_surface->w;
   side_ui_[RIGHT.as_simple_index()].text_height = text_surface->h;
@@ -1495,13 +1507,7 @@ void Display::update_right_video(const std::string& right_file_name, const Video
   }
 
   // Create new right texture
-  std::string right_file_label = right_file_name;
-  const size_t right_file_number = active_right_index_ + 1;
-  if (right_file_number >= 2) {
-    right_file_label += string_sprintf(" <%zu>", right_file_number);
-  }
-
-  SDL_Surface* text_surface = render_text_with_fallback(right_file_label);
+  SDL_Surface* text_surface = render_text_with_fallback(format_right_file_label(left_file_name_, right_file_name, active_right_index_ + 1));
   side_ui_[RIGHT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
   side_ui_[RIGHT.as_simple_index()].text_width = text_surface->w;
   side_ui_[RIGHT.as_simple_index()].text_height = text_surface->h;
