@@ -1,6 +1,7 @@
 #define SDL_MAIN_HANDLED
 #include <algorithm>
 #include <iostream>
+#include <map>
 #include <regex>
 #include <stdexcept>
 #include <vector>
@@ -315,6 +316,144 @@ void resolve_mutual_placeholders(std::string& left, std::string& right, const st
   }
 }
 
+ToneMapping parse_tone_mapping_mode(const std::string& mode) {
+  if (mode.empty() || mode == "auto") {
+    return ToneMapping::AUTO;
+  } else if (mode == "off") {
+    return ToneMapping::OFF;
+  } else if (mode == "on") {
+    return ToneMapping::FULLRANGE;
+  } else if (mode == "rel") {
+    return ToneMapping::RELATIVE;
+  } else {
+    throw std::logic_error{"Cannot parse tone mapping mode (valid options: auto, off, on, rel)"};
+  }
+}
+
+unsigned parse_peak_nits(const std::string& nits_str) {
+  if (nits_str.empty()) {
+    return 0;
+  }
+  const std::regex peak_nits_re("(\\d*)");
+  if (!std::regex_match(nits_str, peak_nits_re)) {
+    throw std::logic_error{"Cannot parse peak nits (required format: [number], e.g. 400, 850 or 1000)"};
+  }
+  int nits = std::stoi(nits_str);
+  if (nits < 1) {
+    throw std::logic_error{"peak nits must be at least 1"};
+  }
+  if (nits > 10000) {
+    throw std::logic_error{"peak nits must not be more than 10000"};
+  }
+  return static_cast<unsigned>(nits);
+}
+
+float parse_boost_tone(const std::string& boost_str) {
+  if (boost_str.empty()) {
+    return 1.0;
+  }
+  const std::regex boost_tone_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
+  if (!std::regex_match(boost_str, boost_tone_re)) {
+    throw std::logic_error{"Cannot parse boost tone; must be a valid number, e.g. 1.3 or 3.0"};
+  }
+  return static_cast<float>(parse_strict_double(boost_str));
+}
+
+// Parse an FFmpeg parameter spec string (format: "name[:options]" or "name:device:options" for hwaccel)
+// Returns the main value and sets options in the provided AVDictionary
+// For hwaccel with join_tokens_0_and_1=true, joins tokens 0 and 1 as the main value
+std::string parse_ffmpeg_param_spec(const std::string& spec, const std::string& template_spec, AVDictionary*& options, const std::string& type_name, int options_token_idx, bool use_default_demuxer_opts, bool join_tokens_0_and_1) {
+  std::string result = safe_replace_placeholder(spec, template_spec, type_name);
+  AVDictionary* base_dict = options;
+  if (!base_dict && use_default_demuxer_opts) {
+    base_dict = create_default_demuxer_options();
+  }
+  options = upsert_avdict_options(base_dict, get_nth_token_or_empty(result, ':', options_token_idx));
+  if (join_tokens_0_and_1) {
+    return string_join({get_nth_token_or_empty(result, ':', 0), get_nth_token_or_empty(result, ':', 1)}, ":");
+  } else {
+    return get_nth_token_or_empty(result, ':', 0);
+  }
+}
+
+// Parse right video specification with :: separator
+// Format: filename[::key=value[::key=value...]]
+struct RightVideoSpec {
+  std::string file_name;
+  std::map<std::string, std::string> params;
+};
+
+RightVideoSpec parse_right_video_spec(const std::string& spec) {
+  RightVideoSpec result;
+  size_t pos = spec.find("::");
+
+  if (pos == std::string::npos) {
+    result.file_name = spec;
+    return result;
+  }
+
+  result.file_name = spec.substr(0, pos);
+  size_t start = pos + 2;
+
+  while (start < spec.length()) {
+    size_t next_sep = spec.find("::", start);
+    std::string part = (next_sep == std::string::npos) ? spec.substr(start) : spec.substr(start, next_sep - start);
+    start = (next_sep == std::string::npos) ? spec.length() : next_sep + 2;
+
+    size_t eq_pos = part.find('=');
+    if (eq_pos != std::string::npos) {
+      result.params[part.substr(0, eq_pos)] = part.substr(eq_pos + 1);
+    } else if (!part.empty()) {
+      result.params[part] = "";
+    }
+  }
+
+  return result;
+}
+
+void apply_right_video_spec(InputVideo& video, const RightVideoSpec& spec, const InputVideo& template_video) {
+  auto get_param = [&](const std::string& key) -> const std::string* {
+    auto it = spec.params.find(key);
+    return (it != spec.params.end()) ? &it->second : nullptr;
+  };
+
+  if (const std::string* val = get_param("filters")) {
+    video.video_filters = safe_replace_placeholder(*val, template_video.video_filters, "filter specification");
+  }
+  if (const std::string* val = get_param("color-space")) {
+    video.color_space = *val;
+  }
+  if (const std::string* val = get_param("color-range")) {
+    video.color_range = *val;
+  }
+  if (const std::string* val = get_param("color-primaries")) {
+    video.color_primaries = *val;
+  }
+  if (const std::string* val = get_param("color-trc")) {
+    video.color_trc = *val;
+  }
+
+  if (const std::string* val = get_param("decoder")) {
+    video.decoder = parse_ffmpeg_param_spec(*val, template_video.decoder, video.decoder_options, "decoder", 1, false, false);
+  }
+  if (const std::string* val = get_param("demuxer")) {
+    video.demuxer = parse_ffmpeg_param_spec(*val, template_video.demuxer, video.demuxer_options, "demuxer", 1, true, false);
+  }
+  if (const std::string* val = get_param("hwaccel")) {
+    video.hw_accel_spec = parse_ffmpeg_param_spec(*val, template_video.hw_accel_spec, video.hw_accel_options, "hardware acceleration", 2, false, true);
+  }
+
+  if (const std::string* val = get_param("tone-map-mode")) {
+    video.tone_mapping_mode = parse_tone_mapping_mode(*val);
+  }
+  if (const std::string* val = get_param("peak-nits")) {
+    video.peak_luminance_nits = parse_peak_nits(*val);
+  }
+  if (const std::string* val = get_param("boost-tone")) {
+    video.boost_tone = parse_boost_tone(*val);
+  }
+}
+
 int main(int argc, char** argv) {
   char** argv_decoded = get_argv(&argc, argv);
   int exit_code = 0;
@@ -540,27 +679,11 @@ int main(int argc, char** argv) {
         config.wheel_sensitivity = parse_strict_double(wheel_sensitivity_arg);
       }
       if (args["tone-map-mode"]) {
-        const std::string tone_mapping_mode_arg = args["tone-map-mode"];
-
-        auto parse_tm_mode_arg = [](const std::string& tone_mapping_mode_arg) {
-          if (tone_mapping_mode_arg.empty() || tone_mapping_mode_arg == "auto") {
-            return ToneMapping::AUTO;
-          } else if (tone_mapping_mode_arg == "off") {
-            return ToneMapping::OFF;
-          } else if (tone_mapping_mode_arg == "on") {
-            return ToneMapping::FULLRANGE;
-          } else if (tone_mapping_mode_arg == "rel") {
-            return ToneMapping::RELATIVE;
-          } else {
-            throw std::logic_error{"Cannot parse tone mapping mode argument (valid options: auto, off, on, rel)"};
-          }
-        };
-
         auto tone_mapping_mode_spec = static_cast<const std::string&>(args["tone-map-mode"]);
         auto left_tone_mapping_mode = get_nth_token_or_empty(tone_mapping_mode_spec, ':', 0);
 
-        config.left.tone_mapping_mode = parse_tm_mode_arg(left_tone_mapping_mode);
-        right_template.tone_mapping_mode = (tone_mapping_mode_spec == left_tone_mapping_mode) ? config.left.tone_mapping_mode : parse_tm_mode_arg(get_nth_token_or_empty(tone_mapping_mode_spec, ':', 1));
+        config.left.tone_mapping_mode = parse_tone_mapping_mode(left_tone_mapping_mode);
+        right_template.tone_mapping_mode = (tone_mapping_mode_spec == left_tone_mapping_mode) ? config.left.tone_mapping_mode : parse_tone_mapping_mode(get_nth_token_or_empty(tone_mapping_mode_spec, ':', 1));
       }
 
       // scopes
@@ -619,10 +742,8 @@ int main(int argc, char** argv) {
       }
       resolve_mutual_placeholders(config.left.demuxer, right_template.demuxer, "demuxer");
 
-      config.left.demuxer_options = upsert_avdict_options(config.left.demuxer_options, get_nth_token_or_empty(config.left.demuxer, ':', 1));
-      right_template.demuxer_options = upsert_avdict_options(right_template.demuxer_options, get_nth_token_or_empty(right_template.demuxer, ':', 1));
-      config.left.demuxer = get_nth_token_or_empty(config.left.demuxer, ':', 0);
-      right_template.demuxer = get_nth_token_or_empty(right_template.demuxer, ':', 0);
+      config.left.demuxer = parse_ffmpeg_param_spec(config.left.demuxer, "", config.left.demuxer_options, "demuxer", 1, false, false);
+      right_template.demuxer = parse_ffmpeg_param_spec(right_template.demuxer, "", right_template.demuxer_options, "demuxer", 1, false, false);
 
       // decder
       if (args["decoder"]) {
@@ -637,10 +758,8 @@ int main(int argc, char** argv) {
       }
       resolve_mutual_placeholders(config.left.decoder, right_template.decoder, "decoder");
 
-      config.left.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.left.decoder, ':', 1));
-      right_template.decoder_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(right_template.decoder, ':', 1));
-      config.left.decoder = get_nth_token_or_empty(config.left.decoder, ':', 0);
-      right_template.decoder = get_nth_token_or_empty(right_template.decoder, ':', 0);
+      config.left.decoder = parse_ffmpeg_param_spec(config.left.decoder, "", config.left.decoder_options, "decoder", 1, false, false);
+      right_template.decoder = parse_ffmpeg_param_spec(right_template.decoder, "", right_template.decoder_options, "decoder", 1, false, false);
 
       // HW acceleration
       if (args["hwaccel"]) {
@@ -655,30 +774,10 @@ int main(int argc, char** argv) {
       }
       resolve_mutual_placeholders(config.left.hw_accel_spec, right_template.hw_accel_spec, "hardware acceleration");
 
-      config.left.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(config.left.hw_accel_spec, ':', 2));
-      right_template.hw_accel_options = upsert_avdict_options(nullptr, get_nth_token_or_empty(right_template.hw_accel_spec, ':', 2));
-      config.left.hw_accel_spec = string_join({get_nth_token_or_empty(config.left.hw_accel_spec, ':', 0), get_nth_token_or_empty(config.left.hw_accel_spec, ':', 1)}, ":");
-      right_template.hw_accel_spec = string_join({get_nth_token_or_empty(right_template.hw_accel_spec, ':', 0), get_nth_token_or_empty(right_template.hw_accel_spec, ':', 1)}, ":");
+      config.left.hw_accel_spec = parse_ffmpeg_param_spec(config.left.hw_accel_spec, "", config.left.hw_accel_options, "hardware acceleration", 2, false, true);
+      right_template.hw_accel_spec = parse_ffmpeg_param_spec(right_template.hw_accel_spec, "", right_template.hw_accel_options, "hardware acceleration", 2, false, true);
 
       if (args["left-peak-nits"] || args["right-peak-nits"]) {
-        const std::regex peak_nits_re("(\\d*)");
-
-        auto parse_peak_nits = [&](const std::string& arg, const InputVideo& input_video) {
-          if (!std::regex_match(arg, peak_nits_re)) {
-            throw std::logic_error{"Cannot parse " + to_lower_case(input_video.side_description) + " peak nits (required format: [number], e.g. 400, 850 or 1000)"};
-          }
-
-          int result = std::stoi(arg);
-
-          if (result < 1) {
-            throw std::logic_error{input_video.side_description + " peak nits must be at least 1"};
-          }
-          if (result > 10000) {
-            throw std::logic_error{input_video.side_description + " peak nits must not be more than 10000"};
-          }
-          return result;
-        };
-
         std::string left_peak_nits;
         std::string right_peak_nits;
 
@@ -691,32 +790,18 @@ int main(int argc, char** argv) {
         resolve_mutual_placeholders(left_peak_nits, right_peak_nits, "peak (in nits)");
 
         if (!left_peak_nits.empty()) {
-          config.left.peak_luminance_nits = parse_peak_nits(left_peak_nits, config.left);
+          config.left.peak_luminance_nits = parse_peak_nits(left_peak_nits);
         }
         if (!right_peak_nits.empty()) {
-          right_template.peak_luminance_nits = parse_peak_nits(right_peak_nits, right_template);
+          right_template.peak_luminance_nits = parse_peak_nits(right_peak_nits);
         }
       }
       if (args["boost-tone"]) {
-        auto parse_boost_tone = [](const std::string& boost_tone_arg, const InputVideo& input_video) {
-          if (boost_tone_arg.empty()) {
-            return 1.0;
-          }
-
-          const std::regex boost_tone_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
-
-          if (!std::regex_match(boost_tone_arg, boost_tone_re)) {
-            throw std::logic_error{"Cannot parse " + to_lower_case(input_video.side_description) + " boost luminance argument; must be a valid number, e.g. 1.3 or 3.0"};
-          }
-
-          return parse_strict_double(boost_tone_arg);
-        };
-
         auto boost_tone_spec = static_cast<const std::string&>(args["boost-tone"]);
         auto left_boost_tone = get_nth_token_or_empty(boost_tone_spec, ':', 0);
 
-        config.left.boost_tone = parse_boost_tone(left_boost_tone, config.left);
-        right_template.boost_tone = (boost_tone_spec == left_boost_tone) ? config.left.boost_tone : parse_boost_tone(get_nth_token_or_empty(boost_tone_spec, ':', 1), right_template);
+        config.left.boost_tone = parse_boost_tone(left_boost_tone);
+        right_template.boost_tone = (boost_tone_spec == left_boost_tone) ? config.left.boost_tone : parse_boost_tone(get_nth_token_or_empty(boost_tone_spec, ':', 1));
       }
 
       config.left.file_name = args.pos[0];
@@ -730,8 +815,10 @@ int main(int argc, char** argv) {
 
       // Create right videos from all remaining file arguments
       for (size_t i = 1; i < args.pos.size(); ++i) {
+        RightVideoSpec spec = parse_right_video_spec(args.pos[i]);
+
         InputVideo right_video = right_template;
-        right_video.file_name = args.pos[i];
+        right_video.file_name = spec.file_name;
         right_video.side = Side::Right(static_cast<size_t>(i - 1));
         right_video.side_description = i == 1 ? "Right" : "Right" + std::to_string(i);
         right_video.demuxer_options = nullptr;
@@ -740,6 +827,8 @@ int main(int argc, char** argv) {
         av_dict_copy(&right_video.decoder_options, right_template.decoder_options, 0);
         right_video.hw_accel_options = nullptr;
         av_dict_copy(&right_video.hw_accel_options, right_template.hw_accel_options, 0);
+
+        apply_right_video_spec(right_video, spec, right_template);
 
         // Resolve placeholders for this right video
         std::string left_file = config.left.file_name;
