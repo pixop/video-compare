@@ -1495,7 +1495,13 @@ void Display::update_right_video(const std::string& right_file_name, const Video
   }
 
   // Create new right texture
-  SDL_Surface* text_surface = render_text_with_fallback(right_file_name);
+  std::string right_file_label = right_file_name;
+  const size_t right_file_number = active_right_index_ + 1;
+  if (right_file_number >= 2) {
+    right_file_label += string_sprintf(" <%zu>", right_file_number);
+  }
+
+  SDL_Surface* text_surface = render_text_with_fallback(right_file_label);
   side_ui_[RIGHT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
   side_ui_[RIGHT.as_simple_index()].text_width = text_surface->w;
   side_ui_[RIGHT.as_simple_index()].text_height = text_surface->h;
