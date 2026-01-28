@@ -10,11 +10,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-windows:
     runs-on: windows-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
@@ -106,48 +108,6 @@ jobs:
             exit 1
           }
 
-      - name: Package Windows release (tag builds only)
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: powershell
-        run: |
-          $tag = "${env:GITHUB_REF_NAME}"
-          $zip = "video-compare-$tag-win10-x86_64.zip"
-
-          New-Item -ItemType Directory -Force -Path release | Out-Null
-          Copy-Item video-compare.exe -Destination release -Force
-          Copy-Item *.dll -Destination release -Force
-          Copy-Item README.md -Destination release -Force
-
-          if (Test-Path $zip) { Remove-Item $zip -Force }
-          7z a -tzip $zip .\release\*
-
-          Write-Host "Created $zip"
-          Get-Item $zip | Format-List Name,Length,LastWriteTime
-
-      - name: Create draft GitHub Release (tag builds only)
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: powershell
-        run: |
-          $tag = "${env:GITHUB_REF_NAME}"
-          cmd /c "gh release view $tag >nul 2>nul"
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --draft --title $tag --notes "Release $tag"
-          } else {
-            Write-Host "Release $tag already exists"
-          }
-
-      - name: Upload Windows zip to GitHub Release (tag builds only)
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: powershell
-        run: |
-          $tag = "${env:GITHUB_REF_NAME}"
-          $zip = "video-compare-$tag-win10-x86_64.zip"
-          gh release upload $tag $zip --clobber=false
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -158,8 +118,97 @@ jobs:
             README.md
           retention-days: 90
 
+  release-windows:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      ZIP_NAME: video-compare-${{ github.ref_name }}-win10-x86_64.zip
+
+    steps:
+      - name: Download Windows build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: video-compare-windows
+
+      - name: Package Windows release
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zip
+
+          mkdir -p release
+          cp -f video-compare.exe README.md release/
+          # Copy all DLLs (if any) from the Windows artifact bundle.
+          shopt -s nullglob
+          dlls=( *.dll )
+          if [ "${#dlls[@]}" -gt 0 ]; then
+            cp -f *.dll release/
+          fi
+
+          rm -f "$ZIP_NAME"
+          (cd release && zip -r "../$ZIP_NAME" .)
+
+          echo "Created $ZIP_NAME"
+          ls -lh "$ZIP_NAME"
+
+      - name: Generate artifact attestation (Windows zip)
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ env.ZIP_NAME }}
+
+      - name: Install Syft (SBOM generator)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sudo sh -s -- -b /usr/local/bin
+          syft version
+
+      - name: Generate SBOM (SPDX JSON)
+        shell: bash
+        run: |
+          set -euo pipefail
+          syft dir:release -o spdx-json=sbom.spdx.json
+          ls -lh sbom.spdx.json
+
+      - name: Generate SBOM attestation (Windows zip)
+        uses: actions/attest-sbom@v2
+        with:
+          subject-path: ${{ env.ZIP_NAME }}
+          sbom-path: sbom.spdx.json
+
+      - name: Create draft GitHub Release (if missing)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --draft --title "$tag" --notes "Release $tag"
+          else
+            echo "Release $tag already exists"
+          fi
+
+      - name: Upload Windows zip to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          gh release upload "$tag" "$ZIP_NAME" --clobber=false
+          gh release upload "$tag" sbom.spdx.json --clobber=false
+
   build-linux:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
@@ -210,6 +259,8 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
