@@ -189,8 +189,9 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --draft --title "$tag" --notes "Release $tag"
+          repo="${GITHUB_REPOSITORY}"
+          if ! gh release view "$tag" -R "$repo" >/dev/null 2>&1; then
+            gh release create "$tag" -R "$repo" --draft --title "$tag" --notes "Release $tag"
           else
             echo "Release $tag already exists"
           fi
@@ -202,8 +203,9 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          gh release upload "$tag" "$ZIP_NAME" --clobber=false
-          gh release upload "$tag" sbom.spdx.json --clobber=false
+          repo="${GITHUB_REPOSITORY}"
+          gh release upload "$tag" -R "$repo" "$ZIP_NAME" --clobber=false
+          gh release upload "$tag" -R "$repo" sbom.spdx.json --clobber=false
 
   build-linux:
     runs-on: ubuntu-latest
