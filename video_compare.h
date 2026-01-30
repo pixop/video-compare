@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <limits>
 #include <map>
 #include <memory>
 #include <shared_mutex>
@@ -135,6 +136,42 @@ class VideoCompare {
   void compare();
 
  private:
+  class ScopeUpdateState {
+   public:
+    ScopeUpdateState() { reset(); }
+
+    bool has_changed(const int64_t new_left_pts, const int64_t new_right_pts, const ScopeWindow::Roi& new_roi, const bool new_swapped) const {
+      const bool frames_changed = (new_left_pts != left_pts_) || (new_right_pts != right_pts_);
+      const bool roi_changed = (!roi_valid_) || (roi_.x != new_roi.x) || (roi_.y != new_roi.y) || (roi_.w != new_roi.w) || (roi_.h != new_roi.h);
+      const bool swap_changed = (new_swapped != swapped_);
+
+      return frames_changed || roi_changed || swap_changed;
+    }
+
+    void mark_updated(const int64_t new_left_pts, const int64_t new_right_pts, const ScopeWindow::Roi& new_roi, const bool new_swapped) {
+      left_pts_ = new_left_pts;
+      right_pts_ = new_right_pts;
+      roi_ = new_roi;
+      roi_valid_ = true;
+      swapped_ = new_swapped;
+    }
+
+    void reset() {
+      left_pts_ = std::numeric_limits<int64_t>::min();
+      right_pts_ = std::numeric_limits<int64_t>::min();
+      roi_ = {0, 0, 0, 0};
+      roi_valid_ = false;
+      swapped_ = false;
+    }
+
+   private:
+    int64_t left_pts_;
+    int64_t right_pts_;
+    ScopeWindow::Roi roi_;
+    bool roi_valid_;
+    bool swapped_;
+  };
+
   const bool same_decoded_video_both_sides_;
 
   const Display::Loop auto_loop_mode_;
@@ -164,6 +201,7 @@ class VideoCompare {
   std::map<Side, RightVideoInfo> right_video_info_;
 
   std::unique_ptr<ScopeManager> scope_manager_;
+  ScopeUpdateState scope_update_state_;
 
   std::vector<std::thread> stages_;
 

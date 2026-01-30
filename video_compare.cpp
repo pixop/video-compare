@@ -749,6 +749,7 @@ void VideoCompare::compare() {
           if (opened) {
             // Ensure the main window retains keyboard focus after opening a scope
             display_->focus_main_window();
+            scope_update_state_.reset();
           }
         }
       }
@@ -1185,8 +1186,17 @@ void VideoCompare::compare() {
             display_refresh_timer.update();
 
             if (display_->possibly_refresh(left_display_frame, right_display_frame, current_total_browsable)) {
-              scope_manager_->submit_jobs(left_display_frame, right_display_frame);
-              scope_manager_->wait_all();
+              // Energy-saving gating for scope windows
+              const bool scope_state_changed =
+                  scope_update_state_.has_changed(left_display_frame->pts, right_display_frame->pts, scope_window_roi, display_->get_swap_left_right());
+
+              if (scope_state_changed) {
+                scope_manager_->submit_jobs(left_display_frame, right_display_frame);
+                scope_manager_->wait_all();
+
+                scope_update_state_.mark_updated(left_display_frame->pts, right_display_frame->pts, scope_window_roi, display_->get_swap_left_right());
+              }
+
               if (scope_manager_->has_fatal_error()) {
                 throw std::runtime_error(scope_manager_->fatal_error_message());
               }

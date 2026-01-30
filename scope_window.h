@@ -65,7 +65,7 @@ class ScopeWindow {
   std::string build_filter_description(const int pane_width, const int pane_height, const int left_colorspace, const int left_range, const int right_colorspace, const int right_range, const bool roi_enabled, const Roi& roi) const;
   static std::string format_filter_args(const AVFrame* frame);
 
-  void present_frame(const AVFrame* filtered_frame);
+  void present_frame(const AVFrame* filtered_frame, bool allow_cached);
 
  private:
   // SDL
@@ -122,4 +122,5 @@ class ScopeWindow {
   AVFrame* pending_frame_{nullptr};  // Owned; freed on render
   bool texture_reset_pending_{false};
   bool graph_reset_pending_{false};
+  bool has_valid_texture_{false};
 };

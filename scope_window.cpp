@@ -170,7 +170,7 @@ ScopeWindow::ScopeWindow(const Type type, const int pane_width, const int pane_h
 
   renderer_ = static_cast<SDL_Renderer*>(sdl_check_ptr(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "SDL_CreateRenderer"));
 
-  present_frame(nullptr);
+  present_frame(nullptr, false);
 
   window_width_ = window_width;
   window_height_ = window_height;
@@ -375,12 +375,16 @@ void ScopeWindow::ensure_texture() {
   }
 }
 
-void ScopeWindow::present_frame(const AVFrame* filtered_frame) {
+void ScopeWindow::present_frame(const AVFrame* filtered_frame, const bool allow_cached) {
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 100);
   sdl_check_bool(SDL_RenderClear(renderer_) == 0, "SDL_RenderClear");
 
   if (filtered_frame != nullptr) {
     sdl_check_bool(SDL_UpdateTexture(texture_, nullptr, filtered_frame->data[0], filtered_frame->linesize[0]) == 0, "SDL_UpdateTexture");
+    has_valid_texture_ = true;
+  }
+
+  if ((filtered_frame != nullptr) || (allow_cached && has_valid_texture_)) {
     sdl_check_bool(SDL_RenderCopy(renderer_, texture_, nullptr, nullptr) == 0, "SDL_RenderCopy");
   }
 
@@ -516,7 +520,9 @@ void ScopeWindow::render() {
   // Always clear/present to keep the window responsive.
   if (!roi_enabled_local) {
     ensure_texture();
-    present_frame(nullptr);
+    // Blank the scope when ROI is disabled.
+    has_valid_texture_ = false;
+    present_frame(nullptr, false);
     return;
   }
 
@@ -540,7 +546,7 @@ void ScopeWindow::render() {
     pending_frame_ = nullptr;
   }
 
-  present_frame(to_present);
+  present_frame(to_present, true);
 
   if (to_present != nullptr) {
     av_frame_free(&to_present);
