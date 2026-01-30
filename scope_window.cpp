@@ -589,6 +589,7 @@ bool ScopeWindow::handle_event(const SDL_Event& event) {
             texture_reset_pending_ = true;
             graph_reset_pending_ = true;
           }
+          refresh_requested_.store(true, std::memory_order_relaxed);
         }
       }
       return true;
@@ -601,6 +602,10 @@ bool ScopeWindow::handle_event(const SDL_Event& event) {
 
   // For other events to this window that we do not explicitly handle, do not consume by default
   return false;
+}
+
+bool ScopeWindow::consume_refresh_request() {
+  return refresh_requested_.exchange(false, std::memory_order_relaxed);
 }
 
 void ScopeWindow::set_roi(const Roi& roi) {

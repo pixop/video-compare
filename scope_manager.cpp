@@ -148,6 +148,16 @@ void ScopeManager::render_all() {
   }
 }
 
+bool ScopeManager::consume_refresh_request() {
+  bool requested = false;
+  for (auto& window : windows_) {
+    if (window && window->consume_refresh_request()) {
+      requested = true;
+    }
+  }
+  return requested;
+}
+
 bool ScopeManager::has_any() const {
   for (const auto& window : windows_) {
     if (window) {

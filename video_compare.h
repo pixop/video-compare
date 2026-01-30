@@ -140,20 +140,31 @@ class VideoCompare {
    public:
     ScopeUpdateState() { reset(); }
 
-    bool has_changed(const int64_t new_left_pts, const int64_t new_right_pts, const ScopeWindow::Roi& new_roi, const bool new_swapped) const {
+    bool has_changed(const AVFrame* new_left_frame,
+                     const AVFrame* new_right_frame,
+                     const ScopeWindow::Roi& new_roi,
+                     const bool new_swapped) const {
+      const int64_t new_left_pts = new_left_frame ? new_left_frame->pts : std::numeric_limits<int64_t>::min();
+      const int64_t new_right_pts = new_right_frame ? new_right_frame->pts : std::numeric_limits<int64_t>::min();
       const bool frames_changed = (new_left_pts != left_pts_) || (new_right_pts != right_pts_);
       const bool roi_changed = (!roi_valid_) || (roi_.x != new_roi.x) || (roi_.y != new_roi.y) || (roi_.w != new_roi.w) || (roi_.h != new_roi.h);
       const bool swap_changed = (new_swapped != swapped_);
+      const bool ptr_changed = (new_left_frame != left_ptr_) || (new_right_frame != right_ptr_);
 
-      return frames_changed || roi_changed || swap_changed;
+      return frames_changed || roi_changed || swap_changed || ptr_changed;
     }
 
-    void mark_updated(const int64_t new_left_pts, const int64_t new_right_pts, const ScopeWindow::Roi& new_roi, const bool new_swapped) {
-      left_pts_ = new_left_pts;
-      right_pts_ = new_right_pts;
+    void mark_updated(const AVFrame* new_left_frame,
+                      const AVFrame* new_right_frame,
+                      const ScopeWindow::Roi& new_roi,
+                      const bool new_swapped) {
+      left_pts_ = new_left_frame ? new_left_frame->pts : std::numeric_limits<int64_t>::min();
+      right_pts_ = new_right_frame ? new_right_frame->pts : std::numeric_limits<int64_t>::min();
       roi_ = new_roi;
       roi_valid_ = true;
       swapped_ = new_swapped;
+      left_ptr_ = new_left_frame;
+      right_ptr_ = new_right_frame;
     }
 
     void reset() {
@@ -162,6 +173,8 @@ class VideoCompare {
       roi_ = {0, 0, 0, 0};
       roi_valid_ = false;
       swapped_ = false;
+      left_ptr_ = nullptr;
+      right_ptr_ = nullptr;
     }
 
    private:
@@ -170,6 +183,8 @@ class VideoCompare {
     ScopeWindow::Roi roi_;
     bool roi_valid_;
     bool swapped_;
+    const AVFrame* left_ptr_;
+    const AVFrame* right_ptr_;
   };
 
   const bool same_decoded_video_both_sides_;

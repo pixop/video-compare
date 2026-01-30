@@ -37,6 +37,8 @@ class ScopeManager {
   void wait_all();
   // Render all open scope windows (main thread)
   void render_all();
+  // Returns true if any scope window requested a refresh (e.g., resize)
+  bool consume_refresh_request();
 
   // Returns true if any scope window is open
   bool has_any() const;

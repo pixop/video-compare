@@ -56,6 +56,7 @@ class ScopeWindow {
 
   // Handle SDL events targeted to this window; returns true if consumed.
   bool handle_event(const SDL_Event& event);
+  bool consume_refresh_request();
 
  private:
   void ensure_graph(const AVFrame* left_frame, const AVFrame* right_frame);
@@ -123,4 +124,5 @@ class ScopeWindow {
   bool texture_reset_pending_{false};
   bool graph_reset_pending_{false};
   bool has_valid_texture_{false};
+  std::atomic<bool> refresh_requested_{false};
 };
