@@ -1198,7 +1198,7 @@ void VideoCompare::compare() {
                 scope_manager_->submit_jobs(left_display_frame, right_display_frame);
                 scope_manager_->wait_all();
 
-                scope_update_state_ = scope_sample;
+                scope_update_state_.update(scope_sample);
 
                 if (scope_manager_->has_fatal_error()) {
                   throw std::runtime_error(scope_manager_->fatal_error_message());
