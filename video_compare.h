@@ -140,51 +140,59 @@ class VideoCompare {
    public:
     ScopeUpdateState() { reset(); }
 
-    bool has_changed(const AVFrame* new_left_frame,
-                     const AVFrame* new_right_frame,
-                     const ScopeWindow::Roi& new_roi,
-                     const bool new_swapped) const {
-      const int64_t new_left_pts = new_left_frame ? new_left_frame->pts : std::numeric_limits<int64_t>::min();
-      const int64_t new_right_pts = new_right_frame ? new_right_frame->pts : std::numeric_limits<int64_t>::min();
-      const bool frames_changed = (new_left_pts != left_pts_) || (new_right_pts != right_pts_);
-      const bool roi_changed = (!roi_valid_) || (roi_.x != new_roi.x) || (roi_.y != new_roi.y) || (roi_.w != new_roi.w) || (roi_.h != new_roi.h);
-      const bool swap_changed = (new_swapped != swapped_);
-      const bool ptr_changed = (new_left_frame != left_ptr_) || (new_right_frame != right_ptr_);
+    struct Sample {
+      int64_t left_pts;
+      int64_t right_pts;
+      ScopeWindow::Roi roi;
+      bool roi_valid;
+      bool swapped;
+      const AVFrame* left_ptr;
+      const AVFrame* right_ptr;
+    };
+
+    static Sample capture(const AVFrame* left_frame,
+                          const AVFrame* right_frame,
+                          const ScopeWindow::Roi& roi,
+                          const bool swapped) {
+      return Sample{
+          left_frame ? left_frame->pts : std::numeric_limits<int64_t>::min(),
+          right_frame ? right_frame->pts : std::numeric_limits<int64_t>::min(),
+          roi,
+          true,
+          swapped,
+          left_frame,
+          right_frame,
+      };
+    }
+
+    bool has_changed(const Sample& sample) const {
+      const bool frames_changed = (sample.left_pts != state_.left_pts) || (sample.right_pts != state_.right_pts);
+      const bool roi_changed = (!state_.roi_valid) || (!sample.roi_valid) || (state_.roi.x != sample.roi.x) || (state_.roi.y != sample.roi.y) || (state_.roi.w != sample.roi.w) || (state_.roi.h != sample.roi.h);
+      const bool swap_changed = (sample.swapped != state_.swapped);
+      const bool ptr_changed = (sample.left_ptr != state_.left_ptr) || (sample.right_ptr != state_.right_ptr);
 
       return frames_changed || roi_changed || swap_changed || ptr_changed;
     }
 
-    void mark_updated(const AVFrame* new_left_frame,
-                      const AVFrame* new_right_frame,
-                      const ScopeWindow::Roi& new_roi,
-                      const bool new_swapped) {
-      left_pts_ = new_left_frame ? new_left_frame->pts : std::numeric_limits<int64_t>::min();
-      right_pts_ = new_right_frame ? new_right_frame->pts : std::numeric_limits<int64_t>::min();
-      roi_ = new_roi;
-      roi_valid_ = true;
-      swapped_ = new_swapped;
-      left_ptr_ = new_left_frame;
-      right_ptr_ = new_right_frame;
+    ScopeUpdateState& operator=(const Sample& sample) {
+      state_ = sample;
+      return *this;
     }
 
     void reset() {
-      left_pts_ = std::numeric_limits<int64_t>::min();
-      right_pts_ = std::numeric_limits<int64_t>::min();
-      roi_ = {0, 0, 0, 0};
-      roi_valid_ = false;
-      swapped_ = false;
-      left_ptr_ = nullptr;
-      right_ptr_ = nullptr;
+      state_ = Sample{
+          std::numeric_limits<int64_t>::min(),
+          std::numeric_limits<int64_t>::min(),
+          {0, 0, 0, 0},
+          false,
+          false,
+          nullptr,
+          nullptr,
+      };
     }
 
    private:
-    int64_t left_pts_;
-    int64_t right_pts_;
-    ScopeWindow::Roi roi_;
-    bool roi_valid_;
-    bool swapped_;
-    const AVFrame* left_ptr_;
-    const AVFrame* right_ptr_;
+    Sample state_;
   };
 
   const bool same_decoded_video_both_sides_;

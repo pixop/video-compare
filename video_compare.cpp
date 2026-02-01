@@ -1191,20 +1191,20 @@ void VideoCompare::compare() {
 
             if (display_->possibly_refresh(left_display_frame, right_display_frame, current_total_browsable)) {
               // Energy-saving gating for scope windows
-              const bool scope_state_changed =
-                  scope_update_state_.has_changed(left_display_frame, right_display_frame, scope_window_roi, display_->get_swap_left_right());
+              const auto scope_sample = ScopeUpdateState::capture(left_display_frame, right_display_frame, scope_window_roi, display_->get_swap_left_right());
+              const bool scope_state_changed = scope_update_state_.has_changed(scope_sample);
 
               if (scope_state_changed) {
                 scope_manager_->submit_jobs(left_display_frame, right_display_frame);
                 scope_manager_->wait_all();
 
-                scope_update_state_.mark_updated(left_display_frame, right_display_frame, scope_window_roi, display_->get_swap_left_right());
-              }
+                scope_update_state_ = scope_sample;
 
-              if (scope_manager_->has_fatal_error()) {
-                throw std::runtime_error(scope_manager_->fatal_error_message());
+                if (scope_manager_->has_fatal_error()) {
+                  throw std::runtime_error(scope_manager_->fatal_error_message());
+                }
+                scope_manager_->render_all();
               }
-              scope_manager_->render_all();
 
               refresh_time_deque.push_back(-display_refresh_timer.us_until_target());
             } else {
