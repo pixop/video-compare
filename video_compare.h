@@ -164,9 +164,7 @@ class VideoCompare {
       };
     }
 
-    bool has_changed(const Sample& sample) const {
-      return (!initialized_) || !(sample == state_);
-    }
+    bool has_changed(const Sample& sample) const { return (!initialized_) || !(sample == state_); }
 
     void update(const Sample& sample) {
       state_ = sample;
