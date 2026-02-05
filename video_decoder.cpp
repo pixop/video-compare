@@ -30,7 +30,7 @@ DynamicRange dynamic_range_from_trc_name(const std::string& trc_name) {
   } else if (trc_name == "arib-std-b67") {
     return DynamicRange::HLG;
   }
-  return DynamicRange::STANDARD;
+  return DynamicRange::Standard;
 }
 
 DynamicRange dynamic_range_from_av_enum(const AVColorTransferCharacteristic color_trc) {
@@ -40,7 +40,7 @@ DynamicRange dynamic_range_from_av_enum(const AVColorTransferCharacteristic colo
     case AVCOL_TRC_ARIB_STD_B67:
       return DynamicRange::HLG;
     default:
-      return DynamicRange::STANDARD;
+      return DynamicRange::Standard;
   }
 }
 
@@ -280,6 +280,6 @@ unsigned VideoDecoder::safe_peak_luminance_nits(const DynamicRange dynamic_range
     return peak_luminance_nits_;
   } else {
     // resolve default peak luminance
-    return (dynamic_range == DynamicRange::STANDARD) ? DEFAULT_SDR_NITS : DEFAULT_HDR_NITS;
+    return (dynamic_range == DynamicRange::Standard) ? DEFAULT_SDR_NITS : DEFAULT_HDR_NITS;
   }
 }

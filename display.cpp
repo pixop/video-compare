@@ -236,8 +236,8 @@ Display::Display(const int display_number,
       duration_{duration},
       subtraction_mode_{start_in_subtraction_mode},
       wheel_sensitivity_{wheel_sensitivity} {
-  const int auto_width = mode == Mode::HSTACK ? width * 2 : width;
-  const int auto_height = mode == Mode::VSTACK ? height * 2 : height;
+  const int auto_width = mode == Mode::HStack ? width * 2 : width;
+  const int auto_height = mode == Mode::VStack ? height * 2 : height;
 
   int window_x;
   int window_y;
@@ -351,8 +351,8 @@ Display::Display(const int display_number,
 
   drawable_to_window_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
   drawable_to_window_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);
-  video_to_window_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::HSTACK) ? 2.F : 1.F);
-  video_to_window_height_factor_ = static_cast<float>(video_height_) / static_cast<float>(window_height_) * ((mode_ == Mode::VSTACK) ? 2.F : 1.F);
+  video_to_window_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::HStack) ? 2.F : 1.F);
+  video_to_window_height_factor_ = static_cast<float>(video_height_) / static_cast<float>(window_height_) * ((mode_ == Mode::VStack) ? 2.F : 1.F);
 
   font_scale_ = (drawable_to_window_width_factor_ + drawable_to_window_height_factor_) / 2.0F;
 
@@ -361,7 +361,7 @@ Display::Display(const int display_number,
   line1_y_ = 20;
   line2_y_ = line1_y_ + 30 * font_scale_;
 
-  if (mode_ != Mode::VSTACK) {
+  if (mode_ != Mode::VStack) {
     max_text_width_ = drawable_width_ / 2 - double_border_extension_ - line1_y_;
   } else {
     max_text_width_ = drawable_width_ - double_border_extension_ - line1_y_;
@@ -380,7 +380,7 @@ Display::Display(const int display_number,
   auto create_video_texture = [&](const std::string& scale_quality) {
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, scale_quality.c_str());
 
-    return check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::HSTACK ? width * 2 : width, mode == Mode::VSTACK ? height * 2 : height),
+    return check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::HStack ? width * 2 : width, mode == Mode::VStack ? height * 2 : height),
                      "video texture " + scale_quality);
   };
 
@@ -951,7 +951,7 @@ void Display::render_text(const int x, const int y, SDL_Texture* texture, const 
   SDL_Rect src_rect = {clip_amount + gradient_amount, 0, texture_width - clip_amount - gradient_amount, texture_height};
   SDL_Rect text_rect = {x + gradient_amount, y, texture_width - clip_amount - gradient_amount, texture_height};
 
-  if (!left_adjust && (mode_ != Mode::VSTACK)) {
+  if (!left_adjust && (mode_ != Mode::VStack)) {
     fill_rect.x += clip_amount;
     text_rect.x += clip_amount;
   }
@@ -1318,9 +1318,9 @@ void Display::render_metadata_overlay() {
   // Calculate the starting Y position to center the table vertically
   int y;
 
-  if (mode_ == Mode::VSTACK && metadata_total_height_ < drawable_height_ / 2) {
+  if (mode_ == Mode::VStack && metadata_total_height_ < drawable_height_ / 2) {
     y = (drawable_height_ / 2 - metadata_total_height_) / 2;
-  } else if (mode_ != Mode::VSTACK && metadata_total_height_ < drawable_height_) {
+  } else if (mode_ != Mode::VStack && metadata_total_height_ < drawable_height_) {
     y = (drawable_height_ - metadata_total_height_) / 2;
   } else {
     y = metadata_y_offset_ + 10;
@@ -1524,7 +1524,7 @@ void Display::update_window_title_with_current_roi() {
 
   auto format_roi_bbox = [](const char* label, const SDL_Rect& r) -> std::string { return string_sprintf("%s(%d,%d)-(%d,%d)", label, r.x, r.y, r.x + r.w - 1, r.y + r.h - 1); };
 
-  if (mode_ == Mode::HSTACK || mode_ == Mode::VSTACK) {
+  if (mode_ == Mode::HStack || mode_ == Mode::VStack) {
     const auto rois = get_visible_rois_in_single_frame_coordinates();
     const SDL_Rect left_roi = rois.first;
     const SDL_Rect right_roi = rois.second;
@@ -1600,7 +1600,7 @@ SDL_Rect Display::get_left_selection_rect() const {
 }
 
 void Display::draw_selection_rect() {
-  if (selection_state_ != SelectionState::STARTED) {
+  if (selection_state_ != SelectionState::Started) {
     return;
   }
 
@@ -1621,7 +1621,7 @@ void Display::draw_selection_rect() {
   SDL_Rect selection_rect = get_left_selection_rect();
   SDL_FRect drawable_rect = video_rect_to_drawable_transform(video_to_zoom_space(selection_rect, zoom_rect));
 
-  if (mode_ == Mode::SPLIT) {
+  if (mode_ == Mode::Split) {
     // For split mode, we don't need to draw a second rectangle
     draw_rect(drawable_rect, 255, 255, 255);
     return;
@@ -1631,10 +1631,10 @@ void Display::draw_selection_rect() {
 
   // Draw right rectangle with appropriate offset
   switch (mode_) {
-    case Mode::HSTACK:
+    case Mode::HStack:
       selection_rect.x += video_width_;
       break;
-    case Mode::VSTACK:
+    case Mode::VStack:
       selection_rect.y += video_height_;
       break;
     default:
@@ -1646,7 +1646,7 @@ void Display::draw_selection_rect() {
 }
 
 void Display::possibly_save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame) {
-  if (selection_state_ != SelectionState::COMPLETED) {
+  if (selection_state_ != SelectionState::Completed) {
     return;
   }
 
@@ -1658,7 +1658,7 @@ void Display::possibly_save_selected_area(const AVFrame* left_frame, const AVFra
     save_selected_area(left_frame, right_frame, selection_rect);
   }
 
-  selection_state_ = SelectionState::NONE;
+  selection_state_ = SelectionState::None;
   save_selected_area_ = false;
 }
 
@@ -1768,10 +1768,10 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     bool print_right_pixel;
 
     switch (mode_) {
-      case Mode::HSTACK:
+      case Mode::HStack:
         print_right_pixel = mouse_video_x >= video_width_ && mouse_video_x < (2 * video_width_) && mouse_video_y >= 0 && mouse_video_y < video_height_;
         break;
-      case Mode::VSTACK:
+      case Mode::VStack:
         print_right_pixel = mouse_video_x >= 0 && mouse_video_x < video_width_ && mouse_video_y >= video_height_ && mouse_video_y < (video_height_ * 2);
         break;
       default:
@@ -1866,7 +1866,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   const float video_texel_clamped_mouse_x = (std::round(video_mouse_x) * zoom_rect.size.x() / static_cast<float>(video_width_) + zoom_rect.start.x()) / video_to_window_width_factor_;
 
   if (show_left_ || show_right_) {
-    const int split_x = (compare_mode && mode_ == Mode::SPLIT) ? clamp_range(std::round(video_mouse_x), 0.0F, float(video_width_)) : show_left_ ? video_width_ : 0;
+    const int split_x = (compare_mode && mode_ == Mode::Split) ? clamp_range(std::round(video_mouse_x), 0.0F, float(video_width_)) : show_left_ ? video_width_ : 0;
 
     // update video
     if (show_left_ && (split_x > 0)) {
@@ -1885,10 +1885,10 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
       check_sdl(SDL_RenderCopyF(renderer_, get_video_texture(), &tex_render_quad_left, &screen_render_quad_left) == 0, "left video texture render copy");
     }
-    if (show_right_ && ((split_x < video_width_) || mode_ != Mode::SPLIT)) {
-      const int start_right = (mode_ == Mode::SPLIT) ? std::max(split_x, 0) : 0;
-      const int right_x_offset = (mode_ == Mode::HSTACK) ? video_width_ : 0;
-      const int right_y_offset = (mode_ == Mode::VSTACK) ? video_height_ : 0;
+    if (show_right_ && ((split_x < video_width_) || mode_ != Mode::Split)) {
+      const int start_right = (mode_ == Mode::Split) ? std::max(split_x, 0) : 0;
+      const int right_x_offset = (mode_ == Mode::HStack) ? video_width_ : 0;
+      const int right_y_offset = (mode_ == Mode::VStack) ? video_height_ : 0;
 
       const SDL_Rect tex_render_quad_right = {right_x_offset + start_right, right_y_offset, (video_width_ - start_right), video_height_};
       const SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
@@ -1977,7 +1977,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       const int left_position_text_height = text_surface->h;
       SDL_FreeSurface(text_surface);
 
-      if (mode_ == Mode::VSTACK) {
+      if (mode_ == Mode::VStack) {
         render_text(line1_y_, line1_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
         render_text(line1_y_, line2_y_, side_ui_[displayed_left_side_.as_simple_index()].text_texture, side_ui_[displayed_left_side_.as_simple_index()].text_width, side_ui_[displayed_left_side_.as_simple_index()].text_height,
                     border_extension_, true);
@@ -2004,7 +2004,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       int text2_x;
       int text2_y;
 
-      if (mode_ == Mode::VSTACK) {
+      if (mode_ == Mode::VStack) {
         text1_x = line1_y_;
         text1_y = drawable_height_ - line2_y_ - side_ui_[displayed_right_side_.as_simple_index()].text_height;
         text2_x = line1_y_;
@@ -2065,8 +2065,8 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 2);
 
-    int text_x = (mode_ == Mode::VSTACK) ? drawable_width_ - line1_y_ - zoom_position_text_width : line1_y_;
-    int text_y = (mode_ == Mode::VSTACK) ? line1_y_ : drawable_height_ - line1_y_ - zoom_position_text_height;
+    int text_x = (mode_ == Mode::VStack) ? drawable_width_ - line1_y_ - zoom_position_text_width : line1_y_;
+    int text_y = (mode_ == Mode::VStack) ? line1_y_ : drawable_height_ - line1_y_ - zoom_position_text_height;
 
     render_text(text_x, text_y, zoom_position_text_texture, zoom_position_text_width, zoom_position_text_height, border_extension_, false);
     SDL_DestroyTexture(zoom_position_text_texture);
@@ -2120,7 +2120,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     const int current_total_browsable_text_height = text_surface->h;
     SDL_FreeSurface(text_surface);
 
-    text_y = (mode_ == Mode::VSTACK) ? line1_y_ : line2_y_;
+    text_y = (mode_ == Mode::VStack) ? line1_y_ : line2_y_;
 
     // blink label in loop mode
     fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
@@ -2129,14 +2129,14 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     SDL_Color label_color = LOOP_OFF_LABEL_COLOR;
     int label_alpha = BACKGROUND_ALPHA;
 
-    if (buffer_play_loop_mode_ != Display::Loop::OFF) {
+    if (buffer_play_loop_mode_ != Display::Loop::Off) {
       label_alpha *= 1.0 + sin(float(SDL_GetTicks()) / 180.0) * 0.6;
 
       switch (buffer_play_loop_mode_) {
-        case Display::Loop::FORWARDONLY:
+        case Display::Loop::ForwardOnly:
           label_color = LOOP_FW_LABEL_COLOR;
           break;
-        case Display::Loop::PINGPONG:
+        case Display::Loop::PingPong:
           label_color = LOOP_PP_LABEL_COLOR;
           break;
         default:
@@ -2189,7 +2189,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     timer_based_update_performed_ = timer_based_update_performed_ || (keep_alpha > 0.0F);
   }
 
-  if (mode_ == Mode::SPLIT && show_hud_ && compare_mode) {
+  if (mode_ == Mode::Split && show_hud_ && compare_mode) {
     // render movable slider(s)
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, SDL_ALPHA_OPAQUE);
     SDL_RenderDrawLine(renderer_, mouse_drawable_x, 0, mouse_drawable_x, drawable_height_);
@@ -2247,8 +2247,8 @@ float Display::compute_zoom_factor(const float zoom_level) const {
 Vector2D Display::compute_relative_move_offset(const Vector2D& zoom_point, const float zoom_factor) const {
   const float zoom_factor_change = zoom_factor / global_zoom_factor_;
 
-  const Vector2D view_center(static_cast<float>(window_width_) / (mode_ == Mode::HSTACK ? 4.0F : 2.0F) * video_to_window_width_factor_,
-                             static_cast<float>(window_height_) / (mode_ == Mode::VSTACK ? 4.0F : 2.0F) * video_to_window_height_factor_);
+  const Vector2D view_center(static_cast<float>(window_width_) / (mode_ == Mode::HStack ? 4.0F : 2.0F) * video_to_window_width_factor_,
+                             static_cast<float>(window_height_) / (mode_ == Mode::VStack ? 4.0F : 2.0F) * video_to_window_height_factor_);
 
   // the center point has to be moved relative to the zoom point
   const Vector2D new_move_offset = move_offset_ - (view_center + move_offset_ - zoom_point) * (1.0F - zoom_factor_change);
@@ -2257,7 +2257,7 @@ Vector2D Display::compute_relative_move_offset(const Vector2D& zoom_point, const
 }
 
 void Display::update_zoom_factor_and_move_offset(const float zoom_factor) {
-  const Vector2D zoom_point(static_cast<float>(video_width_) * (mode_ == Mode::HSTACK ? 1.0F : 0.5F), static_cast<float>(video_height_) * (mode_ == Mode::VSTACK ? 1.0F : 0.5F));
+  const Vector2D zoom_point(static_cast<float>(video_width_) * (mode_ == Mode::HStack ? 1.0F : 0.5F), static_cast<float>(video_height_) * (mode_ == Mode::VStack ? 1.0F : 0.5F));
   update_move_offset(compute_relative_move_offset(zoom_point, zoom_factor));
 
   update_zoom_factor(zoom_factor);
@@ -2318,7 +2318,7 @@ std::pair<SDL_Rect, SDL_Rect> Display::get_visible_rois_in_single_frame_coordina
   };
 
   // Default: single-frame layout (split) => both sides share the same ROI.
-  if (mode_ != Mode::HSTACK && mode_ != Mode::VSTACK) {
+  if (mode_ != Mode::HStack && mode_ != Mode::VStack) {
     const int x0 = clamp_x(lx0);
     const int y0 = clamp_y(ly0);
     const int x1 = clamp_x(lx1);
@@ -2327,7 +2327,7 @@ std::pair<SDL_Rect, SDL_Rect> Display::get_visible_rois_in_single_frame_coordina
     return {roi, roi};
   }
 
-  if (mode_ == Mode::HSTACK) {
+  if (mode_ == Mode::HStack) {
     const int w = video_width_;
     const auto left_x = intersect_1d(lx0, lx1, 0, w);
     const auto right_x_layout = intersect_1d(lx0, lx1, w, 2 * w);
@@ -2387,13 +2387,13 @@ SDL_Rect Display::get_visible_roi_in_single_frame_coordinates() const {
   const bool left_off = left_roi.w <= 0 || left_roi.h <= 0;
   const bool right_off = right_roi.w <= 0 || right_roi.h <= 0;
 
-  if (mode_ == Mode::HSTACK || mode_ == Mode::VSTACK) {
+  if (mode_ == Mode::HStack || mode_ == Mode::VStack) {
     // Prefer the side that the view center is currently over, but fall back to the other
     // if that side is not visible.
     const auto zoom_rect = compute_zoom_rect();
     const Vector2D center_layout = window_to_video_position(window_width_ / 2, window_height_ / 2, zoom_rect, true);
 
-    const bool prefer_right = (mode_ == Mode::HSTACK) ? (center_layout.x() >= static_cast<float>(video_width_)) : (center_layout.y() >= static_cast<float>(video_height_));
+    const bool prefer_right = (mode_ == Mode::HStack) ? (center_layout.x() >= static_cast<float>(video_width_)) : (center_layout.y() >= static_cast<float>(video_height_));
     const SDL_Rect preferred = prefer_right ? right_roi : left_roi;
     const SDL_Rect other = prefer_right ? left_roi : right_roi;
 
@@ -2445,7 +2445,7 @@ void Display::handle_event(const SDL_Event& event) {
 
     if (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_RMASK) {
       cursor = pan_mode_cursor_;
-    } else if (save_selected_area_ && selection_state_ != SelectionState::COMPLETED) {
+    } else if (save_selected_area_ && selection_state_ != SelectionState::Completed) {
       cursor = selection_mode_cursor_;
     } else {
       cursor = normal_mode_cursor_;
@@ -2456,9 +2456,9 @@ void Display::handle_event(const SDL_Event& event) {
 
   auto wrap_to_left_frame = [&](Vector2D& video_position) -> Vector2D {
     switch (mode_) {
-      case Mode::HSTACK:
+      case Mode::HStack:
         return video_position - Vector2D(video_width_, 0);
-      case Mode::VSTACK:
+      case Mode::VStack:
         return video_position - Vector2D(0, video_height_);
       default:
         break;
@@ -2514,7 +2514,7 @@ void Display::handle_event(const SDL_Event& event) {
     case SDL_MOUSEMOTION:
       SDL_GetMouseState(&mouse_x_, &mouse_y_);
 
-      if (selection_state_ == SelectionState::STARTED) {
+      if (selection_state_ == SelectionState::Started) {
         selection_end_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
 
         if (selection_wrap_) {
@@ -2537,12 +2537,12 @@ void Display::handle_event(const SDL_Event& event) {
       }
       break;
     case SDL_MOUSEBUTTONDOWN:
-      if (event_.button.button == SDL_BUTTON_LEFT && save_selected_area_ && selection_state_ == SelectionState::NONE) {
-        selection_state_ = SelectionState::STARTED;
+      if (event_.button.button == SDL_BUTTON_LEFT && save_selected_area_ && selection_state_ == SelectionState::None) {
+        selection_state_ = SelectionState::Started;
         selection_start_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
 
         // Check if the selection is outside the left video frame
-        selection_wrap_ = (mode_ == Mode::HSTACK && selection_start_.x() >= video_width_) || (mode_ == Mode::VSTACK && selection_start_.y() >= video_height_);
+        selection_wrap_ = (mode_ == Mode::HStack && selection_start_.x() >= video_width_) || (mode_ == Mode::VStack && selection_start_.y() >= video_height_);
 
         if (selection_wrap_) {
           selection_start_ = wrap_to_left_frame(selection_start_);
@@ -2556,8 +2556,8 @@ void Display::handle_event(const SDL_Event& event) {
       update_cursor();
       break;
     case SDL_MOUSEBUTTONUP:
-      if (event_.button.button == SDL_BUTTON_LEFT && selection_state_ == SelectionState::STARTED) {
-        selection_state_ = SelectionState::COMPLETED;
+      if (event_.button.button == SDL_BUTTON_LEFT && selection_state_ == SelectionState::Started) {
+        selection_state_ = SelectionState::Completed;
       }
       update_cursor();
       break;
@@ -2603,15 +2603,15 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_SPACE:
           play_ = !play_;
-          buffer_play_loop_mode_ = Loop::OFF;
+          buffer_play_loop_mode_ = Loop::Off;
           tick_playback_ = play_;
           break;
         case SDLK_COMMA:
         case SDLK_KP_COMMA:
-          set_buffer_play_loop_mode(buffer_play_loop_mode_ != Loop::PINGPONG ? Loop::PINGPONG : Loop::OFF);
+          set_buffer_play_loop_mode(buffer_play_loop_mode_ != Loop::PingPong ? Loop::PingPong : Loop::Off);
           break;
         case SDLK_PERIOD:
-          set_buffer_play_loop_mode(buffer_play_loop_mode_ != Loop::FORWARDONLY ? Loop::FORWARDONLY : Loop::OFF);
+          set_buffer_play_loop_mode(buffer_play_loop_mode_ != Loop::ForwardOnly ? Loop::ForwardOnly : Loop::Off);
           break;
         case SDLK_F1:
           toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Histogram)] = true;
@@ -2731,7 +2731,7 @@ void Display::handle_event(const SDL_Event& event) {
               save_selected_area_ = true;
             } else {
               save_selected_area_ = false;
-              selection_state_ = SelectionState::NONE;
+              selection_state_ = SelectionState::None;
             }
             update_cursor();
           } else {
@@ -2911,7 +2911,7 @@ void Display::set_buffer_play_loop_mode(const Display::Loop& mode) {
   play_ = false;
   tick_playback_ = true;
 
-  if (mode == Loop::FORWARDONLY) {
+  if (mode == Loop::ForwardOnly) {
     buffer_play_forward_ = true;
   }
 }

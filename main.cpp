@@ -318,13 +318,13 @@ void resolve_mutual_placeholders(std::string& left, std::string& right, const st
 
 ToneMapping parse_tone_mapping_mode(const std::string& mode) {
   if (mode.empty() || mode == "auto") {
-    return ToneMapping::AUTO;
+    return ToneMapping::Auto;
   } else if (mode == "off") {
-    return ToneMapping::OFF;
+    return ToneMapping::Off;
   } else if (mode == "on") {
-    return ToneMapping::FULLRANGE;
+    return ToneMapping::FullRange;
   } else if (mode == "rel") {
-    return ToneMapping::RELATIVE;
+    return ToneMapping::Relative;
   } else {
     throw std::logic_error{"Cannot parse tone mapping mode (valid options: auto, off, on, rel)"};
   }
@@ -572,11 +572,11 @@ int main(int argc, char** argv) {
         const std::string display_mode_arg = args["display-mode"];
 
         if (display_mode_arg == "split") {
-          config.display_mode = Display::Mode::SPLIT;
+          config.display_mode = Display::Mode::Split;
         } else if (display_mode_arg == "vstack") {
-          config.display_mode = Display::Mode::VSTACK;
+          config.display_mode = Display::Mode::VStack;
         } else if (display_mode_arg == "hstack") {
-          config.display_mode = Display::Mode::HSTACK;
+          config.display_mode = Display::Mode::HStack;
         } else {
           throw std::logic_error{"Cannot parse display mode argument (valid options: split, vstack, hstack)"};
         }
@@ -632,11 +632,11 @@ int main(int argc, char** argv) {
         const std::string auto_loop_mode_arg = args["auto-loop-mode"];
 
         if (auto_loop_mode_arg == "off") {
-          config.auto_loop_mode = Display::Loop::OFF;
+          config.auto_loop_mode = Display::Loop::Off;
         } else if (auto_loop_mode_arg == "on") {
-          config.auto_loop_mode = Display::Loop::FORWARDONLY;
+          config.auto_loop_mode = Display::Loop::ForwardOnly;
         } else if (auto_loop_mode_arg == "pp") {
-          config.auto_loop_mode = Display::Loop::PINGPONG;
+          config.auto_loop_mode = Display::Loop::PingPong;
         } else {
           throw std::logic_error{"Cannot parse auto loop mode argument (valid options: off, on, pp)"};
         }

@@ -94,17 +94,17 @@ class Vector2D {
 
 class Display {
  public:
-  enum Mode { SPLIT, VSTACK, HSTACK };
-  enum Loop { OFF, FORWARDONLY, PINGPONG };
+  enum class Mode { Split, VStack, HStack };
+  enum class Loop { Off, ForwardOnly, PingPong };
   enum class DiffMode { LegacyAbs, AbsLinear, AbsSqrt, SignedDiverging };
 
   std::string modeToString(const Mode& mode) {
     switch (mode) {
-      case SPLIT:
+      case Mode::Split:
         return "split";
-      case VSTACK:
+      case Mode::VStack:
         return "vstack";
-      case HSTACK:
+      case Mode::HStack:
         return "hstack";
       default:
         return "unknown";
@@ -137,7 +137,7 @@ class Display {
   bool show_metadata_{false};
   bool quit_{false};
   bool play_{true};
-  Loop buffer_play_loop_mode_{OFF};
+  Loop buffer_play_loop_mode_{Loop::Off};
   bool buffer_play_forward_{true};
   bool swap_left_right_{false};
   bool zoom_left_{false};
@@ -169,8 +169,8 @@ class Display {
   std::array<bool, ScopeWindow::kNumScopes> toggle_scope_window_requested_{{false, false, false}};
 
   // Rectangle selection state
-  enum class SelectionState { NONE, STARTED, COMPLETED };
-  SelectionState selection_state_{SelectionState::NONE};
+  enum class SelectionState { None, Started, Completed };
+  SelectionState selection_state_{SelectionState::None};
   Vector2D selection_start_{0.0F, 0.0F};
   Vector2D selection_end_{0.0F, 0.0F};
   bool selection_wrap_{false};

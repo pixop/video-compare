@@ -6,10 +6,10 @@
 
 constexpr unsigned UNSET_PEAK_LUMINANCE = 0;
 
-enum ToneMapping { AUTO, OFF, FULLRANGE, RELATIVE };
-enum DynamicRange { STANDARD, PQ, HLG };
+enum class ToneMapping { Auto, Off, FullRange, Relative };
+enum class DynamicRange { Standard, PQ, HLG };
 
-enum class SideType { NONE = -1, LEFT, RIGHT };
+enum class SideType { None = -1, Left, Right };
 
 class Side {
  public:
@@ -25,10 +25,10 @@ class Side {
   // Accessors (kept inline for performance)
   SideType type() const { return type_; }
   size_t right_index() const { return right_index_; }
-  bool is_left() const { return type_ == SideType::LEFT; }
-  bool is_right() const { return type_ == SideType::RIGHT; }
-  bool is_none() const { return type_ == SideType::NONE; }
-  bool is_valid() const { return type_ != SideType::NONE; }
+  bool is_left() const { return type_ == SideType::Left; }
+  bool is_right() const { return type_ == SideType::Right; }
+  bool is_none() const { return type_ == SideType::None; }
+  bool is_valid() const { return type_ != SideType::None; }
 
   // Convert to array index (for backward compatibility)
   // LEFT -> 0, RIGHT -> 1 (for first right video), or use right_index for multiple

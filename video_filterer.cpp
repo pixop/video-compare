@@ -113,13 +113,13 @@ VideoFilterer::VideoFilterer(const Side& side,
   }
 
   dynamic_range_ = video_decoder->infer_dynamic_range(custom_color_trc);
-  const bool is_hdr_trc = dynamic_range_ != DynamicRange::STANDARD;
-  const bool must_tonemap = tone_mapping_mode == ToneMapping::FULLRANGE || tone_mapping_mode == ToneMapping::RELATIVE || (tone_mapping_mode == ToneMapping::AUTO && is_hdr_trc);
+  const bool is_hdr_trc = dynamic_range_ != DynamicRange::Standard;
+  const bool must_tonemap = tone_mapping_mode == ToneMapping::FullRange || tone_mapping_mode == ToneMapping::Relative || (tone_mapping_mode == ToneMapping::Auto && is_hdr_trc);
 
   // resolve initial peak luminance
   peak_luminance_nits_ = video_decoder->safe_peak_luminance_nits(dynamic_range_);
 
-  if (tone_mapping_mode == ToneMapping::AUTO && is_hdr_trc) {
+  if (tone_mapping_mode == ToneMapping::Auto && is_hdr_trc) {
     const char* msg;
 
     if (dynamic_range_ == DynamicRange::PQ) {
@@ -184,13 +184,13 @@ VideoFilterer::VideoFilterer(const Side& side,
     if (warnings.empty()) {
       const unsigned other_peak_luminance_nits = video_filter_context->get_max_peak_luminance_excluding(side);
 
-      float tone_adjustment = (tone_mapping_mode == ToneMapping::RELATIVE && peak_luminance_nits_ < other_peak_luminance_nits) ? static_cast<float>(peak_luminance_nits_) / other_peak_luminance_nits : 1.0F;
+      float tone_adjustment = (tone_mapping_mode == ToneMapping::Relative && peak_luminance_nits_ < other_peak_luminance_nits) ? static_cast<float>(peak_luminance_nits_) / other_peak_luminance_nits : 1.0F;
       tone_adjustment *= boost_tone;
 
       if (std::fabs(tone_adjustment - 1.0F) > 1e-5) {
         filters.push_back("format=gbrpf32");
 
-        if (tone_mapping_mode == ToneMapping::AUTO) {
+        if (tone_mapping_mode == ToneMapping::Auto) {
           // peak luma gets injected from within init_filters() during auto-mode
           filters.push_back("zscale=t=linear:npl=%d");
         } else {
@@ -202,7 +202,7 @@ VideoFilterer::VideoFilterer(const Side& side,
       } else {
         filters.push_back("format=rgb48");
 
-        if (tone_mapping_mode == ToneMapping::AUTO) {
+        if (tone_mapping_mode == ToneMapping::Auto) {
           // peak luma gets injected from within init_filters() during auto-mode
           filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%%d", display_primaries.c_str(), display_trc.c_str()));
         } else {
@@ -288,7 +288,7 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
     inputs->pad_idx = 0;
     inputs->next = nullptr;
 
-    const std::string& filters = (tone_mapping_mode_ == ToneMapping::AUTO && dynamic_range_ != DynamicRange::STANDARD) ? string_sprintf(filter_description_, peak_luminance_nits_) : filter_description_;
+    const std::string& filters = (tone_mapping_mode_ == ToneMapping::Auto && dynamic_range_ != DynamicRange::Standard) ? string_sprintf(filter_description_, peak_luminance_nits_) : filter_description_;
 
     if ((ret = avfilter_graph_parse_ptr(filter_graph_, filters.c_str(), &inputs, &outputs, nullptr)) >= 0) {
       ret = avfilter_graph_config(filter_graph_, nullptr);
@@ -330,15 +330,15 @@ bool VideoFilterer::send(AVFrame* decoded_frame) {
       must_reinit = true;
     }
 
-    if (dynamic_range_ != DynamicRange::STANDARD) {
+    if (dynamic_range_ != DynamicRange::Standard) {
       unsigned max_cll = get_content_light_level_or_zero(decoded_frame);
 
       if (max_cll != UNSET_PEAK_LUMINANCE) {
-        if (tone_mapping_mode_ == ToneMapping::FULLRANGE || tone_mapping_mode_ == ToneMapping::RELATIVE) {
+        if (tone_mapping_mode_ == ToneMapping::FullRange || tone_mapping_mode_ == ToneMapping::Relative) {
           if (peak_luminance_nits_ != max_cll) {
             log_warning(string_sprintf("MaxCLL metadata (%d) differs from the expected HDR peak luminance (%d).", max_cll, peak_luminance_nits_));
           }
-        } else if (tone_mapping_mode_ == ToneMapping::AUTO && (peak_luminance_nits_ != max_cll)) {
+        } else if (tone_mapping_mode_ == ToneMapping::Auto && (peak_luminance_nits_ != max_cll)) {
           log_info(string_sprintf("HDR color space conversion adjusted to %d nits based on MaxCLL metadata.", max_cll).c_str());
 
           must_reinit = true;

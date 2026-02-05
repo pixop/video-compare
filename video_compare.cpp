@@ -176,9 +176,9 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   const auto& first_right = config.right_videos[0];
 
   // Initialize left video demuxer and decoder
-  install_processor(demuxers_, ReadyToSeek::DEMULTIPLEXER, LEFT, std::make_unique<Demuxer>(LEFT, config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options));
+  install_processor(demuxers_, ReadyToSeek::ProcessorThread::Demultiplexer, LEFT, std::make_unique<Demuxer>(LEFT, config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options));
   install_processor(
-      video_decoders_, ReadyToSeek::DECODER, LEFT,
+      video_decoders_, ReadyToSeek::ProcessorThread::Decoder, LEFT,
       std::make_unique<VideoDecoder>(LEFT, config.left.decoder, config.left.hw_accel_spec, demuxers_[LEFT]->video_codec_parameters(), config.left.peak_luminance_nits, config.left.hw_accel_options, config.left.decoder_options));
 
   // Initialize all right video demuxers and decoders
@@ -189,8 +189,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
     // Store file name in the unified map
     right_video_info_[right_side].file_name = right_config.file_name;
 
-    install_processor(demuxers_, ReadyToSeek::DEMULTIPLEXER, right_side, std::make_unique<Demuxer>(right_side, right_config.demuxer, right_config.file_name, right_config.demuxer_options, right_config.decoder_options));
-    install_processor(video_decoders_, ReadyToSeek::DECODER, right_side,
+    install_processor(demuxers_, ReadyToSeek::ProcessorThread::Demultiplexer, right_side, std::make_unique<Demuxer>(right_side, right_config.demuxer, right_config.file_name, right_config.demuxer_options, right_config.decoder_options));
+    install_processor(video_decoders_, ReadyToSeek::ProcessorThread::Decoder, right_side,
                       std::make_unique<VideoDecoder>(right_side, right_config.decoder, right_config.hw_accel_spec, demuxers_[right_side]->video_codec_parameters(), right_config.peak_luminance_nits, right_config.hw_accel_options,
                                                      right_config.decoder_options));
   }
@@ -206,7 +206,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   }
 
   // Initialize filterers using VideoFilterContext for consistent auto-filter determination
-  install_processor(video_filterers_, ReadyToSeek::FILTERER, LEFT,
+  install_processor(video_filterers_, ReadyToSeek::ProcessorThread::Filterer, LEFT,
                     std::make_unique<VideoFilterer>(LEFT, demuxers_[LEFT].get(), video_decoders_[LEFT].get(), config.left.tone_mapping_mode, config.left.boost_tone, config.left.video_filters, config.left.color_space,
                                                     config.left.color_range, config.left.color_primaries, config.left.color_trc, &video_filter_context, config.disable_auto_filters));
 
@@ -215,7 +215,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
     const auto& right_config = config.right_videos[i];
     Side right_side = Side::Right(i);
 
-    install_processor(video_filterers_, ReadyToSeek::FILTERER, right_side,
+    install_processor(video_filterers_, ReadyToSeek::ProcessorThread::Filterer, right_side,
                       std::make_unique<VideoFilterer>(right_side, demuxers_[right_side].get(), video_decoders_[right_side].get(), right_config.tone_mapping_mode, right_config.boost_tone, right_config.video_filters, right_config.color_space,
                                                       right_config.color_range, right_config.color_primaries, right_config.color_trc, &video_filter_context, config.disable_auto_filters));
   }
@@ -234,7 +234,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   for (const auto& pair : video_filterers_) {
     const Side& side = pair.first;
     const auto& filterer = pair.second;
-    install_processor(format_converters_, ReadyToSeek::CONVERTER, side,
+    install_processor(format_converters_, ReadyToSeek::ProcessorThread::Converter, side,
                       std::make_unique<FormatConverter>(filterer->dest_width(), filterer->dest_height(), max_width_, max_height_, filterer->dest_pixel_format(), determine_pixel_format(config), video_decoders_[side]->color_space(),
                                                         video_decoders_[side]->color_range(), side, determine_sws_flags(initial_fast_input_alignment_)));
   }
@@ -369,8 +369,8 @@ void VideoCompare::demultiplex(const Side& side) {
   try {
     while (keep_running()) {
       // Wait for decoder to drain
-      if (seeking_ && ready_to_seek_.get(ReadyToSeek::DECODER, side)) {
-        ready_to_seek_.set(ReadyToSeek::DEMULTIPLEXER, side);
+      if (seeking_ && ready_to_seek_.get(ReadyToSeek::ProcessorThread::Decoder, side)) {
+        ready_to_seek_.set(ReadyToSeek::ProcessorThread::Demultiplexer, side);
 
         sleep_for_ms(SLEEP_PERIOD_MS);
         continue;
@@ -416,7 +416,7 @@ void VideoCompare::decode_video(const Side& side) {
           video_decoders_[side]->flush();
 
           // Seeks are now OK
-          ready_to_seek_.set(ReadyToSeek::DECODER, side);
+          ready_to_seek_.set(ReadyToSeek::ProcessorThread::Decoder, side);
         }
 
         sleep_for_ms(SLEEP_PERIOD_MS);
@@ -523,7 +523,7 @@ void VideoCompare::filter_video(const Side& side) {
     while (keep_running()) {
       if (filtered_frame_queues_[side]->is_stopped()) {
         if (seeking_) {
-          ready_to_seek_.set(ReadyToSeek::FILTERER, side);
+          ready_to_seek_.set(ReadyToSeek::ProcessorThread::Filterer, side);
         }
 
         sleep_for_ms(SLEEP_PERIOD_MS);
@@ -558,7 +558,7 @@ void VideoCompare::format_convert_video(const Side& side) {
     while (keep_running()) {
       if (converted_frame_queues_[side]->is_stopped()) {
         if (seeking_) {
-          ready_to_seek_.set(ReadyToSeek::CONVERTER, side);
+          ready_to_seek_.set(ReadyToSeek::ProcessorThread::Converter, side);
         }
 
         sleep_for_ms(SLEEP_PERIOD_MS);
@@ -1016,7 +1016,7 @@ void VideoCompare::compare() {
       }
 
       // handle regular playback only
-      if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::OFF) {
+      if (!skip_update && display_->get_buffer_play_loop_mode() == Display::Loop::Off) {
         if (!adjusting && fetch_next_frame) {
           // pop for all videos
           bool all_popped = true;
@@ -1225,17 +1225,17 @@ void VideoCompare::compare() {
 
           if (!adjusting && time_until_final_refresh > 0 && time_until_final_refresh < refresh_time_deque.average()) {
             timer_->wait(time_until_final_refresh);
-          } else if (time_until_final_refresh <= 0 && display_->get_buffer_play_loop_mode() != Display::Loop::OFF) {
+          } else if (time_until_final_refresh <= 0 && display_->get_buffer_play_loop_mode() != Display::Loop::Off) {
             // auto-adjust current frame during in-buffer playback
             switch (display_->get_buffer_play_loop_mode()) {
-              case Display::Loop::FORWARDONLY:
+              case Display::Loop::ForwardOnly:
                 if (frame_offset == 0) {
                   frame_offset = last_common_frame_index;
                 } else {
                   frame_offset = adjust_frame_offset(frame_offset, -1);
                 }
                 break;
-              case Display::Loop::PINGPONG:
+              case Display::Loop::PingPong:
                 if (last_common_frame_index >= 1 && (frame_offset == 0 || frame_offset == last_common_frame_index)) {
                   display_->toggle_buffer_play_direction();
                 }
@@ -1252,7 +1252,7 @@ void VideoCompare::compare() {
           }
 
           // enter in-buffer playback once if buffer is full or EOF reached
-          if (auto_loop_mode_ != Display::Loop::OFF && !auto_loop_triggered && (buffer_is_full || end_of_file)) {
+          if (auto_loop_mode_ != Display::Loop::Off && !auto_loop_triggered && (buffer_is_full || end_of_file)) {
             display_->set_buffer_play_loop_mode(auto_loop_mode_);
 
             auto_loop_triggered = true;

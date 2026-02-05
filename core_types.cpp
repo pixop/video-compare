@@ -2,38 +2,38 @@
 
 // Side class implementation
 
-Side::Side() : type_(SideType::NONE), right_index_(0) {}
+Side::Side() : type_(SideType::None), right_index_(0) {}
 
 Side::Side(SideType type, size_t right_index) : type_(type), right_index_(right_index) {
-  if (type != SideType::RIGHT && right_index != 0) {
+  if (type != SideType::Right && right_index != 0) {
     right_index_ = 0;  // Only RIGHT can have non-zero index
   }
 }
 
 Side Side::Left() {
-  return Side(SideType::LEFT);
+  return Side(SideType::Left);
 }
 
 Side Side::Right(size_t index) {
-  return Side(SideType::RIGHT, index);
+  return Side(SideType::Right, index);
 }
 
 Side Side::None() {
-  return Side(SideType::NONE);
+  return Side(SideType::None);
 }
 
 size_t Side::as_index() const {
-  if (type_ == SideType::LEFT)
+  if (type_ == SideType::Left)
     return 0;
-  if (type_ == SideType::RIGHT)
+  if (type_ == SideType::Right)
     return 1;                      // For backward compat with existing arrays
   return static_cast<size_t>(-1);  // NONE
 }
 
 size_t Side::as_simple_index() const {
-  if (type_ == SideType::LEFT)
+  if (type_ == SideType::Left)
     return 0;
-  if (type_ == SideType::RIGHT)
+  if (type_ == SideType::Right)
     return 1;
   return 0;  // Default to LEFT for NONE
 }
@@ -58,9 +58,9 @@ size_t Side::hash() const {
 }
 
 std::string Side::to_string() const {
-  if (type_ == SideType::LEFT)
+  if (type_ == SideType::Left)
     return "LEFT";
-  if (type_ == SideType::RIGHT) {
+  if (type_ == SideType::Right) {
     if (right_index_ == 0)
       return "RIGHT";
     return "RIGHT" + std::to_string(right_index_ + 1);

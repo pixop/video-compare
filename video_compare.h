@@ -34,20 +34,20 @@ using FrameQueue = Queue<AVFrameUniquePtr>;
 
 class ReadyToSeek {
  public:
-  enum ProcessorThread { DEMULTIPLEXER, DECODER, FILTERER, CONVERTER, Count };
+  enum class ProcessorThread { Demultiplexer, Decoder, Filterer, Converter, Count };
 
   bool get(const ProcessorThread i, const Side& j) const {
-    auto it = ready_to_seek_[i].find(j);
-    if (it != ready_to_seek_[i].end()) {
+    auto it = ready_to_seek_[to_index(i)].find(j);
+    if (it != ready_to_seek_[to_index(i)].end()) {
       return load(it->second);
     }
     // If not found, return false (not ready)
     return false;
   }
 
-  void init(const ProcessorThread i, const Side& j) { ready_to_seek_[i][j].store(false, std::memory_order_relaxed); }
+  void init(const ProcessorThread i, const Side& j) { ready_to_seek_[to_index(i)][j].store(false, std::memory_order_relaxed); }
 
-  void set(const ProcessorThread i, const Side& j) { store(ready_to_seek_[i][j], true); }
+  void set(const ProcessorThread i, const Side& j) { store(ready_to_seek_[to_index(i)][j], true); }
 
   void reset_all() {
     for (auto& thread_map : ready_to_seek_) {
@@ -75,7 +75,10 @@ class ReadyToSeek {
   static inline void store(std::atomic_bool& atomic_flag, const bool value) { atomic_flag.store(value, std::memory_order_relaxed); }
 
  private:
-  std::array<std::map<Side, std::atomic_bool>, ProcessorThread::Count> ready_to_seek_;
+  static constexpr size_t to_index(const ProcessorThread thread) { return static_cast<size_t>(thread); }
+  static constexpr size_t kProcessorThreadCount = static_cast<size_t>(ProcessorThread::Count);
+
+  std::array<std::map<Side, std::atomic_bool>, kProcessorThreadCount> ready_to_seek_;
 };
 
 class ExceptionHolder {

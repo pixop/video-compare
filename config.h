@@ -45,7 +45,7 @@ struct InputVideo {
   AVDictionary* decoder_options{nullptr};   // mutated by VideoDecoder
   AVDictionary* hw_accel_options{nullptr};  // mutated by VideoDecoder
 
-  ToneMapping tone_mapping_mode{ToneMapping::AUTO};
+  ToneMapping tone_mapping_mode{ToneMapping::Auto};
   unsigned peak_luminance_nits{UNSET_PEAK_LUMINANCE};  // [cd / m^2]
   float boost_tone{1};
 };
@@ -63,8 +63,8 @@ struct VideoCompareConfig {
   int display_number{0};
   std::tuple<int, int> window_size{-1, -1};
 
-  Display::Mode display_mode{Display::Mode::SPLIT};
-  Display::Loop auto_loop_mode{Display::Loop::OFF};
+  Display::Mode display_mode{Display::Mode::Split};
+  Display::Loop auto_loop_mode{Display::Loop::Off};
 
   size_t frame_buffer_size{50};
 
