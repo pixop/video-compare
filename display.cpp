@@ -2831,22 +2831,25 @@ void Display::handle_event(const SDL_Event& event) {
             shift_right_frames_--;
           }
           break;
-        case SDLK_y:
+        case SDLK_y: {
           // Cycle through subtraction modes
+          const bool forward = (keymod & KMOD_SHIFT) == 0;
+
           switch (diff_mode_) {
             case DiffMode::LegacyAbs:
-              diff_mode_ = DiffMode::AbsLinear;
+              diff_mode_ = forward ? DiffMode::AbsLinear : DiffMode::SignedDiverging;
               break;
             case DiffMode::AbsLinear:
-              diff_mode_ = DiffMode::AbsSqrt;
+              diff_mode_ = forward ? DiffMode::AbsSqrt : DiffMode::LegacyAbs;
               break;
             case DiffMode::AbsSqrt:
-              diff_mode_ = DiffMode::SignedDiverging;
+              diff_mode_ = forward ? DiffMode::SignedDiverging : DiffMode::AbsLinear;
               break;
             case DiffMode::SignedDiverging:
-              diff_mode_ = DiffMode::LegacyAbs;
+              diff_mode_ = forward ? DiffMode::LegacyAbs : DiffMode::AbsSqrt;
               break;
           }
+
           std::cout << "Subtraction mode set to '";
           switch (diff_mode_) {
             case DiffMode::LegacyAbs:
@@ -2864,6 +2867,7 @@ void Display::handle_event(const SDL_Event& event) {
           }
           std::cout << "'" << std::endl;
           break;
+        }
         case SDLK_u:
           diff_luma_only_ = !diff_luma_only_;
           std::cout << "Subtraction luminance-only set to '" << (diff_luma_only_ ? "ON" : "OFF") << "'" << std::endl;
