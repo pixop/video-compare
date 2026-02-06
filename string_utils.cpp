@@ -86,7 +86,7 @@ std::vector<std::string> tokenize_command_line_options(const std::string& input)
   }
 
   if (escaping || in_single_quotes || in_double_quotes) {
-    throw std::logic_error{"Cannot parse options file: unterminated quote or escape sequence"};
+    throw std::logic_error("Cannot parse options file: unterminated quote or escape sequence");
   }
 
   if (!current.empty()) {

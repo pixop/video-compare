@@ -511,7 +511,7 @@ int main(int argc, char** argv) {
          {"show-controls", {"-c", "--show-controls"}, "print controls and exit", 0},
          {"verbose", {"-v", "--verbose"}, "enable verbose output, including information such as library versions and rendering details", 0},
          {"options-file", {"--options-file"}, "read additional command-line options from a file (contents are inserted before other arguments)", 1},
-         {"no-auto-options-file", {"--no-auto-options-file"}, string_sprintf("do not read options from ./%s automatically", AUTO_OPTIONS_FILE_NAME.c_str()), 0},
+         {"no-auto-options-file", {"--no-auto-options-file"}, string_sprintf("do not read options from '%s' automatically", AUTO_OPTIONS_FILE_NAME.c_str()), 0},
          {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
          {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
          {"fast-alignment", {"-F", "--fast-alignment"}, "toggle fast bilinear scaling for aligning input source resolutions, replacing high-quality bicubic and chroma-accurate interpolation", 0},
