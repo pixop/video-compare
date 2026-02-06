@@ -1,6 +1,8 @@
 #define SDL_MAIN_HANDLED
 #include <algorithm>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <regex>
 #include <stdexcept>
@@ -12,6 +14,8 @@
 #include "version.h"
 #include "video_compare.h"
 #include "vmaf_calculator.h"
+
+static const std::string AUTO_OPTIONS_FILE_NAME = "video-compare.opt";
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -52,6 +56,44 @@ void free_argv(int argc, char** argv) {
   UNUSED(argv);
 }
 #endif
+
+std::vector<std::string> read_options_file(const std::string& path) {
+  std::ifstream input(path);
+  if (!input) {
+    throw std::logic_error{"Cannot open options file: " + path};
+  }
+
+  std::string contents((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+  return tokenize_command_line_options(contents);
+}
+
+std::vector<std::string> read_auto_options_file_if_present(bool enabled) {
+  if (!enabled) {
+    return {};
+  }
+
+  std::ifstream probe(AUTO_OPTIONS_FILE_NAME);
+  if (!probe) {
+    return {};
+  }
+
+  return read_options_file(AUTO_OPTIONS_FILE_NAME);
+}
+
+std::vector<std::string> expand_options_files(const argagg::option_results& results) {
+  std::vector<std::string> extra_args;
+
+  for (const auto& result : results.all) {
+    if (!result) {
+      throw std::logic_error{"Missing file path after --options-file"};
+    }
+
+    auto file_args = read_options_file(result.arg);
+    extra_args.insert(extra_args.end(), file_args.begin(), file_args.end());
+  }
+
+  return extra_args;
+}
 
 void print_controls() {
   std::cout << "Controls:" << std::endl << std::endl;
@@ -468,6 +510,8 @@ int main(int argc, char** argv) {
         {{"help", {"-h", "--help"}, "print help and exit", 0},
          {"show-controls", {"-c", "--show-controls"}, "print controls and exit", 0},
          {"verbose", {"-v", "--verbose"}, "enable verbose output, including information such as library versions and rendering details", 0},
+         {"options-file", {"--options-file"}, "read additional command-line options from a file (contents are inserted before other arguments)", 1},
+         {"no-auto-options-file", {"--no-auto-options-file"}, string_sprintf("do not read options from ./%s automatically", AUTO_OPTIONS_FILE_NAME.c_str()), 0},
          {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
          {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
          {"fast-alignment", {"-F", "--fast-alignment"}, "toggle fast bilinear scaling for aligning input source resolutions, replacing high-quality bicubic and chroma-accurate interpolation", 0},
@@ -517,8 +561,32 @@ int main(int argc, char** argv) {
          {"libvmaf-options", {"--libvmaf-options"}, "libvmaf FFmpeg filter options (e.g. 'model=version=vmaf_4k_v0.6.1' or 'model=version=vmaf_v0.6.1\\\\:name=hd|version=vmaf_4k_v0.6.1\\\\:name=4k')", 1},
          {"disable-auto-filters", {"--no-auto-filters"}, "disable the default behaviour of automatically injecting filters for deinterlacing, DAR correction, frame rate harmonization, rotation and colorimetry", 0}}};
 
+    argagg::parser_results initial_args;
+    initial_args = argparser.parse(argc, argv_decoded);
+
+    const bool auto_options_enabled = !initial_args["no-auto-options-file"];
+    std::vector<std::string> auto_options_args = read_auto_options_file_if_present(auto_options_enabled);
+    std::vector<std::string> options_file_args = expand_options_files(initial_args["options-file"]);
+    std::vector<std::string> merged_args;
+    merged_args.reserve(static_cast<size_t>(argc) + auto_options_args.size() + options_file_args.size());
+    merged_args.emplace_back(argv_decoded[0]);
+    merged_args.insert(merged_args.end(), auto_options_args.begin(), auto_options_args.end());
+    merged_args.insert(merged_args.end(), options_file_args.begin(), options_file_args.end());
+    for (int i = 1; i < argc; ++i) {
+      merged_args.emplace_back(argv_decoded[i]);
+    }
+
+    std::vector<char*> merged_argv;
+    merged_argv.reserve(merged_args.size());
+    for (auto& arg : merged_args) {
+      merged_argv.push_back(const_cast<char*>(arg.c_str()));
+    }
+
     argagg::parser_results args;
-    args = argparser.parse(argc, argv_decoded);
+    args = argparser.parse(static_cast<int>(merged_argv.size()), merged_argv.data());
+    if (args["verbose"]) {
+      std::cout << "Command line: " << format_command_line_for_log(merged_args) << std::endl;
+    }
 
     if (args["show-controls"]) {
       print_controls();

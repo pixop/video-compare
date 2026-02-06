@@ -54,6 +54,10 @@ std::string string_join(const std::vector<std::string>& strings, const std::stri
 
 std::vector<std::string> string_split(const std::string& str, char delim);
 
+std::vector<std::string> tokenize_command_line_options(const std::string& input);
+
+std::string format_command_line_for_log(const std::vector<std::string>& args);
+
 std::string format_position(const float position, const bool use_compact);
 
 std::string format_duration(const float duration);

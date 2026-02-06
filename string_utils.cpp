@@ -1,9 +1,11 @@
 #include "string_utils.h"
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <iostream>
 #include <numeric>
 #include <sstream>
+#include <stdexcept>
 
 extern "C" {
 #include <libavutil/pixdesc.h>
@@ -24,6 +26,110 @@ std::vector<std::string> string_split(const std::string& string, char delim) {
   }
 
   return tokens;
+}
+
+std::vector<std::string> tokenize_command_line_options(const std::string& input) {
+  std::vector<std::string> tokens;
+  std::string current;
+  bool in_single_quotes = false;
+  bool in_double_quotes = false;
+  bool escaping = false;
+
+  for (char ch : input) {
+    if (escaping) {
+      current.push_back(ch);
+      escaping = false;
+      continue;
+    }
+
+    if (ch == '\\' && !in_single_quotes) {
+      escaping = true;
+      continue;
+    }
+
+    if (in_single_quotes) {
+      if (ch == '\'') {
+        in_single_quotes = false;
+      } else {
+        current.push_back(ch);
+      }
+      continue;
+    }
+
+    if (in_double_quotes) {
+      if (ch == '"') {
+        in_double_quotes = false;
+      } else {
+        current.push_back(ch);
+      }
+      continue;
+    }
+
+    if (std::isspace(static_cast<unsigned char>(ch)) != 0) {
+      if (!current.empty()) {
+        tokens.push_back(current);
+        current.clear();
+      }
+      continue;
+    }
+
+    if (ch == '\'') {
+      in_single_quotes = true;
+      continue;
+    }
+    if (ch == '"') {
+      in_double_quotes = true;
+      continue;
+    }
+
+    current.push_back(ch);
+  }
+
+  if (escaping || in_single_quotes || in_double_quotes) {
+    throw std::logic_error{"Cannot parse options file: unterminated quote or escape sequence"};
+  }
+
+  if (!current.empty()) {
+    tokens.push_back(current);
+  }
+
+  return tokens;
+}
+
+std::string format_command_line_for_log(const std::vector<std::string>& args) {
+  std::string result;
+  bool first = true;
+
+  for (const auto& arg : args) {
+    if (!first) {
+      result.push_back(' ');
+    }
+    first = false;
+
+    bool needs_quotes = false;
+    for (char ch : arg) {
+      if (std::isspace(static_cast<unsigned char>(ch)) != 0 || ch == '"' || ch == '\\') {
+        needs_quotes = true;
+        break;
+      }
+    }
+
+    if (!needs_quotes) {
+      result.append(arg);
+      continue;
+    }
+
+    result.push_back('"');
+    for (char ch : arg) {
+      if (ch == '"' || ch == '\\') {
+        result.push_back('\\');
+      }
+      result.push_back(ch);
+    }
+    result.push_back('"');
+  }
+
+  return result;
 }
 
 std::string format_position(const float position, const bool use_compact) {
