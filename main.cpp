@@ -510,8 +510,7 @@ int main(int argc, char** argv) {
         {{"help", {"-h", "--help"}, "print help and exit", 0},
          {"show-controls", {"-c", "--show-controls"}, "print controls and exit", 0},
          {"verbose", {"-v", "--verbose"}, "enable verbose output, including information such as library versions and rendering details", 0},
-         {"options-file", {"--options-file"}, "read additional command-line options from a file (contents are inserted before other arguments)", 1},
-         {"no-auto-options-file", {"--no-auto-options-file"}, string_sprintf("do not read options from '%s' automatically", AUTO_OPTIONS_FILE_NAME.c_str()), 0},
+         {"options-file", {"-o", "--options-file"}, "read additional command-line options from a file (contents are inserted before other arguments)", 1},
          {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
          {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
          {"fast-alignment", {"-F", "--fast-alignment"}, "toggle fast bilinear scaling for aligning input source resolutions, replacing high-quality bicubic and chroma-accurate interpolation", 0},
@@ -559,12 +558,13 @@ int main(int argc, char** argv) {
          {"right-hwaccel", {"--right-hwaccel"}, "right FFmpeg video hardware acceleration, specified as [type][:device?[:options?]]", 1},
          {"find-hwaccels", {"--find-hwaccels"}, "find FFmpeg video hardware acceleration types that match the provided search term (e.g. 'videotoolbox' or 'vulkan'; use \"\" to list all)", 1},
          {"libvmaf-options", {"--libvmaf-options"}, "libvmaf FFmpeg filter options (e.g. 'model=version=vmaf_4k_v0.6.1' or 'model=version=vmaf_v0.6.1\\\\:name=hd|version=vmaf_4k_v0.6.1\\\\:name=4k')", 1},
+         {"disable-auto-options-file", {"--no-auto-options-file"}, string_sprintf("do not read options from '%s' automatically", AUTO_OPTIONS_FILE_NAME.c_str()), 0},
          {"disable-auto-filters", {"--no-auto-filters"}, "disable the default behaviour of automatically injecting filters for deinterlacing, DAR correction, frame rate harmonization, rotation and colorimetry", 0}}};
 
     argagg::parser_results initial_args;
     initial_args = argparser.parse(argc, argv_decoded);
 
-    const bool auto_options_enabled = !initial_args["no-auto-options-file"];
+    const bool auto_options_enabled = !initial_args["disable-auto-options-file"];
     std::vector<std::string> auto_options_args = read_auto_options_file_if_present(auto_options_enabled);
     std::vector<std::string> options_file_args = expand_options_files(initial_args["options-file"]);
     std::vector<std::string> merged_args;
