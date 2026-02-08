@@ -382,10 +382,10 @@ unsigned parse_peak_nits(const std::string& nits_str) {
   }
   int nits = std::stoi(nits_str);
   if (nits < 1) {
-    throw std::logic_error{"peak nits must be at least 1"};
+    throw std::logic_error{"Peak nits must be at least 1"};
   }
   if (nits > 10000) {
-    throw std::logic_error{"peak nits must not be more than 10000"};
+    throw std::logic_error{"Peak nits must not be more than 10000"};
   }
   return static_cast<unsigned>(nits);
 }
