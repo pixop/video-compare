@@ -258,8 +258,8 @@ int VideoFilterer::init_filters() {
 #if (LIBAVFILTER_VERSION_INT < AV_VERSION_INT(10, 1, 100))
         string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d", width_, height_, pixel_format_, time_base_.num, time_base_.den, sample_aspect_ratio_.num, sample_aspect_ratio_den);
 #else
-        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d", width_, height_, pixel_format_, time_base_.num, time_base_.den, sample_aspect_ratio_.num, sample_aspect_ratio_den,
-                       color_space_, color_range_);
+        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d", width_, height_, pixel_format_, time_base_.num, time_base_.den, sample_aspect_ratio_.num, sample_aspect_ratio_den, color_space_,
+                       color_range_);
 #endif
 
     // buffer video source: the decoded frames go here
@@ -379,7 +379,7 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
 
   // convert PTS and duration to microseconds
   filtered_frame->pts = av_rescale_q(filtered_frame->pts, av_buffersink_get_time_base(buffersink_ctx_), AV_R_MICROSECONDS) - demuxer_->start_time();
-  ffmpeg::frame_duration(filtered_frame) = av_rescale_q(ffmpeg::frame_duration(filtered_frame), demuxer_->time_base(), AV_R_MICROSECONDS);
+  ffmpeg::frame_duration(filtered_frame) = av_rescale_q(ffmpeg::frame_duration(filtered_frame), time_base_, AV_R_MICROSECONDS);
 
   return true;
 }
