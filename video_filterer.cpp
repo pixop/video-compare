@@ -232,7 +232,8 @@ VideoFilterer::~VideoFilterer() {
 void VideoFilterer::init() {
   filter_graph_ = avfilter_graph_alloc();
 
-  ffmpeg::check(init_filters(video_decoder_->codec_context(), demuxer_->time_base()));
+  AVRational sar = video_decoder_->sample_aspect_ratio(demuxer_, true);
+  ffmpeg::check(init_filters(demuxer_->time_base(), sar));
 }
 
 void VideoFilterer::free() {
@@ -244,7 +245,7 @@ void VideoFilterer::reinit() {
   init();
 }
 
-int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational time_base) {
+int VideoFilterer::init_filters(const AVRational time_base, const AVRational sar) {
   AVFilterInOut* outputs = avfilter_inout_alloc();
   AVFilterInOut* inputs = avfilter_inout_alloc();
 
@@ -253,12 +254,12 @@ int VideoFilterer::init_filters(const AVCodecContext* dec_ctx, const AVRational 
   if ((outputs == nullptr) || (inputs == nullptr) || (filter_graph_ == nullptr)) {
     ret = AVERROR(ENOMEM);
   } else {
-    const int sample_aspect_ratio_den = FFMAX(dec_ctx->sample_aspect_ratio.den, 1);
+    const int sample_aspect_ratio_den = FFMAX(sar.den, 1);
     const std::string args =
 #if (LIBAVFILTER_VERSION_INT < AV_VERSION_INT(10, 1, 100))
-        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d", width_, height_, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num, sample_aspect_ratio_den);
+        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d", width_, height_, pixel_format_, time_base.num, time_base.den, sar.num, sample_aspect_ratio_den);
 #else
-        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d", width_, height_, pixel_format_, time_base.num, time_base.den, dec_ctx->sample_aspect_ratio.num, sample_aspect_ratio_den,
+        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d", width_, height_, pixel_format_, time_base.num, time_base.den, sar.num, sample_aspect_ratio_den,
                        color_space_, color_range_);
 #endif
 
