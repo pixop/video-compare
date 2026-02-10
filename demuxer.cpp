@@ -90,7 +90,7 @@ int64_t Demuxer::start_time() const {
 
 int Demuxer::rotation() const {
   double theta = 0;
-  const AVStream* stream = format_context_->streams[video_stream_index_];
+  AVStream* stream = format_context_->streams[video_stream_index_];
 
 #if LIBAVFORMAT_VERSION_MAJOR >= 62
   const AVPacketSideData* side_data = av_packet_side_data_get(stream->codecpar->coded_side_data, stream->codecpar->nb_coded_side_data, AV_PKT_DATA_DISPLAYMATRIX);
@@ -114,6 +114,16 @@ int Demuxer::rotation() const {
 
 AVRational Demuxer::guess_frame_rate(AVFrame* frame) const {
   return av_guess_frame_rate(format_context_, format_context_->streams[video_stream_index_], frame);
+}
+
+AVRational Demuxer::sample_aspect_ratio(AVFrame* frame) const {
+  AVStream* stream = format_context_->streams[video_stream_index_];
+
+  if (stream == nullptr) {
+    return AVRational{0, 1};
+  }
+
+  return av_guess_sample_aspect_ratio(format_context_, stream, frame);
 }
 
 bool Demuxer::operator()(AVPacket& packet) {

@@ -84,8 +84,8 @@ VideoFilterer::VideoFilterer(const Side& side,
     }
 
     // stretch to display aspect ratio
-    if (video_decoder->is_anamorphic()) {
-      const AVRational sample_aspect_ratio = video_decoder->sample_aspect_ratio();
+    if (video_decoder->is_anamorphic(demuxer_)) {
+      const AVRational sample_aspect_ratio = video_decoder->sample_aspect_ratio(demuxer_);
 
       if (sample_aspect_ratio.num > sample_aspect_ratio.den) {
         filters.push_back("scale=iw*sar:ih");

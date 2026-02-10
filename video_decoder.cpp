@@ -239,8 +239,12 @@ AVRational VideoDecoder::time_base() const {
   return codec_context_->time_base;
 }
 
-AVRational VideoDecoder::sample_aspect_ratio(const bool reduce) const {
+AVRational VideoDecoder::sample_aspect_ratio(const Demuxer* demuxer, const bool reduce) const {
   AVRational sar = codec_context_->sample_aspect_ratio;
+
+  if ((sar.num <= 0 || sar.den <= 0) && demuxer != nullptr) {
+    sar = demuxer->sample_aspect_ratio();
+  }
 
   if (reduce) {
     av_reduce(&sar.num, &sar.den, sar.num, sar.den, 1024 * 1024);
@@ -249,8 +253,8 @@ AVRational VideoDecoder::sample_aspect_ratio(const bool reduce) const {
   return sar;
 }
 
-AVRational VideoDecoder::display_aspect_ratio() const {
-  const AVRational sar = sample_aspect_ratio();
+AVRational VideoDecoder::display_aspect_ratio(const Demuxer* demuxer) const {
+  const AVRational sar = sample_aspect_ratio(demuxer);
 
   AVRational dar;
   av_reduce(&dar.num, &dar.den, width() * static_cast<int64_t>(sar.num), height() * static_cast<int64_t>(sar.den), 1024 * 1024);
@@ -258,8 +262,8 @@ AVRational VideoDecoder::display_aspect_ratio() const {
   return dar;
 }
 
-bool VideoDecoder::is_anamorphic() const {
-  const AVRational sar = sample_aspect_ratio();
+bool VideoDecoder::is_anamorphic(const Demuxer* demuxer) const {
+  const AVRational sar = sample_aspect_ratio(demuxer);
 
   return sar.num && (sar.num != sar.den);
 }

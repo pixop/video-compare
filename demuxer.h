@@ -22,6 +22,7 @@ class Demuxer : public SideAware {
   int rotation() const;
 
   AVRational guess_frame_rate(AVFrame* frame = nullptr) const;
+  AVRational sample_aspect_ratio(AVFrame* frame = nullptr) const;
 
   bool operator()(AVPacket& packet);
   bool seek(float position, bool backward);

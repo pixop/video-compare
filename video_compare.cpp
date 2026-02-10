@@ -264,8 +264,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 
     std::string aspect_ratio;
 
-    if (video_decoders_[side]->is_anamorphic()) {
-      const AVRational display_aspect_ratio = video_decoders_[side]->display_aspect_ratio();
+    if (video_decoders_[side]->is_anamorphic(demuxers_[side].get())) {
+      const AVRational display_aspect_ratio = video_decoders_[side]->display_aspect_ratio(demuxers_[side].get());
       aspect_ratio = string_sprintf(" [DAR %d:%d]", display_aspect_ratio.num, display_aspect_ratio.den);
     }
 
@@ -302,8 +302,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
     const std::string dimensions = string_sprintf("%dx%d", video_decoders_[side]->width(), video_decoders_[side]->height());
     metadata.set(MetadataProperties::RESOLUTION, dimensions);
 
-    const AVRational sample_aspect_ratio = video_decoders_[side]->sample_aspect_ratio(true);
-    const AVRational display_aspect_ratio = video_decoders_[side]->display_aspect_ratio();
+    const AVRational sample_aspect_ratio = video_decoders_[side]->sample_aspect_ratio(demuxers_[side].get(), true);
+    const AVRational display_aspect_ratio = video_decoders_[side]->display_aspect_ratio(demuxers_[side].get());
 
     if (sample_aspect_ratio.num > 0) {
       metadata.set(MetadataProperties::SAMPLE_ASPECT_RATIO, string_sprintf("%d:%d", sample_aspect_ratio.num, sample_aspect_ratio.den));
