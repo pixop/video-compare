@@ -247,7 +247,7 @@ AVRational VideoDecoder::sample_aspect_ratio(const Demuxer* demuxer, const bool 
   }
 
   if (reduce) {
-    av_reduce(&sar.num, &sar.den, sar.num, sar.den, 1024 * 1024);
+    av_reduce(&sar.num, &sar.den, sar.num, sar.den, MAX_AVRATIONAL_REDUCE);
   }
 
   return sar;
@@ -257,7 +257,7 @@ AVRational VideoDecoder::display_aspect_ratio(const Demuxer* demuxer) const {
   const AVRational sar = sample_aspect_ratio(demuxer);
 
   AVRational dar;
-  av_reduce(&dar.num, &dar.den, width() * static_cast<int64_t>(sar.num), height() * static_cast<int64_t>(sar.den), 1024 * 1024);
+  av_reduce(&dar.num, &dar.den, width() * static_cast<int64_t>(sar.num), height() * static_cast<int64_t>(sar.den), MAX_AVRATIONAL_REDUCE);
 
   return dar;
 }

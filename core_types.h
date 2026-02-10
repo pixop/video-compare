@@ -4,6 +4,8 @@
 #include <functional>
 #include <string>
 
+constexpr int64_t MAX_AVRATIONAL_REDUCE = 1024 * 1024;
+
 constexpr unsigned UNSET_PEAK_LUMINANCE = 0;
 
 enum class ToneMapping { Auto, Off, FullRange, Relative };

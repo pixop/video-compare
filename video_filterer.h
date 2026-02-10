@@ -46,7 +46,7 @@ class VideoFilterer : public SideAware {
   AVPixelFormat dest_pixel_format() const;
 
  private:
-  int init_filters(AVRational time_base, AVRational sar);
+  int init_filters();
 
   const Demuxer* demuxer_;
   const VideoDecoder* video_decoder_;
@@ -59,6 +59,8 @@ class VideoFilterer : public SideAware {
   AVPixelFormat pixel_format_;
   AVColorSpace color_space_;
   AVColorRange color_range_;
+  AVRational sample_aspect_ratio_;
+  AVRational time_base_;
 
   AVFilterContext* buffersrc_ctx_;
   AVFilterContext* buffersink_ctx_;

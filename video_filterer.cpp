@@ -40,7 +40,9 @@ VideoFilterer::VideoFilterer(const Side& side,
       height_(video_decoder->height()),
       pixel_format_(video_decoder->pixel_format()),
       color_space_(video_decoder->color_space()),
-      color_range_(video_decoder->color_range()) {
+      color_range_(video_decoder->color_range()),
+      sample_aspect_ratio_(video_decoder->sample_aspect_ratio(demuxer_, true)),
+      time_base_(demuxer_->time_base()) {
   ScopedLogSide scoped_log_side(side);
 
   std::vector<std::string> filters;
@@ -85,9 +87,7 @@ VideoFilterer::VideoFilterer(const Side& side,
 
     // stretch to display aspect ratio
     if (video_decoder->is_anamorphic(demuxer_)) {
-      const AVRational sample_aspect_ratio = video_decoder->sample_aspect_ratio(demuxer_);
-
-      if (sample_aspect_ratio.num > sample_aspect_ratio.den) {
+      if (sample_aspect_ratio_.num > sample_aspect_ratio_.den) {
         filters.push_back("scale=iw*sar:ih");
       } else {
         filters.push_back("scale=iw:ih/sar");
@@ -232,8 +232,7 @@ VideoFilterer::~VideoFilterer() {
 void VideoFilterer::init() {
   filter_graph_ = avfilter_graph_alloc();
 
-  AVRational sar = video_decoder_->sample_aspect_ratio(demuxer_, true);
-  ffmpeg::check(init_filters(demuxer_->time_base(), sar));
+  ffmpeg::check(init_filters());
 }
 
 void VideoFilterer::free() {
@@ -245,7 +244,7 @@ void VideoFilterer::reinit() {
   init();
 }
 
-int VideoFilterer::init_filters(const AVRational time_base, const AVRational sar) {
+int VideoFilterer::init_filters() {
   AVFilterInOut* outputs = avfilter_inout_alloc();
   AVFilterInOut* inputs = avfilter_inout_alloc();
 
@@ -254,12 +253,12 @@ int VideoFilterer::init_filters(const AVRational time_base, const AVRational sar
   if ((outputs == nullptr) || (inputs == nullptr) || (filter_graph_ == nullptr)) {
     ret = AVERROR(ENOMEM);
   } else {
-    const int sample_aspect_ratio_den = FFMAX(sar.den, 1);
+    const int sample_aspect_ratio_den = FFMAX(sample_aspect_ratio_.den, 1);
     const std::string args =
 #if (LIBAVFILTER_VERSION_INT < AV_VERSION_INT(10, 1, 100))
-        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d", width_, height_, pixel_format_, time_base.num, time_base.den, sar.num, sample_aspect_ratio_den);
+        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d", width_, height_, pixel_format_, time_base_.num, time_base_.den, sample_aspect_ratio_.num, sample_aspect_ratio_den);
 #else
-        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d", width_, height_, pixel_format_, time_base.num, time_base.den, sar.num, sample_aspect_ratio_den,
+        string_sprintf("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d", width_, height_, pixel_format_, time_base_.num, time_base_.den, sample_aspect_ratio_.num, sample_aspect_ratio_den,
                        color_space_, color_range_);
 #endif
 
@@ -329,6 +328,15 @@ bool VideoFilterer::send(AVFrame* decoded_frame) {
     if (color_range_ != decoded_frame->color_range) {
       color_range_ = static_cast<AVColorRange>(decoded_frame->color_range);
       must_reinit = true;
+    }
+    if (decoded_frame->sample_aspect_ratio.num > 0 && decoded_frame->sample_aspect_ratio.den > 0) {
+      AVRational new_sar = decoded_frame->sample_aspect_ratio;
+      av_reduce(&new_sar.num, &new_sar.den, new_sar.num, new_sar.den, MAX_AVRATIONAL_REDUCE);
+
+      if (av_cmp_q(new_sar, sample_aspect_ratio_) != 0) {
+        sample_aspect_ratio_ = new_sar;
+        must_reinit = true;
+      }
     }
 
     if (dynamic_range_ != DynamicRange::Standard) {
