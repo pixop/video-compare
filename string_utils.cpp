@@ -242,9 +242,9 @@ std::string stringify_field_order(const AVFieldOrder field_order, const std::str
     case AV_FIELD_BB:
       return "bottom first";
     case AV_FIELD_TB:
-      return "top coded first, swapped";
+      return "top coded first swapped";
     case AV_FIELD_BT:
-      return "bottom coded first, swapped";
+      return "bottom coded first swapped";
     default:
       return unknown;
   }
