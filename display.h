@@ -116,6 +116,7 @@ class Display {
   const Mode mode_;
   const bool fit_window_to_usable_bounds_;
   const bool high_dpi_allowed_;
+  const bool lock_window_aspect_ratio_;
   const bool use_10_bpc_;
   bool fast_input_alignment_;
   bool bilinear_texture_filtering_;
@@ -132,6 +133,8 @@ class Display {
   float video_to_window_width_factor_;
   float video_to_window_height_factor_;
   float font_scale_;
+  float window_aspect_ratio_{1.0F};
+  std::array<int, 2> last_forced_window_size_{{-1, -1}};
 
   bool show_help_{false};
   bool show_metadata_{false};
@@ -187,8 +190,8 @@ class Display {
   Vector2D global_center_{0.5F, 0.5F};
 
   SDL sdl_;
-  TTF_Font* small_font_;
-  TTF_Font* big_font_;
+  TTF_Font* small_font_{nullptr};
+  TTF_Font* big_font_{nullptr};
   SDL_Cursor* normal_mode_cursor_;
   SDL_Cursor* pan_mode_cursor_;
   SDL_Cursor* selection_mode_cursor_;
@@ -258,6 +261,12 @@ class Display {
 
   void print_verbose_info();
 
+  void rebuild_fonts();
+  void rebuild_side_ui_textures();
+  void rebuild_help_textures();
+  void clamp_overlay_offsets();
+  void handle_window_resize();
+
   void convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi);
 
   void update_difference(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x);
@@ -312,10 +321,10 @@ class Display {
 
   void render_help();
   void render_metadata_overlay();
+  void refresh_display_side_mapping();
   void build_metadata_textures(const VideoMetadata& left, const VideoMetadata& right);
   void update_window_title_with_current_roi();
   void ensure_metadata_textures_current();
-  void refresh_display_side_mapping();
 
   SDL_Rect get_left_selection_rect() const;
   void draw_selection_rect();
@@ -346,6 +355,7 @@ class Display {
           const bool verbose,
           const bool fit_window_to_usable_bounds,
           const bool high_dpi_allowed,
+          const bool lock_window_aspect_ratio,
           const bool use_10_bpc,
           const bool fast_input_alignment,
           const bool bilinear_texture_filtering,

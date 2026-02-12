@@ -241,8 +241,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 
   // Initialize display (use first right video's filename)
   display_ =
-      std::make_unique<Display>(config.display_number, config.display_mode, config.verbose, config.fit_window_to_usable_bounds, config.high_dpi_allowed, config.use_10_bpc, initial_fast_input_alignment_, config.bilinear_texture_filtering,
-                                config.window_size, max_width_, max_height_, shortest_duration_, config.wheel_sensitivity, config.start_in_subtraction_mode, config.left.file_name, first_right.file_name);
+      std::make_unique<Display>(config.display_number, config.display_mode, config.verbose, config.fit_window_to_usable_bounds, config.high_dpi_allowed, config.lock_window_aspect_ratio, config.use_10_bpc, initial_fast_input_alignment_,
+                                config.bilinear_texture_filtering, config.window_size, max_width_, max_height_, shortest_duration_, config.wheel_sensitivity, config.start_in_subtraction_mode, config.left.file_name, first_right.file_name);
 
   // Set number of right videos in display
   display_->set_num_right_videos(config.right_videos.size());

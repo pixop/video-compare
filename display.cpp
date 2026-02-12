@@ -50,6 +50,9 @@ static const float PLAYBACK_SPEED_STEP_SIZE = pow(2.0F, 1.0F / float(PLAYBACK_SP
 static const int HELP_TEXT_LINE_SPACING = 1;
 static const int HELP_TEXT_HORIZONTAL_MARGIN = 26;
 
+static const int MIN_WINDOW_WIDTH = 4;
+static const int MIN_WINDOW_HEIGHT = 1;
+
 auto frame_deleter = [](AVFrame* frame) {
   av_freep(&frame->data[0]);
   av_frame_free(&frame);
@@ -213,6 +216,7 @@ Display::Display(const int display_number,
                  const bool verbose,
                  const bool fit_window_to_usable_bounds,
                  const bool high_dpi_allowed,
+                 const bool lock_window_aspect_ratio,
                  const bool use_10_bpc,
                  const bool fast_input_alignment,
                  const bool bilinear_texture_filtering,
@@ -228,6 +232,7 @@ Display::Display(const int display_number,
       mode_{mode},
       fit_window_to_usable_bounds_{fit_window_to_usable_bounds},
       high_dpi_allowed_{high_dpi_allowed},
+      lock_window_aspect_ratio_{lock_window_aspect_ratio},
       use_10_bpc_{use_10_bpc},
       fast_input_alignment_{fast_input_alignment},
       bilinear_texture_filtering_{bilinear_texture_filtering},
@@ -243,9 +248,6 @@ Display::Display(const int display_number,
   int window_y;
   int window_width;
   int window_height;
-
-  constexpr int min_width = 4;
-  constexpr int min_height = 1;
 
   // account for window frame and title bar
   constexpr int border_width = 10;
@@ -283,8 +285,8 @@ Display::Display(const int display_number,
       window_height /= 2;
     }
   } else {
-    const int usable_width = std::max(bounds.w - border_width, min_width);
-    const int usable_height = std::max(bounds.h - border_height, min_height);
+    const int usable_width = std::max(bounds.w - border_width, MIN_WINDOW_WIDTH);
+    const int usable_height = std::max(bounds.h - border_height, MIN_WINDOW_HEIGHT);
 
     const float aspect_ratio = static_cast<float>(auto_width) / static_cast<float>(auto_height);
     const float usable_aspect_ratio = static_cast<float>(usable_width) / static_cast<float>(usable_height);
@@ -304,14 +306,14 @@ Display::Display(const int display_number,
 #endif
   }
 
-  if (window_width < min_width) {
-    throw std::runtime_error{"Window width cannot be less than " + std::to_string(min_width)};
+  if (window_width < MIN_WINDOW_WIDTH) {
+    throw std::runtime_error{"Window width cannot be less than " + std::to_string(MIN_WINDOW_WIDTH)};
   }
-  if (window_height < min_height) {
-    throw std::runtime_error{"Window height cannot be less than " + std::to_string(min_height)};
+  if (window_height < MIN_WINDOW_HEIGHT) {
+    throw std::runtime_error{"Window height cannot be less than " + std::to_string(MIN_WINDOW_HEIGHT)};
   }
 
-  const int create_window_flags = SDL_WINDOW_SHOWN;
+  const int create_window_flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
   window_ = check_sdl(SDL_CreateWindow(format_window_title(left_file_name, right_file_name).c_str(), window_x, window_y, window_width, window_height, high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
                       "window");
 
@@ -337,6 +339,7 @@ Display::Display(const int display_number,
 
   SDL_GL_GetDrawableSize(window_, &drawable_width_, &drawable_height_);
   SDL_GetWindowSize(window_, &window_width_, &window_height_);
+  window_aspect_ratio_ = static_cast<float>(window_width_) / static_cast<float>(std::max(1, window_height_));
 
   // Check if window is larger than display and warn user
   const int usable_width = bounds.w - border_width;
@@ -367,9 +370,7 @@ Display::Display(const int display_number,
     max_text_width_ = drawable_width_ - double_border_extension_ - line1_y_;
   }
 
-  SDL_RWops* embedded_font = check_sdl(SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN), "get pointer to font");
-  small_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 16 * font_scale_), "font open");
-  big_font_ = check_sdl(TTF_OpenFontRW(embedded_font, 0, 24 * font_scale_), "font open");
+  rebuild_fonts();
 
   normal_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
   pan_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZEALL);
@@ -396,21 +397,7 @@ Display::Display(const int display_number,
   right_file_name_ = right_file_name;
   last_window_title_.clear();
 
-  // Initialize per-side UI state (file stems and file name textures)
-  side_ui_[LEFT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(left_file_name));
-  side_ui_[RIGHT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(right_file_name));
-
-  SDL_Surface* text_surface = render_text_with_fallback(left_file_name);
-  side_ui_[LEFT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-  side_ui_[LEFT.as_simple_index()].text_width = text_surface->w;
-  side_ui_[LEFT.as_simple_index()].text_height = text_surface->h;
-  SDL_FreeSurface(text_surface);
-
-  text_surface = render_text_with_fallback(format_right_file_label(left_file_name, right_file_name, 1));
-  side_ui_[RIGHT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-  side_ui_[RIGHT.as_simple_index()].text_width = text_surface->w;
-  side_ui_[RIGHT.as_simple_index()].text_height = text_surface->h;
-  SDL_FreeSurface(text_surface);
+  rebuild_side_ui_textures();
 
   refresh_display_side_mapping();
 
@@ -420,40 +407,7 @@ Display::Display(const int display_number,
   diff_planes_ = {diff_plane_0, nullptr, nullptr};
   diff_pitches_ = {video_width_ * 3 * (use_10_bpc ? sizeof(uint16_t) : sizeof(uint8_t)), 0, 0};
 
-  // initialize help texts
-  bool primary_color = true;
-
-  auto add_help_texture = [&](TTF_Font* font, const std::string& text) {
-    int h;
-
-    SDL_Surface* surface = TTF_RenderUTF8_Blended_Wrapped(font, text.c_str(), primary_color ? HELP_TEXT_PRIMARY_COLOR : HELP_TEXT_ALTERNATE_COLOR, drawable_width_ - HELP_TEXT_HORIZONTAL_MARGIN * 2);
-    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer_, surface);
-    SDL_FreeSurface(surface);
-
-    SDL_QueryTexture(texture, nullptr, nullptr, nullptr, &h);
-    help_total_height_ += h;
-
-    help_textures_.push_back(texture);
-  };
-
-  add_help_texture(small_font_, " ");
-  TTF_SetFontStyle(big_font_, TTF_STYLE_BOLD | TTF_STYLE_UNDERLINE);
-  add_help_texture(big_font_, "CONTROLS");
-  TTF_SetFontStyle(big_font_, TTF_STYLE_NORMAL);
-  add_help_texture(small_font_, " ");
-
-  for (auto& key_description_pair : get_controls()) {
-    primary_color = !primary_color;
-    add_help_texture(small_font_, string_sprintf(" %-12s %s", key_description_pair.first.c_str(), key_description_pair.second.c_str()));
-  }
-
-  add_help_texture(big_font_, " ");
-
-  for (auto& text : get_instructions()) {
-    primary_color = !primary_color;
-    add_help_texture(small_font_, text);
-    add_help_texture(small_font_, " ");
-  }
+  rebuild_help_textures();
 }
 
 Display::~Display() {
@@ -539,6 +493,193 @@ void Display::print_verbose_info() {
   std::cout << "libswscale version:    " << format_libav_version(swscale_version()) << std::endl;
   std::cout << "libswresample version: " << format_libav_version(swresample_version()) << std::endl;
   std::cout << "libavcodec configuration: " << avcodec_configuration() << std::endl << std::endl;
+}
+
+void Display::rebuild_fonts() {
+  if (small_font_ != nullptr) {
+    TTF_CloseFont(small_font_);
+    small_font_ = nullptr;
+  }
+  if (big_font_ != nullptr) {
+    TTF_CloseFont(big_font_);
+    big_font_ = nullptr;
+  }
+
+  SDL_RWops* embedded_font_small = check_sdl(SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN), "get pointer to font");
+  SDL_RWops* embedded_font_big = check_sdl(SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN), "get pointer to font");
+
+  small_font_ = check_sdl(TTF_OpenFontRW(embedded_font_small, 1, static_cast<int>(16 * font_scale_)), "font open");
+  big_font_ = check_sdl(TTF_OpenFontRW(embedded_font_big, 1, static_cast<int>(24 * font_scale_)), "font open");
+}
+
+void Display::rebuild_side_ui_textures() {
+  auto rebuild_side = [&](Side side, const std::string& label) {
+    auto& ui = side_ui_[side.as_simple_index()];
+    if (ui.text_texture != nullptr) {
+      SDL_DestroyTexture(ui.text_texture);
+      ui.text_texture = nullptr;
+    }
+
+    SDL_Surface* text_surface = render_text_with_fallback(label);
+    ui.text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+    ui.text_width = text_surface->w;
+    ui.text_height = text_surface->h;
+    SDL_FreeSurface(text_surface);
+  };
+
+  side_ui_[LEFT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(left_file_name_));
+  side_ui_[RIGHT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(right_file_name_));
+
+  rebuild_side(LEFT, left_file_name_);
+  rebuild_side(RIGHT, format_right_file_label(left_file_name_, right_file_name_, active_right_index_ + 1));
+}
+
+void Display::rebuild_help_textures() {
+  // Rebuild all help textures because wrapping and layout depend on drawable width.
+  for (auto help_texture : help_textures_) {
+    SDL_DestroyTexture(help_texture);
+  }
+  help_textures_.clear();
+  help_total_height_ = 0;
+
+  bool primary_color = true;
+
+  // Helper to render one line and track its height for scrolling math.
+  auto add_help_texture = [&](TTF_Font* font, const std::string& text) {
+    int h;
+
+    SDL_Surface* surface = TTF_RenderUTF8_Blended_Wrapped(font, text.c_str(), primary_color ? HELP_TEXT_PRIMARY_COLOR : HELP_TEXT_ALTERNATE_COLOR, drawable_width_ - HELP_TEXT_HORIZONTAL_MARGIN * 2);
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer_, surface);
+    SDL_FreeSurface(surface);
+
+    SDL_QueryTexture(texture, nullptr, nullptr, nullptr, &h);
+    help_total_height_ += h;
+
+    help_textures_.push_back(texture);
+  };
+
+  // Section header and spacing.
+  add_help_texture(small_font_, " ");
+  TTF_SetFontStyle(big_font_, TTF_STYLE_BOLD | TTF_STYLE_UNDERLINE);
+  add_help_texture(big_font_, "CONTROLS");
+  TTF_SetFontStyle(big_font_, TTF_STYLE_NORMAL);
+  add_help_texture(small_font_, " ");
+
+  // Key bindings list with alternating colors for readability.
+  for (auto& key_description_pair : get_controls()) {
+    primary_color = !primary_color;
+    add_help_texture(small_font_, string_sprintf(" %-12s %s", key_description_pair.first.c_str(), key_description_pair.second.c_str()));
+  }
+
+  add_help_texture(big_font_, " ");
+
+  // Instruction paragraphs with spacing between entries.
+  for (auto& text : get_instructions()) {
+    primary_color = !primary_color;
+    add_help_texture(small_font_, text);
+    add_help_texture(small_font_, " ");
+  }
+}
+
+void Display::clamp_overlay_offsets() {
+  auto clamp_offset = [&](int& y_offset, const int total_height, const std::vector<SDL_Texture*>& textures) {
+    const int min_offset = drawable_height_ - total_height - static_cast<int>(textures.size()) * HELP_TEXT_LINE_SPACING;
+    y_offset = std::max(y_offset, min_offset);
+    y_offset = std::min(y_offset, 0);
+  };
+
+  clamp_offset(help_y_offset_, help_total_height_, help_textures_);
+  clamp_offset(metadata_y_offset_, metadata_total_height_, metadata_textures_);
+}
+
+void Display::handle_window_resize() {
+  int new_drawable_w = 0;
+  int new_drawable_h = 0;
+  int new_window_w = 0;
+  int new_window_h = 0;
+
+  // Query both logical window size and drawable size since they can diverge (e.g. high-DPI).
+  SDL_GL_GetDrawableSize(window_, &new_drawable_w, &new_drawable_h);
+  SDL_GetWindowSize(window_, &new_window_w, &new_window_h);
+
+  auto force_window_size = [&](int width, int height) {
+    last_forced_window_size_ = {width, height};
+    SDL_SetWindowSize(window_, width, height);
+  };
+
+  const bool skip_forced_size = (last_forced_window_size_[0] == new_window_w && last_forced_window_size_[1] == new_window_h);
+
+  // Enforce minimum window size early to keep downstream math well-defined.
+  if (!skip_forced_size && (new_window_w < MIN_WINDOW_WIDTH || new_window_h < MIN_WINDOW_HEIGHT)) {
+    force_window_size(std::max(new_window_w, MIN_WINDOW_WIDTH), std::max(new_window_h, MIN_WINDOW_HEIGHT));
+    return;
+  }
+
+  // If aspect-ratio locking is enabled, snap the resize to the original ratio.
+  if (!skip_forced_size && lock_window_aspect_ratio_) {
+    const float current_ratio = static_cast<float>(new_window_w) / static_cast<float>(new_window_h);
+    if (std::abs(current_ratio - window_aspect_ratio_) > 0.001F) {
+      int target_w = new_window_w;
+      int target_h = new_window_h;
+
+      if (current_ratio > window_aspect_ratio_) {
+        target_w = std::max(MIN_WINDOW_WIDTH, static_cast<int>(std::round(new_window_h * window_aspect_ratio_)));
+      } else {
+        target_h = std::max(MIN_WINDOW_HEIGHT, static_cast<int>(std::round(new_window_w / window_aspect_ratio_)));
+      }
+
+      if (target_w != new_window_w || target_h != new_window_h) {
+        force_window_size(target_w, target_h);
+        return;
+      }
+    }
+  }
+
+  // Ignore invalid sizes (can occur during platform-specific resize transitions).
+  if (new_drawable_w <= 0 || new_drawable_h <= 0 || new_window_w <= 0 || new_window_h <= 0) {
+    return;
+  }
+
+  // No change means we can skip the expensive rebuilds below.
+  if (new_drawable_w == drawable_width_ && new_drawable_h == drawable_height_ && new_window_w == window_width_ && new_window_h == window_height_) {
+    return;
+  }
+
+  drawable_width_ = new_drawable_w;
+  drawable_height_ = new_drawable_h;
+  window_width_ = new_window_w;
+  window_height_ = new_window_h;
+
+  drawable_to_window_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
+  drawable_to_window_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);
+  video_to_window_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::HStack) ? 2.F : 1.F);
+  video_to_window_height_factor_ = static_cast<float>(video_height_) / static_cast<float>(window_height_) * ((mode_ == Mode::VStack) ? 2.F : 1.F);
+
+  font_scale_ = (drawable_to_window_width_factor_ + drawable_to_window_height_factor_) / 2.0F;
+
+  border_extension_ = 3 * font_scale_;
+  double_border_extension_ = border_extension_ * 2;
+  line1_y_ = 20;
+  line2_y_ = line1_y_ + 30 * font_scale_;
+
+  // Keep text clipping consistent with the new drawable width.
+  if (mode_ != Mode::VStack) {
+    max_text_width_ = drawable_width_ / 2 - double_border_extension_ - line1_y_;
+  } else {
+    max_text_width_ = drawable_width_ - double_border_extension_ - line1_y_;
+  }
+
+  // Rebuild cached UI assets that are size-dependent (fonts, help, metadata, labels).
+  SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
+
+  rebuild_fonts();
+  rebuild_side_ui_textures();
+  rebuild_help_textures();
+  metadata_dirty_ = true;
+
+  // Clamp overlay scroll positions to the new size and refresh ROI-dependent title.
+  clamp_overlay_offsets();
+  update_window_title_with_current_roi();
 }
 
 void Display::convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi) {
@@ -2488,6 +2629,10 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDL_WINDOWEVENT_ENTER:
           mouse_is_inside_window_ = true;
+          break;
+        case SDL_WINDOWEVENT_RESIZED:
+        case SDL_WINDOWEVENT_SIZE_CHANGED:
+          handle_window_resize();
           break;
       }
       break;
