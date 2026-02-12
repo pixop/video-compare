@@ -39,18 +39,6 @@ jobs:
             tar
             p7zip
 
-      - name: Toolchain info
-        shell: msys2 {0}
-        run: |
-          set -euxo pipefail
-          uname -a
-          which gcc
-          gcc --version
-          which mingw32-make
-          mingw32-make --version
-          which strip
-          strip --version
-
       - name: Download FFmpeg
         shell: msys2 {0}
         run: |
