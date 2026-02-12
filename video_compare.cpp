@@ -341,6 +341,11 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   update_decoder_mode(time_shift_offset_av_time_);
 
   scope_manager_ = std::make_unique<ScopeManager>(config.scopes, config.use_10_bpc, config.display_number);
+
+  // Move focus to main window if any scope windows are enabled
+  if (config.scopes.histogram || config.scopes.vectorscope || config.scopes.waveform) {
+    display_->focus_main_window();
+  }
 }
 
 void VideoCompare::operator()() {

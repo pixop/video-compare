@@ -2236,7 +2236,7 @@ void Display::set_pending_message(const std::string& message) {
 
 void Display::focus_main_window() {
   if (window_ != nullptr) {
-    SDL_SetWindowInputFocus(window_);
+    SDL_RaiseWindow(window_);
   }
 }
 
