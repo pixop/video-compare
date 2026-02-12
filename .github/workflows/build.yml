@@ -22,63 +22,77 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install build tools
-        shell: powershell
-        run: |
-          choco install cygwin -y --params '/InstallDir:C:\cygwin64'
-          choco install mingw -y
-          choco install make -y
-          choco install 7zip -y
-          choco install wget -y
-          choco install unzip -y
+      - name: Setup MSYS2 (MINGW64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-binutils
+            mingw-w64-x86_64-pkg-config
+            wget
+            unzip
+            tar
+            7zip
 
-      - name: Setup PATH
-        shell: powershell
+      - name: Toolchain info
+        shell: msys2 {0}
         run: |
-          $cygwinPath = "C:\cygwin64\bin"
-          $mingwPath = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
-          echo "$cygwinPath;$mingwPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          set -euxo pipefail
+          uname -a
+          which gcc
+          gcc --version
+          which make
+          make --version
+          which strip
+          strip --version
 
       - name: Download FFmpeg
-        shell: powershell
+        shell: msys2 {0}
         run: |
-          C:\cygwin64\bin\bash.exe --noprofile --norc -eo pipefail -c "./download_and_extract_windows_deps.sh ffmpeg"
+          set -euxo pipefail
+          ./download_and_extract_windows_deps.sh ffmpeg
 
       - name: Download SDL2
-        shell: powershell
+        shell: msys2 {0}
         run: |
-          C:\cygwin64\bin\bash.exe --noprofile --norc -eo pipefail -c "./download_and_extract_windows_deps.sh sdl2 release-2.32.8"
+          set -euxo pipefail
+          ./download_and_extract_windows_deps.sh sdl2 release-2.32.8
 
       - name: Download SDL2_ttf
-        shell: powershell
+        shell: msys2 {0}
         run: |
-          C:\cygwin64\bin\bash.exe --noprofile --norc -eo pipefail -c "./download_and_extract_windows_deps.sh sdl2_ttf release-2.24.0"
+          set -euxo pipefail
+          ./download_and_extract_windows_deps.sh sdl2_ttf release-2.24.0
 
       - name: Build
-        shell: powershell
+        shell: msys2 {0}
         run: |
-          C:\cygwin64\bin\bash.exe --noprofile --norc -eo pipefail -c "make"
+          set -euxo pipefail
+          make
 
-      - name: Copy runtime DLLs from MinGW
-        shell: powershell
+      - name: Copy runtime DLLs (MSYS2 MinGW64)
+        shell: msys2 {0}
         run: |
-          $dllDir = "C:\mingw64\bin"
-          $dlls = @(
-            'libgcc_s_seh-1.dll',
-            'libstdc++-6.dll',
-            'libwinpthread-1.dll'
+          set -euxo pipefail
+          dll_dir="/mingw64/bin"
+          dlls=(
+            "libgcc_s_seh-1.dll"
+            "libstdc++-6.dll"
+            "libwinpthread-1.dll"
           )
 
-          foreach ($dll in $dlls) {
-            $srcPath = Join-Path $dllDir $dll
-            if (Test-Path $srcPath) {
-              Copy-Item $srcPath -Destination '.' -Force
-              Write-Host "Copied $dll from $srcPath"
-            } else {
-              Write-Error "Required DLL '$dll' not found at $srcPath"
+          for dll in "${dlls[@]}"; do
+            if [[ -f "${dll_dir}/${dll}" ]]; then
+              cp -f "${dll_dir}/${dll}" .
+              echo "Copied ${dll} from ${dll_dir}/${dll}"
+            else
+              echo "ERROR: Required DLL '${dll}' not found at ${dll_dir}/${dll}" >&2
               exit 1
-            }
-          }
+            fi
+          done
 
       - name: Verify build output
         shell: powershell
@@ -95,18 +109,10 @@ jobs:
           }
 
       - name: Strip executable
-        shell: powershell
+        shell: msys2 {0}
         run: |
-          $stripPath = "C:\mingw64\bin\strip.exe"
-          if (Test-Path $stripPath) {
-            Write-Host "Stripping executable using $stripPath"
-            & $stripPath video-compare.exe
-            $file = Get-Item "video-compare.exe"
-            Write-Host "Stripped executable. New size: $([math]::Round($file.Length / 1MB, 2)) MB"
-          } else {
-            Write-Error "strip tool not found at $stripPath"
-            exit 1
-          }
+          set -euxo pipefail
+          strip video-compare.exe
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
