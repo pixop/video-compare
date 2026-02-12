@@ -3,7 +3,7 @@ CXXFLAGS = -g3 -Ofast -std=c++14 -D__STDC_CONSTANT_MACROS \
 		   -Wdisabled-optimization -Wctor-dtor-privacy \
 		   -Woverloaded-virtual -Wno-unused -Wno-missing-field-initializers
 
-ifeq ($(findstring CYGWIN_NT-10.0, $(shell uname)), CYGWIN_NT-10.0)
+ifneq ($(filter MINGW%,$(shell uname)),)
   FFMPEG_VERSION = 8.0.1-full_build-shared
   SDL2_VERSION = 2.32.8
   SDL2_TTF_VERSION = 2.24.0
