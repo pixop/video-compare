@@ -81,12 +81,10 @@ jobs:
           set -euxo pipefail
 
           ntldd -R video-compare.exe | \
-            sed -n 's/.*=> \(.*\) (.*/\1/p' | \
-            grep mingw64 | \
+            awk '/mingw64/ {print $1}' | \
             sort -u | \
             while read dll; do
-              posix_path=$(cygpath -u "$dll")
-              cp -f "$posix_path" .
+              cp -f "/mingw64/bin/$dll" .
             done
 
       - name: Verify build output
