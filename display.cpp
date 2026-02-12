@@ -2377,7 +2377,11 @@ void Display::set_pending_message(const std::string& message) {
 
 void Display::focus_main_window() {
   if (window_ != nullptr) {
+#ifdef __APPLE__
     SDL_RaiseWindow(window_);
+#else
+    SDL_SetWindowInputFocus(window_);
+#endif
   }
 }
 
