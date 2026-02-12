@@ -32,7 +32,6 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-make
             mingw-w64-x86_64-binutils
-            mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-ntldd
             wget
             unzip
