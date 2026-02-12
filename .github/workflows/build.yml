@@ -45,8 +45,8 @@ jobs:
           uname -a
           which gcc
           gcc --version
-          which make
-          make --version
+          which mingw32-make
+          mingw32-make --version
           which strip
           strip --version
 
@@ -72,7 +72,7 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euxo pipefail
-          make
+          mingw32-make
 
       - name: Copy runtime DLLs (MSYS2 MinGW64)
         shell: msys2 {0}
