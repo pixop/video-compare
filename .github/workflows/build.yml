@@ -82,7 +82,10 @@ jobs:
           ntldd -R video-compare.exe | \
             awk '/mingw64/ {print $3}' | \
             sort -u | \
-            xargs -I{} cp -f {} .
+            while read dll; do
+              posix_path=$(cygpath -u "$dll")
+              cp -f "$posix_path" .
+            done
 
       - name: Verify build output
         shell: powershell
