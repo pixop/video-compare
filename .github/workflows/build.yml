@@ -79,8 +79,10 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euxo pipefail
+
           ntldd -R video-compare.exe | \
-            awk '/mingw64/ {print $3}' | \
+            sed -n 's/.*=> \(.*\) (.*/\1/p' | \
+            grep mingw64 | \
             sort -u | \
             while read dll; do
               posix_path=$(cygpath -u "$dll")
