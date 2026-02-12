@@ -35,7 +35,7 @@ jobs:
             wget
             unzip
             tar
-            7zip
+            p7zip
 
       - name: Toolchain info
         shell: msys2 {0}
