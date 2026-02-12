@@ -74,26 +74,14 @@ jobs:
           set -euxo pipefail
           mingw32-make
 
-      - name: Copy runtime DLLs (MSYS2 MinGW64)
+      - name: Copy runtime DLLs
         shell: msys2 {0}
         run: |
           set -euxo pipefail
-          dll_dir="/mingw64/bin"
-          dlls=(
-            "libgcc_s_seh-1.dll"
-            "libstdc++-6.dll"
-            "libwinpthread-1.dll"
-          )
-
-          for dll in "${dlls[@]}"; do
-            if [[ -f "${dll_dir}/${dll}" ]]; then
-              cp -f "${dll_dir}/${dll}" .
-              echo "Copied ${dll} from ${dll_dir}/${dll}"
-            else
-              echo "ERROR: Required DLL '${dll}' not found at ${dll_dir}/${dll}" >&2
-              exit 1
-            fi
-          done
+          ntldd -R video-compare.exe | \
+            awk '/mingw64/ {print $3}' | \
+            sort -u | \
+            xargs -I{} cp -f {} .
 
       - name: Verify build output
         shell: powershell
