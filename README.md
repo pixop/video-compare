@@ -226,7 +226,8 @@ Left-click the mouse to perform a time seek based on the horizontal position of 
 mouse cursor relative to the window width (the target position is shown in the lower
 right corner).
 
-**Hold** `Shift` while pressing `D` to decode and move to the next frame.
+**Hold** `Shift` and press `D` to decode and advance one frame, or `A` to seek to the previous
+frame (best with intra-frame formats).
 
 **Hold** `Ctrl` while time-shifting with `+`/`-` for faster increments/decrements of 10 frames
 per keystroke. Similarly, **hold** `Alt` for even larger time-shifts of 100 frames.

@@ -794,20 +794,40 @@ void VideoCompare::compare() {
         pair.second->set_pending_flags(format_conversion_sws_flags);
       }
 
-      // allow 50 ms of lag without resetting timer (and ticking playback)
+      // Allow 50 ms of lag without resetting timer (and ticking playback)
       if (display_->get_tick_playback() || (display_->get_possibly_tick_playback() && (timer_->us_until_target() < -50000))) {
         timer_->reset();
       }
 
-      forward_navigate_frames += display_->get_frame_navigation_delta();
+      const int frame_navigation_delta = display_->get_frame_navigation_delta();
+
+      // Normalize delta values to a sane fallback so we can reuse them for seeks/time shifts.
+      const auto normalized_delta = [](const int64_t delta) { return delta > 0 ? delta : 10000; };
+      const int64_t right_delta = normalized_delta(right_ptr->delta_pts_);
+      const int64_t left_or_right_delta = (left.delta_pts_ > 0) ? left.delta_pts_ : right_delta;
+
+      // Positive delta means "decode N next frames" (shift+D).
+      if (frame_navigation_delta > 0) {
+        forward_navigate_frames += frame_navigation_delta;
+      }
+
+      float seek_relative = display_->get_seek_relative();
+      bool seek_from_start = display_->get_seek_from_start();
+
+      // Negative delta means "seek backward by N frames" (shift+A) using average frame duration.
+      if (frame_navigation_delta < 0) {
+        const int64_t average_delta = left_or_right_delta;
+        seek_relative += static_cast<float>(frame_navigation_delta) * (static_cast<float>(average_delta) * AV_TIME_TO_SEC);
+        seek_from_start = false;
+      }
 
       bool skip_update = false;
 
-      if ((display_->get_seek_relative() != 0.0F) || (display_->get_shift_right_frames() != 0)) {
+      if ((seek_relative != 0.0F) || (display_->get_shift_right_frames() != 0)) {
         total_right_time_shifted += display_->get_shift_right_frames();
 
         // compute effective time shift
-        static_right_time_shift = time_shift_offset_av_time_ + total_right_time_shifted * (right_ptr->delta_pts_ > 0 ? right_ptr->delta_pts_ : 10000);
+        static_right_time_shift = time_shift_offset_av_time_ + total_right_time_shifted * right_delta;
 
         ready_to_seek_.reset_all();
         seeking_ = true;
@@ -853,14 +873,18 @@ void VideoCompare::compare() {
         // the left video is the "master"
         const float left_position = left.pts_ * AV_TIME_TO_SEC + left.start_time_;
 
-        if (display_->get_seek_from_start()) {
+        if (seek_from_start) {
           // seek from start based on the shortest stream duration in seconds
-          next_left_position = shortest_duration_ * display_->get_seek_relative() + left.start_time_;
+          next_left_position = shortest_duration_ * seek_relative + left.start_time_;
         } else {
-          next_left_position = left_position + display_->get_seek_relative();
+          next_left_position = left_position + seek_relative;
         }
 
-        const bool backward = (display_->get_seek_relative() < 0.0F) || (display_->get_shift_right_frames() != 0);
+        // Clamp seeks so we never go before the first decoded PTS.
+        const float min_left_position = (left.first_pts_ > 0) ? (left.first_pts_ * AV_TIME_TO_SEC + left.start_time_) : left.start_time_;
+        next_left_position = std::max(next_left_position, min_left_position);
+
+        const bool backward = (seek_relative < 0.0F) || (display_->get_shift_right_frames() != 0);
 
         auto compute_right_position = [&](const SideState& right_state) -> float { return left.pts_ * AV_TIME_TO_SEC + right_state.start_time_; };
 
@@ -873,11 +897,15 @@ void VideoCompare::compare() {
             SideState& right_state = pair.second;
 
             float next_right_position;
-            if (display_->get_seek_from_start()) {
-              next_right_position = shortest_duration_ * display_->get_seek_relative() + right_state.start_time_;
+            if (seek_from_start) {
+              next_right_position = shortest_duration_ * seek_relative + right_state.start_time_;
             } else {
-              next_right_position = compute_right_position(right_state) + display_->get_seek_relative();
+              next_right_position = compute_right_position(right_state) + seek_relative;
             }
+
+            // Clamp seeks so we never go before the first decoded PTS.
+            const float min_right_position = (right_state.first_pts_ > 0) ? (right_state.first_pts_ * AV_TIME_TO_SEC + right_state.start_time_) : right_state.start_time_;
+            next_right_position = std::max(next_right_position, min_right_position);
 
             next_right_position += (static_right_time_shift + right_state.delta_pts_) * AV_TIME_TO_SEC;
             next_right_position += static_cast<float>(calculate_dynamic_time_shift(time_shift_.multiplier, (next_right_position - right_state.start_time_) / AV_TIME_TO_SEC, false)) * AV_TIME_TO_SEC;
@@ -1145,6 +1173,11 @@ void VideoCompare::compare() {
       const bool no_activity = !skip_update && !adjusting && !store_frames;
       const bool end_of_file = no_activity && all_stopped;
       const bool buffer_is_full = left.frames_.size() == frame_buffer_size_ && right_ptr->frames_.size() == frame_buffer_size_;
+
+      // If we're frame-stepping and hit EOF, stop trying to fetch more frames.
+      if (end_of_file && (forward_navigate_frames > 0) && !display_->get_play()) {
+        forward_navigate_frames = 0;
+      }
 
       const int last_common_frame_index = static_cast<int>(std::min(left.frames_.size(), right_ptr->frames_.size()) - 1);
 

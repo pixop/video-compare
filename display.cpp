@@ -2845,7 +2845,7 @@ void Display::handle_event(const SDL_Event& event) {
         }
         case SDLK_a:
           if (keymod & KMOD_SHIFT) {
-            std::cerr << "Frame-accurate backward navigation has not yet been implemented" << std::endl;
+            --frame_navigation_delta_;
           } else {
             frame_buffer_offset_delta_++;
           }
