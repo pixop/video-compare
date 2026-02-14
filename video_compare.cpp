@@ -1080,11 +1080,14 @@ void VideoCompare::compare() {
 
               timer_->shift_target(play_frame_delay / display_->get_playback_speed_factor());
             } else {
-              for (auto& pair : side_states) {
+              timer_->update();
+            }
+
+            // update first PTS for all videos
+            for (auto& pair : side_states) {
+              if (pair.second.first_pts_ == INT64_MIN) {
                 pair.second.first_pts_ = pair.second.frame_->pts;
               }
-
-              timer_->update();
             }
           }
         } else {
