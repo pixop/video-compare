@@ -907,11 +907,11 @@ int main(int argc, char** argv) {
         config.right_videos.push_back(right_video);
       }
 
+      av_log_set_callback(sa_av_log_callback);
+
       if (args["libvmaf-options"]) {
         VMAFCalculator::instance().set_libvmaf_options(args["libvmaf-options"]);
       }
-
-      av_log_set_callback(sa_av_log_callback);
 
       VideoCompare compare{config};
       compare();
