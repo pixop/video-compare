@@ -657,7 +657,7 @@ struct SideState {
   std::deque<AVFrameUniquePtr> frames_;
   AVFrameUniquePtr frame_{nullptr, avframe_deleter};
 
-  int64_t first_pts_ = 0;
+  int64_t first_pts_ = INT64_MIN;
   int64_t pts_ = 0;
   int64_t delta_pts_ = 0;
   int32_t previous_decoded_picture_number_ = -1;
@@ -816,8 +816,7 @@ void VideoCompare::compare() {
 
       // Negative delta means "seek backward by N frames" (shift+A) using average frame duration.
       if (frame_navigation_delta < 0) {
-        const int64_t average_delta = left_or_right_delta;
-        seek_relative += static_cast<float>(frame_navigation_delta) * (static_cast<float>(average_delta) * AV_TIME_TO_SEC);
+        seek_relative += static_cast<float>(frame_navigation_delta) * (static_cast<float>(left_or_right_delta) * AV_TIME_TO_SEC);
         seek_from_start = false;
       }
 
@@ -881,7 +880,7 @@ void VideoCompare::compare() {
         }
 
         // Clamp seeks so we never go before the first decoded PTS.
-        const float min_left_position = (left.first_pts_ > 0) ? (left.first_pts_ * AV_TIME_TO_SEC + left.start_time_) : left.start_time_;
+        const float min_left_position = (left.first_pts_ > INT64_MIN) ? (left.first_pts_ * AV_TIME_TO_SEC + left.start_time_) : left.start_time_;
         next_left_position = std::max(next_left_position, min_left_position);
 
         const bool backward = (seek_relative < 0.0F) || (display_->get_shift_right_frames() != 0);
@@ -904,7 +903,7 @@ void VideoCompare::compare() {
             }
 
             // Clamp seeks so we never go before the first decoded PTS.
-            const float min_right_position = (right_state.first_pts_ > 0) ? (right_state.first_pts_ * AV_TIME_TO_SEC + right_state.start_time_) : right_state.start_time_;
+            const float min_right_position = (right_state.first_pts_ > INT64_MIN) ? (right_state.first_pts_ * AV_TIME_TO_SEC + right_state.start_time_) : right_state.start_time_;
             next_right_position = std::max(next_right_position, min_right_position);
 
             next_right_position += (static_right_time_shift + right_state.delta_pts_) * AV_TIME_TO_SEC;
