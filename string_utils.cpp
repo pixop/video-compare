@@ -65,6 +65,10 @@ std::vector<std::string> tokenize_command_line_options(const std::string& input)
       continue;
     }
 
+    if (ch == '#') {
+      break;
+    }
+
     if (std::isspace(static_cast<unsigned char>(ch)) != 0) {
       if (!current.empty()) {
         tokens.push_back(current);
