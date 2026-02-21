@@ -53,6 +53,8 @@ static const int HELP_TEXT_HORIZONTAL_MARGIN = 26;
 static const int MIN_WINDOW_WIDTH = 4;
 static const int MIN_WINDOW_HEIGHT = 1;
 
+static std::atomic_int g_sdl_ref_count{0};
+
 auto frame_deleter = [](AVFrame* frame) {
   av_freep(&frame->data[0]);
   av_frame_free(&frame);
@@ -203,12 +205,31 @@ auto get_metadata_int_value = [](const AVFrame* frame, const std::string& key, c
 };
 
 SDL::SDL() {
-  check_sdl(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) == 0, "SDL init");
-  check_sdl(TTF_Init() == 0, "TTF init");
+  const int previous = g_sdl_ref_count.fetch_add(1, std::memory_order_acq_rel);
+
+  // only initialize SDL if it hasn't been initialized yet
+  if (previous == 0) {
+    try {
+      check_sdl(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) == 0, "SDL init");
+      check_sdl(TTF_Init() == 0, "TTF init");
+    } catch (...) {
+      if (TTF_WasInit()) {
+        TTF_Quit();
+      }
+      SDL_Quit();
+      g_sdl_ref_count.fetch_sub(1, std::memory_order_acq_rel);
+      throw;
+    }
+  }
 }
 
 SDL::~SDL() {
-  SDL_Quit();
+  const int previous = g_sdl_ref_count.fetch_sub(1, std::memory_order_acq_rel);
+
+  if (previous == 1) {
+    TTF_Quit();
+    SDL_Quit();
+  }
 }
 
 Display::Display(const int display_number,
@@ -1763,11 +1784,28 @@ void Display::draw_selection_rect() {
   SDL_FRect drawable_rect = video_rect_to_drawable_transform(video_to_zoom_space(selection_rect, zoom_rect));
 
   if (mode_ == Mode::Split) {
-    // For split mode, we don't need to draw a second rectangle
-    draw_rect(drawable_rect, 255, 255, 255);
+    if (crop_mode_) {
+      switch (crop_target_side_) {
+        case CropTargetSide::Right:
+          draw_rect(drawable_rect, 128, 128, 255);
+          break;
+        case CropTargetSide::Both:
+          draw_rect(drawable_rect, 255, 255, 255);
+          break;
+        default:
+          draw_rect(drawable_rect, 255, 128, 128);
+          break;
+      }
+    } else {
+      draw_rect(drawable_rect, 255, 255, 255);
+    }
     return;
   } else {
-    draw_rect(drawable_rect, 255, 128, 128);
+    if (!crop_mode_ || crop_target_side_ == CropTargetSide::Left || crop_target_side_ == CropTargetSide::Both) {
+      draw_rect(drawable_rect, 255, 128, 128);
+    } else {
+      draw_rect(drawable_rect, 96, 48, 48);
+    }
   }
 
   // Draw right rectangle with appropriate offset
@@ -1783,7 +1821,12 @@ void Display::draw_selection_rect() {
   }
 
   drawable_rect = video_rect_to_drawable_transform(video_to_zoom_space(selection_rect, zoom_rect));
-  draw_rect(drawable_rect, 128, 128, 255);
+
+  if (!crop_mode_ || crop_target_side_ == CropTargetSide::Right || crop_target_side_ == CropTargetSide::Both) {
+    draw_rect(drawable_rect, 128, 128, 255);
+  } else {
+    draw_rect(drawable_rect, 48, 48, 96);
+  }
 }
 
 void Display::possibly_save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame) {
@@ -1801,6 +1844,45 @@ void Display::possibly_save_selected_area(const AVFrame* left_frame, const AVFra
 
   selection_state_ = SelectionState::None;
   save_selected_area_ = false;
+}
+
+void Display::possibly_apply_crop() {
+  if (selection_state_ != SelectionState::Completed) {
+    return;
+  }
+
+  const SDL_Rect selection_rect = get_left_selection_rect();
+
+  pending_crop_request_ = PendingCropRequest{};
+
+  if (selection_rect.w <= 0 || selection_rect.h <= 0) {
+    std::cerr << "Crop rectangle is empty. Please make a valid selection." << std::endl;
+  } else {
+    pending_crop_request_.rect = selection_rect;
+    pending_crop_request_.valid = true;
+
+    switch (crop_target_side_) {
+      case CropTargetSide::Left:
+        pending_crop_request_.apply_left = true;
+        break;
+      case CropTargetSide::Right:
+        pending_crop_request_.apply_right = true;
+        pending_crop_request_.right_target_index = active_right_index_;
+        break;
+      case CropTargetSide::Both:
+        pending_crop_request_.apply_left = true;
+        pending_crop_request_.apply_right = true;
+        pending_crop_request_.right_target_index = active_right_index_;
+        break;
+      case CropTargetSide::Undefined:
+        pending_crop_request_.valid = false;
+        break;
+    }
+  }
+
+  selection_state_ = SelectionState::None;
+  crop_mode_ = false;
+  crop_target_side_ = CropTargetSide::Undefined;
 }
 
 void Display::save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame, const SDL_Rect& selection_rect) {
@@ -1868,10 +1950,20 @@ void Display::save_selected_area(const AVFrame* left_frame, const AVFrame* right
 }
 
 bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable) {
+  auto get_version = [&](const AVFrame* frame) -> int {
+    const int version = get_metadata_int_value(frame, "version", 0);
+    return version;
+  };
+
+  const int left_frame_version = get_version(left_frame);
+  const int right_frame_version = get_version(right_frame);
+
   const bool has_updated_left_pts = previous_left_frame_pts_ != left_frame->pts;
   const bool has_updated_right_pts = previous_right_frame_pts_ != right_frame->pts;
+  const bool has_updated_left_version = previous_left_frame_version_ != left_frame_version;
+  const bool has_updated_right_version = previous_right_frame_version_ != right_frame_version;
 
-  if (!input_received_ && !has_updated_left_pts && !has_updated_right_pts && !timer_based_update_performed_ && pending_message_.empty()) {
+  if (!input_received_ && !has_updated_left_pts && !has_updated_right_pts && !has_updated_left_version && !has_updated_right_version && !timer_based_update_performed_ && pending_message_.empty()) {
     return false;
   }
 
@@ -2014,7 +2106,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       const SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
       const SDL_FRect screen_render_quad_left = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_left, zoom_rect));
 
-      if (input_received_ || has_updated_left_pts) {
+      if (input_received_ || has_updated_left_pts || has_updated_left_version) {
         if (use_10_bpc_) {
           convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
 
@@ -2035,7 +2127,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       const SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
       const SDL_FRect screen_render_quad_right = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_right, zoom_rect));
 
-      if (input_received_ || has_updated_right_pts) {
+      if (input_received_ || has_updated_right_pts || has_updated_right_version) {
         if (subtraction_mode_) {
           update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
 
@@ -2361,12 +2453,17 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   if (save_selected_area_) {
     possibly_save_selected_area(left_frame, right_frame);
   }
+  if (crop_mode_) {
+    possibly_apply_crop();
+  }
 
   SDL_RenderPresent(renderer_);
 
   input_received_ = false;
   previous_left_frame_pts_ = left_frame->pts;
   previous_right_frame_pts_ = right_frame->pts;
+  previous_left_frame_version_ = left_frame_version;
+  previous_right_frame_version_ = right_frame_version;
 
   return true;
 }
@@ -2586,7 +2683,7 @@ void Display::handle_event(const SDL_Event& event) {
 
     if (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_RMASK) {
       cursor = pan_mode_cursor_;
-    } else if (save_selected_area_ && selection_state_ != SelectionState::Completed) {
+    } else if ((save_selected_area_ || crop_mode_) && selection_state_ != SelectionState::Completed) {
       cursor = selection_mode_cursor_;
     } else {
       cursor = normal_mode_cursor_;
@@ -2682,7 +2779,7 @@ void Display::handle_event(const SDL_Event& event) {
       }
       break;
     case SDL_MOUSEBUTTONDOWN:
-      if (event_.button.button == SDL_BUTTON_LEFT && save_selected_area_ && selection_state_ == SelectionState::None) {
+      if (event_.button.button == SDL_BUTTON_LEFT && (save_selected_area_ || crop_mode_) && selection_state_ == SelectionState::None) {
         selection_state_ = SelectionState::Started;
         selection_start_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
 
@@ -2718,6 +2815,27 @@ void Display::handle_event(const SDL_Event& event) {
 #endif
       };
 
+      auto start_crop_mode_for_side = [&](const CropTargetSide side) {
+        save_selected_area_ = false;
+        crop_target_side_ = side;
+        crop_mode_ = true;
+        selection_state_ = SelectionState::None;
+        update_cursor();
+      };
+      auto reset_crop_mode = [&]() {
+        crop_mode_ = false;
+        crop_target_side_ = CropTargetSide::Undefined;
+        selection_state_ = SelectionState::None;
+        update_cursor();
+      };
+      auto toggle_crop_mode_for_side = [&](const CropTargetSide side) {
+        if (crop_mode_) {
+          reset_crop_mode();
+        } else {
+          start_crop_mode_for_side(side);
+        }
+      };
+
       // Handle CTRL+SHIFT+1..0 for direct right video selection
       if ((keymod & KMOD_CTRL) && (keymod & KMOD_SHIFT)) {
         size_t target_index = SIZE_MAX;
@@ -2745,6 +2863,11 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_ESCAPE:
           quit_ = true;
+          break;
+        case SDLK_BACKSPACE:
+          pending_crop_request_ = PendingCropRequest{};
+          pending_crop_request_.clear_requested = true;
+          reset_crop_mode();
           break;
         case SDLK_SPACE:
           play_ = !play_;
@@ -2873,6 +2996,7 @@ void Display::handle_event(const SDL_Event& event) {
         case SDLK_f:
           if (keymod & KMOD_SHIFT) {
             if (!save_selected_area_) {
+              reset_crop_mode();
               save_selected_area_ = true;
             } else {
               save_selected_area_ = false;
@@ -2922,9 +3046,13 @@ void Display::handle_event(const SDL_Event& event) {
           update_zoom_factor_and_move_offset(8.0F);
           break;
         case SDLK_r:
-          update_zoom_factor(1.0F);
-          move_offset_ = Vector2D(0.0F, 0.0F);
-          global_center_ = Vector2D(0.5F, 0.5F);
+          if (keymod & KMOD_SHIFT) {
+            toggle_crop_mode_for_side(CropTargetSide::Right);
+          } else {
+            update_zoom_factor(1.0F);
+            move_offset_ = Vector2D(0.0F, 0.0F);
+            global_center_ = Vector2D(0.5F, 0.5F);
+          }
           break;
         case SDLK_LEFT:
           seek_relative_ -= 1.0F;
@@ -2949,8 +3077,17 @@ void Display::handle_event(const SDL_Event& event) {
           possibly_tick_playback_ = true;
           break;
         case SDLK_l:
-          update_playback_speed(playback_speed_level_ + 1);
-          tick_playback_ = true;
+          if (keymod & KMOD_SHIFT) {
+            toggle_crop_mode_for_side(CropTargetSide::Left);
+          } else {
+            update_playback_speed(playback_speed_level_ + 1);
+            tick_playback_ = true;
+          }
+          break;
+        case SDLK_b:
+          if (keymod & KMOD_SHIFT) {
+            toggle_crop_mode_for_side(CropTargetSide::Both);
+          }
           break;
         case SDLK_x:
           show_fps_ = true;
@@ -3121,6 +3258,12 @@ bool Display::get_toggle_scope_window_requested(const ScopeWindow::Type type) co
   return toggle_scope_window_requested_[ScopeWindow::index(type)];
 }
 
+PendingCropRequest Display::get_and_clear_pending_crop_request() {
+  const PendingCropRequest request = pending_crop_request_;
+  pending_crop_request_ = PendingCropRequest{};
+  return request;
+}
+
 void Display::set_num_right_videos(const size_t num_right_videos) {
   num_right_videos_ = num_right_videos;
 }
@@ -3131,4 +3274,75 @@ size_t Display::get_num_right_videos() const {
 
 size_t Display::get_active_right_index() const {
   return active_right_index_;
+}
+
+void Display::set_active_right_index(const size_t index) {
+  active_right_index_ = std::min(index, num_right_videos_ > 0 ? num_right_videos_ - 1 : 0UL);
+}
+
+Display::RecreationState Display::get_recreation_state() const {
+  int window_x = SDL_WINDOWPOS_UNDEFINED;
+  int window_y = SDL_WINDOWPOS_UNDEFINED;
+  SDL_GetWindowPosition(window_, &window_x, &window_y);
+
+  return RecreationState{
+      std::make_tuple(window_width_, window_height_),
+      window_x,
+      window_y,
+      true,
+      fast_input_alignment_,
+      bilinear_texture_filtering_,
+      play_,
+      buffer_play_loop_mode_,
+      buffer_play_forward_,
+      active_right_index_,
+      swap_left_right_,
+      show_help_,
+      show_metadata_,
+      show_hud_,
+      subtraction_mode_,
+      diff_mode_,
+      diff_luma_only_,
+      metadata_y_offset_,
+      help_y_offset_,
+  };
+}
+
+void Display::restore_recreation_state(const RecreationState& state) {
+  fast_input_alignment_ = state.fast_input_alignment;
+  bilinear_texture_filtering_ = state.bilinear_texture_filtering;
+
+  play_ = state.play;
+
+  buffer_play_loop_mode_ = state.buffer_play_loop_mode;
+  buffer_play_forward_ = state.buffer_play_forward;
+
+  set_active_right_index(state.active_right_index);
+
+  swap_left_right_ = state.swap_left_right;
+  refresh_display_side_mapping();
+
+  show_help_ = state.show_help;
+  show_metadata_ = state.show_metadata;
+  show_hud_ = state.show_hud;
+
+  subtraction_mode_ = state.subtraction_mode;
+  diff_mode_ = state.diff_mode;
+  diff_luma_only_ = state.diff_luma_only;
+
+  metadata_y_offset_ = state.metadata_y_offset;
+  help_y_offset_ = state.help_y_offset;
+
+  const int target_window_w = std::max(std::get<0>(state.window_size), MIN_WINDOW_WIDTH);
+  const int target_window_h = std::max(std::get<1>(state.window_size), MIN_WINDOW_HEIGHT);
+  if (target_window_w > 0 && target_window_h > 0 && (target_window_w != window_width_ || target_window_h != window_height_)) {
+    SDL_SetWindowSize(window_, target_window_w, target_window_h);
+    handle_window_resize();
+  }
+  if (state.has_window_position) {
+    SDL_SetWindowPosition(window_, state.window_x, state.window_y);
+  }
+
+  clamp_overlay_offsets();
+  metadata_dirty_ = true;
 }

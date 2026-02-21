@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include "config.h"
 #include "core_types.h"
 #include "demuxer.h"
@@ -10,6 +11,13 @@ extern "C" {
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
 }
+
+struct CropRect {
+  int x{0};
+  int y{0};
+  int w{0};
+  int h{0};
+};
 
 class VideoFilterer : public SideAware {
  public:
@@ -45,8 +53,13 @@ class VideoFilterer : public SideAware {
   size_t dest_height() const;
   AVPixelFormat dest_pixel_format() const;
 
+  bool set_crop_rect(const CropRect* rect);
+  bool consume_filter_change();
+
  private:
   int init_filters();
+
+  void mark_filter_changed();
 
   const Demuxer* demuxer_;
   const VideoDecoder* video_decoder_;
@@ -68,4 +81,8 @@ class VideoFilterer : public SideAware {
 
   DynamicRange dynamic_range_;
   unsigned peak_luminance_nits_;
+
+  CropRect crop_rect_{};
+  bool crop_enabled_{false};
+  std::atomic_bool filter_changed_{false};
 };

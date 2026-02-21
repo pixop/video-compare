@@ -6,6 +6,7 @@ static const std::vector<std::pair<std::string, std::string>> controls{{"H", "To
                                                                        {",", "Toggle bidirectional in-buffer loop/pause"},
                                                                        {".", "Toggle forward-only in-buffer loop/pause"},
                                                                        {"Escape", "Quit"},
+                                                                       {"Backspace", "Clear crop(s)"},
                                                                        {"Down arrow", "Seek 15 seconds backward"},
                                                                        {"Left arrow", "Seek 1 second backward"},
                                                                        {"Page down", "Seek 600 seconds backward"},
@@ -53,6 +54,7 @@ static const std::vector<std::string> instructions{
     "Hold CTRL while time-shifting with +/- for faster increments/decrements of 10 frames per keystroke. Similarly, hold ALT for even larger time-shifts of 100 frames.",
     "Use CTRL+C (Windows/Linux) or CMD+C (macOS) to copy the current timestamp of the left video to the clipboard, and CTRL+V (Windows/Linux) or CMD+V (macOS) to paste a timestamp from the clipboard and seek to that position.",
     "Use SHIFT+F to select a region; cutouts from both frames and their concatenation will be saved as PNGs.",
+    "Use SHIFT+L to select a left crop region, SHIFT+R for right-only crop, or SHIFT+B for both.",
     "Use CTRL+SHIFT+1..0 to switch directly to right video 1-10."};
 
 const std::vector<std::pair<std::string, std::string>> get_controls() {

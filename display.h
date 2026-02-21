@@ -92,6 +92,15 @@ class Vector2D {
   float x_, y_;
 };
 
+struct PendingCropRequest {
+  SDL_Rect rect{0, 0, 0, 0};
+  bool valid{false};
+  bool clear_requested{false};
+  bool apply_left{false};
+  bool apply_right{false};
+  size_t right_target_index{0};
+};
+
 class Display {
  public:
   enum class Mode { Split, VStack, HStack };
@@ -110,6 +119,36 @@ class Display {
         return "unknown";
     }
   }
+
+  struct RecreationState {
+    std::tuple<int, int> window_size{0, 0};
+    int window_x{SDL_WINDOWPOS_UNDEFINED};
+    int window_y{SDL_WINDOWPOS_UNDEFINED};
+    bool has_window_position{false};
+
+    bool fast_input_alignment{false};
+    bool bilinear_texture_filtering{false};
+
+    bool play{true};
+
+    Loop buffer_play_loop_mode{Loop::Off};
+    bool buffer_play_forward{true};
+
+    size_t active_right_index{0};
+
+    bool swap_left_right{false};
+
+    bool show_help{false};
+    bool show_metadata{false};
+    bool show_hud{true};
+
+    bool subtraction_mode{false};
+    DiffMode diff_mode{DiffMode::AbsLinear};
+    bool diff_luma_only{false};
+
+    int metadata_y_offset{0};
+    int help_y_offset{0};
+  };
 
  private:
   const int display_number_;
@@ -173,15 +212,21 @@ class Display {
 
   // Rectangle selection state
   enum class SelectionState { None, Started, Completed };
+  enum class CropTargetSide { Undefined, Left, Right, Both };
   SelectionState selection_state_{SelectionState::None};
   Vector2D selection_start_{0.0F, 0.0F};
   Vector2D selection_end_{0.0F, 0.0F};
   bool selection_wrap_{false};
   bool save_selected_area_{false};
+  bool crop_mode_{false};
+  CropTargetSide crop_target_side_{CropTargetSide::Undefined};
+  PendingCropRequest pending_crop_request_;
 
   bool input_received_{true};
   int64_t previous_left_frame_pts_;
   int64_t previous_right_frame_pts_;
+  int previous_left_frame_version_{0};
+  int previous_right_frame_version_{0};
   bool timer_based_update_performed_;
 
   float global_zoom_level_{0.0F};
@@ -329,6 +374,7 @@ class Display {
   SDL_Rect get_left_selection_rect() const;
   void draw_selection_rect();
   void possibly_save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame);
+  void possibly_apply_crop();
   void save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame, const SDL_Rect& selection_rect);
 
   float compute_zoom_factor(const float zoom_level) const;
@@ -414,8 +460,15 @@ class Display {
 
   bool get_toggle_scope_window_requested(const ScopeWindow::Type type) const;
 
+  PendingCropRequest get_and_clear_pending_crop_request();
+
   // Multiple right video support
   void set_num_right_videos(const size_t num_right_videos);
   size_t get_num_right_videos() const;
   size_t get_active_right_index() const;
+  void set_active_right_index(size_t index);
+
+  // Recreation state support
+  RecreationState get_recreation_state() const;
+  void restore_recreation_state(const RecreationState& state);
 };

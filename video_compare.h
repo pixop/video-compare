@@ -112,6 +112,14 @@ struct RightVideoInfo {
   VideoMetadata metadata;
 };
 
+enum class MediaFrameCardinality { Unknown, SingleFrame, MultiFrame };
+
+struct MediaFrameDetectionState {
+  std::atomic<MediaFrameCardinality> cardinality{MediaFrameCardinality::Unknown};
+  std::atomic_int decoded_count{0};
+  std::atomic<int64_t> last_counted_pts{std::numeric_limits<int64_t>::min()};
+};
+
 class VideoCompare {
  public:
   VideoCompare(const VideoCompareConfig& config);
@@ -119,6 +127,11 @@ class VideoCompare {
   void operator()();
 
  private:
+  void recreate_format_converter_for_side(const Side& side, const int sws_flags);
+  void recreate_format_converters(const int sws_flags);
+
+  void recreate_display();
+
   void demultiplex(const Side& side);
 
   void decode_video(const Side& side);
@@ -133,6 +146,13 @@ class VideoCompare {
   void quit_all_queues();
 
   void update_decoder_mode(const int right_time_shift);
+
+  void note_decoded_frame(const Side& side, const int64_t pts);
+
+  void refresh_side_filter_metadata(const Side& side);
+
+  bool handle_pending_crop_request(const Side& active_right);
+  std::vector<Side> consume_filter_changes();
 
   void dump_debug_info(const int frame_number, const int64_t effective_right_time_shift, const int average_refresh_time);
 
@@ -181,6 +201,7 @@ class VideoCompare {
     bool initialized_{false};
   };
 
+  const VideoCompareConfig& config_;
   const bool same_decoded_video_both_sides_;
 
   const Display::Loop auto_loop_mode_;
@@ -198,9 +219,10 @@ class VideoCompare {
   std::map<Side, std::unique_ptr<FrameQueue>> filtered_frame_queues_;
   std::map<Side, std::unique_ptr<FrameQueue>> converted_frame_queues_;
 
+  std::map<Side, std::vector<SDL_Rect>> crop_history_;
+
   size_t max_width_;
   size_t max_height_;
-  const bool initial_fast_input_alignment_;
   double shortest_duration_;
 
   std::unique_ptr<Display> display_;
@@ -208,6 +230,9 @@ class VideoCompare {
 
   size_t active_right_index_{0};
   std::map<Side, RightVideoInfo> right_video_info_;
+  VideoMetadata left_video_metadata_;
+
+  std::map<Side, MediaFrameDetectionState> media_frame_detection_states_;
 
   std::unique_ptr<ScopeManager> scope_manager_;
   ScopeUpdateState scope_update_state_;

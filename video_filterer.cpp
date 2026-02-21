@@ -8,6 +8,19 @@
 
 static constexpr char VIDEO_FILTER_GROUP_DELIMITER = '|';
 
+static std::string append_crop_filter(const std::string& base_filters, const CropRect& rect, const bool enabled) {
+  if (!enabled) {
+    return base_filters;
+  }
+
+  const std::string crop = string_sprintf("crop=%d:%d:%d:%d", rect.w, rect.h, rect.x, rect.y);
+  if (base_filters.empty()) {
+    return crop;
+  }
+
+  return base_filters + "," + crop;
+}
+
 static unsigned get_content_light_level_or_zero(const AVFrame* frame) {
   AVFrameSideData* frame_side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
 
@@ -288,7 +301,8 @@ int VideoFilterer::init_filters() {
     inputs->pad_idx = 0;
     inputs->next = nullptr;
 
-    const std::string& filters = (tone_mapping_mode_ == ToneMapping::Auto && dynamic_range_ != DynamicRange::Standard) ? string_sprintf(filter_description_, peak_luminance_nits_) : filter_description_;
+    const std::string base_filters = (tone_mapping_mode_ == ToneMapping::Auto && dynamic_range_ != DynamicRange::Standard) ? string_sprintf(filter_description_, peak_luminance_nits_) : filter_description_;
+    const std::string filters = append_crop_filter(base_filters, crop_rect_, crop_enabled_);
 
     if ((ret = avfilter_graph_parse_ptr(filter_graph_, filters.c_str(), &inputs, &outputs, nullptr)) >= 0) {
       ret = avfilter_graph_config(filter_graph_, nullptr);
@@ -358,6 +372,7 @@ bool VideoFilterer::send(AVFrame* decoded_frame) {
     }
 
     if (must_reinit) {
+      mark_filter_changed();
       reinit();
     }
   }
@@ -385,7 +400,7 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
 }
 
 std::string VideoFilterer::filter_description() const {
-  return filter_description_;
+  return append_crop_filter(filter_description_, crop_rect_, crop_enabled_);
 }
 
 size_t VideoFilterer::src_width() const {
@@ -410,4 +425,46 @@ size_t VideoFilterer::dest_height() const {
 
 AVPixelFormat VideoFilterer::dest_pixel_format() const {
   return static_cast<AVPixelFormat>(buffersink_ctx_->inputs[0]->format);
+}
+
+void VideoFilterer::mark_filter_changed() {
+  filter_changed_.store(true, std::memory_order_release);
+}
+
+bool VideoFilterer::set_crop_rect(const CropRect* rect) {
+  const auto reset_crop = [&]() {
+    crop_enabled_ = false;
+    crop_rect_ = CropRect{};
+  };
+  const auto rect_equals = [](const CropRect& a, const CropRect& b) { return a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h; };
+
+  if (rect == nullptr) {
+    const bool changed = crop_enabled_;
+    reset_crop();
+    if (changed) {
+      mark_filter_changed();
+    }
+    return changed;
+  }
+
+  if (rect->w <= 0 || rect->h <= 0) {
+    const bool changed = crop_enabled_;
+    reset_crop();
+    if (changed) {
+      mark_filter_changed();
+    }
+    return changed;
+  }
+
+  const bool changed = !crop_enabled_ || !rect_equals(crop_rect_, *rect);
+  crop_rect_ = *rect;
+  crop_enabled_ = true;
+  if (changed) {
+    mark_filter_changed();
+  }
+  return changed;
+}
+
+bool VideoFilterer::consume_filter_change() {
+  return filter_changed_.exchange(false, std::memory_order_acq_rel);
 }

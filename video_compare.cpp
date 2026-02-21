@@ -1,6 +1,7 @@
 #include "video_compare.h"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <deque>
 #include <iostream>
@@ -157,12 +158,12 @@ static void sleep_for_ms(const uint32_t ms) {
 VideoCompare::~VideoCompare() = default;
 
 VideoCompare::VideoCompare(const VideoCompareConfig& config)
-    : same_decoded_video_both_sides_(produces_same_decoded_video(config)),
+    : config_(config),
+      same_decoded_video_both_sides_(produces_same_decoded_video(config)),
       auto_loop_mode_(config.auto_loop_mode),
       frame_buffer_size_(config.frame_buffer_size),
       time_shift_(config.time_shift),
-      time_shift_offset_av_time_(time_ms_to_av_time(static_cast<double>(config.time_shift.offset_ms))),
-      initial_fast_input_alignment_{use_fast_input_alignment(config)} {
+      time_shift_offset_av_time_(time_ms_to_av_time(static_cast<double>(config.time_shift.offset_ms))) {
   auto install_processor = [&](auto& processor_map, const ReadyToSeek::ProcessorThread thread, const Side& side, auto processor) {
     processor_map[side] = std::move(processor);
     ready_to_seek_.init(thread, side);
@@ -172,8 +173,6 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   if (config.right_videos.empty()) {
     throw std::logic_error{"At least one right video must be supplied"};
   }
-
-  const auto& first_right = config.right_videos[0];
 
   // Initialize left video demuxer and decoder
   install_processor(demuxers_, ReadyToSeek::ProcessorThread::Demultiplexer, LEFT, std::make_unique<Demuxer>(LEFT, config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options));
@@ -227,25 +226,12 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
     max_height_ = dims.second;
   }
 
+  // Initialize format converters
+  const bool initial_fast_input_alignment = use_fast_input_alignment(config_);
+  recreate_format_converters(determine_sws_flags(initial_fast_input_alignment));
+
   // Calculate shortest duration
   shortest_duration_ = calculate_shortest_duration_seconds(demuxers_);
-
-  // Initialize format converters
-  for (const auto& pair : video_filterers_) {
-    const Side& side = pair.first;
-    const auto& filterer = pair.second;
-    install_processor(format_converters_, ReadyToSeek::ProcessorThread::Converter, side,
-                      std::make_unique<FormatConverter>(filterer->dest_width(), filterer->dest_height(), max_width_, max_height_, filterer->dest_pixel_format(), determine_pixel_format(config), video_decoders_[side]->color_space(),
-                                                        video_decoders_[side]->color_range(), side, determine_sws_flags(initial_fast_input_alignment_)));
-  }
-
-  // Initialize display (use first right video's filename)
-  display_ =
-      std::make_unique<Display>(config.display_number, config.display_mode, config.verbose, config.fit_window_to_usable_bounds, config.high_dpi_allowed, config.lock_window_aspect_ratio, config.use_10_bpc, initial_fast_input_alignment_,
-                                config.bilinear_texture_filtering, config.window_size, max_width_, max_height_, shortest_duration_, config.wheel_sensitivity, config.start_in_subtraction_mode, config.left.file_name, first_right.file_name);
-
-  // Set number of right videos in display
-  display_->set_num_right_videos(config.right_videos.size());
 
   timer_ = std::make_unique<Timer>();
 
@@ -256,6 +242,12 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
     decoded_frame_queues_[side] = std::make_shared<DecodedFrameQueue>(QUEUE_SIZE);
     filtered_frame_queues_[side] = std::make_unique<FrameQueue>(QUEUE_SIZE);
     converted_frame_queues_[side] = std::make_unique<FrameQueue>(QUEUE_SIZE);
+
+    // Initialize media frame detection state
+    auto& detection_state = media_frame_detection_states_[side];
+    detection_state.cardinality.store(MediaFrameCardinality::Unknown, std::memory_order_relaxed);
+    detection_state.decoded_count.store(0, std::memory_order_relaxed);
+    detection_state.last_counted_pts.store(std::numeric_limits<int64_t>::min(), std::memory_order_relaxed);
   }
   auto dump_video_info = [&](const Side& side, const std::string& file_name) {
     const std::string dimensions = string_sprintf("%dx%d", video_decoders_[side]->width(), video_decoders_[side]->height());
@@ -336,15 +328,57 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
     right_video_info_[right_side].metadata = collect_metadata(right_side);
   }
 
-  display_->update_metadata(collect_metadata(LEFT), right_video_info_[RIGHT].metadata);
+  left_video_metadata_ = collect_metadata(LEFT);
 
   update_decoder_mode(time_shift_offset_av_time_);
+
+  // Initialize display from the centralized recreation path.
+  recreate_display();
 
   scope_manager_ = std::make_unique<ScopeManager>(config.scopes, config.use_10_bpc, config.display_number);
 
   // Move focus to main window if any scope windows are enabled
   if (config.scopes.histogram || config.scopes.vectorscope || config.scopes.waveform) {
     display_->focus_main_window();
+  }
+}
+
+void VideoCompare::recreate_format_converter_for_side(const Side& side, const int sws_flags) {
+  const AVPixelFormat output_pixel_format = determine_pixel_format(config_);
+  const auto& filterer = video_filterers_.at(side);
+  ready_to_seek_.init(ReadyToSeek::ProcessorThread::Converter, side);
+  format_converters_[side] = std::make_unique<FormatConverter>(filterer->dest_width(), filterer->dest_height(), max_width_, max_height_, filterer->dest_pixel_format(), output_pixel_format, video_decoders_[side]->color_space(),
+                                                               video_decoders_[side]->color_range(), side, sws_flags);
+}
+
+void VideoCompare::recreate_format_converters(const int sws_flags) {
+  format_converters_.clear();
+  for (const auto& pair : video_filterers_) {
+    recreate_format_converter_for_side(pair.first, sws_flags);
+  }
+}
+
+void VideoCompare::recreate_display() {
+  const bool is_initial_display = display_ == nullptr;
+  const Display::RecreationState previous_display_state = is_initial_display ? Display::RecreationState{} : display_->get_recreation_state();
+  const bool use_previous_state = !is_initial_display;
+
+  const Side active_right = Side::Right(active_right_index_);
+  const auto right_it = right_video_info_.find(active_right);
+  const std::string right_file_name = (right_it != right_video_info_.end()) ? right_it->second.file_name : right_video_info_.begin()->second.file_name;
+
+  const bool effective_fast_input_alignment = use_previous_state ? previous_display_state.fast_input_alignment : use_fast_input_alignment(config_);
+  const bool effective_bilinear_filtering = use_previous_state ? previous_display_state.bilinear_texture_filtering : config_.bilinear_texture_filtering;
+  const std::tuple<int, int> effective_window_size = use_previous_state ? previous_display_state.window_size : config_.window_size;
+
+  display_ = std::make_unique<Display>(config_.display_number, config_.display_mode, config_.verbose, config_.fit_window_to_usable_bounds, config_.high_dpi_allowed, config_.lock_window_aspect_ratio, config_.use_10_bpc,
+                                       effective_fast_input_alignment, effective_bilinear_filtering, effective_window_size, max_width_, max_height_, shortest_duration_, config_.wheel_sensitivity, config_.start_in_subtraction_mode,
+                                       config_.left.file_name, right_file_name);
+  display_->set_num_right_videos(right_video_info_.size());
+  display_->update_metadata(left_video_metadata_, right_video_info_[active_right].metadata);
+
+  if (use_previous_state) {
+    display_->restore_recreation_state(previous_display_state);
   }
 }
 
@@ -439,7 +473,6 @@ void VideoCompare::decode_video(const Side& side) {
 
         // Enter wait state
         decoded_frame_queues_[side]->stop();
-
         if (single_decoder_mode_) {
           decoded_frame_queues_[RIGHT]->stop();
         }
@@ -489,10 +522,12 @@ bool VideoCompare::process_packet(const Side& side, AVPacket* packet) {
     if (!decoded_frame_queues_[side]->push(frame_for_filtering)) {
       return sent;
     }
+    note_decoded_frame(side, frame_for_filtering->pts);
 
     // Send the decoded frame to the right filterer, as well, if in single decoder mode
     if (single_decoder_mode_) {
       decoded_frame_queues_[RIGHT]->push(frame_for_filtering);
+      note_decoded_frame(RIGHT, frame_for_filtering->pts);
     }
   }
 
@@ -615,6 +650,135 @@ void VideoCompare::update_decoder_mode(const int right_time_shift) {
   single_decoder_mode_ = same_decoded_video_both_sides_ && (av_q2d(time_shift_.multiplier) == 1.0) && (abs(right_time_shift) < NEAR_ZERO_TIME_SHIFT_THRESHOLD);
 }
 
+void VideoCompare::note_decoded_frame(const Side& side, const int64_t pts) {
+  auto& detection_state = media_frame_detection_states_.at(side);
+  auto& last_pts = detection_state.last_counted_pts;
+  const int64_t previous_pts = last_pts.exchange(pts, std::memory_order_relaxed);
+
+  if (previous_pts == pts) {
+    return;
+  }
+
+  const int decoded_count = detection_state.decoded_count.fetch_add(1, std::memory_order_relaxed) + 1;
+
+  if (decoded_count == 1) {
+    detection_state.cardinality.store(MediaFrameCardinality::SingleFrame, std::memory_order_relaxed);
+  } else if (decoded_count >= 2) {
+    detection_state.cardinality.store(MediaFrameCardinality::MultiFrame, std::memory_order_relaxed);
+  }
+}
+
+void VideoCompare::refresh_side_filter_metadata(const Side& side) {
+  const std::string filters = video_filterers_[side]->filter_description();
+  if (side.is_left()) {
+    left_video_metadata_.set(MetadataProperties::FILTERS, filters);
+  } else {
+    right_video_info_[side].metadata.set(MetadataProperties::FILTERS, filters);
+  }
+}
+
+bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
+  const PendingCropRequest crop_request = display_->get_and_clear_pending_crop_request();
+  if (!crop_request.clear_requested && !crop_request.valid) {
+    return false;
+  }
+  const Side target_right = crop_request.apply_right ? Side::Right(std::min(crop_request.right_target_index, right_video_info_.empty() ? 0UL : (right_video_info_.size() - 1))) : active_right;
+
+  auto compose_crop_history = [&](const std::vector<SDL_Rect>& history) {
+    SDL_Rect composed = {0, 0, 0, 0};
+    bool initialized = false;
+    for (const SDL_Rect& rect : history) {
+      if (!initialized) {
+        composed = rect;
+        initialized = true;
+        continue;
+      }
+      composed.x += rect.x;
+      composed.y += rect.y;
+      composed.w = rect.w;
+      composed.h = rect.h;
+    }
+    return composed;
+  };
+
+  auto apply_crop_for_side = [&](const Side& side) {
+    const int side_w = std::max(1, static_cast<int>(video_filterers_[side]->dest_width()));
+    const int side_h = std::max(1, static_cast<int>(video_filterers_[side]->dest_height()));
+    if (max_width_ == 0 || max_height_ == 0) {
+      return false;
+    }
+    const auto clamp_to = [](const int value, const int min_value, const int max_value) { return std::max(min_value, std::min(value, max_value)); };
+
+    SDL_Rect mapped = {
+        clamp_to(static_cast<int>(std::llround(static_cast<double>(crop_request.rect.x) * side_w / max_width_)), 0, side_w - 1),
+        clamp_to(static_cast<int>(std::llround(static_cast<double>(crop_request.rect.y) * side_h / max_height_)), 0, side_h - 1),
+        std::max(1, static_cast<int>(std::llround(static_cast<double>(crop_request.rect.w) * side_w / max_width_))),
+        std::max(1, static_cast<int>(std::llround(static_cast<double>(crop_request.rect.h) * side_h / max_height_))),
+    };
+    mapped.w = std::min(mapped.w, side_w - mapped.x);
+    mapped.h = std::min(mapped.h, side_h - mapped.y);
+    if (mapped.w <= 0 || mapped.h <= 0) {
+      return false;
+    }
+
+    crop_history_[side].push_back(mapped);
+    const SDL_Rect composed = compose_crop_history(crop_history_[side]);
+    const CropRect crop_rect{composed.x, composed.y, composed.w, composed.h};
+    const bool changed = video_filterers_[side]->set_crop_rect(&crop_rect);
+    if (changed) {
+      refresh_side_filter_metadata(side);
+    }
+    return changed;
+  };
+
+  bool crop_changed = false;
+  if (crop_request.clear_requested) {
+    if (!crop_request.apply_left && !crop_request.apply_right) {
+      for (auto& pair : video_filterers_) {
+        crop_history_[pair.first].clear();
+        crop_changed = pair.second->set_crop_rect(nullptr) || crop_changed;
+        refresh_side_filter_metadata(pair.first);
+      }
+    } else {
+      if (crop_request.apply_left) {
+        crop_history_[LEFT].clear();
+        crop_changed = video_filterers_[LEFT]->set_crop_rect(nullptr) || crop_changed;
+        refresh_side_filter_metadata(LEFT);
+      }
+      if (crop_request.apply_right) {
+        crop_history_[target_right].clear();
+        crop_changed = video_filterers_[target_right]->set_crop_rect(nullptr) || crop_changed;
+        refresh_side_filter_metadata(target_right);
+      }
+    }
+  } else if (crop_request.valid) {
+    if (crop_request.apply_left) {
+      crop_changed = apply_crop_for_side(LEFT) || crop_changed;
+    }
+    if (crop_request.apply_right) {
+      crop_changed = apply_crop_for_side(target_right) || crop_changed;
+    }
+  }
+
+  if (!crop_changed) {
+    return false;
+  }
+
+  display_->update_metadata(left_video_metadata_, right_video_info_[active_right].metadata);
+  scope_update_state_.reset();
+  return true;
+}
+
+std::vector<Side> VideoCompare::consume_filter_changes() {
+  std::vector<Side> changed_sides;
+  for (const auto& pair : video_filterers_) {
+    if (pair.second->consume_filter_change()) {
+      changed_sides.push_back(pair.first);
+    }
+  }
+  return changed_sides;
+}
+
 void VideoCompare::dump_debug_info(const int frame_number, const int64_t effective_right_time_shift, const int average_refresh_time) {
   std::cout << "FRAME: " << frame_number << std::endl;
   std::cout << "keep_running()=" << keep_running() << std::endl;
@@ -636,6 +800,10 @@ void VideoCompare::dump_debug_info(const int frame_number, const int64_t effecti
   }
   for (const auto& pair : converted_frame_queues_) {
     std::cout << pair.first.to_string() << " format converter: size=" << pair.second->size() << ", is_stopped=" << pair.second->is_stopped() << ", quit=" << pair.second->is_quit() << std::endl;
+  }
+  for (const auto& pair : media_frame_detection_states_) {
+    const MediaFrameCardinality cardinality = pair.second.cardinality.load(std::memory_order_relaxed);
+    std::cout << pair.first.to_string() << " media frame cardinality: " << (cardinality == MediaFrameCardinality::Unknown ? "Unknown" : (cardinality == MediaFrameCardinality::SingleFrame ? "SingleFrame" : "MultiFrame")) << std::endl;
   }
 
   std::cout << "all_are_idle()=" << ready_to_seek_.all_are_idle() << std::endl;
@@ -822,8 +990,17 @@ void VideoCompare::compare() {
 
       bool skip_update = false;
 
-      if ((seek_relative != 0.0F) || (display_->get_shift_right_frames() != 0)) {
-        total_right_time_shifted += display_->get_shift_right_frames();
+      // handle pending crop request
+      const bool force_seek_current_position = handle_pending_crop_request(active_right);
+
+      const int shift_right_frames = display_->get_shift_right_frames();
+
+      // if seeking is required, drain packet and frame queues
+      if ((seek_relative != 0.0F) || (shift_right_frames != 0) || force_seek_current_position) {
+        // update total right time shifted
+        if (shift_right_frames != 0) {
+          total_right_time_shifted += shift_right_frames;
+        }
 
         // compute effective time shift
         static_right_time_shift = time_shift_offset_av_time_ + total_right_time_shifted * right_delta;
@@ -860,30 +1037,62 @@ void VideoCompare::compare() {
         // empty the frame queues one last time
         empty_frame_queues();
 
+        // update decoder mode
+        update_decoder_mode(static_right_time_shift);
+
+        // consume filter changes
+        const std::vector<Side> filter_change_sides = consume_filter_changes();
+        const bool had_filter_changes = !filter_change_sides.empty();
+
         // reinit filter graphs
         for (auto& pair : video_filterers_) {
           pair.second->reinit();
         }
 
-        update_decoder_mode(static_right_time_shift);
+        // recalculate max dimensions
+        const auto dims = calculate_max_dest_dimensions(video_filterers_);
+        const bool dims_changed = (dims.first != max_width_) || (dims.second != max_height_);
+        max_width_ = dims.first;
+        max_height_ = dims.second;
+
+        // if dimensions changed, recreate display and format converters
+        if (dims_changed) {
+          recreate_format_converters(format_conversion_sws_flags);
+          recreate_display();
+
+          active_right = Side::Right(active_right_index_);
+          right_ptr = &side_states.at(active_right);
+          scope_update_state_.reset();
+        } else if (had_filter_changes) {
+          for (const Side& side : filter_change_sides) {
+            recreate_format_converter_for_side(side, format_conversion_sws_flags);
+          }
+        }
 
         float next_left_position;
 
         // the left video is the "master"
+        const float min_left_position = (left.first_pts_ > INT64_MIN) ? (left.first_pts_ * AV_TIME_TO_SEC + left.start_time_) : left.start_time_;
         const float left_position = left.pts_ * AV_TIME_TO_SEC + left.start_time_;
+        const bool left_is_single_frame = media_frame_detection_states_.at(LEFT).cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::SingleFrame;
 
         if (seek_from_start) {
           // seek from start based on the shortest stream duration in seconds
           next_left_position = shortest_duration_ * seek_relative + left.start_time_;
         } else {
+          if (left_is_single_frame) {
+            // force state transition for single frame media files
+            seek_relative = left.delta_pts_ * AV_TIME_TO_SEC;
+          }
+
           next_left_position = left_position + seek_relative;
         }
 
         // Clamp seeks so we never go before the first decoded PTS.
-        const float min_left_position = (left.first_pts_ > INT64_MIN) ? (left.first_pts_ * AV_TIME_TO_SEC + left.start_time_) : left.start_time_;
         next_left_position = std::max(next_left_position, min_left_position);
 
-        const bool backward = (seek_relative < 0.0F) || (display_->get_shift_right_frames() != 0);
+        // Add the delta PTS to the next left position
+        const bool backward = (seek_relative < 0.0F) || (shift_right_frames != 0) || (force_seek_current_position && !left_is_single_frame);
 
         auto compute_right_position = [&](const SideState& right_state) -> float { return left.pts_ * AV_TIME_TO_SEC + right_state.start_time_; };
 
@@ -892,21 +1101,33 @@ void VideoCompare::compare() {
 
         for (auto& pair : side_states) {
           const Side& side = pair.first;
+
           if (side.is_right()) {
             SideState& right_state = pair.second;
 
             float next_right_position;
+
+            const float min_right_position = (right_state.first_pts_ > INT64_MIN) ? (right_state.first_pts_ * AV_TIME_TO_SEC + right_state.start_time_) : right_state.start_time_;
+            const float right_position = compute_right_position(right_state);
+            const bool right_is_single_frame = media_frame_detection_states_.at(side).cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::SingleFrame;
+
             if (seek_from_start) {
+              // seek from start based on the shortest stream duration in seconds
               next_right_position = shortest_duration_ * seek_relative + right_state.start_time_;
             } else {
-              next_right_position = compute_right_position(right_state) + seek_relative;
+              if (right_is_single_frame) {
+                // force state transition for single frame media files
+                seek_relative = right_state.delta_pts_ * AV_TIME_TO_SEC;
+              }
+
+              next_right_position = right_position + seek_relative;
             }
 
             // Clamp seeks so we never go before the first decoded PTS.
-            const float min_right_position = (right_state.first_pts_ > INT64_MIN) ? (right_state.first_pts_ * AV_TIME_TO_SEC + right_state.start_time_) : right_state.start_time_;
             next_right_position = std::max(next_right_position, min_right_position);
 
-            next_right_position += (static_right_time_shift + right_state.delta_pts_) * AV_TIME_TO_SEC;
+            // Add the dynamic time shift and the delta PTS to the next right position
+            next_right_position += static_right_time_shift * AV_TIME_TO_SEC;
             next_right_position += static_cast<float>(calculate_dynamic_time_shift(time_shift_.multiplier, (next_right_position - right_state.start_time_) / AV_TIME_TO_SEC, false)) * AV_TIME_TO_SEC;
 
 #ifdef _DEBUG

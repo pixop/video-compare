@@ -178,6 +178,7 @@ see all supported options.
 - Comma `,`: Toggle bidirectional in-buffer loop/pause
 - Period `.`: Toggle forward-only in-buffer loop/pause
 - Escape: Quit
+- Backspace: Clear crop(s)
 - Down arrow: Seek 15 seconds backward
 - Left arrow: Seek 1 second backward
 - Page down: Seek 600 seconds backward
@@ -238,6 +239,9 @@ clipboard and seek to that position.
 
 Use `Shift+F` to select a region; cutouts from both frames and their concatenation will be saved
 as PNGs.
+
+Use `Shift+L` to interactively crop the left side, `Shift+R` for right-only crop, or `Shift+B`
+to crop both sides to the same area.
 
 **Hold** `Ctrl+Shift` while pressing `1..0` to switch directly to right video 1–10.
 

@@ -4,6 +4,8 @@
 
 static constexpr int FIXED_1_0 = (1 << 16);
 
+static std::atomic<int> g_format_converter_context_generation{0};
+
 inline int get_sws_colorspace(const AVColorSpace color_space) {
   switch (color_space) {
     case AVCOL_SPC_BT709:
@@ -59,6 +61,8 @@ FormatConverter::~FormatConverter() {
 }
 
 void FormatConverter::init() {
+  g_format_converter_context_generation++;
+
   conversion_context_ = sws_getContext(
       // Source
       src_width(), src_height(), src_pixel_format(),
@@ -150,6 +154,7 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
 
   av_dict_set(&dst->metadata, "original_width", std::to_string(src->width).c_str(), 0);
   av_dict_set(&dst->metadata, "original_height", std::to_string(src->height).c_str(), 0);
+  av_dict_set(&dst->metadata, "version", std::to_string(g_format_converter_context_generation.load(std::memory_order_relaxed)).c_str(), 0);
 
   sws_scale(conversion_context_,
             // Source
