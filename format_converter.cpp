@@ -1,4 +1,5 @@
 #include "format_converter.h"
+#include <atomic>
 #include <iostream>
 #include "ffmpeg.h"
 
