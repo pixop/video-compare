@@ -1075,7 +1075,7 @@ void VideoCompare::compare() {
         const float left_position = left.pts_ * AV_TIME_TO_SEC + left.start_time_;
         const bool left_is_single_frame = media_frame_detection_states_.at(LEFT).cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::SingleFrame;
 
-        if (seek_from_start) {
+        if (seek_from_start && !left_is_single_frame) {
           // seek from start based on the shortest stream duration in seconds
           next_left_position = shortest_duration_ * seek_relative + left.start_time_;
         } else {
@@ -1110,7 +1110,7 @@ void VideoCompare::compare() {
             const float right_position = compute_right_position(right_state);
             const bool right_is_single_frame = media_frame_detection_states_.at(side).cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::SingleFrame;
 
-            if (seek_from_start) {
+            if (seek_from_start && !right_is_single_frame) {
               // seek from start based on the shortest stream duration in seconds
               next_right_position = shortest_duration_ * seek_relative + right_state.start_time_;
             } else {
