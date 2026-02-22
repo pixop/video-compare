@@ -53,8 +53,6 @@ static const int HELP_TEXT_HORIZONTAL_MARGIN = 26;
 static const int MIN_WINDOW_WIDTH = 4;
 static const int MIN_WINDOW_HEIGHT = 1;
 
-static std::atomic_int g_sdl_ref_count{0};
-
 auto frame_deleter = [](AVFrame* frame) {
   av_freep(&frame->data[0]);
   av_frame_free(&frame);
@@ -205,31 +203,12 @@ auto get_metadata_int_value = [](const AVFrame* frame, const std::string& key, c
 };
 
 SDL::SDL() {
-  const int previous = g_sdl_ref_count.fetch_add(1, std::memory_order_acq_rel);
-
-  // only initialize SDL if it hasn't been initialized yet
-  if (previous == 0) {
-    try {
-      check_sdl(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) == 0, "SDL init");
-      check_sdl(TTF_Init() == 0, "TTF init");
-    } catch (...) {
-      if (TTF_WasInit()) {
-        TTF_Quit();
-      }
-      SDL_Quit();
-      g_sdl_ref_count.fetch_sub(1, std::memory_order_acq_rel);
-      throw;
-    }
-  }
+  check_sdl(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) == 0, "SDL init");
+  check_sdl(TTF_Init() == 0, "TTF init");
 }
 
 SDL::~SDL() {
-  const int previous = g_sdl_ref_count.fetch_sub(1, std::memory_order_acq_rel);
-
-  if (previous == 1) {
-    TTF_Quit();
-    SDL_Quit();
-  }
+  SDL_Quit();
 }
 
 Display::Display(const int display_number,
@@ -257,8 +236,8 @@ Display::Display(const int display_number,
       use_10_bpc_{use_10_bpc},
       fast_input_alignment_{fast_input_alignment},
       bilinear_texture_filtering_{bilinear_texture_filtering},
-      video_width_{static_cast<int>(width)},
-      video_height_{static_cast<int>(height)},
+      video_width_{0},
+      video_height_{0},
       duration_{duration},
       subtraction_mode_{start_in_subtraction_mode},
       wheel_sensitivity_{wheel_sensitivity} {
@@ -399,34 +378,20 @@ Display::Display(const int display_number,
 
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
 
-  auto create_video_texture = [&](const std::string& scale_quality) {
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, scale_quality.c_str());
+  // Store left/right names before reinitializing dimensions since it may refresh title text.
+  left_file_name_ = left_file_name;
+  right_file_name_ = right_file_name;
+  last_window_title_.clear();
 
-    return check_sdl(SDL_CreateTexture(renderer_, use_10_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode == Mode::HStack ? width * 2 : width, mode == Mode::VStack ? height * 2 : height),
-                     "video texture " + scale_quality);
-  };
-
-  video_texture_linear_ = create_video_texture("linear");
-  video_texture_nn_ = create_video_texture("nearest");
+  reinitialize_video_dimensions(width, height);
 
   if (verbose) {
     print_verbose_info();
   }
 
-  // Store left file name for window title updates
-  left_file_name_ = left_file_name;
-  right_file_name_ = right_file_name;
-  last_window_title_.clear();
-
   rebuild_side_ui_textures();
 
   refresh_display_side_mapping();
-
-  diff_buffer_ = new uint8_t[video_width_ * video_height_ * 3 * (use_10_bpc ? sizeof(uint16_t) : sizeof(uint8_t))];
-  uint8_t* diff_plane_0 = diff_buffer_;
-
-  diff_planes_ = {diff_plane_0, nullptr, nullptr};
-  diff_pitches_ = {video_width_ * 3 * (use_10_bpc ? sizeof(uint16_t) : sizeof(uint8_t)), 0, 0};
 
   rebuild_help_textures();
 }
@@ -463,6 +428,65 @@ Display::~Display() {
 
   SDL_DestroyRenderer(renderer_);
   SDL_DestroyWindow(window_);
+}
+
+void Display::reinitialize_video_dimensions(const unsigned width, const unsigned height) {
+  const int new_video_width = static_cast<int>(width);
+  const int new_video_height = static_cast<int>(height);
+  if (new_video_width <= 0 || new_video_height <= 0) {
+    throw std::runtime_error("Video dimensions must be positive");
+  }
+  if (video_width_ == new_video_width && video_height_ == new_video_height) {
+    return;
+  }
+
+  video_width_ = new_video_width;
+  video_height_ = new_video_height;
+
+  if (video_texture_linear_ != nullptr) {
+    SDL_DestroyTexture(video_texture_linear_);
+    video_texture_linear_ = nullptr;
+  }
+  if (video_texture_nn_ != nullptr) {
+    SDL_DestroyTexture(video_texture_nn_);
+    video_texture_nn_ = nullptr;
+  }
+
+  auto create_video_texture = [&](const std::string& scale_quality) {
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, scale_quality.c_str());
+    return check_sdl(SDL_CreateTexture(renderer_, use_10_bpc_ ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode_ == Mode::HStack ? video_width_ * 2 : video_width_,
+                                       mode_ == Mode::VStack ? video_height_ * 2 : video_height_),
+                     "video texture " + scale_quality);
+  };
+
+  video_texture_linear_ = create_video_texture("linear");
+  video_texture_nn_ = create_video_texture("nearest");
+
+  if (diff_buffer_ != nullptr) {
+    delete[] diff_buffer_;
+    diff_buffer_ = nullptr;
+  }
+  diff_buffer_ = new uint8_t[video_width_ * video_height_ * 3 * (use_10_bpc_ ? sizeof(uint16_t) : sizeof(uint8_t))];
+  diff_planes_ = {diff_buffer_, nullptr, nullptr};
+  diff_pitches_ = {video_width_ * 3 * (use_10_bpc_ ? sizeof(uint16_t) : sizeof(uint8_t)), 0, 0};
+
+  if (left_buffer_ != nullptr) {
+    delete[] left_buffer_;
+    left_buffer_ = nullptr;
+  }
+  if (right_buffer_ != nullptr) {
+    delete[] right_buffer_;
+    right_buffer_ = nullptr;
+  }
+  left_planes_ = {nullptr, nullptr, nullptr};
+  right_planes_ = {nullptr, nullptr, nullptr};
+
+  video_to_window_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::HStack) ? 2.F : 1.F);
+  video_to_window_height_factor_ = static_cast<float>(video_height_) / static_cast<float>(window_height_) * ((mode_ == Mode::VStack) ? 2.F : 1.F);
+
+  move_offset_ = Vector2D((global_center_.x() - 0.5F) * static_cast<float>(video_width_), (global_center_.y() - 0.5F) * static_cast<float>(video_height_));
+
+  update_window_title_with_current_roi();
 }
 
 void Display::print_verbose_info() {
@@ -3278,71 +3302,4 @@ size_t Display::get_active_right_index() const {
 
 void Display::set_active_right_index(const size_t index) {
   active_right_index_ = std::min(index, num_right_videos_ > 0 ? num_right_videos_ - 1 : 0UL);
-}
-
-Display::RecreationState Display::get_recreation_state() const {
-  int window_x = SDL_WINDOWPOS_UNDEFINED;
-  int window_y = SDL_WINDOWPOS_UNDEFINED;
-  SDL_GetWindowPosition(window_, &window_x, &window_y);
-
-  return RecreationState{
-      std::make_tuple(window_width_, window_height_),
-      window_x,
-      window_y,
-      true,
-      fast_input_alignment_,
-      bilinear_texture_filtering_,
-      play_,
-      buffer_play_loop_mode_,
-      buffer_play_forward_,
-      active_right_index_,
-      swap_left_right_,
-      show_help_,
-      show_metadata_,
-      show_hud_,
-      subtraction_mode_,
-      diff_mode_,
-      diff_luma_only_,
-      metadata_y_offset_,
-      help_y_offset_,
-  };
-}
-
-void Display::restore_recreation_state(const RecreationState& state) {
-  fast_input_alignment_ = state.fast_input_alignment;
-  bilinear_texture_filtering_ = state.bilinear_texture_filtering;
-
-  play_ = state.play;
-
-  buffer_play_loop_mode_ = state.buffer_play_loop_mode;
-  buffer_play_forward_ = state.buffer_play_forward;
-
-  set_active_right_index(state.active_right_index);
-
-  swap_left_right_ = state.swap_left_right;
-  refresh_display_side_mapping();
-
-  show_help_ = state.show_help;
-  show_metadata_ = state.show_metadata;
-  show_hud_ = state.show_hud;
-
-  subtraction_mode_ = state.subtraction_mode;
-  diff_mode_ = state.diff_mode;
-  diff_luma_only_ = state.diff_luma_only;
-
-  metadata_y_offset_ = state.metadata_y_offset;
-  help_y_offset_ = state.help_y_offset;
-
-  const int target_window_w = std::max(std::get<0>(state.window_size), MIN_WINDOW_WIDTH);
-  const int target_window_h = std::max(std::get<1>(state.window_size), MIN_WINDOW_HEIGHT);
-  if (target_window_w > 0 && target_window_h > 0 && (target_window_w != window_width_ || target_window_h != window_height_)) {
-    SDL_SetWindowSize(window_, target_window_w, target_window_h);
-    handle_window_resize();
-  }
-  if (state.has_window_position) {
-    SDL_SetWindowPosition(window_, state.window_x, state.window_y);
-  }
-
-  clamp_overlay_offsets();
-  metadata_dirty_ = true;
 }

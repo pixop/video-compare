@@ -332,8 +332,16 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 
   update_decoder_mode(time_shift_offset_av_time_);
 
-  // Initialize display from the centralized recreation path.
-  recreate_display();
+  const Side active_right = Side::Right(active_right_index_);
+  const auto right_it = right_video_info_.find(active_right);
+  const std::string right_file_name = (right_it != right_video_info_.end()) ? right_it->second.file_name : right_video_info_.begin()->second.file_name;
+
+  display_ = std::make_unique<Display>(config_.display_number, config_.display_mode, config_.verbose, config_.fit_window_to_usable_bounds, config_.high_dpi_allowed, config_.lock_window_aspect_ratio, config_.use_10_bpc,
+                                       use_fast_input_alignment(config_), config_.bilinear_texture_filtering, config_.window_size, max_width_, max_height_, shortest_duration_, config_.wheel_sensitivity,
+                                       config_.start_in_subtraction_mode, config_.left.file_name, right_file_name);
+  display_->set_num_right_videos(right_video_info_.size());
+  display_->set_active_right_index(active_right_index_);
+  display_->update_metadata(left_video_metadata_, right_video_info_[active_right].metadata);
 
   scope_manager_ = std::make_unique<ScopeManager>(config.scopes, config.use_10_bpc, config.display_number);
 
@@ -345,40 +353,17 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 
 void VideoCompare::recreate_format_converter_for_side(const Side& side, const int sws_flags) {
   const AVPixelFormat output_pixel_format = determine_pixel_format(config_);
+
   const auto& filterer = video_filterers_.at(side);
-  ready_to_seek_.init(ReadyToSeek::ProcessorThread::Converter, side);
   format_converters_[side] = std::make_unique<FormatConverter>(filterer->dest_width(), filterer->dest_height(), max_width_, max_height_, filterer->dest_pixel_format(), output_pixel_format, video_decoders_[side]->color_space(),
                                                                video_decoders_[side]->color_range(), side, sws_flags);
 }
 
 void VideoCompare::recreate_format_converters(const int sws_flags) {
   format_converters_.clear();
+
   for (const auto& pair : video_filterers_) {
     recreate_format_converter_for_side(pair.first, sws_flags);
-  }
-}
-
-void VideoCompare::recreate_display() {
-  const bool is_initial_display = display_ == nullptr;
-  const Display::RecreationState previous_display_state = is_initial_display ? Display::RecreationState{} : display_->get_recreation_state();
-  const bool use_previous_state = !is_initial_display;
-
-  const Side active_right = Side::Right(active_right_index_);
-  const auto right_it = right_video_info_.find(active_right);
-  const std::string right_file_name = (right_it != right_video_info_.end()) ? right_it->second.file_name : right_video_info_.begin()->second.file_name;
-
-  const bool effective_fast_input_alignment = use_previous_state ? previous_display_state.fast_input_alignment : use_fast_input_alignment(config_);
-  const bool effective_bilinear_filtering = use_previous_state ? previous_display_state.bilinear_texture_filtering : config_.bilinear_texture_filtering;
-  const std::tuple<int, int> effective_window_size = use_previous_state ? previous_display_state.window_size : config_.window_size;
-
-  display_ = std::make_unique<Display>(config_.display_number, config_.display_mode, config_.verbose, config_.fit_window_to_usable_bounds, config_.high_dpi_allowed, config_.lock_window_aspect_ratio, config_.use_10_bpc,
-                                       effective_fast_input_alignment, effective_bilinear_filtering, effective_window_size, max_width_, max_height_, shortest_duration_, config_.wheel_sensitivity, config_.start_in_subtraction_mode,
-                                       config_.left.file_name, right_file_name);
-  display_->set_num_right_videos(right_video_info_.size());
-  display_->update_metadata(left_video_metadata_, right_video_info_[active_right].metadata);
-
-  if (use_previous_state) {
-    display_->restore_recreation_state(previous_display_state);
   }
 }
 
@@ -702,9 +687,16 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
   };
 
   auto apply_crop_for_side = [&](const Side& side) {
+    static constexpr int kMinCropDimension = 2;
+
     const int side_w = std::max(1, static_cast<int>(video_filterers_[side]->dest_width()));
     const int side_h = std::max(1, static_cast<int>(video_filterers_[side]->dest_height()));
+    const int src_w = std::max(1, static_cast<int>(video_filterers_[side]->src_width()));
+    const int src_h = std::max(1, static_cast<int>(video_filterers_[side]->src_height()));
     if (max_width_ == 0 || max_height_ == 0) {
+      return false;
+    }
+    if (side_w < kMinCropDimension || side_h < kMinCropDimension || src_w < kMinCropDimension || src_h < kMinCropDimension) {
       return false;
     }
     const auto clamp_to = [](const int value, const int min_value, const int max_value) { return std::max(min_value, std::min(value, max_value)); };
@@ -712,17 +704,26 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
     SDL_Rect mapped = {
         clamp_to(static_cast<int>(std::llround(static_cast<double>(crop_request.rect.x) * side_w / max_width_)), 0, side_w - 1),
         clamp_to(static_cast<int>(std::llround(static_cast<double>(crop_request.rect.y) * side_h / max_height_)), 0, side_h - 1),
-        std::max(1, static_cast<int>(std::llround(static_cast<double>(crop_request.rect.w) * side_w / max_width_))),
-        std::max(1, static_cast<int>(std::llround(static_cast<double>(crop_request.rect.h) * side_h / max_height_))),
+        std::max(kMinCropDimension, static_cast<int>(std::llround(static_cast<double>(crop_request.rect.w) * side_w / max_width_))),
+        std::max(kMinCropDimension, static_cast<int>(std::llround(static_cast<double>(crop_request.rect.h) * side_h / max_height_))),
     };
     mapped.w = std::min(mapped.w, side_w - mapped.x);
     mapped.h = std::min(mapped.h, side_h - mapped.y);
-    if (mapped.w <= 0 || mapped.h <= 0) {
+    if (mapped.w < kMinCropDimension || mapped.h < kMinCropDimension) {
       return false;
     }
 
     crop_history_[side].push_back(mapped);
-    const SDL_Rect composed = compose_crop_history(crop_history_[side]);
+    SDL_Rect composed = compose_crop_history(crop_history_[side]);
+    composed.x = clamp_to(composed.x, 0, src_w - kMinCropDimension);
+    composed.y = clamp_to(composed.y, 0, src_h - kMinCropDimension);
+    composed.w = std::min(std::max(kMinCropDimension, composed.w), src_w - composed.x);
+    composed.h = std::min(std::max(kMinCropDimension, composed.h), src_h - composed.y);
+    if (composed.w < kMinCropDimension || composed.h < kMinCropDimension) {
+      crop_history_[side].pop_back();
+      return false;
+    }
+
     const CropRect crop_rect{composed.x, composed.y, composed.w, composed.h};
     const bool changed = video_filterers_[side]->set_crop_rect(&crop_rect);
     if (changed) {
@@ -1055,13 +1056,11 @@ void VideoCompare::compare() {
         max_width_ = dims.first;
         max_height_ = dims.second;
 
-        // if dimensions changed, recreate display and format converters
+        // if dimensions changed, recreate format converters and reinitialize video dimensions
         if (dims_changed) {
           recreate_format_converters(format_conversion_sws_flags);
-          recreate_display();
+          display_->reinitialize_video_dimensions(static_cast<unsigned>(max_width_), static_cast<unsigned>(max_height_));
 
-          active_right = Side::Right(active_right_index_);
-          right_ptr = &side_states.at(active_right);
           scope_update_state_.reset();
         } else if (had_filter_changes) {
           for (const Side& side : filter_change_sides) {

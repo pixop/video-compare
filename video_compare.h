@@ -130,8 +130,6 @@ class VideoCompare {
   void recreate_format_converter_for_side(const Side& side, const int sws_flags);
   void recreate_format_converters(const int sws_flags);
 
-  void recreate_display();
-
   void demultiplex(const Side& side);
 
   void decode_video(const Side& side);

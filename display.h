@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 #include "core_types.h"
 #include "row_workers.h"
@@ -120,36 +121,6 @@ class Display {
     }
   }
 
-  struct RecreationState {
-    std::tuple<int, int> window_size{0, 0};
-    int window_x{SDL_WINDOWPOS_UNDEFINED};
-    int window_y{SDL_WINDOWPOS_UNDEFINED};
-    bool has_window_position{false};
-
-    bool fast_input_alignment{false};
-    bool bilinear_texture_filtering{false};
-
-    bool play{true};
-
-    Loop buffer_play_loop_mode{Loop::Off};
-    bool buffer_play_forward{true};
-
-    size_t active_right_index{0};
-
-    bool swap_left_right{false};
-
-    bool show_help{false};
-    bool show_metadata{false};
-    bool show_hud{true};
-
-    bool subtraction_mode{false};
-    DiffMode diff_mode{DiffMode::AbsLinear};
-    bool diff_luma_only{false};
-
-    int metadata_y_offset{0};
-    int help_y_offset{0};
-  };
-
  private:
   const int display_number_;
   const Mode mode_;
@@ -159,8 +130,8 @@ class Display {
   const bool use_10_bpc_;
   bool fast_input_alignment_;
   bool bilinear_texture_filtering_;
-  const int video_width_;
-  const int video_height_;
+  int video_width_;
+  int video_height_;
   const double duration_;
 
   int drawable_width_;
@@ -240,7 +211,7 @@ class Display {
   SDL_Cursor* normal_mode_cursor_;
   SDL_Cursor* pan_mode_cursor_;
   SDL_Cursor* selection_mode_cursor_;
-  uint8_t* diff_buffer_;
+  uint8_t* diff_buffer_{nullptr};
   uint32_t* left_buffer_{nullptr};
   uint32_t* right_buffer_{nullptr};
   std::array<uint8_t*, 3> diff_planes_;
@@ -271,8 +242,8 @@ class Display {
 
   SDL_Window* window_;
   SDL_Renderer* renderer_;
-  SDL_Texture* video_texture_linear_;
-  SDL_Texture* video_texture_nn_;
+  SDL_Texture* video_texture_linear_{nullptr};
+  SDL_Texture* video_texture_nn_{nullptr};
 
   SDL_Event event_;
   int mouse_x_;
@@ -415,6 +386,9 @@ class Display {
           const std::string& right_file_name);
   ~Display();
 
+  // Reinitialize size-dependent rendering resources while preserving the SDL window.
+  void reinitialize_video_dimensions(unsigned width, unsigned height);
+
   // Copy frame to display
   bool possibly_refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable);
 
@@ -468,7 +442,4 @@ class Display {
   size_t get_active_right_index() const;
   void set_active_right_index(size_t index);
 
-  // Recreation state support
-  RecreationState get_recreation_state() const;
-  void restore_recreation_state(const RecreationState& state);
 };
