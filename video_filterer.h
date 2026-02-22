@@ -65,7 +65,8 @@ class VideoFilterer : public SideAware {
   const VideoDecoder* video_decoder_;
   const ToneMapping tone_mapping_mode_;
 
-  std::string filter_description_;
+  std::string pre_filter_description_;
+  std::string post_filter_description_;
 
   int width_;
   int height_;

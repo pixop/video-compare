@@ -8,17 +8,30 @@
 
 static constexpr char VIDEO_FILTER_GROUP_DELIMITER = '|';
 
-static std::string append_crop_filter(const std::string& base_filters, const CropRect& rect, const bool enabled) {
-  if (!enabled) {
-    return base_filters;
+static std::string crop_filter(const CropRect& rect) {
+  return string_sprintf("crop=%d:%d:%d:%d", rect.w, rect.h, rect.x, rect.y);
+}
+
+static std::string compose_filters(const std::string& pre_filters, const std::string& post_filters, const CropRect& rect, const bool crop_enabled) {
+  std::vector<std::string> filter_groups;
+
+  if (!pre_filters.empty()) {
+    filter_groups.push_back(pre_filters);
   }
 
-  const std::string crop = string_sprintf("crop=%d:%d:%d:%d", rect.w, rect.h, rect.x, rect.y);
-  if (base_filters.empty()) {
-    return crop;
+  if (crop_enabled) {
+    filter_groups.push_back(crop_filter(rect));
   }
 
-  return base_filters + "," + crop;
+  if (!post_filters.empty()) {
+    filter_groups.push_back(post_filters);
+  }
+
+  if (filter_groups.empty()) {
+    return "copy";
+  }
+
+  return string_join(filter_groups, ",");
 }
 
 static unsigned get_content_light_level_or_zero(const AVFrame* frame) {
@@ -58,7 +71,8 @@ VideoFilterer::VideoFilterer(const Side& side,
       time_base_(demuxer_->time_base()) {
   ScopedLogSide scoped_log_side(side);
 
-  std::vector<std::string> filters;
+  std::vector<std::string> pre_filters;
+  std::vector<std::string> post_filters;
 
   // up to two filter groups are allowed ("pre" and "post"), if only a single group is specified it is assigned to the "post" group
   const std::vector<std::string> custom_filter_groups = string_split(custom_video_filters, VIDEO_FILTER_GROUP_DELIMITER);
@@ -80,7 +94,7 @@ VideoFilterer::VideoFilterer(const Side& side,
   // custom pre-filtering can for example be used to override the color space, primaries and trc settings in case of incorrect metadata before any tone-mapping is performed
   // for example: 'setparams=colorspace=bt709|' (if not post-filtering is desired)
   if (!custom_pre_filters.empty()) {
-    filters.push_back(custom_pre_filters);
+    pre_filters.push_back(custom_pre_filters);
   }
 
   if (!disable_auto_filters) {
@@ -88,7 +102,7 @@ VideoFilterer::VideoFilterer(const Side& side,
     const bool this_is_interlaced = video_decoder->codec_context()->field_order != AV_FIELD_PROGRESSIVE && video_decoder->codec_context()->field_order != AV_FIELD_UNKNOWN;
 
     if (this_is_interlaced) {
-      filters.push_back("bwdif");
+      pre_filters.push_back("bwdif");
     }
 
     double this_frame_rate_dbl = av_q2d(demuxer->guess_frame_rate());
@@ -101,27 +115,27 @@ VideoFilterer::VideoFilterer(const Side& side,
     // stretch to display aspect ratio
     if (video_decoder->is_anamorphic(demuxer_)) {
       if (sample_aspect_ratio_.num > sample_aspect_ratio_.den) {
-        filters.push_back("scale=iw*sar:ih");
+        pre_filters.push_back("scale=iw*sar:ih");
       } else {
-        filters.push_back("scale=iw:ih/sar");
+        pre_filters.push_back("scale=iw:ih/sar");
       }
     }
 
     // harmonize the frame rate to the most frames per second
     if (this_frame_rate_dbl < (max_other_frame_rate_dbl * 0.9995)) {
-      filters.push_back(string_sprintf("fps=%.3f", max_other_frame_rate_dbl));
+      pre_filters.push_back(string_sprintf("fps=%.3f", max_other_frame_rate_dbl));
     }
 
     // rotation
     if (demuxer->rotation() == 90) {
-      filters.push_back("transpose=clock");
+      pre_filters.push_back("transpose=clock");
     } else if (demuxer->rotation() == 270) {
-      filters.push_back("transpose=cclock");
+      pre_filters.push_back("transpose=cclock");
     } else if (demuxer->rotation() == 180) {
-      filters.push_back("hflip");
-      filters.push_back("vflip");
+      pre_filters.push_back("hflip");
+      pre_filters.push_back("vflip");
     } else if (demuxer->rotation() != 0) {
-      filters.push_back(string_sprintf("rotate=%d*PI/180", demuxer->rotation()));
+      pre_filters.push_back(string_sprintf("rotate=%d*PI/180", demuxer->rotation()));
     }
   }
 
@@ -179,7 +193,7 @@ VideoFilterer::VideoFilterer(const Side& side,
       log_warning(string_sprintf("Metadata is missing for %s; assuming limited range Rec. 709. It is recommended to manually set the missing properties to their correct values.", string_join(notes, ", ").c_str()));
     }
     if (!setparams_options.empty()) {
-      filters.push_back(string_sprintf("setparams=%s", string_join(setparams_options, ":").c_str()));
+      pre_filters.push_back(string_sprintf("setparams=%s", string_join(setparams_options, ":").c_str()));
     }
   }
 
@@ -201,25 +215,25 @@ VideoFilterer::VideoFilterer(const Side& side,
       tone_adjustment *= boost_tone;
 
       if (std::fabs(tone_adjustment - 1.0F) > 1e-5) {
-        filters.push_back("format=gbrpf32");
+        post_filters.push_back("format=gbrpf32");
 
         if (tone_mapping_mode == ToneMapping::Auto) {
           // peak luma gets injected from within init_filters() during auto-mode
-          filters.push_back("zscale=t=linear:npl=%d");
+          post_filters.push_back("zscale=t=linear:npl=%d");
         } else {
-          filters.push_back(string_sprintf("zscale=t=linear:npl=%d", peak_luminance_nits_));
+          post_filters.push_back(string_sprintf("zscale=t=linear:npl=%d", peak_luminance_nits_));
         }
 
-        filters.push_back(string_sprintf("tonemap=clip:param=%.5f", tone_adjustment));
-        filters.push_back(string_sprintf("zscale=p=%s:t=%s", display_primaries.c_str(), display_trc.c_str()));
+        post_filters.push_back(string_sprintf("tonemap=clip:param=%.5f", tone_adjustment));
+        post_filters.push_back(string_sprintf("zscale=p=%s:t=%s", display_primaries.c_str(), display_trc.c_str()));
       } else {
-        filters.push_back("format=rgb48");
+        post_filters.push_back("format=rgb48");
 
         if (tone_mapping_mode == ToneMapping::Auto) {
           // peak luma gets injected from within init_filters() during auto-mode
-          filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%%d", display_primaries.c_str(), display_trc.c_str()));
+          post_filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%%d", display_primaries.c_str(), display_trc.c_str()));
         } else {
-          filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%d", display_primaries.c_str(), display_trc.c_str(), peak_luminance_nits_));
+          post_filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%d", display_primaries.c_str(), display_trc.c_str(), peak_luminance_nits_));
         }
       }
     } else {
@@ -228,12 +242,11 @@ VideoFilterer::VideoFilterer(const Side& side,
   }
 
   if (!custom_post_filters.empty()) {
-    filters.push_back(custom_post_filters);
-  } else if (filters.empty()) {
-    filters.push_back("copy");
+    post_filters.push_back(custom_post_filters);
   }
 
-  filter_description_ = string_join(filters, ",");
+  pre_filter_description_ = string_join(pre_filters, ",");
+  post_filter_description_ = string_join(post_filters, ",");
 
   init();
 }
@@ -301,8 +314,8 @@ int VideoFilterer::init_filters() {
     inputs->pad_idx = 0;
     inputs->next = nullptr;
 
-    const std::string base_filters = (tone_mapping_mode_ == ToneMapping::Auto && dynamic_range_ != DynamicRange::Standard) ? string_sprintf(filter_description_, peak_luminance_nits_) : filter_description_;
-    const std::string filters = append_crop_filter(base_filters, crop_rect_, crop_enabled_);
+    const std::string base_filters = compose_filters(pre_filter_description_, post_filter_description_, crop_rect_, crop_enabled_);
+    const std::string filters = (tone_mapping_mode_ == ToneMapping::Auto && dynamic_range_ != DynamicRange::Standard) ? string_sprintf(base_filters, peak_luminance_nits_) : base_filters;
 
     if ((ret = avfilter_graph_parse_ptr(filter_graph_, filters.c_str(), &inputs, &outputs, nullptr)) >= 0) {
       ret = avfilter_graph_config(filter_graph_, nullptr);
@@ -400,7 +413,7 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
 }
 
 std::string VideoFilterer::filter_description() const {
-  return append_crop_filter(filter_description_, crop_rect_, crop_enabled_);
+  return compose_filters(pre_filter_description_, post_filter_description_, crop_rect_, crop_enabled_);
 }
 
 size_t VideoFilterer::src_width() const {
