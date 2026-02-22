@@ -668,6 +668,9 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
     return false;
   }
   const Side target_right = crop_request.apply_right ? Side::Right(std::min(crop_request.right_target_index, right_video_info_.empty() ? 0UL : (right_video_info_.size() - 1))) : active_right;
+  const bool swap_left_right = display_->get_swap_left_right();
+  const Side resolved_left_side = swap_left_right ? active_right : LEFT;
+  const Side resolved_right_side = swap_left_right ? LEFT : target_right;
 
   auto compose_crop_history = [&](const std::vector<SDL_Rect>& history) {
     SDL_Rect composed = {0, 0, 0, 0};
@@ -742,22 +745,22 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
       }
     } else {
       if (crop_request.apply_left) {
-        crop_history_[LEFT].clear();
-        crop_changed = video_filterers_[LEFT]->set_crop_rect(nullptr) || crop_changed;
-        refresh_side_filter_metadata(LEFT);
+        crop_history_[resolved_left_side].clear();
+        crop_changed = video_filterers_[resolved_left_side]->set_crop_rect(nullptr) || crop_changed;
+        refresh_side_filter_metadata(resolved_left_side);
       }
       if (crop_request.apply_right) {
-        crop_history_[target_right].clear();
-        crop_changed = video_filterers_[target_right]->set_crop_rect(nullptr) || crop_changed;
-        refresh_side_filter_metadata(target_right);
+        crop_history_[resolved_right_side].clear();
+        crop_changed = video_filterers_[resolved_right_side]->set_crop_rect(nullptr) || crop_changed;
+        refresh_side_filter_metadata(resolved_right_side);
       }
     }
   } else if (crop_request.valid) {
     if (crop_request.apply_left) {
-      crop_changed = apply_crop_for_side(LEFT) || crop_changed;
+      crop_changed = apply_crop_for_side(resolved_left_side) || crop_changed;
     }
     if (crop_request.apply_right) {
-      crop_changed = apply_crop_for_side(target_right) || crop_changed;
+      crop_changed = apply_crop_for_side(resolved_right_side) || crop_changed;
     }
   }
 
