@@ -129,13 +129,16 @@ static bool compare_av_dictionaries(AVDictionary* dict1, AVDictionary* dict2) {
 }
 
 static bool produces_same_decoded_video(const VideoCompareConfig& config) {
-  if (config.right_videos.size() != 1) {
+  if (config.right_videos.empty()) {
     return false;
   }
-  const auto& first_right = config.right_videos[0];
-  return (config.left.file_name == first_right.file_name) && (config.left.demuxer == first_right.demuxer) && (config.left.decoder == first_right.decoder) && (config.left.hw_accel_spec == first_right.hw_accel_spec) &&
-         compare_av_dictionaries(config.left.demuxer_options, first_right.demuxer_options) && compare_av_dictionaries(config.left.decoder_options, first_right.decoder_options) &&
-         compare_av_dictionaries(config.left.hw_accel_options, first_right.hw_accel_options);
+  const auto matches_left_decode_source = [&](const InputVideo& right_video) {
+    return (config.left.file_name == right_video.file_name) && (config.left.demuxer == right_video.demuxer) && (config.left.decoder == right_video.decoder) && (config.left.hw_accel_spec == right_video.hw_accel_spec) &&
+           compare_av_dictionaries(config.left.demuxer_options, right_video.demuxer_options) && compare_av_dictionaries(config.left.decoder_options, right_video.decoder_options) &&
+           compare_av_dictionaries(config.left.hw_accel_options, right_video.hw_accel_options);
+  };
+
+  return std::all_of(config.right_videos.begin(), config.right_videos.end(), matches_left_decode_source);
 }
 
 static inline AVPixelFormat determine_pixel_format(const VideoCompareConfig& config) {
@@ -459,7 +462,11 @@ void VideoCompare::decode_video(const Side& side) {
         // Enter wait state
         decoded_frame_queues_[side]->stop();
         if (single_decoder_mode_) {
-          decoded_frame_queues_[RIGHT]->stop();
+          for (auto& pair : decoded_frame_queues_) {
+            if (pair.first.is_right()) {
+              pair.second->stop();
+            }
+          }
         }
         continue;
       }
@@ -509,10 +516,16 @@ bool VideoCompare::process_packet(const Side& side, AVPacket* packet) {
     }
     note_decoded_frame(side, frame_for_filtering->pts);
 
-    // Send the decoded frame to the right filterer, as well, if in single decoder mode
-    if (single_decoder_mode_) {
-      decoded_frame_queues_[RIGHT]->push(frame_for_filtering);
-      note_decoded_frame(RIGHT, frame_for_filtering->pts);
+    // Send the decoded frame to all right filterers when a single decoder drives all sides.
+    if (single_decoder_mode_ && side.is_left()) {
+      for (auto& pair : decoded_frame_queues_) {
+        if (!pair.first.is_right()) {
+          continue;
+        }
+
+        pair.second->push(frame_for_filtering);
+        note_decoded_frame(pair.first, frame_for_filtering->pts);
+      }
     }
   }
 
