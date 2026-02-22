@@ -196,8 +196,8 @@ class Display {
   bool input_received_{true};
   int64_t previous_left_frame_pts_;
   int64_t previous_right_frame_pts_;
-  int previous_left_frame_version_{0};
-  int previous_right_frame_version_{0};
+  std::string previous_left_frame_key_;
+  std::string previous_right_frame_key_;
   bool timer_based_update_performed_;
 
   float global_zoom_level_{0.0F};

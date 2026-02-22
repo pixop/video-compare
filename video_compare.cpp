@@ -879,7 +879,7 @@ void VideoCompare::compare() {
     Timer full_cycle_timer;
     sorted_flat_deque<uint32_t> full_cycle_time_deque(NOMINAL_FPS_UPDATE_RATE_US / 1000);
 
-    int64_t previous_frame_combo_tag = -1;
+    std::string previous_frame_combo_tag;
     int32_t unique_frame_combo_tags_processed = 0;
     std::string fps_message = "Gathering stats... hold onto your pixels!";
 
@@ -1063,8 +1063,6 @@ void VideoCompare::compare() {
         if (dims_changed) {
           recreate_format_converters(format_conversion_sws_flags);
           display_->reinitialize_video_dimensions(static_cast<unsigned>(max_width_), static_cast<unsigned>(max_height_));
-
-          scope_update_state_.reset();
         } else if (had_filter_changes) {
           for (const Side& side : filter_change_sides) {
             recreate_format_converter_for_side(side, format_conversion_sws_flags);
@@ -1427,7 +1425,7 @@ void VideoCompare::compare() {
 
           // count the number of unique in-sync video frame combinations processed
           if (is_playback_in_sync) {
-            const int64_t frame_combo_tag = (left_display_frame->pts << 20) | right_display_frame->pts;
+            const std::string frame_combo_tag = get_frame_key(left_display_frame) + "|" + get_frame_key(right_display_frame);
 
             if (frame_combo_tag != previous_frame_combo_tag) {
               unique_frame_combo_tags_processed++;

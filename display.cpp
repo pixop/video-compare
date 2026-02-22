@@ -1976,20 +1976,13 @@ void Display::save_selected_area(const AVFrame* left_frame, const AVFrame* right
 }
 
 bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable) {
-  auto get_version = [&](const AVFrame* frame) -> int {
-    const int version = get_metadata_int_value(frame, "version", 0);
-    return version;
-  };
+  const std::string left_frame_key = get_frame_key(left_frame);
+  const std::string right_frame_key = get_frame_key(right_frame);
 
-  const int left_frame_version = get_version(left_frame);
-  const int right_frame_version = get_version(right_frame);
+  const bool has_updated_left_frame = previous_left_frame_key_ != left_frame_key;
+  const bool has_updated_right_frame = previous_right_frame_key_ != right_frame_key;
 
-  const bool has_updated_left_pts = previous_left_frame_pts_ != left_frame->pts;
-  const bool has_updated_right_pts = previous_right_frame_pts_ != right_frame->pts;
-  const bool has_updated_left_version = previous_left_frame_version_ != left_frame_version;
-  const bool has_updated_right_version = previous_right_frame_version_ != right_frame_version;
-
-  if (!input_received_ && !has_updated_left_pts && !has_updated_right_pts && !has_updated_left_version && !has_updated_right_version && !timer_based_update_performed_ && pending_message_.empty()) {
+  if (!input_received_ && !has_updated_left_frame && !has_updated_right_frame && !timer_based_update_performed_ && pending_message_.empty()) {
     return false;
   }
 
@@ -2132,7 +2125,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       const SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
       const SDL_FRect screen_render_quad_left = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_left, zoom_rect));
 
-      if (input_received_ || has_updated_left_pts || has_updated_left_version) {
+      if (input_received_ || has_updated_left_frame) {
         if (use_10_bpc_) {
           convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
 
@@ -2153,7 +2146,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       const SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
       const SDL_FRect screen_render_quad_right = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_right, zoom_rect));
 
-      if (input_received_ || has_updated_right_pts || has_updated_right_version) {
+      if (input_received_ || has_updated_right_frame) {
         if (subtraction_mode_) {
           update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
 
@@ -2488,8 +2481,8 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   input_received_ = false;
   previous_left_frame_pts_ = left_frame->pts;
   previous_right_frame_pts_ = right_frame->pts;
-  previous_left_frame_version_ = left_frame_version;
-  previous_right_frame_version_ = right_frame_version;
+  previous_left_frame_key_ = left_frame_key;
+  previous_right_frame_key_ = right_frame_key;
 
   return true;
 }

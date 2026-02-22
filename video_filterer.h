@@ -85,5 +85,7 @@ class VideoFilterer : public SideAware {
 
   CropRect crop_rect_{};
   bool crop_enabled_{false};
+
   std::atomic_bool filter_changed_{false};
+  std::atomic<int> filter_generation_{0};
 };

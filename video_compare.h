@@ -162,26 +162,26 @@ class VideoCompare {
     ScopeUpdateState() { reset(); }
 
     struct Sample {
-      int64_t left_pts;
-      int64_t right_pts;
+      std::string left_frame_key;
+      std::string right_frame_key;
       ScopeWindow::Roi roi;
       bool swapped;
-      const AVFrame* left_ptr;
-      const AVFrame* right_ptr;
 
       bool operator==(const Sample& other) const {
-        const bool same_pts = left_pts == other.left_pts && right_pts == other.right_pts;
+        const bool same_frame_keys = left_frame_key == other.left_frame_key && right_frame_key == other.right_frame_key;
         const bool same_roi = roi.x == other.roi.x && roi.y == other.roi.y && roi.w == other.roi.w && roi.h == other.roi.h;
         const bool same_swap = swapped == other.swapped;
-        const bool same_ptrs = left_ptr == other.left_ptr && right_ptr == other.right_ptr;
 
-        return same_pts && same_roi && same_swap && same_ptrs;
+        return same_frame_keys && same_roi && same_swap;
       }
     };
 
     static Sample capture(const AVFrame* left_frame, const AVFrame* right_frame, const ScopeWindow::Roi& roi, const bool swapped) {
       return Sample{
-          left_frame ? left_frame->pts : std::numeric_limits<int64_t>::min(), right_frame ? right_frame->pts : std::numeric_limits<int64_t>::min(), roi, swapped, left_frame, right_frame,
+          get_frame_key(left_frame),
+          get_frame_key(right_frame),
+          roi,
+          swapped,
       };
     }
 

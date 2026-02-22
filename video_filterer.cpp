@@ -259,6 +259,8 @@ void VideoFilterer::init() {
   filter_graph_ = avfilter_graph_alloc();
 
   ffmpeg::check(init_filters());
+
+  filter_generation_.fetch_add(1, std::memory_order_acq_rel);
 }
 
 void VideoFilterer::free() {
@@ -408,6 +410,9 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
   // convert PTS and duration to microseconds
   filtered_frame->pts = av_rescale_q(filtered_frame->pts, av_buffersink_get_time_base(buffersink_ctx_), AV_R_MICROSECONDS) - demuxer_->start_time();
   ffmpeg::frame_duration(filtered_frame) = av_rescale_q(ffmpeg::frame_duration(filtered_frame), time_base_, AV_R_MICROSECONDS);
+
+  // add filter generation to metadata
+  av_dict_set(&filtered_frame->metadata, "filter_generation", std::to_string(filter_generation_.load(std::memory_order_acquire)).c_str(), 0);
 
   return true;
 }

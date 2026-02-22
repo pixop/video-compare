@@ -1,11 +1,8 @@
 #include "format_converter.h"
-#include <atomic>
 #include <iostream>
 #include "ffmpeg.h"
 
 static constexpr int FIXED_1_0 = (1 << 16);
-
-static std::atomic<int> g_format_converter_context_generation{0};
 
 inline int get_sws_colorspace(const AVColorSpace color_space) {
   switch (color_space) {
@@ -62,8 +59,6 @@ FormatConverter::~FormatConverter() {
 }
 
 void FormatConverter::init() {
-  g_format_converter_context_generation++;
-
   conversion_context_ = sws_getContext(
       // Source
       src_width(), src_height(), src_pixel_format(),
@@ -155,7 +150,12 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
 
   av_dict_set(&dst->metadata, "original_width", std::to_string(src->width).c_str(), 0);
   av_dict_set(&dst->metadata, "original_height", std::to_string(src->height).c_str(), 0);
-  av_dict_set(&dst->metadata, "version", std::to_string(g_format_converter_context_generation.load(std::memory_order_relaxed)).c_str(), 0);
+
+  const AVDictionaryEntry* filter_generation_entry = av_dict_get(src->metadata, "filter_generation", nullptr, 0);
+  const char* filter_generation = filter_generation_entry != nullptr ? filter_generation_entry->value : "0";
+  const std::string frame_key = std::to_string(src->pts) + ":" + filter_generation;
+
+  set_frame_key(dst, frame_key);
 
   sws_scale(conversion_context_,
             // Source
