@@ -1145,6 +1145,9 @@ void VideoCompare::compare() {
             if (!right_seek_result && !backward) {
               seek_failed = true;
             }
+#ifdef _DEBUG
+            std::cout << "Right seek result: " << right_seek_result << " - side: " << side.to_string() << std::endl;
+#endif
           }
         }
 
@@ -1155,6 +1158,9 @@ void VideoCompare::compare() {
         if (!left_seek_result && !backward) {
           seek_failed = true;
         }
+#ifdef _DEBUG
+        std::cout << "Left seek result: " << left_seek_result << " - side: " << LEFT.to_string() << std::endl;
+#endif
 
         // Restore all positions if any seek failed
         if (seek_failed) {
@@ -1203,6 +1209,10 @@ void VideoCompare::compare() {
             side_state.decoded_picture_number_ = 1;
 
             side_state.frames_.clear();
+          } else {
+#ifdef _DEBUG
+            std::cout << "Side state frame is nullptr: " << side_state.side_.to_string() << std::endl;
+#endif
           }
         };
 
