@@ -337,8 +337,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   const std::string right_file_name = (right_it != right_video_info_.end()) ? right_it->second.file_name : right_video_info_.begin()->second.file_name;
 
   display_ = std::make_unique<Display>(config_.display_number, config_.display_mode, config_.verbose, config_.fit_window_to_usable_bounds, config_.high_dpi_allowed, config_.lock_window_aspect_ratio, config_.use_10_bpc,
-                                       use_fast_input_alignment(config_), config_.bilinear_texture_filtering, config_.window_size, max_width_, max_height_, shortest_duration_, config_.wheel_sensitivity,
-                                       config_.start_in_subtraction_mode, config_.left.file_name, right_file_name);
+                                       use_fast_input_alignment(config_), config_.bilinear_texture_filtering, config_.window_size, max_width_, max_height_, shortest_duration_, config_.wheel_sensitivity, config_.start_in_subtraction_mode,
+                                       config_.left.file_name, right_file_name);
   display_->set_num_right_videos(right_video_info_.size());
   display_->set_active_right_index(active_right_index_);
   display_->update_metadata(left_video_metadata_, right_video_info_[active_right].metadata);
