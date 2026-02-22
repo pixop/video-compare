@@ -1075,10 +1075,6 @@ void VideoCompare::compare() {
         if (dims_changed) {
           recreate_format_converters(format_conversion_sws_flags);
           display_->reinitialize_video_dimensions(static_cast<unsigned>(max_width_), static_cast<unsigned>(max_height_));
-        } else if (had_filter_changes) {
-          for (const Side& side : filter_change_sides) {
-            recreate_format_converter_for_side(side, format_conversion_sws_flags);
-          }
         }
 
         float next_left_position;
