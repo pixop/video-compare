@@ -1794,14 +1794,14 @@ void Display::draw_selection_rect() {
 
   const auto zoom_rect = compute_zoom_rect();
 
-  auto draw_rect = [this](const SDL_FRect& r, Uint8 r_val, Uint8 g_val, Uint8 b_val) {
+  auto draw_rect = [this](const SDL_FRect& r, Uint8 r_val, Uint8 g_val, Uint8 b_val, int alpha_divider = 1) {
     // Draw semi-transparent overlay
-    SDL_SetRenderDrawColor(renderer_, r_val / 2, g_val / 2, b_val / 2, 128);
+    SDL_SetRenderDrawColor(renderer_, r_val / 2, g_val / 2, b_val / 2, 128 / alpha_divider);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
     SDL_RenderFillRectF(renderer_, &r);
 
     // Draw border
-    SDL_SetRenderDrawColor(renderer_, r_val, g_val, b_val, 255);
+    SDL_SetRenderDrawColor(renderer_, r_val, g_val, b_val, 255 / alpha_divider);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
     SDL_RenderDrawRectF(renderer_, &r);
   };
@@ -1830,7 +1830,7 @@ void Display::draw_selection_rect() {
     if (!crop_mode_ || crop_target_side_ == CropTargetSide::Left || crop_target_side_ == CropTargetSide::Both) {
       draw_rect(drawable_rect, 255, 128, 128);
     } else {
-      draw_rect(drawable_rect, 96, 48, 48);
+      draw_rect(drawable_rect, 96, 96, 96, 3);
     }
   }
 
@@ -1851,7 +1851,7 @@ void Display::draw_selection_rect() {
   if (!crop_mode_ || crop_target_side_ == CropTargetSide::Right || crop_target_side_ == CropTargetSide::Both) {
     draw_rect(drawable_rect, 128, 128, 255);
   } else {
-    draw_rect(drawable_rect, 48, 48, 96);
+    draw_rect(drawable_rect, 96, 96, 96, 3);
   }
 }
 
