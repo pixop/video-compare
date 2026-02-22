@@ -421,6 +421,11 @@ std::string VideoFilterer::filter_description() const {
   return compose_filters(pre_filter_description_, post_filter_description_, crop_.rect, crop_.enabled);
 }
 
+std::string VideoFilterer::pending_filter_description() const {
+  std::lock_guard<std::mutex> lock(pending_crop_mutex_);
+  return compose_filters(pre_filter_description_, post_filter_description_, pending_crop_.rect, pending_crop_.enabled);
+}
+
 size_t VideoFilterer::src_width() const {
   return buffersrc_ctx_->outputs[0]->w;
 }

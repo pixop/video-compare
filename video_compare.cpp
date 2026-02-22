@@ -666,7 +666,7 @@ void VideoCompare::note_decoded_frame(const Side& side, const int64_t pts) {
 }
 
 void VideoCompare::refresh_side_filter_metadata(const Side& side) {
-  const std::string filters = video_filterers_[side]->filter_description();
+  const std::string filters = video_filterers_[side]->pending_filter_description();
   if (side.is_left()) {
     left_video_metadata_.set(MetadataProperties::FILTERS, filters);
   } else {
