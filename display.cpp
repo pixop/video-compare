@@ -496,8 +496,10 @@ void Display::print_verbose_info() {
   std::cout << "Display mode:          " << modeToString(mode_) << std::endl;
   std::cout << "Fit to usable bounds:  " << std::boolalpha << fit_window_to_usable_bounds_ << std::endl;
   std::cout << "High-DPI allowed:      " << std::boolalpha << high_dpi_allowed_ << std::endl;
+  std::cout << "Lock wnd aspect ratio: " << std::boolalpha << lock_window_aspect_ratio_ << std::endl;
   std::cout << "Use 10 bpc:            " << std::boolalpha << use_10_bpc_ << std::endl;
   std::cout << "Fast input alignment:  " << std::boolalpha << fast_input_alignment_ << std::endl;
+  std::cout << "Bilinear filtering:    " << std::boolalpha << bilinear_texture_filtering_ << std::endl;
   std::cout << "Mouse whl sensitivity: " << wheel_sensitivity_ << std::endl;
 
   SDL_version sdl_linked_version;
