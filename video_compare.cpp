@@ -1099,8 +1099,11 @@ void VideoCompare::compare() {
         // Clamp seeks so we never go before the first decoded PTS.
         next_left_position = std::max(next_left_position, min_left_position);
 
-        // Add the delta PTS to the next left position
-        const bool backward = (seek_relative < 0.0F) || (shift_right_frames != 0) || (force_seek_current_position && !left_is_single_frame);
+        // determine if the seek is backward or forward
+        const auto all_media_are_multi_frame = [&]() -> bool {
+          return std::all_of(media_frame_detection_states_.cbegin(), media_frame_detection_states_.cend(), [](const auto& kv) { return kv.second.cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::MultiFrame; });
+        };
+        const bool backward = (seek_relative < 0.0F) || (shift_right_frames != 0) || (force_seek_current_position && all_media_are_multi_frame());
 
         auto compute_right_position = [&](const SideState& right_state) -> float { return left.pts_ * AV_TIME_TO_SEC + right_state.start_time_; };
 
