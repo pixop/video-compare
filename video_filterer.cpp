@@ -316,7 +316,7 @@ int VideoFilterer::init_filters() {
     inputs->pad_idx = 0;
     inputs->next = nullptr;
 
-    const std::string base_filters = compose_filters(pre_filter_description_, post_filter_description_, crop_rect_, crop_enabled_);
+    const std::string base_filters = filter_description();
     const std::string filters = (tone_mapping_mode_ == ToneMapping::Auto && dynamic_range_ != DynamicRange::Standard) ? string_sprintf(base_filters, peak_luminance_nits_) : base_filters;
 
     if ((ret = avfilter_graph_parse_ptr(filter_graph_, filters.c_str(), &inputs, &outputs, nullptr)) >= 0) {
@@ -418,7 +418,7 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
 }
 
 std::string VideoFilterer::filter_description() const {
-  return compose_filters(pre_filter_description_, post_filter_description_, crop_rect_, crop_enabled_);
+  return compose_filters(pre_filter_description_, post_filter_description_, crop_.rect, crop_.enabled);
 }
 
 size_t VideoFilterer::src_width() const {
@@ -450,39 +450,36 @@ void VideoFilterer::mark_filter_changed() {
 }
 
 bool VideoFilterer::set_crop_rect(const CropRect* rect) {
-  const auto reset_crop = [&]() {
-    crop_enabled_ = false;
-    crop_rect_ = CropRect{};
-  };
-  const auto rect_equals = [](const CropRect& a, const CropRect& b) { return a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h; };
+  CropSnapshot next;
 
-  if (rect == nullptr) {
-    const bool changed = crop_enabled_;
-    reset_crop();
-    if (changed) {
-      mark_filter_changed();
-    }
-    return changed;
+  if (rect != nullptr && rect->w > 0 && rect->h > 0) {
+    next.rect = *rect;
+    next.enabled = true;
   }
 
-  if (rect->w <= 0 || rect->h <= 0) {
-    const bool changed = crop_enabled_;
-    reset_crop();
-    if (changed) {
-      mark_filter_changed();
-    }
-    return changed;
+  std::lock_guard<std::mutex> lock(pending_crop_mutex_);
+  const bool changed = (pending_crop_.enabled != next.enabled) || (next.enabled && (pending_crop_.rect.x != next.rect.x || pending_crop_.rect.y != next.rect.y || pending_crop_.rect.w != next.rect.w || pending_crop_.rect.h != next.rect.h));
+  if (!changed) {
+    return false;
   }
+  pending_crop_ = next;
 
-  const bool changed = !crop_enabled_ || !rect_equals(crop_rect_, *rect);
-  crop_rect_ = *rect;
-  crop_enabled_ = true;
-  if (changed) {
-    mark_filter_changed();
-  }
-  return changed;
+  mark_filter_changed();
+  return true;
 }
 
 bool VideoFilterer::consume_filter_change() {
-  return filter_changed_.exchange(false, std::memory_order_acq_rel);
+  const bool changed = filter_changed_.exchange(false, std::memory_order_acq_rel);
+  if (!changed) {
+    return false;
+  }
+
+  CropSnapshot snapshot;
+  {
+    std::lock_guard<std::mutex> lock(pending_crop_mutex_);
+    snapshot = pending_crop_;
+  }
+  crop_ = snapshot;
+
+  return true;
 }

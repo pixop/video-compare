@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <mutex>
 #include "config.h"
 #include "core_types.h"
 #include "demuxer.h"
@@ -57,6 +58,11 @@ class VideoFilterer : public SideAware {
   bool consume_filter_change();
 
  private:
+  struct CropSnapshot {
+    CropRect rect{};
+    bool enabled{false};
+  };
+
   int init_filters();
 
   void mark_filter_changed();
@@ -83,8 +89,9 @@ class VideoFilterer : public SideAware {
   DynamicRange dynamic_range_;
   unsigned peak_luminance_nits_;
 
-  CropRect crop_rect_{};
-  bool crop_enabled_{false};
+  CropSnapshot crop_{};
+  CropSnapshot pending_crop_{};
+  mutable std::mutex pending_crop_mutex_;
 
   std::atomic_bool filter_changed_{false};
   std::atomic<int> filter_generation_{0};

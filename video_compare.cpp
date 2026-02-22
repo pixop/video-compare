@@ -358,6 +358,7 @@ void VideoCompare::recreate_format_converter_for_side(const Side& side, const in
   const AVPixelFormat output_pixel_format = determine_pixel_format(config_);
 
   const auto& filterer = video_filterers_.at(side);
+  ready_to_seek_.init(ReadyToSeek::ProcessorThread::Converter, side);
   format_converters_[side] = std::make_unique<FormatConverter>(filterer->dest_width(), filterer->dest_height(), max_width_, max_height_, filterer->dest_pixel_format(), output_pixel_format, video_decoders_[side]->color_space(),
                                                                video_decoders_[side]->color_range(), side, sws_flags);
 }
@@ -519,12 +520,10 @@ bool VideoCompare::process_packet(const Side& side, AVPacket* packet) {
     // Send the decoded frame to all right filterers when a single decoder drives all sides.
     if (single_decoder_mode_ && side.is_left()) {
       for (auto& pair : decoded_frame_queues_) {
-        if (!pair.first.is_right()) {
-          continue;
+        if (pair.first.is_right()) {
+          pair.second->push(frame_for_filtering);
+          note_decoded_frame(pair.first, frame_for_filtering->pts);
         }
-
-        pair.second->push(frame_for_filtering);
-        note_decoded_frame(pair.first, frame_for_filtering->pts);
       }
     }
   }
