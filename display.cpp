@@ -488,8 +488,7 @@ void Display::reinitialize_video_dimensions(const unsigned width, const unsigned
 
   move_offset_ = Vector2D((global_center_.x() - 0.5F) * static_cast<float>(video_width_), (global_center_.y() - 0.5F) * static_cast<float>(video_height_));
 
-  last_forced_window_size_ = {-1, -1};
-  handle_window_resize();
+  handle_window_resize(true);
   update_window_title_with_current_roi();
 }
 
@@ -656,7 +655,11 @@ float Display::compute_content_aspect_ratio() const {
   return content_w / std::max(content_h, 1.0F);
 }
 
-void Display::handle_window_resize() {
+void Display::handle_window_resize(const bool reset_forced_size_guard) {
+  if (reset_forced_size_guard) {
+    last_forced_window_size_ = {-1, -1};
+  }
+
   int new_drawable_w = 0;
   int new_drawable_h = 0;
   int new_window_w = 0;
@@ -2884,8 +2887,10 @@ void Display::handle_event(const SDL_Event& event) {
       auto restore_window_size = [&](const std::array<int, 2>& size) {
         const int target_w = std::max(MIN_WINDOW_WIDTH, size[0]);
         const int target_h = std::max(MIN_WINDOW_HEIGHT, size[1]);
-        last_forced_window_size_ = {target_w, target_h};
         SDL_SetWindowSize(window_, target_w, target_h);
+        // Route restore operations through the normal resize path so active
+        // aspect-lock constraints (window/content) are always enforced.
+        handle_window_resize(true);
       };
 
       // Handle CTRL+SHIFT+1..0 for direct right video selection

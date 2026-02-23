@@ -285,7 +285,7 @@ class Display {
   void rebuild_help_textures();
   void clamp_overlay_offsets();
   float compute_content_aspect_ratio() const;
-  void handle_window_resize();
+  void handle_window_resize(bool reset_forced_size_guard = false);
 
   void convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi);
 
