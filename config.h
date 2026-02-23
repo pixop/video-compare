@@ -59,7 +59,7 @@ struct VideoCompareConfig {
   bool bilinear_texture_filtering{false};
   bool disable_auto_filters{false};
   bool start_in_subtraction_mode{false};
-  bool lock_window_aspect_ratio{false};
+  Display::AspectLockMode aspect_lock_mode{Display::AspectLockMode::Off};
 
   int display_number{0};
   std::tuple<int, int> window_size{-1, -1};

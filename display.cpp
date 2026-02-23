@@ -216,7 +216,7 @@ Display::Display(const int display_number,
                  const bool verbose,
                  const bool fit_window_to_usable_bounds,
                  const bool high_dpi_allowed,
-                 const bool lock_window_aspect_ratio,
+                 const AspectLockMode aspect_lock_mode,
                  const bool use_10_bpc,
                  const bool fast_input_alignment,
                  const bool bilinear_texture_filtering,
@@ -232,7 +232,7 @@ Display::Display(const int display_number,
       mode_{mode},
       fit_window_to_usable_bounds_{fit_window_to_usable_bounds},
       high_dpi_allowed_{high_dpi_allowed},
-      lock_window_aspect_ratio_{lock_window_aspect_ratio},
+      aspect_lock_mode_{aspect_lock_mode},
       use_10_bpc_{use_10_bpc},
       fast_input_alignment_{fast_input_alignment},
       bilinear_texture_filtering_{bilinear_texture_filtering},
@@ -340,6 +340,8 @@ Display::Display(const int display_number,
   SDL_GL_GetDrawableSize(window_, &drawable_width_, &drawable_height_);
   SDL_GetWindowSize(window_, &window_width_, &window_height_);
   window_aspect_ratio_ = static_cast<float>(window_width_) / static_cast<float>(std::max(1, window_height_));
+  startup_window_size_ = {window_width_, window_height_};
+  saved_window_size_ = startup_window_size_;
 
   // Check if window is larger than display and warn user
   const int usable_width = bounds.w - border_width;
@@ -486,6 +488,8 @@ void Display::reinitialize_video_dimensions(const unsigned width, const unsigned
 
   move_offset_ = Vector2D((global_center_.x() - 0.5F) * static_cast<float>(video_width_), (global_center_.y() - 0.5F) * static_cast<float>(video_height_));
 
+  last_forced_window_size_ = {-1, -1};
+  handle_window_resize();
   update_window_title_with_current_roi();
 }
 
@@ -496,7 +500,13 @@ void Display::print_verbose_info() {
   std::cout << "Display mode:          " << modeToString(mode_) << std::endl;
   std::cout << "Fit to usable bounds:  " << std::boolalpha << fit_window_to_usable_bounds_ << std::endl;
   std::cout << "High-DPI allowed:      " << std::boolalpha << high_dpi_allowed_ << std::endl;
-  std::cout << "Lock wnd aspect ratio: " << std::boolalpha << lock_window_aspect_ratio_ << std::endl;
+  std::string aspect_lock_mode = "off";
+  if (aspect_lock_mode_ == AspectLockMode::Window) {
+    aspect_lock_mode = "window";
+  } else if (aspect_lock_mode_ == AspectLockMode::Content) {
+    aspect_lock_mode = "content";
+  }
+  std::cout << "Aspect lock mode:      " << aspect_lock_mode << std::endl;
   std::cout << "Use 10 bpc:            " << std::boolalpha << use_10_bpc_ << std::endl;
   std::cout << "Fast input alignment:  " << std::boolalpha << fast_input_alignment_ << std::endl;
   std::cout << "Bilinear filtering:    " << std::boolalpha << bilinear_texture_filtering_ << std::endl;
@@ -639,6 +649,13 @@ void Display::clamp_overlay_offsets() {
   clamp_offset(metadata_y_offset_, metadata_total_height_, metadata_textures_);
 }
 
+float Display::compute_content_aspect_ratio() const {
+  const float content_w = static_cast<float>(video_width_) * ((mode_ == Mode::HStack) ? 2.0F : 1.0F);
+  const float content_h = static_cast<float>(video_height_) * ((mode_ == Mode::VStack) ? 2.0F : 1.0F);
+
+  return content_w / std::max(content_h, 1.0F);
+}
+
 void Display::handle_window_resize() {
   int new_drawable_w = 0;
   int new_drawable_h = 0;
@@ -662,17 +679,27 @@ void Display::handle_window_resize() {
     return;
   }
 
-  // If aspect-ratio locking is enabled, snap the resize to the original ratio.
-  if (!skip_forced_size && lock_window_aspect_ratio_) {
+  // If aspect-ratio locking is enabled, snap the resize to the selected ratio.
+  if (!skip_forced_size && aspect_lock_mode_ != AspectLockMode::Off) {
+    const float target_aspect_ratio = (aspect_lock_mode_ == AspectLockMode::Window) ? window_aspect_ratio_ : compute_content_aspect_ratio();
+    const float safe_target_aspect_ratio = std::max(target_aspect_ratio, 0.001F);
     const float current_ratio = static_cast<float>(new_window_w) / static_cast<float>(new_window_h);
-    if (std::abs(current_ratio - window_aspect_ratio_) > 0.001F) {
+    if (std::abs(current_ratio - safe_target_aspect_ratio) > 0.001F) {
       int target_w = new_window_w;
       int target_h = new_window_h;
 
-      if (current_ratio > window_aspect_ratio_) {
-        target_w = std::max(MIN_WINDOW_WIDTH, static_cast<int>(std::round(new_window_h * window_aspect_ratio_)));
+      if (current_ratio > safe_target_aspect_ratio) {
+        target_w = static_cast<int>(std::round(new_window_h * safe_target_aspect_ratio));
+        if (target_w < MIN_WINDOW_WIDTH) {
+          target_w = MIN_WINDOW_WIDTH;
+          target_h = std::max(MIN_WINDOW_HEIGHT, static_cast<int>(std::round(static_cast<float>(target_w) / safe_target_aspect_ratio)));
+        }
       } else {
-        target_h = std::max(MIN_WINDOW_HEIGHT, static_cast<int>(std::round(new_window_w / window_aspect_ratio_)));
+        target_h = static_cast<int>(std::round(new_window_w / safe_target_aspect_ratio));
+        if (target_h < MIN_WINDOW_HEIGHT) {
+          target_h = MIN_WINDOW_HEIGHT;
+          target_w = std::max(MIN_WINDOW_WIDTH, static_cast<int>(std::round(static_cast<float>(target_h) * safe_target_aspect_ratio)));
+        }
       }
 
       if (target_w != new_window_w || target_h != new_window_h) {
@@ -2854,6 +2881,12 @@ void Display::handle_event(const SDL_Event& event) {
           start_crop_mode_for_side(side);
         }
       };
+      auto restore_window_size = [&](const std::array<int, 2>& size) {
+        const int target_w = std::max(MIN_WINDOW_WIDTH, size[0]);
+        const int target_h = std::max(MIN_WINDOW_HEIGHT, size[1]);
+        last_forced_window_size_ = {target_w, target_h};
+        SDL_SetWindowSize(window_, target_w, target_h);
+      };
 
       // Handle CTRL+SHIFT+1..0 for direct right video selection
       if ((keymod & KMOD_CTRL) && (keymod & KMOD_SHIFT)) {
@@ -2888,6 +2921,22 @@ void Display::handle_event(const SDL_Event& event) {
           pending_crop_request_.clear_requested = true;
           reset_crop_mode();
           break;
+        case SDLK_w: {
+          const bool ctrl_pressed = (keymod & KMOD_CTRL) != 0;
+          const bool shift_pressed = (keymod & KMOD_SHIFT) != 0;
+
+          if (ctrl_pressed && shift_pressed) {
+            saved_window_size_ = {window_width_, window_height_};
+            std::cout << string_sprintf("Saved window size (%dx%d)", saved_window_size_[0], saved_window_size_[1]) << std::endl;
+          } else if (ctrl_pressed) {
+            restore_window_size(startup_window_size_);
+            std::cout << string_sprintf("Restored startup window size (%dx%d)", startup_window_size_[0], startup_window_size_[1]) << std::endl;
+          } else if (shift_pressed) {
+            restore_window_size(saved_window_size_);
+            std::cout << string_sprintf("Restored saved window size (%dx%d)", saved_window_size_[0], saved_window_size_[1]) << std::endl;
+          }
+          break;
+        }
         case SDLK_SPACE:
           play_ = !play_;
           buffer_play_loop_mode_ = Loop::Off;

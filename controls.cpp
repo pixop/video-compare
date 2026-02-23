@@ -55,6 +55,7 @@ static const std::vector<std::string> instructions{
     "Use CTRL+C (Windows/Linux) or CMD+C (macOS) to copy the current timestamp of the left video to the clipboard, and CTRL+V (Windows/Linux) or CMD+V (macOS) to paste a timestamp from the clipboard and seek to that position.",
     "Use SHIFT+F to select a region; cutouts from both frames and their concatenation will be saved as PNGs.",
     "Use SHIFT+L to select a left crop region, SHIFT+R for right-only crop, or SHIFT+B for both.",
+    "Use SHIFT+W to restore the saved window size, CTRL+W to restore the startup window size, and CTRL+SHIFT+W to save the current window size.",
     "Use CTRL+SHIFT+1..0 to switch directly to right video 1-10."};
 
 const std::vector<std::pair<std::string, std::string>> get_controls() {

@@ -358,6 +358,18 @@ void resolve_mutual_placeholders(std::string& left, std::string& right, const st
   }
 }
 
+Display::AspectLockMode parse_aspect_lock_mode(const std::string& mode) {
+  if (mode.empty() || mode == "off") {
+    return Display::AspectLockMode::Off;
+  } else if (mode == "window") {
+    return Display::AspectLockMode::Window;
+  } else if (mode == "content") {
+    return Display::AspectLockMode::Content;
+  } else {
+    throw std::logic_error{"Cannot parse aspect lock mode (valid options: off, window, content)"};
+  }
+}
+
 ToneMapping parse_tone_mapping_mode(const std::string& mode) {
   if (mode.empty() || mode == "auto") {
     return ToneMapping::Auto;
@@ -520,7 +532,7 @@ int main(int argc, char** argv) {
          {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
          {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
          {"window-fit-display", {"-W", "--window-fit-display"}, "calculate the window size to fit within the usable display bounds while maintaining the video aspect ratio", 0},
-         {"lock-window-aspect", {"-k", "--lock-window-aspect"}, "lock main window aspect ratio to its initial size during resizing", 0},
+         {"aspect-lock", {"-k", "--aspect-lock"}, "aspect lock mode during resizing: 'off' (default), 'window' for initial window ratio, 'content' for current video/content ratio", 1},
          {"auto-loop-mode", {"-a", "--auto-loop-mode"}, "auto-loop playback when buffer fills, 'off' for continuous streaming (default), 'on' for forward-only mode, 'pp' for ping-pong mode", 1},
          {"frame-buffer-size", {"-f", "--frame-buffer-size"}, "frame buffer size (e.g. 10, 70 or 150), default is 50", 1},
          {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified time offset, optionally with a multiplier (e.g. 0.150, -0.1, x1.04+0.1, x25.025/24-1:30.5)", 1},
@@ -621,7 +633,9 @@ int main(int argc, char** argv) {
       config.verbose = args["verbose"];
       config.fit_window_to_usable_bounds = args["window-fit-display"];
       config.high_dpi_allowed = args["high-dpi"];
-      config.lock_window_aspect_ratio = args["lock-window-aspect"];
+      if (args["aspect-lock"]) {
+        config.aspect_lock_mode = parse_aspect_lock_mode(static_cast<const std::string&>(args["aspect-lock"]));
+      }
       config.use_10_bpc = args["10-bpc"];
       config.fast_input_alignment = args["fast-alignment"];
       config.bilinear_texture_filtering = args["bilinear-texture"];

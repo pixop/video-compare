@@ -106,6 +106,7 @@ class Display {
  public:
   enum class Mode { Split, VStack, HStack };
   enum class Loop { Off, ForwardOnly, PingPong };
+  enum class AspectLockMode { Off, Window, Content };
   enum class DiffMode { LegacyAbs, AbsLinear, AbsSqrt, SignedDiverging };
 
   std::string modeToString(const Mode& mode) {
@@ -126,7 +127,7 @@ class Display {
   const Mode mode_;
   const bool fit_window_to_usable_bounds_;
   const bool high_dpi_allowed_;
-  const bool lock_window_aspect_ratio_;
+  const AspectLockMode aspect_lock_mode_;
   const bool use_10_bpc_;
   bool fast_input_alignment_;
   bool bilinear_texture_filtering_;
@@ -145,6 +146,8 @@ class Display {
   float font_scale_;
   float window_aspect_ratio_{1.0F};
   std::array<int, 2> last_forced_window_size_{{-1, -1}};
+  std::array<int, 2> startup_window_size_{{-1, -1}};
+  std::array<int, 2> saved_window_size_{{-1, -1}};
 
   bool show_help_{false};
   bool show_metadata_{false};
@@ -281,6 +284,7 @@ class Display {
   void rebuild_side_ui_textures();
   void rebuild_help_textures();
   void clamp_overlay_offsets();
+  float compute_content_aspect_ratio() const;
   void handle_window_resize();
 
   void convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi);
@@ -372,7 +376,7 @@ class Display {
           const bool verbose,
           const bool fit_window_to_usable_bounds,
           const bool high_dpi_allowed,
-          const bool lock_window_aspect_ratio,
+          const AspectLockMode aspect_lock_mode,
           const bool use_10_bpc,
           const bool fast_input_alignment,
           const bool bilinear_texture_filtering,

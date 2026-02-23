@@ -243,6 +243,9 @@ as PNGs.
 Use `Shift+L` to interactively crop the left side, `Shift+R` for right-only crop, or `Shift+B`
 to crop both sides to the same area.
 
+Use `Shift+W` to restore the saved window size, `Ctrl+W` to restore the startup window size,
+and `Ctrl+Shift+W` to save the current window size.
+
 **Hold** `Ctrl+Shift` while pressing `1..0` to switch directly to right video 1–10.
 
 ## Build
