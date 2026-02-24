@@ -45,8 +45,11 @@ class VideoFilterer : public SideAware {
   bool send(AVFrame* decoded_frame);
   bool receive(AVFrame* filtered_frame);
 
+  static std::string get_resolved_filters_from_frame(const AVFrame* frame);
+  static int get_filter_generation_from_frame(const AVFrame* frame);
+
   std::string filter_description() const;
-  std::string pending_filter_description() const;
+  std::string resolved_filter_description() const;
 
   size_t src_width() const;
   size_t src_height() const;

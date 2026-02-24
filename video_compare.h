@@ -147,7 +147,7 @@ class VideoCompare {
 
   void note_decoded_frame(const Side& side, const int64_t pts);
 
-  void refresh_side_filter_metadata(const Side& side);
+  void refresh_side_filter_metadata(const Side& side, const std::string& filters);
 
   bool handle_pending_crop_request(const Side& active_right);
   std::vector<Side> consume_filter_changes();

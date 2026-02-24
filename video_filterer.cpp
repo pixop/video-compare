@@ -1,5 +1,6 @@
 #include "video_filterer.h"
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 #include "ffmpeg.h"
@@ -316,8 +317,7 @@ int VideoFilterer::init_filters() {
     inputs->pad_idx = 0;
     inputs->next = nullptr;
 
-    const std::string base_filters = filter_description();
-    const std::string filters = (tone_mapping_mode_ == ToneMapping::Auto && dynamic_range_ != DynamicRange::Standard) ? string_sprintf(base_filters, peak_luminance_nits_) : base_filters;
+    const std::string filters = resolved_filter_description();
 
     if ((ret = avfilter_graph_parse_ptr(filter_graph_, filters.c_str(), &inputs, &outputs, nullptr)) >= 0) {
       ret = avfilter_graph_config(filter_graph_, nullptr);
@@ -411,19 +411,38 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
   filtered_frame->pts = av_rescale_q(filtered_frame->pts, av_buffersink_get_time_base(buffersink_ctx_), AV_R_MICROSECONDS) - demuxer_->start_time();
   ffmpeg::frame_duration(filtered_frame) = av_rescale_q(ffmpeg::frame_duration(filtered_frame), time_base_, AV_R_MICROSECONDS);
 
-  // add filter generation to metadata
+  // add filter generation and resolved filters to metadata
   av_dict_set(&filtered_frame->metadata, "filter_generation", std::to_string(filter_generation_.load(std::memory_order_acquire)).c_str(), 0);
+  av_dict_set(&filtered_frame->metadata, "resolved_filters", resolved_filter_description().c_str(), 0);
 
   return true;
+}
+
+std::string VideoFilterer::get_resolved_filters_from_frame(const AVFrame* frame) {
+  if (frame == nullptr) {
+    return "";
+  }
+
+  const AVDictionaryEntry* filters_entry = av_dict_get(frame->metadata, "resolved_filters", nullptr, 0);
+  return (filters_entry != nullptr) ? filters_entry->value : "";
+}
+
+int VideoFilterer::get_filter_generation_from_frame(const AVFrame* frame) {
+  if (frame == nullptr) {
+    return -1;
+  }
+
+  const AVDictionaryEntry* generation_entry = av_dict_get(frame->metadata, "filter_generation", nullptr, 0);
+  return (generation_entry != nullptr) ? std::atoi(generation_entry->value) : -1;
 }
 
 std::string VideoFilterer::filter_description() const {
   return compose_filters(pre_filter_description_, post_filter_description_, crop_.rect, crop_.enabled);
 }
 
-std::string VideoFilterer::pending_filter_description() const {
-  std::lock_guard<std::mutex> lock(pending_crop_mutex_);
-  return compose_filters(pre_filter_description_, post_filter_description_, pending_crop_.rect, pending_crop_.enabled);
+std::string VideoFilterer::resolved_filter_description() const {
+  const std::string base_filters = filter_description();
+  return (tone_mapping_mode_ == ToneMapping::Auto && dynamic_range_ != DynamicRange::Standard) ? string_sprintf(base_filters, peak_luminance_nits_) : base_filters;
 }
 
 size_t VideoFilterer::src_width() const {

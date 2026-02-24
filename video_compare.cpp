@@ -277,7 +277,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       file_name.c_str(),
       stringify_file_size(demuxers_[side]->file_size(), 2).c_str(),
       stringify_bit_rate(demuxers_[side]->bit_rate(), 1).c_str(),
-      video_filterers_[side]->filter_description().c_str()
+      video_filterers_[side]->resolved_filter_description().c_str()
     );
     // clang-format on
 
@@ -321,7 +321,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
     metadata.set(MetadataProperties::TRANSFER_CURVE, av_color_transfer_name(video_decoders_[side]->color_trc()));
     metadata.set(MetadataProperties::COLOR_RANGE, av_color_range_name(video_decoders_[side]->color_range()));
     metadata.set(MetadataProperties::HARDWARE_ACCELERATION, video_decoders_[side]->is_hw_accelerated() ? video_decoders_[side]->hw_accel_name() : "None");
-    metadata.set(MetadataProperties::FILTERS, video_filterers_[side]->filter_description());
+    metadata.set(MetadataProperties::FILTERS, video_filterers_[side]->resolved_filter_description());
 
     return metadata;
   };
@@ -665,8 +665,7 @@ void VideoCompare::note_decoded_frame(const Side& side, const int64_t pts) {
   }
 }
 
-void VideoCompare::refresh_side_filter_metadata(const Side& side) {
-  const std::string filters = video_filterers_[side]->pending_filter_description();
+void VideoCompare::refresh_side_filter_metadata(const Side& side, const std::string& filters) {
   if (side.is_left()) {
     left_video_metadata_.set(MetadataProperties::FILTERS, filters);
   } else {
@@ -741,9 +740,7 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
 
     const CropRect crop_rect{composed.x, composed.y, composed.w, composed.h};
     const bool changed = video_filterers_[side]->set_crop_rect(&crop_rect);
-    if (changed) {
-      refresh_side_filter_metadata(side);
-    }
+
     return changed;
   };
 
@@ -753,18 +750,15 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
       for (auto& pair : video_filterers_) {
         crop_history_[pair.first].clear();
         crop_changed = pair.second->set_crop_rect(nullptr) || crop_changed;
-        refresh_side_filter_metadata(pair.first);
       }
     } else {
       if (crop_request.apply_left) {
         crop_history_[resolved_left_side].clear();
         crop_changed = video_filterers_[resolved_left_side]->set_crop_rect(nullptr) || crop_changed;
-        refresh_side_filter_metadata(resolved_left_side);
       }
       if (crop_request.apply_right) {
         crop_history_[resolved_right_side].clear();
         crop_changed = video_filterers_[resolved_right_side]->set_crop_rect(nullptr) || crop_changed;
-        refresh_side_filter_metadata(resolved_right_side);
       }
     }
   } else if (crop_request.valid) {
@@ -780,7 +774,6 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
     return false;
   }
 
-  display_->update_metadata(left_video_metadata_, right_video_info_[active_right].metadata);
   scope_update_state_.reset();
   return true;
 }
@@ -849,6 +842,9 @@ struct SideState {
   int64_t effective_time_shift_ = 0;
 
   sorted_flat_deque<int64_t> frame_duration_deque_;
+
+  int last_filter_generation_ = -1;
+  std::string last_filter_description_;
 };
 
 void VideoCompare::compare() {
@@ -1057,8 +1053,7 @@ void VideoCompare::compare() {
         update_decoder_mode(static_right_time_shift);
 
         // consume filter changes
-        const std::vector<Side> filter_change_sides = consume_filter_changes();
-        const bool had_filter_changes = !filter_change_sides.empty();
+        consume_filter_changes();
 
         // reinit filter graphs
         for (auto& pair : video_filterers_) {
@@ -1443,6 +1438,38 @@ void VideoCompare::compare() {
 
           const auto left_display_frame = left_frames_ref[frame_offset].get();
           const auto right_display_frame = right_frames_ref[frame_offset].get();
+          const auto left_state_frame = left.frames_[frame_offset].get();
+          const auto right_state_frame = right_ptr->frames_[frame_offset].get();
+
+          auto refresh_from_frame_if_changed = [&](SideState& side_state, const AVFrame* frame) {
+            const int frame_filter_generation = VideoFilterer::get_filter_generation_from_frame(frame);
+
+            // Use filter generation as a cheap dirty bit and skip string work for unchanged frames.
+            if (frame_filter_generation < 0 || frame_filter_generation == side_state.last_filter_generation_) {
+              return false;
+            }
+
+            const std::string frame_filters = VideoFilterer::get_resolved_filters_from_frame(frame);
+            if (frame_filters.empty()) {
+              return false;
+            }
+
+            refresh_side_filter_metadata(side_state.side_, frame_filters);
+
+            side_state.last_filter_generation_ = frame_filter_generation;
+            side_state.last_filter_description_ = frame_filters;
+
+            return true;
+          };
+
+          bool metadata_changed = false;
+          metadata_changed = refresh_from_frame_if_changed(left, left_state_frame) || metadata_changed;
+          metadata_changed = refresh_from_frame_if_changed(*right_ptr, right_state_frame) || metadata_changed;
+
+          // Rebuild metadata overlay only when at least one side's filter metadata actually changed.
+          if (metadata_changed) {
+            display_->update_metadata(left_video_metadata_, right_video_info_[active_right].metadata);
+          }
 
           // count the number of unique in-sync video frame combinations processed
           if (is_playback_in_sync) {
