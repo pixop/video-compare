@@ -1817,6 +1817,36 @@ SDL_Rect Display::get_left_selection_rect() const {
   return {clipped_x, clipped_y, clipped_w, clipped_h};
 }
 
+Vector2D Display::wrap_to_left_frame(const Vector2D& video_position) const {
+  switch (mode_) {
+    case Mode::HStack:
+      return video_position - Vector2D(video_width_, 0);
+    case Mode::VStack:
+      return video_position - Vector2D(0, video_height_);
+    default:
+      break;
+  }
+
+  return video_position;
+}
+
+void Display::refresh_selection_end_from_mouse() {
+  if (selection_state_ != SelectionState::Started) {
+    return;
+  }
+
+  SDL_GetMouseState(&mouse_x_, &mouse_y_);
+  selection_end_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
+
+  if (selection_wrap_) {
+    selection_end_ = wrap_to_left_frame(selection_end_);
+  }
+}
+
+void Display::on_view_transform_changed() {
+  refresh_selection_end_from_mouse();
+}
+
 void Display::draw_selection_rect() {
   if (selection_state_ != SelectionState::Started) {
     return;
@@ -2553,11 +2583,13 @@ void Display::update_zoom_factor_and_move_offset(const float zoom_factor) {
 void Display::update_zoom_factor(const float zoom_factor) {
   global_zoom_factor_ = zoom_factor;
   global_zoom_level_ = log(zoom_factor) / log(ZOOM_STEP_SIZE);
+  on_view_transform_changed();
 }
 
 void Display::update_move_offset(const Vector2D& move_offset) {
   move_offset_ = move_offset;
   global_center_ = Vector2D(move_offset_.x() / video_width_ + 0.5F, move_offset_.y() / video_height_ + 0.5F);
+  on_view_transform_changed();
 }
 
 Display::ZoomRect Display::compute_zoom_rect() const {
@@ -2741,19 +2773,6 @@ void Display::handle_event(const SDL_Event& event) {
     SDL_SetCursor(cursor);
   };
 
-  auto wrap_to_left_frame = [&](Vector2D& video_position) -> Vector2D {
-    switch (mode_) {
-      case Mode::HStack:
-        return video_position - Vector2D(video_width_, 0);
-      case Mode::VStack:
-        return video_position - Vector2D(0, video_height_);
-      default:
-        break;
-    }
-
-    return video_position;
-  };
-
   auto handle_scroll = [&](int& y_offset, const int total_height, std::vector<SDL_Texture*>& textures) {
     y_offset += (-event_.motion.yrel * total_height * 3) / drawable_height_;
     y_offset = std::max(y_offset, drawable_height_ - total_height - static_cast<int>(textures.size()) * HELP_TEXT_LINE_SPACING);
@@ -2796,22 +2815,14 @@ void Display::handle_event(const SDL_Event& event) {
         if (new_global_zoom_factor >= 0.001 && new_global_zoom_factor <= 10000) {
           const Vector2D zoom_point = Vector2D(static_cast<float>(mouse_x_) * video_to_window_width_factor_, static_cast<float>(mouse_y_) * video_to_window_height_factor_);
           update_move_offset(compute_relative_move_offset(zoom_point, new_global_zoom_factor));
-
-          global_zoom_level_ -= delta_zoom;
-          global_zoom_factor_ = new_global_zoom_factor;
+          update_zoom_factor(new_global_zoom_factor);
         }
       }
       break;
     case SDL_MOUSEMOTION:
       SDL_GetMouseState(&mouse_x_, &mouse_y_);
 
-      if (selection_state_ == SelectionState::Started) {
-        selection_end_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
-
-        if (selection_wrap_) {
-          selection_end_ = wrap_to_left_frame(selection_end_);
-        }
-      }
+      refresh_selection_end_from_mouse();
 
       if (event_.motion.state & SDL_BUTTON_RMASK) {
         const auto pan_offset = Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_) / Vector2D(drawable_to_window_width_factor_, drawable_to_window_height_factor_);

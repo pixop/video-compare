@@ -347,6 +347,9 @@ class Display {
   void ensure_metadata_textures_current();
 
   SDL_Rect get_left_selection_rect() const;
+  Vector2D wrap_to_left_frame(const Vector2D& video_position) const;
+  void refresh_selection_end_from_mouse();
+  void on_view_transform_changed();
   void draw_selection_rect();
   void possibly_save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame);
   void possibly_apply_crop();
