@@ -220,8 +220,8 @@ see all supported options.
 
 Move the mouse horizontally to adjust the movable slider position.
 
-Use the mouse wheel to zoom in/out on the pixel under the cursor. Pan the view
-by moving the mouse while holding down the right button.
+Use the mouse wheel to zoom in/out on the pixel under the cursor. Hold `Shift`
+to slow zoom. Pan the view by moving the mouse while holding down the right button.
 
 Left-click the mouse to perform a time seek based on the horizontal position of the
 mouse cursor relative to the window width (the target position is shown in the lower

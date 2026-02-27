@@ -2804,9 +2804,11 @@ void Display::handle_event(const SDL_Event& event) {
     case SDL_MOUSEWHEEL:
       if (mouse_is_inside_window_ && event_.wheel.y != 0) {
         float delta_zoom = wheel_sensitivity_ * event_.wheel.y * (event_.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -1 : 1);
-
         if (delta_zoom > 0) {
           delta_zoom /= 2.0F;
+        }
+        if (SDL_GetModState() & KMOD_SHIFT) {
+          delta_zoom /= 3.0F;
         }
 
         const float new_global_zoom_factor = compute_zoom_factor(global_zoom_level_ - delta_zoom);
