@@ -3140,6 +3140,16 @@ void Display::handle_event(const SDL_Event& event) {
         case SDLK_KP_9:
           update_zoom_factor_and_move_offset(8.0F);
           break;
+        case SDLK_e: {
+          SDL_GetMouseState(&mouse_x_, &mouse_y_);
+
+          const auto zoom_rect = compute_zoom_rect();
+          const Vector2D mouse_video = window_to_video_position(mouse_x_, mouse_y_, zoom_rect);
+          const Vector2D center_video = window_to_video_position(window_width_ / 2, window_height_ / 2, zoom_rect);
+
+          update_move_offset(move_offset_ + (center_video - mouse_video) * global_zoom_factor_);
+          break;
+        }
         case SDLK_r:
           if (is_shift_down) {
             toggle_crop_mode_for_side(CropTargetSide::Right);

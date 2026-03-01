@@ -197,7 +197,8 @@ see all supported options.
 - M: Print image similarity metrics to console
 - Z: Magnify area around cursor (result shown in lower left corner)
 - C: Magnify area around cursor (result shown in lower right corner)
-- R: Re-center and reset zoom to 100% (x1)
+- E: Re-center view around mouse position
+- R: Global re-center and reset zoom to 100% (x1)
 - 1: Toggle hide/show left video
 - 2: Toggle hide/show right video
 - 3: Toggle hide/show HUD
