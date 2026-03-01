@@ -3144,9 +3144,9 @@ void Display::handle_event(const SDL_Event& event) {
           if (is_shift_down) {
             toggle_crop_mode_for_side(CropTargetSide::Right);
           } else {
-            update_zoom_factor(1.0F);
             move_offset_ = Vector2D(0.0F, 0.0F);
             global_center_ = Vector2D(0.5F, 0.5F);
+            update_zoom_factor(1.0F);
           }
           break;
         case SDLK_LEFT:
