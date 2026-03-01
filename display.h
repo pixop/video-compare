@@ -171,7 +171,7 @@ class Display {
   bool print_mouse_position_and_color_{false};
   bool print_image_similarity_metrics_{false};
   bool mouse_is_inside_window_{false};
-  int playback_speed_level_{0};
+  float playback_speed_level_{0.0F};
   float playback_speed_factor_{1.0F};
   bool tick_playback_{false};
   bool possibly_tick_playback_{false};
@@ -371,7 +371,7 @@ class Display {
   Vector2D window_to_video_position(const int window_x_position, const int window_y_position, const ZoomRect& zoom_rect, const bool floor_result = true) const;
   SDL_FRect video_to_zoom_space(const SDL_Rect& video_rect, const ZoomRect& zoom_rect) const;
 
-  void update_playback_speed(const int playback_speed_level);
+  void update_playback_speed(const float playback_speed_level_delta);
 
  public:
   Display(const int display_number,

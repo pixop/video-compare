@@ -44,8 +44,13 @@ static const int BACKGROUND_ALPHA = 100;
 
 static const int MOUSE_WHEEL_SCROLL_STEPS_TO_DOUBLE = 12;
 static const float ZOOM_STEP_SIZE = pow(2.0F, 1.0F / float(MOUSE_WHEEL_SCROLL_STEPS_TO_DOUBLE));
+static const float ZOOM_SLOWDOWN_RATIO = 3.0F;
+
 static const int PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE = 6;
 static const float PLAYBACK_SPEED_STEP_SIZE = pow(2.0F, 1.0F / float(PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE));
+static const float PLAYBACK_SPEED_SLOWDOWN_RATIO = 5.0F;
+
+static const float RELATIVE_SEEK_SLOWDOWN_RATIO = 4.0F;
 
 static const int HELP_TEXT_LINE_SPACING = 1;
 static const int HELP_TEXT_HORIZONTAL_MARGIN = 26;
@@ -2732,9 +2737,11 @@ SDL_Rect Display::get_visible_roi_in_single_frame_coordinates() const {
   return left_roi;
 }
 
-void Display::update_playback_speed(const int playback_speed_level) {
+void Display::update_playback_speed(const float playback_speed_level_delta) {
+  const float playback_speed_level = playback_speed_level_ + playback_speed_level_delta;
+
   // allow 128x change of playback speed
-  if (abs(playback_speed_level) <= (PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE * 7)) {
+  if (std::abs(playback_speed_level) <= static_cast<float>(PLAYBACK_SPEED_KEY_PRESSES_TO_DOUBLE * 7)) {
     playback_speed_level_ = playback_speed_level;
     playback_speed_factor_ = pow(PLAYBACK_SPEED_STEP_SIZE, playback_speed_level);
   }
@@ -2807,8 +2814,8 @@ void Display::handle_event(const SDL_Event& event) {
         if (delta_zoom > 0) {
           delta_zoom /= 2.0F;
         }
-        if (SDL_GetModState() & KMOD_SHIFT) {
-          delta_zoom /= 3.0F;
+        if (SDL_GetModState() & (KMOD_SHIFT | KMOD_CTRL)) {
+          delta_zoom /= ZOOM_SLOWDOWN_RATIO;
         }
 
         const float new_global_zoom_factor = compute_zoom_factor(global_zoom_level_ - delta_zoom);
@@ -2868,12 +2875,17 @@ void Display::handle_event(const SDL_Event& event) {
     case SDL_KEYDOWN: {
       const SDL_Keymod keymod = static_cast<SDL_Keymod>(event_.key.keysym.mod);
       const SDL_Keycode keycode = event_.key.keysym.sym;
+      const bool is_shift_down = (keymod & KMOD_SHIFT) != 0;
+      const bool is_ctrl_down = (keymod & KMOD_CTRL) != 0;
 
-      auto is_clipboard_mod_pressed = [keymod]() -> bool {
+      const float relative_seek_scale = (is_shift_down || is_ctrl_down) ? 1.0F / RELATIVE_SEEK_SLOWDOWN_RATIO : 1.0F;
+      const float playback_speed_scale = (is_shift_down || is_ctrl_down) ? 1.0F / PLAYBACK_SPEED_SLOWDOWN_RATIO : 1.0F;
+
+      auto is_clipboard_mod_pressed = [is_ctrl_down, keymod]() -> bool {
 #ifdef __APPLE__
         return (keymod & KMOD_GUI);
 #else
-        return (keymod & KMOD_CTRL);
+        return is_ctrl_down;
 #endif
       };
 
@@ -2907,7 +2919,7 @@ void Display::handle_event(const SDL_Event& event) {
       };
 
       // Handle CTRL+SHIFT+1..0 for direct right video selection
-      if ((keymod & KMOD_CTRL) && (keymod & KMOD_SHIFT)) {
+      if (is_ctrl_down && is_shift_down) {
         size_t target_index = SIZE_MAX;
 
         if (keycode >= SDLK_1 && keycode <= SDLK_9) {
@@ -2940,16 +2952,13 @@ void Display::handle_event(const SDL_Event& event) {
           reset_crop_mode();
           break;
         case SDLK_w: {
-          const bool ctrl_pressed = (keymod & KMOD_CTRL) != 0;
-          const bool shift_pressed = (keymod & KMOD_SHIFT) != 0;
-
-          if (ctrl_pressed && shift_pressed) {
+          if (is_ctrl_down && is_shift_down) {
             saved_window_size_ = {window_width_, window_height_};
             std::cout << string_sprintf("Saved window size (%dx%d)", saved_window_size_[0], saved_window_size_[1]) << std::endl;
-          } else if (ctrl_pressed) {
+          } else if (is_ctrl_down) {
             restore_window_size(startup_window_size_);
             std::cout << string_sprintf("Restored startup window size (%dx%d)", startup_window_size_[0], startup_window_size_[1]) << std::endl;
-          } else if (shift_pressed) {
+          } else if (is_shift_down) {
             restore_window_size(saved_window_size_);
             std::cout << string_sprintf("Restored saved window size (%dx%d)", saved_window_size_[0], saved_window_size_[1]) << std::endl;
           }
@@ -2972,7 +2981,7 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_1:
         case SDLK_KP_1:
-          if (keymod & KMOD_SHIFT) {
+          if (is_shift_down) {
             // Fallback for layouts where F-keys are inconvenient
             toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Histogram)] = true;
           } else {
@@ -2984,7 +2993,7 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_2:
         case SDLK_KP_2:
-          if (keymod & KMOD_SHIFT) {
+          if (is_shift_down) {
             // Fallback for layouts where F-keys are inconvenient
             toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Vectorscope)] = true;
           } else {
@@ -2996,7 +3005,7 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_3:
         case SDLK_KP_3:
-          if (keymod & KMOD_SHIFT) {
+          if (is_shift_down) {
             // Fallback for layouts where F-keys are inconvenient
             toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Waveform)] = true;
           } else {
@@ -3053,14 +3062,14 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         }
         case SDLK_a:
-          if (keymod & KMOD_SHIFT) {
+          if (is_shift_down) {
             --frame_navigation_delta_;
           } else {
             frame_buffer_offset_delta_++;
           }
           break;
         case SDLK_d:
-          if (keymod & KMOD_SHIFT) {
+          if (is_shift_down) {
             frame_navigation_delta_++;
           } else {
             frame_buffer_offset_delta_--;
@@ -3080,7 +3089,7 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         }
         case SDLK_f:
-          if (keymod & KMOD_SHIFT) {
+          if (is_shift_down) {
             if (!save_selected_area_) {
               reset_crop_mode();
               save_selected_area_ = true;
@@ -3097,7 +3106,7 @@ void Display::handle_event(const SDL_Event& event) {
           print_mouse_position_and_color_ = mouse_is_inside_window_;
           break;
         case SDLK_TAB:
-          if (keymod & KMOD_SHIFT) {
+          if (is_shift_down) {
             active_right_index_ = (active_right_index_ + num_right_videos_ - 1) % num_right_videos_;
           } else {
             active_right_index_ = (active_right_index_ + 1) % num_right_videos_;
@@ -3132,7 +3141,7 @@ void Display::handle_event(const SDL_Event& event) {
           update_zoom_factor_and_move_offset(8.0F);
           break;
         case SDLK_r:
-          if (keymod & KMOD_SHIFT) {
+          if (is_shift_down) {
             toggle_crop_mode_for_side(CropTargetSide::Right);
           } else {
             update_zoom_factor(1.0F);
@@ -3141,37 +3150,37 @@ void Display::handle_event(const SDL_Event& event) {
           }
           break;
         case SDLK_LEFT:
-          seek_relative_ -= 1.0F;
+          seek_relative_ -= 1.0F * relative_seek_scale;
           break;
         case SDLK_DOWN:
-          seek_relative_ -= 10.0F;
+          seek_relative_ -= 10.0F * relative_seek_scale;
           break;
         case SDLK_PAGEDOWN:
-          seek_relative_ -= 600.0F;
+          seek_relative_ -= 600.0F * relative_seek_scale;
           break;
         case SDLK_RIGHT:
-          seek_relative_ += 1.0F;
+          seek_relative_ += 1.0F * relative_seek_scale;
           break;
         case SDLK_UP:
-          seek_relative_ += 10.0F;
+          seek_relative_ += 10.0F * relative_seek_scale;
           break;
         case SDLK_PAGEUP:
-          seek_relative_ += 600.0F;
+          seek_relative_ += 600.0F * relative_seek_scale;
           break;
         case SDLK_j:
-          update_playback_speed(playback_speed_level_ - 1);
+          update_playback_speed(-1.0F * playback_speed_scale);
           possibly_tick_playback_ = true;
           break;
         case SDLK_l:
-          if (keymod & KMOD_SHIFT) {
+          if (is_shift_down) {
             toggle_crop_mode_for_side(CropTargetSide::Left);
           } else {
-            update_playback_speed(playback_speed_level_ + 1);
+            update_playback_speed(1.0F * playback_speed_scale);
             tick_playback_ = true;
           }
           break;
         case SDLK_b:
-          if (keymod & KMOD_SHIFT) {
+          if (is_shift_down) {
             toggle_crop_mode_for_side(CropTargetSide::Both);
           }
           break;
@@ -3183,7 +3192,7 @@ void Display::handle_event(const SDL_Event& event) {
         case SDLK_EQUALS:  // for tenkeyless keyboards
           if (keymod & KMOD_ALT) {
             shift_right_frames_ += 100;
-          } else if (keymod & KMOD_CTRL) {
+          } else if (is_ctrl_down) {
             shift_right_frames_ += 10;
           } else {
             shift_right_frames_++;
@@ -3193,7 +3202,7 @@ void Display::handle_event(const SDL_Event& event) {
         case SDLK_KP_MINUS:
           if (keymod & KMOD_ALT) {
             shift_right_frames_ -= 100;
-          } else if (keymod & KMOD_CTRL) {
+          } else if (is_ctrl_down) {
             shift_right_frames_ -= 10;
           } else {
             shift_right_frames_--;
@@ -3201,7 +3210,7 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_y: {
           // Cycle through subtraction modes
-          const bool forward = (keymod & KMOD_SHIFT) == 0;
+          const bool forward = !is_shift_down;
 
           switch (diff_mode_) {
             case DiffMode::LegacyAbs:
