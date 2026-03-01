@@ -2877,6 +2877,7 @@ void Display::handle_event(const SDL_Event& event) {
       const SDL_Keycode keycode = event_.key.keysym.sym;
       const bool is_shift_down = (keymod & KMOD_SHIFT) != 0;
       const bool is_ctrl_down = (keymod & KMOD_CTRL) != 0;
+      const bool is_alt_down = (keymod & KMOD_ALT) != 0;
 
       const float relative_seek_scale = (is_shift_down || is_ctrl_down) ? 1.0F / RELATIVE_SEEK_SLOWDOWN_RATIO : 1.0F;
       const float playback_speed_scale = (is_shift_down || is_ctrl_down) ? 1.0F / PLAYBACK_SPEED_SLOWDOWN_RATIO : 1.0F;
@@ -3200,7 +3201,7 @@ void Display::handle_event(const SDL_Event& event) {
         case SDLK_PLUS:
         case SDLK_KP_PLUS:
         case SDLK_EQUALS:  // for tenkeyless keyboards
-          if (keymod & KMOD_ALT) {
+          if (is_alt_down) {
             shift_right_frames_ += 100;
           } else if (is_ctrl_down) {
             shift_right_frames_ += 10;
@@ -3210,7 +3211,7 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_MINUS:
         case SDLK_KP_MINUS:
-          if (keymod & KMOD_ALT) {
+          if (is_alt_down) {
             shift_right_frames_ -= 100;
           } else if (is_ctrl_down) {
             shift_right_frames_ -= 10;
