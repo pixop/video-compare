@@ -96,16 +96,26 @@ std::vector<std::string> expand_options_files(const argagg::option_results& resu
 }
 
 void print_controls() {
-  std::cout << "Controls:" << std::endl << std::endl;
+  const auto& sections = get_control_sections();
+  for (size_t i = 0; i < sections.size(); ++i) {
+    const auto& section = sections[i];
+    std::cout << section.title << ":" << std::endl << std::endl;
 
-  for (auto& key_description_pair : get_controls()) {
-    std::cout << string_sprintf(" %-12s %s", key_description_pair.first.c_str(), key_description_pair.second.c_str()) << std::endl;
-  }
+    for (size_t j = 0; j < section.entries.size(); ++j) {
+      const auto& entry = section.entries[j];
+      if (entry.key.empty()) {
+        print_wrapped(entry.description, 80);
+        if (j + 1 < section.entries.size()) {
+          std::cout << std::endl;
+        }
+      } else {
+        std::cout << string_sprintf(" %-16s %s", entry.key.c_str(), entry.description.c_str()) << std::endl;
+      }
+    }
 
-  for (auto& instruction : get_instructions()) {
-    std::cout << std::endl;
-
-    print_wrapped(instruction, 80);
+    if (i + 1 < sections.size()) {
+      std::cout << std::endl;
+    }
   }
 }
 

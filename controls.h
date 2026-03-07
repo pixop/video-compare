@@ -1,7 +1,16 @@
 #pragma once
 #include <string>
+#include <utility>
 #include <vector>
 
-const std::vector<std::pair<std::string, std::string>> get_controls();
+struct ControlEntry {
+  std::string key;
+  std::string description;
+};
 
-const std::vector<std::string> get_instructions();
+struct ControlSection {
+  std::string title;
+  std::vector<ControlEntry> entries;
+};
+
+const std::vector<ControlSection>& get_control_sections();

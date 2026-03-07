@@ -619,26 +619,37 @@ void Display::rebuild_help_textures() {
     help_textures_.push_back(texture);
   };
 
-  // Section header and spacing.
-  add_help_texture(small_font_, " ");
-  TTF_SetFontStyle(big_font_, TTF_STYLE_BOLD | TTF_STYLE_UNDERLINE);
-  add_help_texture(big_font_, "CONTROLS");
-  TTF_SetFontStyle(big_font_, TTF_STYLE_NORMAL);
   add_help_texture(small_font_, " ");
 
-  // Key bindings list with alternating colors for readability.
-  for (auto& key_description_pair : get_controls()) {
-    primary_color = !primary_color;
-    add_help_texture(small_font_, string_sprintf(" %-12s %s", key_description_pair.first.c_str(), key_description_pair.second.c_str()));
-  }
+  const auto& sections = get_control_sections();
+  for (size_t i = 0; i < sections.size(); ++i) {
+    const auto& section = sections[i];
 
-  add_help_texture(big_font_, " ");
+    // Force section headers to white, underlined, and uppercase.
+    primary_color = true;
 
-  // Instruction paragraphs with spacing between entries.
-  for (auto& text : get_instructions()) {
-    primary_color = !primary_color;
-    add_help_texture(small_font_, text);
-    add_help_texture(small_font_, " ");
+    TTF_SetFontStyle(big_font_, TTF_STYLE_BOLD | TTF_STYLE_UNDERLINE);
+    add_help_texture(big_font_, to_upper_case(section.title));
+    TTF_SetFontStyle(big_font_, TTF_STYLE_NORMAL);
+
+    // Reset so the first section item toggles to secondary color (light yellow).
+    primary_color = true;
+
+    for (size_t j = 0; j < section.entries.size(); ++j) {
+      const auto& entry = section.entries[j];
+      primary_color = !primary_color;
+
+      if (entry.key.empty()) {
+        add_help_texture(small_font_, entry.description);
+        add_help_texture(small_font_, " ");
+      } else {
+        add_help_texture(small_font_, string_sprintf(" %-16s %s", entry.key.c_str(), entry.description.c_str()));
+      }
+    }
+
+    if (i + 1 < sections.size()) {
+      add_help_texture(small_font_, " ");
+    }
   }
 }
 
