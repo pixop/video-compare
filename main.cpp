@@ -616,7 +616,7 @@ int main(int argc, char** argv) {
     } else if (args["help"] || args.count() == 0) {
       std::ostringstream usage;
       usage << "video-compare " << VersionInfo::version << " " << VersionInfo::copyright << std::endl << std::endl;
-      usage << "Usage: " << argv[0] << " [OPTIONS]... FILE1 FILE2 [FILE3] [FILE4] ..." << std::endl << std::endl;
+      usage << "Usage: " << argv[0] << " [OPTIONS]... LEFT RIGHT [RIGHT2 RIGHT3 ...]" << std::endl << std::endl;
       argagg::fmt_ostream fmt(std::cerr);
       fmt << usage.str() << argparser;
     } else {
