@@ -48,7 +48,7 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euxo pipefail
-          ./download_and_extract_windows_deps.sh sdl2 release-2.32.8
+          ./download_and_extract_windows_deps.sh sdl2 release-2.32.10
 
       - name: Download SDL2_ttf
         shell: msys2 {0}

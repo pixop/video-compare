@@ -5,7 +5,7 @@ CXXFLAGS = -g3 -Ofast -std=c++14 -D__STDC_CONSTANT_MACROS \
 
 ifneq ($(filter MINGW%,$(shell uname)),)
   FFMPEG_VERSION = 8.0.1-full_build-shared
-  SDL2_VERSION = 2.32.8
+  SDL2_VERSION = 2.32.10
   SDL2_TTF_VERSION = 2.24.0
 
   FFMPEG_PATH = ffmpeg-$(FFMPEG_VERSION)
