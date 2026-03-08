@@ -248,7 +248,7 @@ Left-click the mouse to perform a time seek based on the horizontal position of 
 
 ### Other
 
-**Hold `Ctrl` or `Shift`** for smaller relative seek, playback-speed, and zoom adjustments where available.  
+Hold `Ctrl` or `Shift` for smaller relative seek, playback-speed, and zoom adjustments where available.
 Availability may depend on conflicts with application shortcuts or operating system bindings.
 
 ## Build
