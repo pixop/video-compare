@@ -245,6 +245,7 @@ Display::Display(const int display_number,
       video_height_{0},
       duration_{duration},
       subtraction_mode_{start_in_subtraction_mode},
+      pending_verbose_print_{verbose},
       wheel_sensitivity_{wheel_sensitivity} {
   const int auto_width = mode == Mode::HStack ? width * 2 : width;
   const int auto_height = mode == Mode::VStack ? height * 2 : height;
@@ -391,10 +392,6 @@ Display::Display(const int display_number,
   last_window_title_.clear();
 
   reinitialize_video_dimensions(width, height);
-
-  if (verbose) {
-    print_verbose_info();
-  }
 
   rebuild_side_ui_textures();
 
@@ -2813,9 +2810,15 @@ void Display::handle_event(const SDL_Event& event) {
         case SDL_WINDOWEVENT_ENTER:
           mouse_is_inside_window_ = true;
           break;
+        case SDL_WINDOWEVENT_SHOWN:
         case SDL_WINDOWEVENT_RESIZED:
         case SDL_WINDOWEVENT_SIZE_CHANGED:
           handle_window_resize();
+
+          if (pending_verbose_print_) {
+            print_verbose_info();
+            pending_verbose_print_ = false;
+          }
           break;
       }
       break;

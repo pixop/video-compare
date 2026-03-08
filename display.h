@@ -162,6 +162,7 @@ class Display {
   bool show_right_{true};
   bool show_hud_{true};
   bool subtraction_mode_{false};
+  bool pending_verbose_print_{false};
   float seek_relative_{0.0F};
   int frame_buffer_offset_delta_{0};
   int frame_navigation_delta_{0};
