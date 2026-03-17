@@ -60,7 +60,7 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euxo pipefail
-          mingw32-make
+          mingw32-make -j$(nproc)
 
       - name: Copy runtime DLLs
         shell: msys2 {0}
@@ -217,7 +217,7 @@ jobs:
             libsdl2-ttf-dev
 
       - name: Build
-        run: make
+        run: make -j$(nproc)
 
       - name: Verify build output
         run: |
@@ -259,7 +259,7 @@ jobs:
           brew install ffmpeg sdl2 sdl2_ttf
 
       - name: Build
-        run: make
+        run: make -j$(nproc)
 
       - name: Verify build output
         run: |
