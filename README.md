@@ -291,38 +291,42 @@ Note that root privileges are required to perform this operation in most environ
 ## Notes
 
 1. Audio playback is not supported.
-
 2. Keep time-shifts below a few seconds for the best experience.
-
 3. Seeks require re-synchronization on the closest keyframe (i.e., I-frame).
 
 ## Practical tips
 
-### Send To integration in Windows File Explorer
+### Send To Integration in Windows File Explorer
 
-You can fire up the tool directly from the File Explorer when you don't need to specify
-any other arguments than the inputs via Right click -> Send To -> video-compare.
+You can launch `video-compare` directly from Windows File Explorer when you only need to specify input files. Simply use:
 
-Here is how this integration works:
+**Right click → Send to → video-compare**
+
+#### How it works
 
 https://user-images.githubusercontent.com/8549626/166630445-c8c511b7-005f-48aa-83bc-0eb9676cfa2a.mp4
 
-You can do that quickly by selecting two files, then right clicking any of them, pressing N (focuses se**n**d to),
-then V (selects **v**ideo-compare).
+For quick access, select two files, right-click either one, then press:
 
-To get video-compare to appear in the `Send To` field you will need to open the `send to` folder, which
-you can access by typing `shell:sendto` in Run (Windows + R), then simply make a shortcut to `video-compare.exe`.
+* **N** to focus *Send to*
+* **V** to select *video-compare*
 
-Thanks to [couleurm](https://github.com/couleurm) for the sharing this tip and creating the screen recording above.
+#### Setup
+
+To make *video-compare* appear in the **Send to** menu:
+
+1. Open the Run dialog (**Windows + R**)
+2. Type `shell:sendto` and press Enter
+3. Create a shortcut to `video-compare.exe` in this folder
+
+Thanks to [couleurm](https://github.com/couleurm) for sharing this tip and providing the screen recording.
 
 ### More frontend options for Windows users
 
 For Windows users, the community has shared several frontend options to complement the command-line functionality:
 
 1. **Beyond Compare** integration: Launch `video-compare` directly from the interface.
-
 2. **Total Commander** integration: Add a toolbar button to open selected videos.
-
 3. **[VideoCompareGUI](https://github.com/TetzkatLipHoka/VideoCompareGUI)**: A standalone graphical utility that simplifies launching `video-compare`.
 
 For details, check out the [open GitHub issue thread](https://github.com/pixop/video-compare/issues/81).
