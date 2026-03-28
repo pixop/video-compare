@@ -1242,7 +1242,8 @@ void VideoCompare::compare() {
       bool adjusting = false;
 
       // keep showing currently displayed frame for another iteration?
-      skip_update = skip_update || (timer_->us_until_target() - refresh_time_deque.average()) > 0;
+      const bool paused_forward_step = !display_->get_play() && forward_navigate_frames > 0;
+      skip_update = skip_update || ((timer_->us_until_target() - refresh_time_deque.average()) > 0 && !paused_forward_step);
       const bool fetch_next_frame = display_->get_play() || (forward_navigate_frames > 0);
 
       // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
@@ -1315,7 +1316,8 @@ void VideoCompare::compare() {
             if (frame_number > 0) {
               const int64_t play_frame_delay = compute_frame_delay(left.frame_->pts - left.pts_, right_ptr->frame_->pts - right_ptr->pts_ - right_ptr->effective_time_shift_);
 
-              timer_->shift_target(play_frame_delay / display_->get_playback_speed_factor());
+              const float pace_divisor = display_->get_play() ? display_->get_playback_speed_factor() : 1.0f;
+              timer_->shift_target(static_cast<int64_t>(play_frame_delay / pace_divisor));
             } else {
               timer_->update();
             }
