@@ -1,3 +1,7 @@
+## Acknowledgments & License
+
+This project is a fork of [pixop/video-compare](https://github.com/pixop/video-compare), created by Jon Frydensbjerg (jon@pixop.com), which itself builds on the video player project by [pockethook](https://github.com/pockethook/player). The GUI extension adds a graphical interface using [Dear ImGui](https://github.com/ocornut/imgui) (MIT) and [portable-file-dialogs](https://github.com/samhocevar/portable-file-dialogs) (WTFPL) on top of the existing FFmpeg/SDL2 architecture. This project is licensed under the **GNU General Public License v2.0 only** (GPL-2.0-only), in accordance with the upstream license. See [LICENSE.md](LICENSE.md) for the full license text.
+
 # <img src="https://github.com/user-attachments/assets/da615466-683e-4cc5-8380-32a98d743ba0" alt="Logo" width="32"/>&nbsp; video-compare
 
 [![GitHub release](https://img.shields.io/github/release/pixop/video-compare)](https://github.com/pixop/video-compare/releases)
