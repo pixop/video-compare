@@ -21,6 +21,10 @@ video-compare
 # Videos
 *.mov
 
+# Build directories
+build/
+build-*/
+
 # Mac OS X stuff
 .DS_Store
 

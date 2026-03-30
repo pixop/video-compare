@@ -912,6 +912,15 @@ void VideoCompare::compare() {
       while (SDL_PollEvent(&event) != 0) {
         display_->mark_input_received();
 
+#ifdef ENABLE_GUI
+        // Let ImGui process the event first; if it consumes the event
+        // (mouse over widget, keyboard in text field), skip scope/display handling.
+        const bool consumed_by_gui = display_->gui().process_event(event);
+        if (consumed_by_gui) {
+          continue;
+        }
+#endif
+
         const uint32_t wid = SDLEventInfo::window_id(event);
         const bool consumed_by_scope = scope_manager_->handle_event(event);
         if (!consumed_by_scope) {

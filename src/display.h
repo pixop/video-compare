@@ -14,6 +14,9 @@
 #include "row_workers.h"
 #include "scope_window.h"
 #include "string_utils.h"
+#ifdef ENABLE_GUI
+#include "gui_manager.h"
+#endif
 extern "C" {
 #include <libavutil/frame.h>
 }
@@ -249,6 +252,10 @@ class Display {
   SDL_Texture* video_texture_linear_{nullptr};
   SDL_Texture* video_texture_nn_{nullptr};
 
+#ifdef ENABLE_GUI
+  GuiManager gui_manager_;
+#endif
+
   SDL_Event event_;
   int mouse_x_;
   int mouse_y_;
@@ -449,4 +456,9 @@ class Display {
   size_t get_num_right_videos() const;
   size_t get_active_right_index() const;
   void set_active_right_index(size_t index);
+
+#ifdef ENABLE_GUI
+  // GUI integration
+  GuiManager& gui() { return gui_manager_; }
+#endif
 };

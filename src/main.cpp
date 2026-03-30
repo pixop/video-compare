@@ -14,6 +14,9 @@
 #include "version.h"
 #include "video_compare.h"
 #include "vmaf_calculator.h"
+#ifdef ENABLE_GUI
+#include "gui_launcher.h"
+#endif
 
 static const std::string AUTO_OPTIONS_FILE_NAME = "video-compare.opt";
 
@@ -623,12 +626,24 @@ int main(int argc, char** argv) {
       find_matching_video_decoders(args["find-decoders"]);
     } else if (args["find-hwaccels"]) {
       find_matching_hw_accels(args["find-hwaccels"]);
-    } else if (args["help"] || args.count() == 0) {
+    } else if (args["help"]) {
       std::ostringstream usage;
       usage << "video-compare " << VersionInfo::version << " " << VersionInfo::copyright << std::endl << std::endl;
       usage << "Usage: " << argv[0] << " [OPTIONS]... LEFT RIGHT [RIGHT2 RIGHT3 ...]" << std::endl << std::endl;
       argagg::fmt_ostream fmt(std::cerr);
       fmt << usage.str() << argparser;
+    } else if (args.count() == 0) {
+#ifdef ENABLE_GUI
+      // No files provided — launch graphical launcher
+      GuiLauncher launcher;
+      exit_code = launcher.run();
+#else
+      std::ostringstream usage;
+      usage << "video-compare " << VersionInfo::version << " " << VersionInfo::copyright << std::endl << std::endl;
+      usage << "Usage: " << argv[0] << " [OPTIONS]... LEFT RIGHT [RIGHT2 RIGHT3 ...]" << std::endl << std::endl;
+      argagg::fmt_ostream fmt(std::cerr);
+      fmt << usage.str() << argparser;
+#endif
     } else {
       VideoCompareConfig config;
 

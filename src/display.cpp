@@ -339,6 +339,10 @@ Display::Display(const int display_number,
 
   renderer_ = check_sdl(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "renderer");
 
+#ifdef ENABLE_GUI
+  gui_manager_.init(window_, renderer_);
+#endif
+
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
   SDL_RenderClear(renderer_);
   SDL_RenderPresent(renderer_);
@@ -401,6 +405,10 @@ Display::Display(const int display_number,
 }
 
 Display::~Display() {
+#ifdef ENABLE_GUI
+  gui_manager_.shutdown();
+#endif
+
   SDL_DestroyTexture(video_texture_linear_);
   SDL_DestroyTexture(video_texture_nn_);
   SDL_DestroyTexture(side_ui_[LEFT.as_simple_index()].text_texture);
@@ -2181,6 +2189,10 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   SDL_SetRenderDrawColor(renderer_, BACKGROUND_COLOR.r, BACKGROUND_COLOR.g, BACKGROUND_COLOR.b, BACKGROUND_COLOR.a);
   SDL_RenderClear(renderer_);
 
+#ifdef ENABLE_GUI
+  gui_manager_.begin_frame();
+#endif
+
   // mouse video x-position stretched to full window extent
   const float full_ws_mouse_video_x = static_cast<float>(mouse_x_ * window_width_ / (window_width_ - 1)) * video_to_window_width_factor_;
 
@@ -2548,6 +2560,10 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   if (crop_mode_) {
     possibly_apply_crop();
   }
+
+#ifdef ENABLE_GUI
+  gui_manager_.end_frame();
+#endif
 
   SDL_RenderPresent(renderer_);
 
