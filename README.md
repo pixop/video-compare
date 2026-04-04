@@ -122,9 +122,9 @@ Explicit decoder selection for the right video:
 
     video-compare --right-decoder h264_cuvid video1.mp4 video2.mp4
 
-Compare an AV1 video against itself with and without film grain synthesis applied (requires `libdav1d`):
+Compare an AV1 video against itself with and without film grain synthesis applied (requires `libdav1d`; `export_side_data=film_grain` disables grain synthesis during decoding):
 
-    video-compare input_av1.mkv __ --right-decoder libdav1d:export_side_data=film_grain
+    video-compare --right-decoder libdav1d:export_side_data=film_grain input_av1.mkv __
 
 Set the same hardware acceleration type for both videos:
 
