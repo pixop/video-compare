@@ -122,6 +122,10 @@ Explicit decoder selection for the right video:
 
     video-compare --right-decoder h264_cuvid video1.mp4 video2.mp4
 
+Compare an AV1 video against itself with and without film grain synthesis applied (requires `libdav1d`):
+
+    video-compare input_av1.mkv __ --right-decoder libdav1d:export_side_data=film_grain
+
 Set the same hardware acceleration type for both videos:
 
     video-compare --hwaccel cuda video1.mp4 video2.mp4
