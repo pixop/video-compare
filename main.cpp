@@ -9,6 +9,7 @@
 #include <vector>
 #include "argagg.h"
 #include "controls.h"
+#include "runtime_notes.h"
 #include "side_aware_logger.h"
 #include "string_utils.h"
 #include "version.h"
@@ -938,6 +939,8 @@ int main(int argc, char** argv) {
       if (args["libvmaf-options"]) {
         VMAFCalculator::instance().set_libvmaf_options(args["libvmaf-options"]);
       }
+
+      maybe_log_runtime_note();
 
       VideoCompare compare{config};
       compare();
