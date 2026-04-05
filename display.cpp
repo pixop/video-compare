@@ -231,6 +231,7 @@ Display::Display(const int display_number,
                  const double duration,
                  const float wheel_sensitivity,
                  const bool start_in_subtraction_mode,
+                 const bool start_in_fullscreen,
                  const std::string& left_file_name,
                  const std::string& right_file_name)
     : display_number_{display_number},
@@ -244,6 +245,7 @@ Display::Display(const int display_number,
       video_width_{0},
       video_height_{0},
       duration_{duration},
+      start_in_fullscreen_{start_in_fullscreen},
       subtraction_mode_{start_in_subtraction_mode},
       pending_verbose_print_{verbose},
       wheel_sensitivity_{wheel_sensitivity} {
@@ -362,8 +364,9 @@ Display::Display(const int display_number,
 
   drawable_to_window_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
   drawable_to_window_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);
-  video_to_window_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::HStack) ? 2.F : 1.F);
-  video_to_window_height_factor_ = static_cast<float>(video_height_) / static_cast<float>(window_height_) * ((mode_ == Mode::VStack) ? 2.F : 1.F);
+  content_window_ = SDL_Rect{0, 0, window_width_, window_height_};
+  video_to_window_width_factor_ = 1.0F;
+  video_to_window_height_factor_ = 1.0F;
 
   font_scale_ = (drawable_to_window_width_factor_ + drawable_to_window_height_factor_) / 2.0F;
 
@@ -398,6 +401,10 @@ Display::Display(const int display_number,
   refresh_display_side_mapping();
 
   rebuild_help_textures();
+
+  if (start_in_fullscreen_) {
+    set_fullscreen(true);
+  }
 }
 
 Display::~Display() {
@@ -460,7 +467,77 @@ void Display::apply_window_size_and_relayout(const int target_w, const int targe
   handle_window_resize(true, force_layout_refresh);
 }
 
-void Display::resize_window_for_mode_switch() {
+void Display::set_fullscreen(const bool fullscreen) {
+  int current_window_w = window_width_;
+  int current_window_h = window_height_;
+  SDL_GetWindowSize(window_, &current_window_w, &current_window_h);
+  const Uint32 flags_before = SDL_GetWindowFlags(window_);
+  const bool sdl_fullscreen_before = (flags_before & SDL_WINDOW_FULLSCREEN) != 0;
+
+  if (fullscreen == sdl_fullscreen_before) {
+    return;
+  }
+
+  if (fullscreen) {
+    windowed_size_before_fullscreen_ = {current_window_w, current_window_h};
+  }
+
+  if (SDL_SetWindowFullscreen(window_, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0) != 0) {
+    set_pending_message(string_sprintf("Unable to %s fullscreen (%s)", fullscreen ? "enter" : "exit", SDL_GetError()));
+    return;
+  }
+
+  const bool sdl_fullscreen_after = (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
+
+  if (sdl_fullscreen_after != fullscreen) {
+    set_pending_message(string_sprintf("Unable to %s fullscreen mode", fullscreen ? "enter" : "exit"));
+    return;
+  }
+
+  if (!fullscreen && windowed_size_before_fullscreen_[0] > 0 && windowed_size_before_fullscreen_[1] > 0) {
+    apply_window_size_and_relayout(std::max(MIN_WINDOW_WIDTH, windowed_size_before_fullscreen_[0]), std::max(MIN_WINDOW_HEIGHT, windowed_size_before_fullscreen_[1]), true);
+  } else {
+    handle_window_resize(true, true);
+  }
+}
+
+bool Display::detect_fullscreen_like_state() const {
+  const Uint32 flags = SDL_GetWindowFlags(window_);
+  if ((flags & SDL_WINDOW_FULLSCREEN) != 0) {
+    return true;
+  }
+
+  if ((flags & (SDL_WINDOW_MAXIMIZED | SDL_WINDOW_BORDERLESS)) == 0) {
+    return false;
+  }
+
+  int window_x = 0;
+  int window_y = 0;
+  int window_w = 0;
+  int window_h = 0;
+  SDL_GetWindowSize(window_, &window_w, &window_h);
+  SDL_GetWindowPosition(window_, &window_x, &window_y);
+
+  int display_index = SDL_GetWindowDisplayIndex(window_);
+  if (display_index < 0) {
+    display_index = display_number_;
+  }
+
+  SDL_Rect display_bounds{};
+  SDL_Rect usable_bounds{};
+  if (SDL_GetDisplayBounds(display_index, &display_bounds) != 0 || SDL_GetDisplayUsableBounds(display_index, &usable_bounds) != 0) {
+    return false;
+  }
+
+  constexpr int tolerance = 4;
+  const auto near = [&](const int a, const int b) { return std::abs(a - b) <= tolerance; };
+  const bool fills_display_bounds = near(window_x, display_bounds.x) && near(window_y, display_bounds.y) && near(window_w, display_bounds.w) && near(window_h, display_bounds.h);
+  const bool fills_usable_bounds = near(window_x, usable_bounds.x) && near(window_y, usable_bounds.y) && near(window_w, usable_bounds.w) && near(window_h, usable_bounds.h);
+
+  return fills_display_bounds || fills_usable_bounds;
+}
+
+std::array<int, 2> Display::compute_mode_switch_target_window_size() const {
   const float target_aspect_ratio = std::max(compute_content_aspect_ratio(), 0.001F);
   const double current_area = static_cast<double>(std::max(window_width_, MIN_WINDOW_WIDTH)) * static_cast<double>(std::max(window_height_, MIN_WINDOW_HEIGHT));
 
@@ -489,9 +566,25 @@ void Display::resize_window_for_mode_switch() {
     target_h = std::max(min_h, std::min(target_h, max_h));
   }
 
+  return {target_w, target_h};
+}
+
+void Display::resize_window_for_mode_switch() {
+  const auto target_size = compute_mode_switch_target_window_size();
+  const int target_w = target_size[0];
+  const int target_h = target_size[1];
+  const float target_aspect_ratio = std::max(compute_content_aspect_ratio(), 0.001F);
+
   // Keep WINDOW aspect lock consistent with the newly selected display mode.
   if (aspect_lock_mode_ == AspectLockMode::Window) {
     window_aspect_ratio_ = target_aspect_ratio;
+  }
+
+  if (is_fullscreen_) {
+    // Keep the future windowed restore size in sync with mode changes done in fullscreen.
+    windowed_size_before_fullscreen_ = target_size;
+    handle_window_resize(true, true);
+    return;
   }
 
   apply_window_size_and_relayout(target_w, target_h, true);
@@ -531,12 +624,10 @@ void Display::reinitialize_video_dimensions(const unsigned width, const unsigned
   left_planes_ = {nullptr, nullptr, nullptr};
   right_planes_ = {nullptr, nullptr, nullptr};
 
-  video_to_window_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::HStack) ? 2.F : 1.F);
-  video_to_window_height_factor_ = static_cast<float>(video_height_) / static_cast<float>(window_height_) * ((mode_ == Mode::VStack) ? 2.F : 1.F);
-
   move_offset_ = Vector2D((global_center_.x() - 0.5F) * static_cast<float>(video_width_), (global_center_.y() - 0.5F) * static_cast<float>(video_height_));
 
-  handle_window_resize(true);
+  // Force relayout because video dimensions changed even if window size did not.
+  handle_window_resize(true, true);
   update_window_title_with_current_roi();
 }
 
@@ -714,6 +805,33 @@ float Display::compute_content_aspect_ratio() const {
   return content_w / std::max(content_h, 1.0F);
 }
 
+void Display::update_content_window_layout() {
+  const int safe_window_w = std::max(1, window_width_);
+  const int safe_window_h = std::max(1, window_height_);
+
+  content_window_ = SDL_Rect{0, 0, safe_window_w, safe_window_h};
+
+  if (is_fullscreen_) {
+    const float content_aspect_ratio = std::max(compute_content_aspect_ratio(), 0.001F);
+    const float window_aspect_ratio = static_cast<float>(safe_window_w) / static_cast<float>(safe_window_h);
+
+    if (window_aspect_ratio > content_aspect_ratio) {
+      content_window_.h = safe_window_h;
+      content_window_.w = std::max(1, static_cast<int>(std::round(static_cast<float>(content_window_.h) * content_aspect_ratio)));
+      content_window_.x = (safe_window_w - content_window_.w) / 2;
+    } else {
+      content_window_.w = safe_window_w;
+      content_window_.h = std::max(1, static_cast<int>(std::round(static_cast<float>(content_window_.w) / content_aspect_ratio)));
+      content_window_.y = (safe_window_h - content_window_.h) / 2;
+    }
+  }
+
+  const float content_w = static_cast<float>(std::max(1, video_width_)) * ((mode_ == Mode::HStack) ? 2.0F : 1.0F);
+  const float content_h = static_cast<float>(std::max(1, video_height_)) * ((mode_ == Mode::VStack) ? 2.0F : 1.0F);
+  video_to_window_width_factor_ = content_w / static_cast<float>(std::max(1, content_window_.w));
+  video_to_window_height_factor_ = content_h / static_cast<float>(std::max(1, content_window_.h));
+}
+
 void Display::handle_window_resize(const bool reset_forced_size_guard, const bool force_layout_refresh) {
   if (reset_forced_size_guard) {
     last_forced_window_size_ = {-1, -1};
@@ -727,6 +845,9 @@ void Display::handle_window_resize(const bool reset_forced_size_guard, const boo
   // Query both logical window size and drawable size since they can diverge (e.g. high-DPI).
   SDL_GL_GetDrawableSize(window_, &new_drawable_w, &new_drawable_h);
   SDL_GetWindowSize(window_, &new_window_w, &new_window_h);
+
+  bool was_fullscreen = is_fullscreen_;
+  is_fullscreen_ = detect_fullscreen_like_state();
 
   auto force_window_size = [&](int width, int height) {
     last_forced_window_size_ = {width, height};
@@ -742,7 +863,7 @@ void Display::handle_window_resize(const bool reset_forced_size_guard, const boo
   }
 
   // If aspect-ratio locking is enabled, snap the resize to the selected ratio.
-  if (!skip_forced_size && aspect_lock_mode_ != AspectLockMode::Off) {
+  if (!skip_forced_size && !is_fullscreen_ && aspect_lock_mode_ != AspectLockMode::Off) {
     const float target_aspect_ratio = (aspect_lock_mode_ == AspectLockMode::Window) ? window_aspect_ratio_ : compute_content_aspect_ratio();
     const float safe_target_aspect_ratio = std::max(target_aspect_ratio, 0.001F);
     const float current_ratio = static_cast<float>(new_window_w) / static_cast<float>(new_window_h);
@@ -788,8 +909,7 @@ void Display::handle_window_resize(const bool reset_forced_size_guard, const boo
 
   drawable_to_window_width_factor_ = static_cast<float>(drawable_width_) / static_cast<float>(window_width_);
   drawable_to_window_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);
-  video_to_window_width_factor_ = static_cast<float>(video_width_) / static_cast<float>(window_width_) * ((mode_ == Mode::HStack) ? 2.F : 1.F);
-  video_to_window_height_factor_ = static_cast<float>(video_height_) / static_cast<float>(window_height_) * ((mode_ == Mode::VStack) ? 2.F : 1.F);
+  update_content_window_layout();
 
   font_scale_ = (drawable_to_window_width_factor_ + drawable_to_window_height_factor_) / 2.0F;
 
@@ -816,6 +936,17 @@ void Display::handle_window_resize(const bool reset_forced_size_guard, const boo
   // Clamp overlay scroll positions to the new size and refresh ROI-dependent title.
   clamp_overlay_offsets();
   update_window_title_with_current_roi();
+
+  // Trigger a synthetic no-op mouse move after fullscreen transitions to force
+  // slider/UI refresh without requiring physical mouse movement.
+  if (was_fullscreen != is_fullscreen_) {
+    int global_mouse_x = 0;
+    int global_mouse_y = 0;
+    SDL_GetGlobalMouseState(&global_mouse_x, &global_mouse_y);
+    SDL_WarpMouseGlobal(global_mouse_x, global_mouse_y);
+
+    set_pending_message(string_sprintf("Fullscreen mode set to '%s'", is_fullscreen_ ? "ON" : "OFF"));
+  }
 }
 
 void Display::convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi) {
@@ -1212,7 +1343,7 @@ void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_
   save_osd_frame_thread.join();
 
   if (!error_occurred) {
-    std::cout << "Saved " << string_sprintf("%s, %s and %s", left_filename.c_str(), right_filename.c_str(), osd_filename.c_str()) << std::endl;
+    notify_user(string_sprintf("Saved %s, %s and %s", left_filename.c_str(), right_filename.c_str(), osd_filename.c_str()));
 
     saved_image_number_++;
   }
@@ -2227,14 +2358,16 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   SDL_SetRenderDrawColor(renderer_, BACKGROUND_COLOR.r, BACKGROUND_COLOR.g, BACKGROUND_COLOR.b, BACKGROUND_COLOR.a);
   SDL_RenderClear(renderer_);
 
-  // mouse video x-position stretched to full window extent
-  const float full_ws_mouse_video_x = static_cast<float>(mouse_x_ * window_width_ / (window_width_ - 1)) * video_to_window_width_factor_;
+  // mouse video x-position stretched to the active content area (letterboxed in fullscreen)
+  const float content_mouse_x = static_cast<float>(mouse_x_ - content_window_.x);
+  const float safe_content_window_w = static_cast<float>(std::max(1, content_window_.w));
+  const float full_ws_mouse_video_x = (content_mouse_x * safe_content_window_w / std::max(1.0F, safe_content_window_w - 1.0F)) * video_to_window_width_factor_;
 
   // mouse x-position in video coordinates
   const float video_mouse_x = (full_ws_mouse_video_x - zoom_rect.start.x()) * static_cast<float>(video_width_) / zoom_rect.size.x();
 
   // the nearest texel border to the mouse x-position in window coordinates
-  const float video_texel_clamped_mouse_x = (std::round(video_mouse_x) * zoom_rect.size.x() / static_cast<float>(video_width_) + zoom_rect.start.x()) / video_to_window_width_factor_;
+  const float video_texel_clamped_mouse_x = static_cast<float>(content_window_.x) + (std::round(video_mouse_x) * zoom_rect.size.x() / static_cast<float>(video_width_) + zoom_rect.start.x()) / video_to_window_width_factor_;
 
   if (show_left_ || show_right_) {
     const int split_x = (compare_mode && mode_ == Mode::Split) ? clamp_range(std::round(video_mouse_x), 0.0F, float(video_width_)) : show_left_ ? video_width_ : 0;
@@ -2610,6 +2743,15 @@ void Display::set_pending_message(const std::string& message) {
   pending_message_ = message;
 }
 
+void Display::notify_user(const std::string& message) {
+  if (!is_fullscreen_) {
+    // Avoid cluttering the screen with messages in windowed mode
+    std::cout << message << std::endl;
+  } else {
+    set_pending_message(message);
+  }
+}
+
 void Display::focus_main_window() {
   if (window_ != nullptr) {
     SDL_RaiseWindow(window_);
@@ -2623,8 +2765,8 @@ float Display::compute_zoom_factor(const float zoom_level) const {
 Vector2D Display::compute_relative_move_offset(const Vector2D& zoom_point, const float zoom_factor) const {
   const float zoom_factor_change = zoom_factor / global_zoom_factor_;
 
-  const Vector2D view_center(static_cast<float>(window_width_) / (mode_ == Mode::HStack ? 4.0F : 2.0F) * video_to_window_width_factor_,
-                             static_cast<float>(window_height_) / (mode_ == Mode::VStack ? 4.0F : 2.0F) * video_to_window_height_factor_);
+  const Vector2D view_center((static_cast<float>(content_window_.x) + static_cast<float>(content_window_.w) / 2.0F) * video_to_window_width_factor_,
+                             (static_cast<float>(content_window_.y) + static_cast<float>(content_window_.h) / 2.0F) * video_to_window_height_factor_);
 
   // the center point has to be moved relative to the zoom point
   const Vector2D new_move_offset = move_offset_ - (view_center + move_offset_ - zoom_point) * (1.0F - zoom_factor_change);
@@ -2662,8 +2804,10 @@ Display::ZoomRect Display::compute_zoom_rect() const {
 Vector2D Display::window_to_video_position(const int window_x_position, const int window_y_position, const Display::ZoomRect& zoom_rect, const bool floor_result) const {
   auto floor_or_ceil = [&](const float value) -> int { return floor_result ? std::floor(value) : std::ceil(value); };
 
-  const int video_x = floor_or_ceil((static_cast<float>(window_x_position) * video_to_window_width_factor_ - zoom_rect.start.x()) * static_cast<float>(video_width_) / zoom_rect.size.x());
-  const int video_y = floor_or_ceil((static_cast<float>(window_y_position) * video_to_window_height_factor_ - zoom_rect.start.y()) * static_cast<float>(video_height_) / zoom_rect.size.y());
+  const float window_x_in_content = static_cast<float>(window_x_position - content_window_.x);
+  const float window_y_in_content = static_cast<float>(window_y_position - content_window_.y);
+  const int video_x = floor_or_ceil((window_x_in_content * video_to_window_width_factor_ - zoom_rect.start.x()) * static_cast<float>(video_width_) / zoom_rect.size.x());
+  const int video_y = floor_or_ceil((window_y_in_content * video_to_window_height_factor_ - zoom_rect.start.y()) * static_cast<float>(video_height_) / zoom_rect.size.y());
 
   return Vector2D(video_x, video_y);
 }
@@ -2859,6 +3003,11 @@ void Display::handle_event(const SDL_Event& event) {
         case SDL_WINDOWEVENT_SHOWN:
         case SDL_WINDOWEVENT_RESIZED:
         case SDL_WINDOWEVENT_SIZE_CHANGED:
+        case SDL_WINDOWEVENT_MAXIMIZED:
+        case SDL_WINDOWEVENT_RESTORED:
+#ifdef SDL_WINDOWEVENT_DISPLAY_CHANGED
+        case SDL_WINDOWEVENT_DISPLAY_CHANGED:
+#endif
           handle_window_resize();
 
           if (pending_verbose_print_) {
@@ -2882,7 +3031,7 @@ void Display::handle_event(const SDL_Event& event) {
 
         // logic ported from YUView's MoveAndZoomableView.cpp with thanks :)
         if (new_global_zoom_factor >= 0.001 && new_global_zoom_factor <= 10000) {
-          const Vector2D zoom_point = Vector2D(static_cast<float>(mouse_x_) * video_to_window_width_factor_, static_cast<float>(mouse_y_) * video_to_window_height_factor_);
+          const Vector2D zoom_point = Vector2D(static_cast<float>(mouse_x_ - content_window_.x) * video_to_window_width_factor_, static_cast<float>(mouse_y_ - content_window_.y) * video_to_window_height_factor_);
           update_move_offset(compute_relative_move_offset(zoom_point, new_global_zoom_factor));
           update_zoom_factor(new_global_zoom_factor);
         }
@@ -2993,7 +3142,7 @@ void Display::handle_event(const SDL_Event& event) {
         if (target_index != SIZE_MAX) {
           if (target_index < num_right_videos_) {
             active_right_index_ = target_index;
-            std::cout << string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_) << std::endl;
+            notify_user(string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_));
           }
           break;
         }
@@ -3010,6 +3159,20 @@ void Display::handle_event(const SDL_Event& event) {
           pending_crop_request_ = PendingCropRequest{};
           pending_crop_request_.clear_requested = true;
           reset_crop_mode();
+          break;
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+          if (is_alt_down) {
+            const bool sdl_fullscreen_now = (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
+
+            if (sdl_fullscreen_now) {
+              set_fullscreen(false);
+            } else if (detect_fullscreen_like_state()) {
+              set_pending_message("Alt+Enter cannot toggle native fullscreen; use window fullscreen button");
+            } else {
+              set_fullscreen(true);
+            }
+          }
           break;
         case SDLK_w: {
           if (is_ctrl_down && is_shift_down) {
@@ -3086,7 +3249,7 @@ void Display::handle_event(const SDL_Event& event) {
 
             SDL_SetClipboardText(previous_left_frame_secs_str.c_str());
 
-            std::cout << "Copied to clipboard: " << previous_left_frame_secs_str << std::endl;
+            notify_user(string_sprintf("Copied to clipboard: %s", previous_left_frame_secs_str.c_str()));
           } else {
             zoom_right_ = true;
           }
@@ -3109,12 +3272,12 @@ void Display::handle_event(const SDL_Event& event) {
 
             if (std::regex_search(clipboard_str, match, timestamp_regex)) {
               std::string timestamp = match.str();
-              std::cout << "Timestamp pasted: " << timestamp << std::endl;
+              notify_user(string_sprintf("Timestamp pasted: %s", timestamp.c_str()));
 
               seek_relative_ = parse_timestamps_to_seconds(timestamp) / static_cast<float>(duration_);
               seek_from_start_ = true;
             } else {
-              std::cout << "No valid timestamp found in clipboard." << std::endl;
+              notify_user("No valid timestamp found in clipboard.");
             }
           } else {
             show_metadata_ = !show_metadata_;
@@ -3137,11 +3300,11 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_i:
           fast_input_alignment_ = !fast_input_alignment_;
-          std::cout << "Input alignment resizing filter set to '" << (fast_input_alignment_ ? "BILINEAR (fast)" : "BICUBIC (high-quality)") << "' (takes effect for the next decoded frame)" << std::endl;
+          notify_user(string_sprintf("Input alignment resizing filter set to '%s' (takes effect for the next decoded frame)", fast_input_alignment_ ? "BILINEAR (fast)" : "BICUBIC (high-quality)"));
           break;
         case SDLK_t:
           bilinear_texture_filtering_ = !bilinear_texture_filtering_;
-          std::cout << "Video texture filter set to '" << (bilinear_texture_filtering_ ? "BILINEAR" : "NEAREST NEIGHBOR") << "'" << std::endl;
+          notify_user(string_sprintf("Video texture filter set to '%s'", bilinear_texture_filtering_ ? "BILINEAR" : "NEAREST NEIGHBOR"));
           break;
         case SDLK_s: {
           swap_left_right_ = !swap_left_right_;
@@ -3171,7 +3334,7 @@ void Display::handle_event(const SDL_Event& event) {
           } else {
             active_right_index_ = (active_right_index_ + 1) % num_right_videos_;
           }
-          std::cout << string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_) << std::endl;
+          notify_user(string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_));
           break;
         case SDLK_m:
           if (is_shift_down) {
@@ -3183,7 +3346,7 @@ void Display::handle_event(const SDL_Event& event) {
             resize_window_for_mode_switch();
 
             const std::string mode_name = modeToString(mode_);
-            std::cout << "Display mode set to '" << to_upper_case(mode_name) << "'" << std::endl;
+            notify_user(string_sprintf("Display mode set to '%s'", to_upper_case(mode_name).c_str()));
           } else {
             print_image_similarity_metrics_ = true;
           }
@@ -3217,7 +3380,7 @@ void Display::handle_event(const SDL_Event& event) {
 
           const auto zoom_rect = compute_zoom_rect();
           const Vector2D mouse_video = window_to_video_position(mouse_x_, mouse_y_, zoom_rect);
-          const Vector2D center_video = window_to_video_position(window_width_ / 2, window_height_ / 2, zoom_rect);
+          const Vector2D center_video = window_to_video_position(content_window_.x + content_window_.w / 2, content_window_.y + content_window_.h / 2, zoom_rect);
 
           update_move_offset(move_offset_ + (center_video - mouse_video) * global_zoom_factor_);
           break;
@@ -3309,27 +3472,27 @@ void Display::handle_event(const SDL_Event& event) {
               break;
           }
 
-          std::cout << "Subtraction mode set to '";
+          std::string diff_mode_name;
           switch (diff_mode_) {
             case DiffMode::LegacyAbs:
-              std::cout << "ABSOLUTE LINEAR (FIXED GAIN)";
+              diff_mode_name = "ABSOLUTE LINEAR (FIXED GAIN)";
               break;
             case DiffMode::AbsLinear:
-              std::cout << "ABSOLUTE LINEAR (ADAPTIVE)";
+              diff_mode_name = "ABSOLUTE LINEAR (ADAPTIVE)";
               break;
             case DiffMode::AbsSqrt:
-              std::cout << "ABSOLUTE SQUARE ROOT";
+              diff_mode_name = "ABSOLUTE SQUARE ROOT";
               break;
             case DiffMode::SignedDiverging:
-              std::cout << "SIGNED DIVERGING";
+              diff_mode_name = "SIGNED DIVERGING";
               break;
           }
-          std::cout << "'" << std::endl;
+          notify_user(string_sprintf("Subtraction mode set to '%s'", diff_mode_name.c_str()));
           break;
         }
         case SDLK_u:
           diff_luma_only_ = !diff_luma_only_;
-          std::cout << "Subtraction luminance-only set to '" << (diff_luma_only_ ? "ON" : "OFF") << "'" << std::endl;
+          notify_user(string_sprintf("Subtraction luminance-only set to '%s'", diff_luma_only_ ? "ON" : "OFF"));
           break;
         default:
           break;

@@ -540,6 +540,7 @@ int main(int argc, char** argv) {
          {"subtraction-mode", {"-S", "--subtraction-mode"}, "start in subtraction (difference) view", 0},
          {"display-number", {"-n", "--display-number"}, "open main window on specific display (e.g. 0, 1 or 2), default is 0", 1},
          {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
+         {"fullscreen", {"-u", "--fullscreen"}, "start in fullscreen mode (desktop fullscreen without changing display mode/refresh rate)", 0},
          {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
          {"window-fit-display", {"-W", "--window-fit-display"}, "calculate the window size to fit within the usable display bounds while maintaining the video aspect ratio", 0},
          {"aspect-lock", {"-k", "--aspect-lock"}, "aspect lock mode during resizing: 'off' (default), 'window' for initial window ratio, 'content' for current video/content ratio", 1},
@@ -651,6 +652,7 @@ int main(int argc, char** argv) {
       config.bilinear_texture_filtering = args["bilinear-texture"];
       config.disable_auto_filters = args["disable-auto-filters"];
       config.start_in_subtraction_mode = args["subtraction-mode"];
+      config.start_in_fullscreen = args["fullscreen"];
 
       if (args["display-number"]) {
         const std::string display_number_arg = args["display-number"];

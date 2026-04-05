@@ -135,19 +135,39 @@ class Display {
   int video_height_;
   const double duration_;
 
+  // SDL renderer drawable dimensions in physical pixels.
+  // Can differ from window_width_/window_height_ on high-DPI displays.
   int drawable_width_;
   int drawable_height_;
+  // Full SDL window dimensions (container area, including any letterbox/pillarbox margins).
   int window_width_;
   int window_height_;
+  // Video content viewport inside the window in *window coordinates*.
+  // In regular windowed mode this normally matches the full window.
+  // In fullscreen-like states this can be centered and smaller than the full
+  // window to preserve content aspect ratio without stretching.
+  SDL_Rect content_window_{0, 0, 0, 0};
+
+  // Scale from window coordinates to drawable pixel coordinates.
   float drawable_to_window_width_factor_;
   float drawable_to_window_height_factor_;
+  // Scale from content-window coordinates to video-layout coordinates.
+  // (layout is split/vstack/hstack space, not per-side source coordinates)
   float video_to_window_width_factor_;
   float video_to_window_height_factor_;
+  // UI text scale derived from drawable/window density.
   float font_scale_;
+  // Stored window aspect ratio used by AspectLockMode::Window.
   float window_aspect_ratio_{1.0F};
+
+  // Last size we programmatically forced (used to avoid resize feedback loops).
   std::array<int, 2> last_forced_window_size_{{-1, -1}};
+  // Initial window size captured at startup (restore with Ctrl+W).
   std::array<int, 2> startup_window_size_{{-1, -1}};
+  // User-saved window size snapshot (save: Ctrl+Shift+W, restore: Shift+W).
   std::array<int, 2> saved_window_size_{{-1, -1}};
+  // Windowed size to restore when exiting fullscreen.
+  std::array<int, 2> windowed_size_before_fullscreen_{{-1, -1}};
 
   bool show_help_{false};
   bool show_metadata_{false};
@@ -161,6 +181,8 @@ class Display {
   bool show_left_{true};
   bool show_right_{true};
   bool show_hud_{true};
+  bool start_in_fullscreen_{false};
+  bool is_fullscreen_{false};
   bool subtraction_mode_{false};
   bool pending_verbose_print_{false};
   float seek_relative_{0.0F};
@@ -285,8 +307,12 @@ class Display {
   void rebuild_side_ui_textures();
   void rebuild_help_textures();
   void clamp_overlay_offsets();
+  bool detect_fullscreen_like_state() const;
   float compute_content_aspect_ratio() const;
+  std::array<int, 2> compute_mode_switch_target_window_size() const;
+  void update_content_window_layout();
   void apply_window_size_and_relayout(int target_w, int target_h, bool force_layout_refresh);
+  void set_fullscreen(bool fullscreen);
   void resize_window_for_mode_switch();
   void handle_window_resize(bool reset_forced_size_guard = false, bool force_layout_refresh = false);
   void recreate_video_textures_for_current_mode();
@@ -315,8 +341,10 @@ class Display {
   SDL_FRect video_rect_to_drawable_transform(const SDL_FRect& rect) const {
     const float width_scale = drawable_to_window_width_factor_ / video_to_window_width_factor_;
     const float height_scale = drawable_to_window_height_factor_ / video_to_window_height_factor_;
+    const float x_offset = static_cast<float>(content_window_.x) * drawable_to_window_width_factor_;
+    const float y_offset = static_cast<float>(content_window_.y) * drawable_to_window_height_factor_;
 
-    return {rect.x * width_scale, rect.y * height_scale, rect.w * width_scale, rect.h * height_scale};
+    return {x_offset + rect.x * width_scale, y_offset + rect.y * height_scale, rect.w * width_scale, rect.h * height_scale};
   }
 
   void render_text(int x, int y, SDL_Texture* texture, int texture_width, int texture_height, int border_extension, bool left_adjust);
@@ -393,6 +421,7 @@ class Display {
           const double duration,
           const float wheel_sensitivity,
           const bool start_in_subtraction_mode,
+          const bool start_in_fullscreen,
           const std::string& left_file_name,
           const std::string& right_file_name);
   ~Display();
@@ -405,6 +434,9 @@ class Display {
 
   // Set a pending message to be displayed
   void set_pending_message(const std::string& message);
+
+  // Notify the user with a message
+  void notify_user(const std::string& message);
 
   // Bring focus back to the main window (avoid scope windows stealing keyboard focus)
   void focus_main_window();

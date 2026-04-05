@@ -59,6 +59,7 @@ struct VideoCompareConfig {
   bool bilinear_texture_filtering{false};
   bool disable_auto_filters{false};
   bool start_in_subtraction_mode{false};
+  bool start_in_fullscreen{false};
   Display::AspectLockMode aspect_lock_mode{Display::AspectLockMode::Off};
 
   int display_number{0};
