@@ -231,6 +231,7 @@ see all supported options.
 - `Shift+R`: Crop right video interactively
 - `Shift+B`: Crop both videos to the same area
 - `Shift+D`: Decode and advance one frame
+- `Shift+M`: Cycle display mode
 - `Shift+A`: Seek to the previous frame (best with intra-frame formats)
 - `Shift+F`: Select a region and save cutouts as PNGs
 - `Shift+W`: Restore saved window size
@@ -312,12 +313,12 @@ https://user-images.githubusercontent.com/8549626/166630445-c8c511b7-005f-48aa-8
 
 For quick access, select two files, right-click either one, then press:
 
-* **N** to focus *Send to*
-* **V** to select *video-compare*
+- **N** to focus _Send to_
+- **V** to select _video-compare_
 
 #### Setup
 
-To make *video-compare* appear in the **Send to** menu:
+To make _video-compare_ appear in the **Send to** menu:
 
 1. Open the Run dialog (**Windows + R**)
 2. Type `shell:sendto` and press Enter

@@ -54,6 +54,7 @@ static const std::vector<ControlSection> control_sections{
       {"Shift+B", "Crop both videos to the same area"},
       {"Shift+D", "Decode and advance one frame"},
       {"Shift+A", "Seek to the previous frame (best with intra-frame formats)"},
+      {"Shift+M", "Cycle display mode"},
       {"Shift+F", "Select a region and save cutouts as PNGs"},
       {"Shift+W", "Restore saved window size"},
       {"Ctrl+W", "Restore startup window size"},

@@ -124,7 +124,7 @@ class Display {
 
  private:
   const int display_number_;
-  const Mode mode_;
+  Mode mode_;
   const bool fit_window_to_usable_bounds_;
   const bool high_dpi_allowed_;
   const AspectLockMode aspect_lock_mode_;
@@ -286,7 +286,10 @@ class Display {
   void rebuild_help_textures();
   void clamp_overlay_offsets();
   float compute_content_aspect_ratio() const;
-  void handle_window_resize(bool reset_forced_size_guard = false);
+  void apply_window_size_and_relayout(int target_w, int target_h, bool force_layout_refresh);
+  void resize_window_for_mode_switch();
+  void handle_window_resize(bool reset_forced_size_guard = false, bool force_layout_refresh = false);
+  void recreate_video_textures_for_current_mode();
 
   void convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi);
 

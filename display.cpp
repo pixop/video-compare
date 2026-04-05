@@ -434,19 +434,7 @@ Display::~Display() {
   SDL_DestroyWindow(window_);
 }
 
-void Display::reinitialize_video_dimensions(const unsigned width, const unsigned height) {
-  const int new_video_width = static_cast<int>(width);
-  const int new_video_height = static_cast<int>(height);
-  if (new_video_width <= 0 || new_video_height <= 0) {
-    throw std::runtime_error("Video dimensions must be positive");
-  }
-  if (video_width_ == new_video_width && video_height_ == new_video_height) {
-    return;
-  }
-
-  video_width_ = new_video_width;
-  video_height_ = new_video_height;
-
+void Display::recreate_video_textures_for_current_mode() {
   if (video_texture_linear_ != nullptr) {
     SDL_DestroyTexture(video_texture_linear_);
     video_texture_linear_ = nullptr;
@@ -465,6 +453,64 @@ void Display::reinitialize_video_dimensions(const unsigned width, const unsigned
 
   video_texture_linear_ = create_video_texture("linear");
   video_texture_nn_ = create_video_texture("nearest");
+}
+
+void Display::apply_window_size_and_relayout(const int target_w, const int target_h, const bool force_layout_refresh) {
+  SDL_SetWindowSize(window_, target_w, target_h);
+  handle_window_resize(true, force_layout_refresh);
+}
+
+void Display::resize_window_for_mode_switch() {
+  const float target_aspect_ratio = std::max(compute_content_aspect_ratio(), 0.001F);
+  const double current_area = static_cast<double>(std::max(window_width_, MIN_WINDOW_WIDTH)) * static_cast<double>(std::max(window_height_, MIN_WINDOW_HEIGHT));
+
+  int target_w = std::max(MIN_WINDOW_WIDTH, static_cast<int>(std::round(std::sqrt(current_area * target_aspect_ratio))));
+  int target_h = std::max(MIN_WINDOW_HEIGHT, static_cast<int>(std::round(std::sqrt(current_area / target_aspect_ratio))));
+
+  int display_index = SDL_GetWindowDisplayIndex(window_);
+  if (display_index < 0) {
+    display_index = display_number_;
+  }
+
+  SDL_Rect bounds;
+  if (SDL_GetDisplayUsableBounds(display_index, &bounds) == 0) {
+    const int max_w = std::max(1, bounds.w);
+    const int max_h = std::max(1, bounds.h);
+
+    if (target_w > max_w || target_h > max_h) {
+      const float scale = std::min(static_cast<float>(max_w) / static_cast<float>(std::max(1, target_w)), static_cast<float>(max_h) / static_cast<float>(std::max(1, target_h)));
+      target_w = std::max(1, static_cast<int>(std::round(static_cast<float>(target_w) * scale)));
+      target_h = std::max(1, static_cast<int>(std::round(static_cast<float>(target_h) * scale)));
+    }
+
+    const int min_w = std::min(MIN_WINDOW_WIDTH, max_w);
+    const int min_h = std::min(MIN_WINDOW_HEIGHT, max_h);
+    target_w = std::max(min_w, std::min(target_w, max_w));
+    target_h = std::max(min_h, std::min(target_h, max_h));
+  }
+
+  // Keep WINDOW aspect lock consistent with the newly selected display mode.
+  if (aspect_lock_mode_ == AspectLockMode::Window) {
+    window_aspect_ratio_ = target_aspect_ratio;
+  }
+
+  apply_window_size_and_relayout(target_w, target_h, true);
+}
+
+void Display::reinitialize_video_dimensions(const unsigned width, const unsigned height) {
+  const int new_video_width = static_cast<int>(width);
+  const int new_video_height = static_cast<int>(height);
+  if (new_video_width <= 0 || new_video_height <= 0) {
+    throw std::runtime_error("Video dimensions must be positive");
+  }
+  if (video_width_ == new_video_width && video_height_ == new_video_height) {
+    return;
+  }
+
+  video_width_ = new_video_width;
+  video_height_ = new_video_height;
+
+  recreate_video_textures_for_current_mode();
 
   if (diff_buffer_ != nullptr) {
     delete[] diff_buffer_;
@@ -668,7 +714,7 @@ float Display::compute_content_aspect_ratio() const {
   return content_w / std::max(content_h, 1.0F);
 }
 
-void Display::handle_window_resize(const bool reset_forced_size_guard) {
+void Display::handle_window_resize(const bool reset_forced_size_guard, const bool force_layout_refresh) {
   if (reset_forced_size_guard) {
     last_forced_window_size_ = {-1, -1};
   }
@@ -731,7 +777,7 @@ void Display::handle_window_resize(const bool reset_forced_size_guard) {
   }
 
   // No change means we can skip the expensive rebuilds below.
-  if (new_drawable_w == drawable_width_ && new_drawable_h == drawable_height_ && new_window_w == window_width_ && new_window_h == window_height_) {
+  if (!force_layout_refresh && new_drawable_w == drawable_width_ && new_drawable_h == drawable_height_ && new_window_w == window_width_ && new_window_h == window_height_) {
     return;
   }
 
@@ -2927,10 +2973,9 @@ void Display::handle_event(const SDL_Event& event) {
       auto restore_window_size = [&](const std::array<int, 2>& size) {
         const int target_w = std::max(MIN_WINDOW_WIDTH, size[0]);
         const int target_h = std::max(MIN_WINDOW_HEIGHT, size[1]);
-        SDL_SetWindowSize(window_, target_w, target_h);
         // Route restore operations through the normal resize path so active
         // aspect-lock constraints (window/content) are always enforced.
-        handle_window_resize(true);
+        apply_window_size_and_relayout(target_w, target_h, false);
       };
 
       // Handle CTRL+SHIFT+1..0 for direct right video selection
@@ -3129,7 +3174,19 @@ void Display::handle_event(const SDL_Event& event) {
           std::cout << string_sprintf("Active right video: %d/%d", active_right_index_ + 1, num_right_videos_) << std::endl;
           break;
         case SDLK_m:
-          print_image_similarity_metrics_ = true;
+          if (is_shift_down) {
+            constexpr int kModeCount = 3;
+            const int delta = is_ctrl_down ? -1 : 1;
+            mode_ = static_cast<Mode>((static_cast<int>(mode_) + delta + kModeCount) % kModeCount);
+
+            recreate_video_textures_for_current_mode();
+            resize_window_for_mode_switch();
+
+            const std::string mode_name = modeToString(mode_);
+            std::cout << "Display mode set to '" << to_upper_case(mode_name) << "'" << std::endl;
+          } else {
+            print_image_similarity_metrics_ = true;
+          }
           break;
         case SDLK_4:
         case SDLK_KP_4:
