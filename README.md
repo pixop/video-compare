@@ -232,9 +232,11 @@ see all supported options.
 - `Shift+R`: Crop right video interactively
 - `Shift+B`: Crop both videos to the same area
 - `Shift+D`: Decode and advance one frame
-- `Shift+M`: Cycle display mode
 - `Shift+A`: Seek to the previous frame (best with intra-frame formats)
+- `Shift+M`: Cycle display mode
+- `Shift+S`: Cycle aspect view mode
 - `Shift+F`: Select a region and save cutouts as PNGs
+- `Shift+X`: Print display state to console
 - `Shift+W`: Restore saved window size
 - `Ctrl+W`: Restore startup window size
 - `Ctrl+Shift+W`: Save current window size

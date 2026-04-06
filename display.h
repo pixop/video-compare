@@ -107,9 +107,10 @@ class Display {
   enum class Mode { Split, VStack, HStack };
   enum class Loop { Off, ForwardOnly, PingPong };
   enum class AspectLockMode { Off, Window, Content };
+  enum class AspectViewMode { Original, Stretch, Preset16x9, Preset4x3, Preset1x1 };
   enum class DiffMode { LegacyAbs, AbsLinear, AbsSqrt, SignedDiverging };
 
-  std::string modeToString(const Mode& mode) {
+  std::string mode_to_string(const Mode& mode) {
     switch (mode) {
       case Mode::Split:
         return "split";
@@ -117,6 +118,23 @@ class Display {
         return "vstack";
       case Mode::HStack:
         return "hstack";
+      default:
+        return "unknown";
+    }
+  }
+
+  std::string aspect_view_mode_to_string(const Display::AspectViewMode& mode) {
+    switch (mode) {
+      case Display::AspectViewMode::Original:
+        return "original";
+      case Display::AspectViewMode::Stretch:
+        return "stretch";
+      case Display::AspectViewMode::Preset16x9:
+        return "16:9";
+      case Display::AspectViewMode::Preset4x3:
+        return "4:3";
+      case Display::AspectViewMode::Preset1x1:
+        return "1:1";
       default:
         return "unknown";
     }
@@ -159,6 +177,7 @@ class Display {
   float font_scale_;
   // Stored window aspect ratio used by AspectLockMode::Window.
   float window_aspect_ratio_{1.0F};
+  AspectViewMode aspect_view_mode_{AspectViewMode::Original};
 
   // Last size we programmatically forced (used to avoid resize feedback loops).
   std::array<int, 2> last_forced_window_size_{{-1, -1}};
@@ -309,6 +328,7 @@ class Display {
   void clamp_overlay_offsets();
   bool detect_fullscreen_like_state() const;
   float compute_content_aspect_ratio() const;
+  float compute_active_content_aspect_ratio() const;
   std::array<int, 2> compute_mode_switch_target_window_size() const;
   void update_content_window_layout();
   void apply_window_size_and_relayout(int target_w, int target_h, bool force_layout_refresh);

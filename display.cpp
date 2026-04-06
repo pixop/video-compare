@@ -538,7 +538,7 @@ bool Display::detect_fullscreen_like_state() const {
 }
 
 std::array<int, 2> Display::compute_mode_switch_target_window_size() const {
-  const float target_aspect_ratio = std::max(compute_content_aspect_ratio(), 0.001F);
+  const float target_aspect_ratio = std::max(compute_active_content_aspect_ratio(), 0.001F);
   const double current_area = static_cast<double>(std::max(window_width_, MIN_WINDOW_WIDTH)) * static_cast<double>(std::max(window_height_, MIN_WINDOW_HEIGHT));
 
   int target_w = std::max(MIN_WINDOW_WIDTH, static_cast<int>(std::round(std::sqrt(current_area * target_aspect_ratio))));
@@ -573,7 +573,7 @@ void Display::resize_window_for_mode_switch() {
   const auto target_size = compute_mode_switch_target_window_size();
   const int target_w = target_size[0];
   const int target_h = target_size[1];
-  const float target_aspect_ratio = std::max(compute_content_aspect_ratio(), 0.001F);
+  const float target_aspect_ratio = std::max(compute_active_content_aspect_ratio(), 0.001F);
 
   // Keep WINDOW aspect lock consistent with the newly selected display mode.
   if (aspect_lock_mode_ == AspectLockMode::Window) {
@@ -635,7 +635,7 @@ void Display::print_verbose_info() {
   std::cout << "Main program version:  " << VersionInfo::version << std::endl;
   std::cout << "Video size:            " << video_width_ << "x" << video_height_ << std::endl;
   std::cout << "Video duration:        " << format_duration(duration_) << std::endl;
-  std::cout << "Display mode:          " << modeToString(mode_) << std::endl;
+  std::cout << "Display mode:          " << mode_to_string(mode_) << std::endl;
   std::cout << "Fit to usable bounds:  " << std::boolalpha << fit_window_to_usable_bounds_ << std::endl;
   std::cout << "High-DPI allowed:      " << std::boolalpha << high_dpi_allowed_ << std::endl;
   std::string aspect_lock_mode = "off";
@@ -805,14 +805,42 @@ float Display::compute_content_aspect_ratio() const {
   return content_w / std::max(content_h, 1.0F);
 }
 
+float Display::compute_active_content_aspect_ratio() const {
+  auto apply_mode_layout_multiplier = [&](const float single_frame_ratio) {
+    if (mode_ == Mode::HStack) {
+      return single_frame_ratio * 2.0F;
+    }
+    if (mode_ == Mode::VStack) {
+      return single_frame_ratio * 0.5F;
+    }
+    return single_frame_ratio;
+  };
+
+  switch (aspect_view_mode_) {
+    case AspectViewMode::Stretch:
+      return static_cast<float>(std::max(window_width_, 1)) / static_cast<float>(std::max(window_height_, 1));
+    case AspectViewMode::Preset16x9:
+      return apply_mode_layout_multiplier(16.0F / 9.0F);
+    case AspectViewMode::Preset4x3:
+      return apply_mode_layout_multiplier(4.0F / 3.0F);
+    case AspectViewMode::Preset1x1:
+      return apply_mode_layout_multiplier(1.0F);
+    case AspectViewMode::Original:
+    default:
+      break;
+  }
+
+  return compute_content_aspect_ratio();
+}
+
 void Display::update_content_window_layout() {
   const int safe_window_w = std::max(1, window_width_);
   const int safe_window_h = std::max(1, window_height_);
 
   content_window_ = SDL_Rect{0, 0, safe_window_w, safe_window_h};
 
-  if (is_fullscreen_) {
-    const float content_aspect_ratio = std::max(compute_content_aspect_ratio(), 0.001F);
+  if (aspect_view_mode_ != AspectViewMode::Stretch) {
+    const float content_aspect_ratio = std::max(compute_active_content_aspect_ratio(), 0.001F);
     const float window_aspect_ratio = static_cast<float>(safe_window_w) / static_cast<float>(safe_window_h);
 
     if (window_aspect_ratio > content_aspect_ratio) {
@@ -864,7 +892,7 @@ void Display::handle_window_resize(const bool reset_forced_size_guard, const boo
 
   // If aspect-ratio locking is enabled, snap the resize to the selected ratio.
   if (!skip_forced_size && !is_fullscreen_ && aspect_lock_mode_ != AspectLockMode::Off) {
-    const float target_aspect_ratio = (aspect_lock_mode_ == AspectLockMode::Window) ? window_aspect_ratio_ : compute_content_aspect_ratio();
+    const float target_aspect_ratio = (aspect_lock_mode_ == AspectLockMode::Window) ? window_aspect_ratio_ : compute_active_content_aspect_ratio();
     const float safe_target_aspect_ratio = std::max(target_aspect_ratio, 0.001F);
     const float current_ratio = static_cast<float>(new_window_w) / static_cast<float>(new_window_h);
     if (std::abs(current_ratio - safe_target_aspect_ratio) > 0.001F) {
@@ -3307,8 +3335,23 @@ void Display::handle_event(const SDL_Event& event) {
           notify_user(string_sprintf("Video texture filter set to '%s'", bilinear_texture_filtering_ ? "BILINEAR" : "NEAREST NEIGHBOR"));
           break;
         case SDLK_s: {
-          swap_left_right_ = !swap_left_right_;
-          refresh_display_side_mapping();
+          if (is_shift_down) {
+            constexpr int kModeCount = 5;
+            const int delta = is_ctrl_down ? -1 : 1;
+            aspect_view_mode_ = static_cast<AspectViewMode>((static_cast<int>(aspect_view_mode_) + delta + kModeCount) % kModeCount);
+
+            if (is_fullscreen_) {
+              handle_window_resize(true, true);
+            } else {
+              const auto target_size = compute_mode_switch_target_window_size();
+              apply_window_size_and_relayout(target_size[0], target_size[1], true);
+            }
+
+            notify_user(string_sprintf("Aspect view mode set to '%s'", to_upper_case(aspect_view_mode_to_string(aspect_view_mode_)).c_str()));
+          } else {
+            swap_left_right_ = !swap_left_right_;
+            refresh_display_side_mapping();
+          }
           break;
         }
         case SDLK_f:
@@ -3345,7 +3388,7 @@ void Display::handle_event(const SDL_Event& event) {
             recreate_video_textures_for_current_mode();
             resize_window_for_mode_switch();
 
-            const std::string mode_name = modeToString(mode_);
+            const std::string mode_name = mode_to_string(mode_);
             notify_user(string_sprintf("Display mode set to '%s'", to_upper_case(mode_name).c_str()));
           } else {
             print_image_similarity_metrics_ = true;
@@ -3430,7 +3473,11 @@ void Display::handle_event(const SDL_Event& event) {
           }
           break;
         case SDLK_x:
-          show_fps_ = true;
+          if (is_shift_down) {
+            notify_user(string_sprintf("Display state: window=%dx%d aspect=%s", window_width_, window_height_, aspect_view_mode_to_string(aspect_view_mode_).c_str()));
+          } else {
+            show_fps_ = true;
+          }
           break;
         case SDLK_PLUS:
         case SDLK_KP_PLUS:
