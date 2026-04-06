@@ -222,6 +222,7 @@ Display::Display(const int display_number,
                  const bool fit_window_to_usable_bounds,
                  const bool high_dpi_allowed,
                  const AspectLockMode aspect_lock_mode,
+                 const AspectViewMode aspect_view_mode,
                  const bool use_10_bpc,
                  const bool fast_input_alignment,
                  const bool bilinear_texture_filtering,
@@ -239,6 +240,7 @@ Display::Display(const int display_number,
       fit_window_to_usable_bounds_{fit_window_to_usable_bounds},
       high_dpi_allowed_{high_dpi_allowed},
       aspect_lock_mode_{aspect_lock_mode},
+      aspect_view_mode_{aspect_view_mode},
       use_10_bpc_{use_10_bpc},
       fast_input_alignment_{fast_input_alignment},
       bilinear_texture_filtering_{bilinear_texture_filtering},
@@ -638,13 +640,8 @@ void Display::print_verbose_info() {
   std::cout << "Display mode:          " << mode_to_string(mode_) << std::endl;
   std::cout << "Fit to usable bounds:  " << std::boolalpha << fit_window_to_usable_bounds_ << std::endl;
   std::cout << "High-DPI allowed:      " << std::boolalpha << high_dpi_allowed_ << std::endl;
-  std::string aspect_lock_mode = "off";
-  if (aspect_lock_mode_ == AspectLockMode::Window) {
-    aspect_lock_mode = "window";
-  } else if (aspect_lock_mode_ == AspectLockMode::Content) {
-    aspect_lock_mode = "content";
-  }
-  std::cout << "Aspect lock mode:      " << aspect_lock_mode << std::endl;
+  std::cout << "Aspect lock mode:      " << aspect_lock_mode_to_string(aspect_lock_mode_) << std::endl;
+  std::cout << "Aspect view mode:      " << aspect_view_mode_to_string(aspect_view_mode_) << std::endl;
   std::cout << "Use 10 bpc:            " << std::boolalpha << use_10_bpc_ << std::endl;
   std::cout << "Fast input alignment:  " << std::boolalpha << fast_input_alignment_ << std::endl;
   std::cout << "Bilinear filtering:    " << std::boolalpha << bilinear_texture_filtering_ << std::endl;

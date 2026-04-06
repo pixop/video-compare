@@ -123,17 +123,30 @@ class Display {
     }
   }
 
-  std::string aspect_view_mode_to_string(const Display::AspectViewMode& mode) {
+  std::string aspect_lock_mode_to_string(const AspectLockMode& mode) {
     switch (mode) {
-      case Display::AspectViewMode::Original:
+      case AspectLockMode::Off:
+        return "off";
+      case AspectLockMode::Window:
+        return "window";
+      case AspectLockMode::Content:
+        return "content";
+      default:
+        return "unknown";
+    }
+  }
+
+  std::string aspect_view_mode_to_string(const AspectViewMode& mode) {
+    switch (mode) {
+      case AspectViewMode::Original:
         return "original";
-      case Display::AspectViewMode::Stretch:
+      case AspectViewMode::Stretch:
         return "stretch";
-      case Display::AspectViewMode::Preset16x9:
+      case AspectViewMode::Preset16x9:
         return "16:9";
-      case Display::AspectViewMode::Preset4x3:
+      case AspectViewMode::Preset4x3:
         return "4:3";
-      case Display::AspectViewMode::Preset1x1:
+      case AspectViewMode::Preset1x1:
         return "1:1";
       default:
         return "unknown";
@@ -146,6 +159,7 @@ class Display {
   const bool fit_window_to_usable_bounds_;
   const bool high_dpi_allowed_;
   const AspectLockMode aspect_lock_mode_;
+  AspectViewMode aspect_view_mode_;
   const bool use_10_bpc_;
   bool fast_input_alignment_;
   bool bilinear_texture_filtering_;
@@ -177,7 +191,6 @@ class Display {
   float font_scale_;
   // Stored window aspect ratio used by AspectLockMode::Window.
   float window_aspect_ratio_{1.0F};
-  AspectViewMode aspect_view_mode_{AspectViewMode::Original};
 
   // Last size we programmatically forced (used to avoid resize feedback loops).
   std::array<int, 2> last_forced_window_size_{{-1, -1}};
@@ -432,6 +445,7 @@ class Display {
           const bool fit_window_to_usable_bounds,
           const bool high_dpi_allowed,
           const AspectLockMode aspect_lock_mode,
+          const AspectViewMode aspect_view_mode,
           const bool use_10_bpc,
           const bool fast_input_alignment,
           const bool bilinear_texture_filtering,

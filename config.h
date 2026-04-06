@@ -61,6 +61,7 @@ struct VideoCompareConfig {
   bool start_in_subtraction_mode{false};
   bool start_in_fullscreen{false};
   Display::AspectLockMode aspect_lock_mode{Display::AspectLockMode::Off};
+  Display::AspectViewMode aspect_view_mode{Display::AspectViewMode::Original};
 
   int display_number{0};
   std::tuple<int, int> window_size{-1, -1};
