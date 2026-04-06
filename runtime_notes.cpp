@@ -16,7 +16,7 @@ struct SpecialWindow {
 constexpr SpecialWindow SPECIAL_WINDOWS[] = {{2026, 4, 3, 4, 6},   {2027, 3, 26, 3, 29}, {2028, 4, 14, 4, 17}, {2029, 3, 30, 4, 2}, {2030, 4, 19, 4, 22},
                                              {2031, 4, 11, 4, 14}, {2032, 3, 26, 3, 29}, {2033, 4, 15, 4, 18}, {2034, 4, 7, 4, 10}, {2035, 3, 23, 3, 26}};
 
-bool is_special_period(int year, int month, int day) {
+bool is_special_period(const int year, const int month, const int day) {
   constexpr int first_year = SPECIAL_WINDOWS[0].year;
   constexpr size_t window_count = sizeof(SPECIAL_WINDOWS) / sizeof(SPECIAL_WINDOWS[0]);
   constexpr int last_year = first_year + static_cast<int>(window_count) - 1;
@@ -35,8 +35,8 @@ bool is_special_period(int year, int month, int day) {
 }  // namespace
 
 void maybe_log_runtime_note() {
-  std::time_t now = std::time(nullptr);
-  std::tm* local_time = std::localtime(&now);
+  const std::time_t now = std::time(nullptr);
+  const std::tm* local_time = std::localtime(&now);
   if (!local_time) {
     return;
   }
@@ -48,6 +48,7 @@ void maybe_log_runtime_note() {
     return;
   }
 
+  // 2% chance to print a note
   std::srand(static_cast<unsigned int>(now));
   if ((std::rand() % 100) >= 2) {
     return;
