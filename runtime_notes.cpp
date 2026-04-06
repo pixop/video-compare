@@ -17,15 +17,20 @@ constexpr SpecialWindow SPECIAL_WINDOWS[] = {{2026, 4, 3, 4, 6},   {2027, 3, 26,
                                              {2031, 4, 11, 4, 14}, {2032, 3, 26, 3, 29}, {2033, 4, 15, 4, 18}, {2034, 4, 7, 4, 10}, {2035, 3, 23, 3, 26}};
 
 bool is_special_period(int year, int month, int day) {
-  for (const auto& window : SPECIAL_WINDOWS) {
-    if (window.year != year) {
-      continue;
-    }
-    const bool after_start = month > window.start_month || (month == window.start_month && day >= window.start_day);
-    const bool before_end = month < window.end_month || (month == window.end_month && day <= window.end_day);
-    return after_start && before_end;
+  constexpr int first_year = SPECIAL_WINDOWS[0].year;
+  constexpr size_t window_count = sizeof(SPECIAL_WINDOWS) / sizeof(SPECIAL_WINDOWS[0]);
+  constexpr int last_year = first_year + static_cast<int>(window_count) - 1;
+
+  if (year < first_year || year > last_year) {
+    return false;
   }
-  return false;
+
+  const size_t idx = static_cast<size_t>(year - first_year);
+  const auto& window = SPECIAL_WINDOWS[idx];
+  const bool after_start = month > window.start_month || (month == window.start_month && day >= window.start_day);
+  const bool before_end = month < window.end_month || (month == window.end_month && day <= window.end_day);
+
+  return after_start && before_end;
 }
 }  // namespace
 
