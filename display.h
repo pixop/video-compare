@@ -107,7 +107,7 @@ class Display {
   enum class Mode { Split, VStack, HStack };
   enum class Loop { Off, ForwardOnly, PingPong };
   enum class AspectLockMode { Off, Window, Content };
-  enum class AspectViewMode { Original, Stretch, Preset16x9, Preset4x3, Preset1x1 };
+  enum class AspectViewMode { Stretch, Original, Preset16x9, Preset4x3, Preset1x1 };
   enum class DiffMode { LegacyAbs, AbsLinear, AbsSqrt, SignedDiverging };
 
   std::string mode_to_string(const Mode& mode) {
@@ -138,10 +138,10 @@ class Display {
 
   std::string aspect_view_mode_to_string(const AspectViewMode& mode) {
     switch (mode) {
-      case AspectViewMode::Original:
-        return "original";
       case AspectViewMode::Stretch:
         return "stretch";
+      case AspectViewMode::Original:
+        return "original";
       case AspectViewMode::Preset16x9:
         return "16:9";
       case AspectViewMode::Preset4x3:
