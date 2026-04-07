@@ -48,7 +48,7 @@ static const std::vector<ControlSection> control_sections{
       {"F1", "Toggle Histogram window"},
       {"F2", "Toggle Vectorscope window"},
       {"F3", "Toggle Waveform window"},
-      {"Alt+Enter", "Toggle fullscreen (desktop fullscreen)"},
+      {"Alt+Enter", "Toggle fullscreen"},
       {"Backspace", "Clear crop(s)"},
       {"Shift+L", "Crop left video interactively"},
       {"Shift+R", "Crop right video interactively"},
