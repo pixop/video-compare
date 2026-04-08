@@ -547,6 +547,7 @@ int main(int argc, char** argv) {
   try {
     argagg::parser argparser{
         {{"help", {"-h", "--help"}, "print help and exit", 0},
+         {"version", {"--version"}, "print version and exit", 0},
          {"show-controls", {"-c", "--show-controls"}, "print controls and exit", 0},
          {"verbose", {"-v", "--verbose"}, "enable verbose output, including information such as library versions and rendering details", 0},
          {"options-file", {"-o", "--options-file"}, "read additional command-line options from a file (contents are inserted before other arguments)", 1},
@@ -632,6 +633,8 @@ int main(int argc, char** argv) {
 
     if (args["show-controls"]) {
       print_controls();
+    } else if (args["version"]) {
+      std::cout << "video-compare " << VersionInfo::version << std::endl;
     } else if (args["find-filters"]) {
       find_matching_video_filters(args["find-filters"]);
     } else if (args["find-demuxers"]) {
