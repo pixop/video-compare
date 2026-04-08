@@ -547,7 +547,7 @@ int main(int argc, char** argv) {
   try {
     argagg::parser argparser{
         {{"help", {"-h", "--help"}, "print help and exit", 0},
-         {"version", {"--version"}, "print version and exit", 0},
+         {"version", {"-V", "--version"}, "print version and exit", 0},
          {"show-controls", {"-c", "--show-controls"}, "print controls and exit", 0},
          {"verbose", {"-v", "--verbose"}, "enable verbose output, including information such as library versions and rendering details", 0},
          {"options-file", {"-o", "--options-file"}, "read additional command-line options from a file (contents are inserted before other arguments)", 1},
