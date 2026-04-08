@@ -259,7 +259,7 @@ jobs:
           brew install ffmpeg sdl2 sdl2_ttf
 
       - name: Build
-        run: make -j$(nproc)
+        run: make -j$(sysctl -n hw.ncpu)
 
       - name: Verify build output
         run: |
