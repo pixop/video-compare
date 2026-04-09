@@ -32,7 +32,7 @@ brew install video-compare
 ```
 
 For more advanced use cases, it is recommended to install `ffmpeg-full` instead of the default FFmpeg. The standard formula 
-is minimal, while `ffmpeg-full` adds broader codec and format support (e.g., JPEG XL and SRT).
+is minimal, while [ffmpeg-full](https://formulae.brew.sh/formula/ffmpeg-full) adds broader codec and format support (e.g., JPEG XL and SRT).
 
 ```sh
 brew install ffmpeg-full
