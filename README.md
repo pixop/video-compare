@@ -31,6 +31,13 @@ Install [via Homebrew](https://formulae.brew.sh/formula/video-compare):
 brew install video-compare
 ```
 
+For more advanced use cases, it is recommended to install `ffmpeg-full` instead of the default FFmpeg. The standard formula 
+is minimal, while `ffmpeg-full` adds broader codec and format support (e.g., JPEG XL and SRT).
+
+```sh
+brew install ffmpeg-full
+```
+
 ### Pre-compiled Windows 10 binaries
 
 Pre-built Windows 10 x86 64-bit releases are available from [this page](https://github.com/pixop/video-compare/releases).
