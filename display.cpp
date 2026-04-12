@@ -398,6 +398,13 @@ Display::Display(const int display_number,
 
   reinitialize_video_dimensions(width, height);
 
+  // Match startup behavior to manual aspect-mode switching by normalizing the
+  // window size to the selected aspect mode before first interaction.
+  if (aspect_view_mode_ != AspectViewMode::Stretch) {
+    const auto target_size = compute_mode_switch_target_window_size();
+    apply_window_size_and_relayout(target_size[0], target_size[1], true);
+  }
+
   rebuild_side_ui_textures();
 
   refresh_display_side_mapping();
