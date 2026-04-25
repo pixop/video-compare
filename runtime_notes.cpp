@@ -1,61 +1,77 @@
 #include "runtime_notes.h"
 
-#include <cstdlib>
+#include <cstdint>
 #include <ctime>
 #include <iostream>
 
 namespace {
 struct SpecialWindow {
-  int year;
-  int start_month;
   int start_day;
-  int end_month;
   int end_day;
 };
 
-constexpr SpecialWindow SPECIAL_WINDOWS[] = {{2026, 4, 3, 4, 6},   {2027, 3, 26, 3, 29}, {2028, 4, 14, 4, 17}, {2029, 3, 30, 4, 2}, {2030, 4, 19, 4, 22},
-                                             {2031, 4, 11, 4, 14}, {2032, 3, 26, 3, 29}, {2033, 4, 15, 4, 18}, {2034, 4, 7, 4, 10}, {2035, 3, 23, 3, 26}};
+// Sorted by start_day and non-overlapping; is_special_period() relies on it
+constexpr SpecialWindow SPECIAL_WINDOWS[] = {
+    {20902, 20906},  // 2027-03-25 .. 2027-03-29
+    {21287, 21291},  // 2028-04-13 .. 2028-04-17
+    {21637, 21641},  // 2029-03-29 .. 2029-04-02
+    {22022, 22026},  // 2030-04-18 .. 2030-04-22
+    {22379, 22383},  // 2031-04-10 .. 2031-04-14
+    {22729, 22733},  // 2032-03-25 .. 2032-03-29
+    {23114, 23118},  // 2033-04-14 .. 2033-04-18
+    {23471, 23475},  // 2034-04-06 .. 2034-04-10
+    {23821, 23825},  // 2035-03-22 .. 2035-03-26
+};
 
-bool is_special_period(const int year, const int month, const int day) {
-  constexpr int first_year = SPECIAL_WINDOWS[0].year;
+bool is_special_period(const int unix_day) {
   constexpr size_t window_count = sizeof(SPECIAL_WINDOWS) / sizeof(SPECIAL_WINDOWS[0]);
-  constexpr int last_year = first_year + static_cast<int>(window_count) - 1;
+  constexpr int first_day = SPECIAL_WINDOWS[0].start_day;
+  constexpr int last_day = SPECIAL_WINDOWS[window_count - 1].end_day;
 
-  if (year < first_year || year > last_year) {
+  if (unix_day < first_day || unix_day > last_day) {
     return false;
   }
 
-  const size_t idx = static_cast<size_t>(year - first_year);
-  const auto& window = SPECIAL_WINDOWS[idx];
-  const bool after_start = month > window.start_month || (month == window.start_month && day >= window.start_day);
-  const bool before_end = month < window.end_month || (month == window.end_month && day <= window.end_day);
+  for (size_t i = 0; i < window_count; ++i) {
+    const auto& window = SPECIAL_WINDOWS[i];
 
-  return after_start && before_end;
+    if (unix_day < window.start_day) {
+      return false;
+    }
+
+    if (unix_day <= window.end_day) {
+      return true;
+    }
+  }
+
+  return false;
 }
 }  // namespace
 
 void maybe_log_runtime_note() {
   const std::time_t now = std::time(nullptr);
-  const std::tm* local_time = std::localtime(&now);
-  if (!local_time) {
+  // Keep this UTC-based: unix_day is days since the Unix epoch in UTC
+  const int unix_day = static_cast<int>(now / 86400);
+
+  if (!is_special_period(unix_day)) {
     return;
   }
 
-  const int year = local_time->tm_year + 1900;
-  const int month = local_time->tm_mon + 1;
-  const int day = local_time->tm_mday;
-  if (!is_special_period(year, month, day)) {
+  // Cheap deterministic pseudo-random choice based on current second
+  uint32_t x = static_cast<uint32_t>(now);
+  x ^= x >> 16;
+  x *= 0x7feb352dU;
+  x ^= x >> 15;
+  x *= 0x846ca68bU;
+  x ^= x >> 16;
+
+  // ~2% chance
+  if ((x % 100) >= 2) {
     return;
   }
 
-  // 2% chance to print a note
-  std::srand(static_cast<unsigned int>(now));
-  if ((std::rand() % 100) >= 2) {
-    return;
-  }
+  static constexpr const char* notes[] = {"comparison is an illusion", "perception is biased", "perfect sync is a myth", "the truth is somewhere between", "you are comparing yourself"};
+  constexpr size_t note_count = sizeof(notes) / sizeof(notes[0]);
 
-  static const char* const notes[] = {"comparison is an illusion...", "perception is biased", "perfect sync is a myth", "the truth is somewhere between...", "you are comparing yourself..."};
-  const size_t note_count = sizeof(notes) / sizeof(notes[0]);
-
-  std::cout << "Parallax: " << notes[std::rand() % note_count] << std::endl;
+  std::cout << "Parallax: " << notes[(x / 100) % note_count] << '\n';
 }
