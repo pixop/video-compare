@@ -116,6 +116,12 @@ also supported):
 
     video-compare -m vstack video1.mp4 video2.mp4
 
+Perform simpler comparison of a video with itself using double underscore (`__`) as a placeholder. This
+enables tasks such as comparing the video with a time-shifted version of itself or testing various sets
+of filters, without the need to enter the same, potentially long path twice:
+
+    video-compare some/very/long/and/complicated/video/path.mp4 __
+
 Preprocess one or both inputs via a list of FFmpeg video filters specified on the command line
 (see [FFmpeg's video filters documentation](https://ffmpeg.org/ffmpeg-filters.html#Video-Filters)).
 The Swiss Army knife for cropping/padding (comparing videos with different aspect ratios),
@@ -153,12 +159,6 @@ Map a 500-nit peak light level HDR video for an sRGB SDR display, and adjust the
 to simulate the relative light level difference between the two videos on an actual HDR display:
 
     video-compare -T rel -L 500 hdr_video.mp4 sdr_video.mp4
-
-Perform simpler comparison of a video with itself using double underscore (`__`) as a placeholder. This
-enables tasks such as comparing the video with a time-shifted version of itself or testing various sets
-of filters, without the need to enter the same, potentially long path twice:
-
-    video-compare some/very/long/and/complicated/video/path.mp4 __
 
 Apply common filters to both videos and extend them with additional side-specific filters using the
 placeholder resolution functionality. This structure also works for demuxer, decoder, and hardware
