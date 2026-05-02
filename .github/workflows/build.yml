@@ -159,7 +159,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          syft dir:release -o spdx-json=sbom.spdx.json
+          syft dir:release \
+            --source-name "video-compare" \
+            --source-version "${GITHUB_REF_NAME}" \
+            -o spdx-json=sbom.spdx.json
           ls -lh sbom.spdx.json
 
       - name: Generate SBOM attestation (Windows zip)
