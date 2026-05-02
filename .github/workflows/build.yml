@@ -163,7 +163,7 @@ jobs:
           ls -lh sbom.spdx.json
 
       - name: Generate SBOM attestation (Windows zip)
-        uses: actions/attest-sbom@v4
+        uses: actions/attest@v4
         with:
           subject-path: ${{ env.ZIP_NAME }}
           sbom-path: sbom.spdx.json
