@@ -393,7 +393,7 @@ Display::AspectViewMode parse_aspect_view_mode(const std::string& mode) {
   } else if (mode == "1:1" || mode == "1x1") {
     return Display::AspectViewMode::Preset1x1;
   } else {
-    throw std::logic_error{"Cannot parse aspect view mode (valid options: original, stretch, 16:9, 4:3, 1:1)"};
+    throw std::logic_error{"Cannot parse aspect view mode (valid options: stretch, original, 16:9, 4:3, 1:1)"};
   }
 }
 
