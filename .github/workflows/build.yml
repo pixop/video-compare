@@ -144,7 +144,7 @@ jobs:
           ls -lh "$ZIP_NAME"
 
       - name: Generate artifact attestation (Windows zip)
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ env.ZIP_NAME }}
 
@@ -163,7 +163,7 @@ jobs:
           ls -lh sbom.spdx.json
 
       - name: Generate SBOM attestation (Windows zip)
-        uses: actions/attest-sbom@v2
+        uses: actions/attest-sbom@v4
         with:
           subject-path: ${{ env.ZIP_NAME }}
           sbom-path: sbom.spdx.json
