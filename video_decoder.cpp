@@ -51,7 +51,16 @@ VideoDecoder::VideoDecoder(const Side& side,
                            const unsigned peak_luminance_nits,
                            AVDictionary* hwaccel_options,
                            AVDictionary* decoder_options)
-    : SideAware(side), hw_pixel_format_(AV_PIX_FMT_NONE), first_pts_(AV_NOPTS_VALUE), next_pts_(AV_NOPTS_VALUE), trust_decoded_pts_(false), peak_luminance_nits_(peak_luminance_nits) {
+    : SideAware(side),
+      hw_pixel_format_(AV_PIX_FMT_NONE),
+      first_pts_(AV_NOPTS_VALUE),
+      previous_pts_(AV_NOPTS_VALUE),
+      next_pts_(AV_NOPTS_VALUE),
+      trust_decoded_pts_(false),
+      rewrite_duration_(false),
+      metadata_duration_(0),
+      duration_deriver_(12),
+      peak_luminance_nits_(peak_luminance_nits) {
   ScopedLogSide scoped_log_side(side);
 
   if (decoder_name.empty()) {
@@ -118,9 +127,13 @@ VideoDecoder::VideoDecoder(const Side& side,
 
   // parse and remove any video-compare specific decoder options
   trust_decoded_pts_ = get_and_remove_bool_avdict_option(decoder_options, "trust_dec_pts");
+  rewrite_duration_ = get_and_remove_bool_avdict_option(decoder_options, "rewrite_duration");
 
   if (trust_decoded_pts_) {
     log_info("Trusting decoded PTS; extrapolation logic disabled.");
+  }
+  if (rewrite_duration_) {
+    log_info("Rewriting frame duration from inferred timing layers (history -> PTS delta -> metadata).");
   }
 
   // open codec and check all options were consumed
@@ -130,6 +143,22 @@ VideoDecoder::VideoDecoder(const Side& side,
 
 VideoDecoder::~VideoDecoder() {
   avcodec_free_context(&codec_context_);
+}
+
+int64_t VideoDecoder::metadata_duration(Demuxer* demuxer, AVFrame* frame) {
+  if (metadata_duration_ > 0) {
+    return metadata_duration_;
+  }
+
+  const AVRational guessed_frame_rate = demuxer->guess_frame_rate(frame);
+  if (guessed_frame_rate.num > 0 && guessed_frame_rate.den > 0) {
+    const int64_t guessed_duration = av_rescale_q(1, av_inv_q(guessed_frame_rate), demuxer->time_base());
+    if (guessed_duration > 0) {
+      metadata_duration_ = guessed_duration;
+    }
+  }
+
+  return metadata_duration_;
 }
 
 const AVCodec* VideoDecoder::codec() const {
@@ -176,16 +205,31 @@ bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
   // use an increasing timestamp via pkt_duration between keyframes; otherwise, fall back to the best effort timestamp when PTS is not available
   frame->pts = (use_avframe_state || (next_pts_ + 1) == avframe_pts) ? avframe_pts : next_pts_;
 
-  // ensure pkt_duration is always some sensible value
-  if (ffmpeg::frame_duration(frame) == 0) {
-    // estimate based on guessed frame rate
+  if (rewrite_duration_) {
+    const auto derive_result = duration_deriver_.derive(DurationDeriver::Input{ffmpeg::frame_duration(frame), metadata_duration(demuxer, frame), avframe_pts, previous_pts_, previous_pts_ != AV_NOPTS_VALUE});
+    ffmpeg::frame_duration(frame) = derive_result.resolved_duration;
+
+    if (!derive_result.has_previous_source) {
+      log_info(string_sprintf("rewrite_duration source=%s resolved=%lld pts_delta=%lld predicted=%lld metadata=%lld", DurationDeriver::source_name(derive_result.source), static_cast<long long>(derive_result.resolved_duration),
+                              static_cast<long long>(derive_result.pts_delta), static_cast<long long>(derive_result.predicted_duration), static_cast<long long>(derive_result.metadata_duration)));
+    }
+
+    // Keep logging focused on degraded transitions and suppress noisy
+    // prediction<->pts_delta flips, which can happen even when duration is stable.
+    const bool fallback_source = derive_result.source == DurationDeriver::Source::Metadata || derive_result.source == DurationDeriver::Source::Fallback;
+    if (derive_result.source_changed && derive_result.has_previous_source && fallback_source) {
+      log_info(string_sprintf("rewrite_duration source transition: %s -> %s (resolved=%lld)", DurationDeriver::source_name(derive_result.previous_source), DurationDeriver::source_name(derive_result.source),
+                              static_cast<long long>(derive_result.resolved_duration)));
+    }
+  } else if (ffmpeg::frame_duration(frame) == 0) {
+    // ensure pkt_duration is always some sensible value
     ffmpeg::frame_duration(frame) = av_rescale_q(1, av_inv_q(demuxer->guess_frame_rate(frame)), demuxer->time_base());
 
-    if (!use_avframe_state) {
+    if (!use_avframe_state && previous_pts_ != AV_NOPTS_VALUE) {
       const int64_t avframe_delta_pts = avframe_pts - previous_pts_;
 
       // can avframe_delta_pts be relied on?
-      if (abs(ffmpeg::frame_duration(frame) - avframe_delta_pts) <= (ffmpeg::frame_duration(frame) * 20 / 100)) {
+      if (std::abs(ffmpeg::frame_duration(frame) - avframe_delta_pts) <= (ffmpeg::frame_duration(frame) * 20 / 100)) {
         // use the delta between the current and previous PTS instead to reduce accumulated error
         ffmpeg::frame_duration(frame) = avframe_delta_pts;
       }
@@ -201,6 +245,8 @@ bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
 
 void VideoDecoder::flush() {
   avcodec_flush_buffers(codec_context_);
+  duration_deriver_.reset();
+  previous_pts_ = AV_NOPTS_VALUE;
 }
 
 unsigned VideoDecoder::width() const {

@@ -1,7 +1,9 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include "core_types.h"
 #include "demuxer.h"
+#include "duration_deriver.h"
 #include "side_aware.h"
 
 extern "C" {
@@ -51,6 +53,8 @@ class VideoDecoder : public SideAware {
   unsigned safe_peak_luminance_nits(const DynamicRange dynamic_range) const;
 
  private:
+  int64_t metadata_duration(Demuxer* demuxer, AVFrame* frame);
+
   const AVCodec* codec_{};
   AVCodecContext* codec_context_{};
 
@@ -62,6 +66,10 @@ class VideoDecoder : public SideAware {
   int64_t next_pts_;
 
   bool trust_decoded_pts_;
+  bool rewrite_duration_;
+
+  int64_t metadata_duration_;
+  DurationDeriver duration_deriver_;
 
   unsigned peak_luminance_nits_;
 };
