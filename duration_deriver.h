@@ -32,12 +32,12 @@ class DurationDeriver {
 
   void reset();
 
-  static const char* source_name(Source source);
+  static const char* source_name(const Source source);
 
  private:
   int64_t predict_duration() const;
-  bool is_plausible_duration_delta(int64_t duration, int64_t anchor) const;
-  void remember_duration(int64_t duration);
+  bool is_plausible_duration_delta(const int64_t duration, const int64_t anchor) const;
+  void remember_duration(const int64_t duration);
 
   size_t history_window_;
   std::deque<int64_t> duration_history_;

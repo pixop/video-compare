@@ -65,7 +65,7 @@ void DurationDeriver::reset() {
   last_source_ = Source::Fallback;
 }
 
-const char* DurationDeriver::source_name(Source source) {
+const char* DurationDeriver::source_name(const Source source) {
   switch (source) {
     case Source::PtsDelta:
       return "pts_delta";
