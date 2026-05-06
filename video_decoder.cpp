@@ -59,7 +59,7 @@ VideoDecoder::VideoDecoder(const Side& side,
       trust_decoded_pts_(false),
       rewrite_duration_(false),
       metadata_duration_(0),
-      duration_deriver_(12),
+      duration_deriver_(),
       peak_luminance_nits_(peak_luminance_nits) {
   ScopedLogSide scoped_log_side(side);
 
@@ -206,7 +206,8 @@ bool VideoDecoder::receive(AVFrame* frame, Demuxer* demuxer) {
   frame->pts = (use_avframe_state || (next_pts_ + 1) == avframe_pts) ? avframe_pts : next_pts_;
 
   if (rewrite_duration_) {
-    const auto derive_result = duration_deriver_.derive(DurationDeriver::Input{ffmpeg::frame_duration(frame), metadata_duration(demuxer, frame), avframe_pts, previous_pts_, previous_pts_ != AV_NOPTS_VALUE});
+    const auto derive_input = DurationDeriver::Input{ffmpeg::frame_duration(frame), metadata_duration(demuxer, frame), avframe_pts, previous_pts_, previous_pts_ != AV_NOPTS_VALUE};
+    const auto derive_result = duration_deriver_.derive(derive_input);
     ffmpeg::frame_duration(frame) = derive_result.resolved_duration;
 
     if (!derive_result.has_previous_source) {

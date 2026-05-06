@@ -1,10 +1,12 @@
 #pragma once
+#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 
 class DurationDeriver {
  public:
+  static constexpr size_t HISTORY_WINDOW = 12;
+
   enum class Source { PtsDelta, Prediction, Metadata, Fallback };
 
   struct Input {
@@ -26,7 +28,7 @@ class DurationDeriver {
     Source previous_source{Source::Fallback};
   };
 
-  explicit DurationDeriver(size_t history_window = 12);
+  DurationDeriver();
 
   Result derive(const Input& input);
 
@@ -39,8 +41,9 @@ class DurationDeriver {
   bool is_plausible_duration_delta(const int64_t duration, const int64_t anchor) const;
   void remember_duration(const int64_t duration);
 
-  size_t history_window_;
-  std::deque<int64_t> duration_history_;
+  size_t history_size_;
+  size_t next_index_;
+  std::array<int64_t, HISTORY_WINDOW> duration_history_;
   bool has_last_source_;
   Source last_source_;
 };

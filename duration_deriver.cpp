@@ -1,8 +1,10 @@
 #include "duration_deriver.h"
 #include <algorithm>
-#include <vector>
+#include <limits>
 
-DurationDeriver::DurationDeriver(size_t history_window) : history_window_(history_window > 0 ? history_window : 1), has_last_source_(false), last_source_(Source::Fallback) {}
+constexpr size_t DurationDeriver::HISTORY_WINDOW;
+
+DurationDeriver::DurationDeriver() : history_size_(0), next_index_(0), duration_history_{}, has_last_source_(false), last_source_(Source::Fallback) {}
 
 DurationDeriver::Result DurationDeriver::derive(const Input& input) {
   Result result;
@@ -10,9 +12,11 @@ DurationDeriver::Result DurationDeriver::derive(const Input& input) {
   result.metadata_duration = input.metadata_duration;
 
   if (input.has_previous_pts) {
-    const int64_t delta = input.current_pts - input.previous_pts;
-    if (delta > 0) {
-      result.pts_delta = delta;
+    if (input.current_pts > input.previous_pts) {
+      const bool subtraction_overflow = input.previous_pts < 0 && input.current_pts > (std::numeric_limits<int64_t>::max() + input.previous_pts);
+      if (!subtraction_overflow) {
+        result.pts_delta = input.current_pts - input.previous_pts;
+      }
     }
   }
 
@@ -60,7 +64,8 @@ DurationDeriver::Result DurationDeriver::derive(const Input& input) {
 }
 
 void DurationDeriver::reset() {
-  duration_history_.clear();
+  history_size_ = 0;
+  next_index_ = 0;
   has_last_source_ = false;
   last_source_ = Source::Fallback;
 }
@@ -81,16 +86,31 @@ const char* DurationDeriver::source_name(const Source source) {
 }
 
 int64_t DurationDeriver::predict_duration() const {
-  if (duration_history_.empty()) {
+  if (history_size_ == 0) {
     return 0;
   }
 
-  std::vector<int64_t> sorted_durations(duration_history_.begin(), duration_history_.end());
-  std::sort(sorted_durations.begin(), sorted_durations.end());
+  std::array<int64_t, HISTORY_WINDOW> sorted_durations{};
+  for (size_t i = 0; i < history_size_; ++i) {
+    sorted_durations[i] = duration_history_[i];
+  }
 
-  const size_t mid = sorted_durations.size() / 2;
-  if ((sorted_durations.size() % 2) == 0) {
-    return (sorted_durations[mid - 1] + sorted_durations[mid]) / 2;
+  // Small bounded window: insertion sort is simple and allocation-free.
+  for (size_t i = 1; i < history_size_; ++i) {
+    const int64_t key = sorted_durations[i];
+    size_t j = i;
+    while (j > 0 && sorted_durations[j - 1] > key) {
+      sorted_durations[j] = sorted_durations[j - 1];
+      --j;
+    }
+    sorted_durations[j] = key;
+  }
+
+  const size_t mid = history_size_ / 2;
+  if ((history_size_ % 2) == 0) {
+    const int64_t left = sorted_durations[mid - 1];
+    const int64_t right = sorted_durations[mid];
+    return left / 2 + right / 2 + ((left % 2 + right % 2) / 2);
   }
 
   return sorted_durations[mid];
@@ -105,7 +125,9 @@ bool DurationDeriver::is_plausible_duration_delta(const int64_t duration, const 
   }
 
   const int64_t lower_bound = std::max<int64_t>(1, anchor / 4);
-  const int64_t upper_bound = std::max<int64_t>(lower_bound, anchor * 4);
+  const int64_t max_int64 = std::numeric_limits<int64_t>::max();
+  const int64_t scaled_upper = anchor > (max_int64 / 4) ? max_int64 : anchor * 4;
+  const int64_t upper_bound = std::max<int64_t>(lower_bound, scaled_upper);
 
   return duration >= lower_bound && duration <= upper_bound;
 }
@@ -115,8 +137,9 @@ void DurationDeriver::remember_duration(const int64_t duration) {
     return;
   }
 
-  duration_history_.push_back(duration);
-  while (duration_history_.size() > history_window_) {
-    duration_history_.pop_front();
+  duration_history_[next_index_] = duration;
+  if (history_size_ < HISTORY_WINDOW) {
+    ++history_size_;
   }
+  next_index_ = (next_index_ + 1) % HISTORY_WINDOW;
 }
