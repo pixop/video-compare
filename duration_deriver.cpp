@@ -10,6 +10,7 @@ DurationDeriver::Result DurationDeriver::derive(const Input& input) {
   Result result;
   result.predicted_duration = predict_duration();
   result.metadata_duration = input.metadata_duration;
+  bool metadata_plausible = false;
 
   if (input.has_previous_pts) {
     if (input.current_pts > input.previous_pts) {
@@ -37,8 +38,15 @@ DurationDeriver::Result DurationDeriver::derive(const Input& input) {
 
   // Layer 3: use metadata baseline if no dynamic value exists yet.
   if (result.resolved_duration <= 0 && result.metadata_duration > 0) {
-    result.resolved_duration = result.metadata_duration;
-    result.source = Source::Metadata;
+    const int64_t metadata_anchor = result.predicted_duration > 0 ? result.predicted_duration : input.frame_field_duration;
+    if (metadata_anchor > 0) {
+      metadata_plausible = is_plausible_duration_delta(result.metadata_duration, metadata_anchor);
+    }
+
+    if (metadata_plausible) {
+      result.resolved_duration = result.metadata_duration;
+      result.source = Source::Metadata;
+    }
   }
 
   // Layer 4: consolidated last-resort fallback for broken/missing timing metadata.
@@ -51,7 +59,13 @@ DurationDeriver::Result DurationDeriver::derive(const Input& input) {
     result.source = Source::Fallback;
   }
 
-  remember_duration(result.resolved_duration);
+  const bool remember_resolved_duration =
+      result.source == Source::PtsDelta ||
+      result.source == Source::Prediction ||
+      (result.source == Source::Metadata && metadata_plausible);
+  if (remember_resolved_duration) {
+    remember_duration(result.resolved_duration);
+  }
 
   result.has_previous_source = has_last_source_;
   result.previous_source = last_source_;
