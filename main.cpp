@@ -18,6 +18,12 @@
 
 static const std::string AUTO_OPTIONS_FILE_NAME = "video-compare.opt";
 
+static const std::regex POSITIVE_NUMBER_RE("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
+static const std::regex SIGNED_NUMBER_RE("^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$");
+static const std::regex UNSIGNED_INTEGER_RE("^(\\d+)$");
+static const std::regex OPTIONAL_DIMS_RE("(\\d*)x(\\d*)");
+static const std::regex REQUIRED_DIMS_RE("^(\\d+)x(\\d+)$");
+
 #ifdef _WIN32
 #include <Windows.h>
 #undef RELATIVE
@@ -256,14 +262,12 @@ TimeShiftConfig parse_time_shift(const std::string& time_shift_arg) {
     remaining = remaining.substr(multiplier_end);
 
     // Check if it's a rational fraction (e.g., "25/24")
-    const std::regex number_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
-
     size_t slash_pos = multiplier_str.find('/');
     if (slash_pos != std::string::npos) {
       std::string numerator_str = multiplier_str.substr(0, slash_pos);
       std::string denominator_str = multiplier_str.substr(slash_pos + 1);
 
-      if (!std::regex_match(numerator_str, number_re) || !std::regex_match(denominator_str, number_re)) {
+      if (!std::regex_match(numerator_str, POSITIVE_NUMBER_RE) || !std::regex_match(denominator_str, POSITIVE_NUMBER_RE)) {
         throw std::logic_error{"Cannot parse time shift multiplier; numerator and denominator must be valid postive numbers"};
       }
 
@@ -276,7 +280,7 @@ TimeShiftConfig parse_time_shift(const std::string& time_shift_arg) {
 
       av_reduce(&config.multiplier.num, &config.multiplier.den, std::round(numerator * 10000), std::round(denominator * 10000), 1000000);
     } else {
-      if (!std::regex_match(multiplier_str, number_re)) {
+      if (!std::regex_match(multiplier_str, POSITIVE_NUMBER_RE)) {
         throw std::logic_error{"Cannot parse time shift multiplier; must be a valid positive number"};
       }
 
@@ -415,8 +419,7 @@ unsigned parse_peak_nits(const std::string& nits_str) {
   if (nits_str.empty()) {
     return 0;
   }
-  const std::regex peak_nits_re("(\\d*)");
-  if (!std::regex_match(nits_str, peak_nits_re)) {
+  if (!std::regex_match(nits_str, UNSIGNED_INTEGER_RE)) {
     throw std::logic_error{"Cannot parse peak nits (required format: [number], e.g. 400, 850 or 1000)"};
   }
   int nits = std::stoi(nits_str);
@@ -433,8 +436,7 @@ float parse_boost_tone(const std::string& boost_str) {
   if (boost_str.empty()) {
     return 1.0;
   }
-  const std::regex boost_tone_re("^([0-9]+([.][0-9]*)?|[.][0-9]+)$");
-  if (!std::regex_match(boost_str, boost_tone_re)) {
+  if (!std::regex_match(boost_str, POSITIVE_NUMBER_RE)) {
     throw std::logic_error{"Cannot parse boost tone; must be a valid number, e.g. 1.3 or 3.0"};
   }
   return static_cast<float>(parse_strict_double(boost_str));
@@ -553,6 +555,7 @@ int main(int argc, char** argv) {
          {"options-file", {"-o", "--options-file"}, "read additional command-line options from a file (contents are inserted before other arguments)", 1},
          {"fullscreen", {"-u", "--fullscreen"}, "start in fullscreen mode (desktop fullscreen without changing display mode/refresh rate)", 0},
          {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
+         {"ui-scale", {"-U", "--ui-scale"}, "UI scale multiplier for on-screen text (e.g. 1.25), default is 1.0", 1},
          {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
          {"fast-alignment", {"-F", "--fast-alignment"}, "toggle fast bilinear scaling for aligning input source resolutions, replacing high-quality bicubic and chroma-accurate interpolation", 0},
          {"bilinear-texture", {"-I", "--bilinear-texture"}, "toggle bilinear video texture interpolation, replacing nearest-neighbor filtering", 0},
@@ -665,6 +668,17 @@ int main(int argc, char** argv) {
       config.verbose = args["verbose"];
       config.fit_window_to_usable_bounds = args["window-fit-display"];
       config.high_dpi_allowed = args["high-dpi"];
+      if (args["ui-scale"]) {
+        const std::string ui_scale_arg = args["ui-scale"];
+        if (!std::regex_match(ui_scale_arg, POSITIVE_NUMBER_RE)) {
+          throw std::logic_error{"Cannot parse UI scale argument; must be a positive number, e.g. 1.0 or 1.25"};
+        }
+
+        config.ui_scale = parse_strict_double(ui_scale_arg);
+        if (config.ui_scale <= 0.0F) {
+          throw std::logic_error{"UI scale must be greater than 0"};
+        }
+      }
       if (args["aspect-lock"]) {
         config.aspect_lock_mode = parse_aspect_lock_mode(static_cast<const std::string&>(args["aspect-lock"]));
       }
@@ -680,9 +694,7 @@ int main(int argc, char** argv) {
 
       if (args["display-number"]) {
         const std::string display_number_arg = args["display-number"];
-        const std::regex display_number_re("(\\d*)");
-
-        if (!std::regex_match(display_number_arg, display_number_re)) {
+        if (!std::regex_match(display_number_arg, UNSIGNED_INTEGER_RE)) {
           throw std::logic_error{"Cannot parse display number argument (required format: [number], e.g. 0, 1 or 2)"};
         }
 
@@ -735,9 +747,7 @@ int main(int argc, char** argv) {
         }
 
         const std::string window_size_arg = args["window-size"];
-        const std::regex window_size_re("(\\d*)x(\\d*)");
-
-        if (!std::regex_match(window_size_arg, window_size_re)) {
+        if (!std::regex_match(window_size_arg, OPTIONAL_DIMS_RE)) {
           throw std::logic_error{"Cannot parse window size argument (required format: [width]x[height], e.g. 800x600, 1280x or x480)"};
         }
 
@@ -763,9 +773,7 @@ int main(int argc, char** argv) {
       }
       if (args["frame-buffer-size"]) {
         const std::string frame_buffer_size_arg = args["frame-buffer-size"];
-        const std::regex frame_buffer_size_re("(\\d*)");
-
-        if (!std::regex_match(frame_buffer_size_arg, frame_buffer_size_re)) {
+        if (!std::regex_match(frame_buffer_size_arg, UNSIGNED_INTEGER_RE)) {
           throw std::logic_error{"Cannot parse frame buffer size (required format: [number], e.g. 10, 70 or 150)"};
         }
 
@@ -790,9 +798,7 @@ int main(int argc, char** argv) {
       }
       if (args["wheel-sensitivity"]) {
         const std::string wheel_sensitivity_arg = args["wheel-sensitivity"];
-        const std::regex wheel_sensitivity_re("^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$");
-
-        if (!std::regex_match(wheel_sensitivity_arg, wheel_sensitivity_re)) {
+        if (!std::regex_match(wheel_sensitivity_arg, SIGNED_NUMBER_RE)) {
           throw std::logic_error{"Cannot parse mouse wheel sensitivity argument; must be a valid number, e.g. 1.3 or -1"};
         }
 
@@ -821,9 +827,8 @@ int main(int argc, char** argv) {
       }
       if (args["scope-size"]) {
         const std::string scope_size_arg = args["scope-size"];
-        const std::regex scope_size_re("^(\\d+)x(\\d+)$");
         std::smatch sm;
-        if (!std::regex_match(scope_size_arg, sm, scope_size_re)) {
+        if (!std::regex_match(scope_size_arg, sm, REQUIRED_DIMS_RE)) {
           throw std::logic_error{"Cannot parse --scope-size argument (required format: [width]x[height], e.g. 1024x256)"};
         }
         config.scopes.width = std::stoi(sm[1].str());

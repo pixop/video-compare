@@ -221,6 +221,7 @@ Display::Display(const int display_number,
                  const bool verbose,
                  const bool fit_window_to_usable_bounds,
                  const bool high_dpi_allowed,
+                 const float ui_scale,
                  const AspectLockMode aspect_lock_mode,
                  const AspectViewMode aspect_view_mode,
                  const bool use_10_bpc,
@@ -239,6 +240,7 @@ Display::Display(const int display_number,
       mode_{mode},
       fit_window_to_usable_bounds_{fit_window_to_usable_bounds},
       high_dpi_allowed_{high_dpi_allowed},
+      ui_scale_{ui_scale},
       aspect_lock_mode_{aspect_lock_mode},
       aspect_view_mode_{aspect_view_mode},
       use_10_bpc_{use_10_bpc},
@@ -374,16 +376,9 @@ Display::Display(const int display_number,
 
   border_extension_ = 3 * font_scale_;
   double_border_extension_ = border_extension_ * 2;
-  line1_y_ = 20;
-  line2_y_ = line1_y_ + 30 * font_scale_;
-
-  if (mode_ != Mode::VStack) {
-    max_text_width_ = drawable_width_ / 2 - double_border_extension_ - line1_y_;
-  } else {
-    max_text_width_ = drawable_width_ - double_border_extension_ - line1_y_;
-  }
 
   rebuild_fonts();
+  update_hud_text_layout();
 
   normal_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
   pan_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZEALL);
@@ -647,6 +642,7 @@ void Display::print_verbose_info() {
   std::cout << "Display mode:          " << mode_to_string(mode_) << std::endl;
   std::cout << "Fit to usable bounds:  " << std::boolalpha << fit_window_to_usable_bounds_ << std::endl;
   std::cout << "High-DPI allowed:      " << std::boolalpha << high_dpi_allowed_ << std::endl;
+  std::cout << "UI scale:              " << ui_scale_ << std::endl;
   std::cout << "Aspect lock mode:      " << aspect_lock_mode_to_string(aspect_lock_mode_) << std::endl;
   std::cout << "Aspect view mode:      " << aspect_view_mode_to_string(aspect_view_mode_) << std::endl;
   std::cout << "Use 10 bpc:            " << std::boolalpha << use_10_bpc_ << std::endl;
@@ -695,6 +691,11 @@ void Display::print_verbose_info() {
 }
 
 void Display::rebuild_fonts() {
+  static constexpr int MIN_SMALL_FONT_SIZE = 14;
+  static constexpr int MAX_SMALL_FONT_SIZE = 64;
+  static constexpr int MIN_BIG_FONT_SIZE = 20;
+  static constexpr int MAX_BIG_FONT_SIZE = 96;
+
   if (small_font_ != nullptr) {
     TTF_CloseFont(small_font_);
     small_font_ = nullptr;
@@ -707,8 +708,28 @@ void Display::rebuild_fonts() {
   SDL_RWops* embedded_font_small = check_sdl(SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN), "get pointer to font");
   SDL_RWops* embedded_font_big = check_sdl(SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN), "get pointer to font");
 
-  small_font_ = check_sdl(TTF_OpenFontRW(embedded_font_small, 1, static_cast<int>(16 * font_scale_)), "font open");
-  big_font_ = check_sdl(TTF_OpenFontRW(embedded_font_big, 1, static_cast<int>(24 * font_scale_)), "font open");
+  const float scaled_font = font_scale_ * ui_scale_;
+  const int small_font_size = clamp_range(static_cast<int>(std::lround(16.0F * scaled_font)), MIN_SMALL_FONT_SIZE, MAX_SMALL_FONT_SIZE);
+  const int big_font_size = clamp_range(static_cast<int>(std::lround(24.0F * scaled_font)), MIN_BIG_FONT_SIZE, MAX_BIG_FONT_SIZE);
+
+  small_font_ = check_sdl(TTF_OpenFontRW(embedded_font_small, 1, small_font_size), "font open");
+  big_font_ = check_sdl(TTF_OpenFontRW(embedded_font_big, 1, big_font_size), "font open");
+}
+
+void Display::update_hud_text_layout() {
+  const int small_font_height = std::max(1, TTF_FontHeight(small_font_));
+  const int outer_margin = std::max(8, static_cast<int>(std::lround(8.0F * font_scale_ * ui_scale_)));
+  const int desired_line_spacing = std::max(small_font_height + double_border_extension_ + outer_margin / 2, static_cast<int>(std::lround(30.0F * font_scale_)));
+
+  line1_y_ = outer_margin + border_extension_;
+  line2_y_ = line1_y_ + desired_line_spacing;
+
+  // Keep text clipping consistent with the current drawable width and left margin.
+  if (mode_ != Mode::VStack) {
+    max_text_width_ = drawable_width_ / 2 - double_border_extension_ - line1_y_;
+  } else {
+    max_text_width_ = drawable_width_ - double_border_extension_ - line1_y_;
+  }
 }
 
 void Display::rebuild_side_ui_textures() {
@@ -947,20 +968,12 @@ void Display::handle_window_resize(const bool reset_forced_size_guard, const boo
 
   border_extension_ = 3 * font_scale_;
   double_border_extension_ = border_extension_ * 2;
-  line1_y_ = 20;
-  line2_y_ = line1_y_ + 30 * font_scale_;
-
-  // Keep text clipping consistent with the new drawable width.
-  if (mode_ != Mode::VStack) {
-    max_text_width_ = drawable_width_ / 2 - double_border_extension_ - line1_y_;
-  } else {
-    max_text_width_ = drawable_width_ - double_border_extension_ - line1_y_;
-  }
 
   // Rebuild cached UI assets that are size-dependent (fonts, help, metadata, labels).
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
 
   rebuild_fonts();
+  update_hud_text_layout();
   rebuild_side_ui_textures();
   rebuild_help_textures();
   metadata_dirty_ = true;
@@ -2494,6 +2507,8 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   SDL_Surface* text_surface;
 
   if (show_hud_) {
+    static constexpr int HUD_SCANLINE_GAP = 2;
+
     const float left_position = ffmpeg::pts_in_secs(left_frame);
     const float right_position = ffmpeg::pts_in_secs(right_frame);
     const float left_progress = left_position + ffmpeg::frame_duration_in_secs(left_frame);
@@ -2515,12 +2530,14 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
       if (mode_ == Mode::VStack) {
         render_text(line1_y_, line1_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
-        render_text(line1_y_, line2_y_, side_ui_[displayed_left_side_.as_simple_index()].text_texture, side_ui_[displayed_left_side_.as_simple_index()].text_width, side_ui_[displayed_left_side_.as_simple_index()].text_height,
+        const int left_file_row_y = line1_y_ + left_position_text_height + double_border_extension_ + HUD_SCANLINE_GAP;
+        render_text(line1_y_, left_file_row_y, side_ui_[displayed_left_side_.as_simple_index()].text_texture, side_ui_[displayed_left_side_.as_simple_index()].text_width, side_ui_[displayed_left_side_.as_simple_index()].text_height,
                     border_extension_, true);
       } else {
         render_text(line1_y_, line1_y_, side_ui_[displayed_left_side_.as_simple_index()].text_texture, side_ui_[displayed_left_side_.as_simple_index()].text_width, side_ui_[displayed_left_side_.as_simple_index()].text_height,
                     border_extension_, true);
-        render_text(line1_y_, line2_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
+        const int left_position_row_y = line1_y_ + side_ui_[displayed_left_side_.as_simple_index()].text_height + double_border_extension_ + HUD_SCANLINE_GAP;
+        render_text(line1_y_, left_position_row_y, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
       }
 
       SDL_DestroyTexture(left_position_text_texture);
@@ -2542,14 +2559,14 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
       if (mode_ == Mode::VStack) {
         text1_x = line1_y_;
-        text1_y = drawable_height_ - line2_y_ - side_ui_[displayed_right_side_.as_simple_index()].text_height;
         text2_x = line1_y_;
         text2_y = drawable_height_ - line1_y_ - side_ui_[displayed_right_side_.as_simple_index()].text_height;
+        text1_y = text2_y - side_ui_[displayed_right_side_.as_simple_index()].text_height - double_border_extension_ - HUD_SCANLINE_GAP;
       } else {
         text1_x = drawable_width_ - line1_y_ - side_ui_[displayed_right_side_.as_simple_index()].text_width;
         text1_y = line1_y_;
         text2_x = drawable_width_ - line1_y_ - right_position_text_width;
-        text2_y = line2_y_;
+        text2_y = line1_y_ + side_ui_[displayed_right_side_.as_simple_index()].text_height + double_border_extension_ + HUD_SCANLINE_GAP;
       }
 
       render_text(text1_x, text1_y, side_ui_[displayed_right_side_.as_simple_index()].text_texture, side_ui_[displayed_right_side_.as_simple_index()].text_width, side_ui_[displayed_right_side_.as_simple_index()].text_height,

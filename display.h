@@ -158,6 +158,7 @@ class Display {
   Mode mode_;
   const bool fit_window_to_usable_bounds_;
   const bool high_dpi_allowed_;
+  const float ui_scale_;
   const AspectLockMode aspect_lock_mode_;
   AspectViewMode aspect_view_mode_;
   const bool use_10_bpc_;
@@ -336,6 +337,7 @@ class Display {
   void print_verbose_info();
 
   void rebuild_fonts();
+  void update_hud_text_layout();
   void rebuild_side_ui_textures();
   void rebuild_help_textures();
   void clamp_overlay_offsets();
@@ -444,6 +446,7 @@ class Display {
           const bool verbose,
           const bool fit_window_to_usable_bounds,
           const bool high_dpi_allowed,
+          const float ui_scale,
           const AspectLockMode aspect_lock_mode,
           const AspectViewMode aspect_view_mode,
           const bool use_10_bpc,
