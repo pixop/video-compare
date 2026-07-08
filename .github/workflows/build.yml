@@ -197,7 +197,7 @@ jobs:
           gh release upload "$tag" -R "$repo" sbom.spdx.json --clobber=false
 
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
 
@@ -249,7 +249,7 @@ jobs:
           retention-days: 90
 
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-26
     permissions:
       contents: read
 
