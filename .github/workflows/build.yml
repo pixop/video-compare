@@ -257,6 +257,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Remove untrusted Homebrew taps
+        run: |
+          brew untap aws/tap || true
+
       - name: Install dependencies via Homebrew
         run: |
           brew install ffmpeg sdl2 sdl2_ttf
