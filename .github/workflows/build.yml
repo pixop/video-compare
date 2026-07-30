@@ -40,21 +40,27 @@ jobs:
 
       - name: Download FFmpeg
         shell: msys2 {0}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
           ./download_and_extract_windows_deps.sh ffmpeg
 
       - name: Download SDL2
         shell: msys2 {0}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          ./download_and_extract_windows_deps.sh sdl2 release-2.32.10
+          ./download_and_extract_windows_deps.sh sdl2
 
       - name: Download SDL2_ttf
         shell: msys2 {0}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          ./download_and_extract_windows_deps.sh sdl2_ttf release-2.24.0
+          ./download_and_extract_windows_deps.sh sdl2_ttf
 
       - name: Build
         shell: msys2 {0}
@@ -94,6 +100,18 @@ jobs:
           set -euxo pipefail
           strip video-compare.exe
 
+      - name: Verify FFmpeg source manifest
+        shell: msys2 {0}
+        run: |
+          set -euxo pipefail
+          test -s licenses/FFMPEG-SOURCE.txt
+          grep -q '^Source and build information for the bundled FFmpeg libraries' licenses/FFMPEG-SOURCE.txt
+          grep -q '^Gyan release version:' licenses/FFMPEG-SOURCE.txt
+          grep -q '^FFmpeg upstream commit:' licenses/FFMPEG-SOURCE.txt
+          grep -q '^FFmpeg upstream archive:' licenses/FFMPEG-SOURCE.txt
+          grep -q '^Bundled shared-build archive:' licenses/FFMPEG-SOURCE.txt
+          grep -q '^Archive SHA-256:' licenses/FFMPEG-SOURCE.txt
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -102,6 +120,8 @@ jobs:
             video-compare.exe
             *.dll
             README.md
+            LICENSE.md
+            licenses/
           retention-days: 90
 
   release-windows:
@@ -129,7 +149,8 @@ jobs:
           sudo apt-get install -y zip
 
           mkdir -p release
-          cp -f video-compare.exe README.md release/
+          cp -f video-compare.exe README.md LICENSE.md release/
+          cp -a licenses release/
           # Copy all DLLs (if any) from the Windows artifact bundle.
           shopt -s nullglob
           dlls=( *.dll )
@@ -246,6 +267,8 @@ jobs:
           path: |
             video-compare
             README.md
+            LICENSE.md
+            licenses/
           retention-days: 90
 
   build-macos:
@@ -292,4 +315,6 @@ jobs:
           path: |
             video-compare
             README.md
+            LICENSE.md
+            licenses/
           retention-days: 90

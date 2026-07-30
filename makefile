@@ -4,9 +4,8 @@ CXXFLAGS = -g3 -Ofast -std=c++14 -D__STDC_CONSTANT_MACROS \
 		   -Woverloaded-virtual -Wno-unused -Wno-missing-field-initializers
 
 ifneq ($(filter MINGW%,$(shell uname)),)
-  FFMPEG_VERSION = 8.1.2-full_build-shared
-  SDL2_VERSION = 2.32.10
-  SDL2_TTF_VERSION = 2.24.0
+  include windows_deps.mk
+  FFMPEG_VERSION = $(GYAN_FFMPEG_VERSION)-$(GYAN_FFMPEG_VARIANT)
 
   FFMPEG_PATH = ffmpeg-$(FFMPEG_VERSION)
   SDL2_PATH = SDL2-devel-$(SDL2_VERSION)-mingw/SDL2-$(SDL2_VERSION)/x86_64-w64-mingw32

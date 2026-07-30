@@ -1,0 +1,79 @@
+Third-Party Notices for video-compare
+=====================================
+
+This application uses or distributes the following third-party software.
+
+FFmpeg
+------
+
+Upstream project: FFmpeg (https://ffmpeg.org/)
+
+Windows release
+~~~~~~~~~~~~~~~
+Windows distribution: Gyan Doshi FFmpeg builds
+Build variant: GPL-enabled full shared build
+License: GNU General Public License version 3
+License file: licenses/LICENSE-FFmpeg-GPL-3.0.txt
+
+The Windows binary release bundles shared FFmpeg libraries from the
+Gyan full shared build.
+
+The exact Gyan/FFmpeg version, upstream source revision, bundled archive,
+and corresponding source location for this artifact are recorded in:
+
+  licenses/FFMPEG-SOURCE.txt
+
+That file is generated for and included with each Windows release.
+
+Linux and macOS releases
+~~~~~~~~~~~~~~~~~~~~~~~~
+Linux and macOS release artifacts do not bundle FFmpeg libraries. They
+dynamically link against FFmpeg libraries supplied by the target system;
+the applicable FFmpeg licensing terms depend on the installed FFmpeg build.
+
+SDL2
+----
+Upstream project: Simple DirectMedia Layer (https://github.com/libsdl-org/SDL)
+License: zlib License
+License file: licenses/LICENSE-SDL2-Zlib.txt
+
+SDL2_ttf
+--------
+Upstream project: SDL_ttf (https://github.com/libsdl-org/SDL_ttf)
+License: zlib License
+License file: licenses/LICENSE-SDL2_ttf-Zlib.txt
+
+stb_image_write
+---------------
+Upstream project: stb (https://github.com/nothings/stb)
+Embedded component: stb_image_write.h
+License: MIT License
+License file: licenses/LICENSE-stb_image_write-MIT.txt
+
+Embedded font software
+----------------------
+This application also embeds the following font software in its binary.
+
+Source Code Pro Regular
+-----------------------
+Upstream project: Adobe Source Code Pro
+Embedded variant: Source Code Pro Regular
+License: SIL Open Font License 1.1
+License file: licenses/LICENSE-Source-Code-Pro-OFL-1.1.txt
+
+Sarasa Mono SC Regular
+----------------------
+Upstream project: Sarasa Gothic (be5invis)
+Embedded variant: Sarasa Mono SC Regular
+License: SIL Open Font License 1.1
+License file: licenses/LICENSE-Sarasa-Gothic-OFL-1.1.txt
+
+Redistribution
+--------------
+Binary distributions of video-compare must include the application's
+LICENSE.md and the applicable third-party notices and license texts listed
+above. Preserving the complete licenses/ directory from the corresponding
+official release is the recommended way to satisfy this requirement.
+
+Redistributors are also responsible for satisfying the applicable
+source-code requirements of GPLv2 and any bundled GPL components.

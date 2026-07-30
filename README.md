@@ -60,13 +60,6 @@ Subtraction mode (plus time-shift, 200% zoom, and magnification):
 Vertically stacked mode:
 ![Stacked mode"](screenshot_3.jpg?raw=true)
 
-## Credits
-
-`video-compare` was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on
-the excellent video player GitHub project: https://github.com/pockethook/player
-
-Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://github.com/libsdl-org/SDL) and
-[stb](https://github.com/nothings/stb) authors.
 
 ## Usage
 
@@ -351,3 +344,28 @@ For details, check out the [open GitHub issue thread](https://github.com/pixop/v
 ## Contributing
 
 We're always looking for ways to improve and expand the tool. Your feedback and contributions are appreciated.
+
+## Credits
+
+`video-compare` was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on
+the excellent video player GitHub project: https://github.com/pockethook/player
+
+Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://github.com/libsdl-org/SDL) and
+[stb](https://github.com/nothings/stb) authors.
+
+## License
+
+`video-compare` is licensed under the [GNU General Public License version 2](LICENSE.md).
+Third-party software and the corresponding license texts are listed in
+[`licenses/THIRD-PARTY-NOTICES.txt`](licenses/THIRD-PARTY-NOTICES.txt).
+
+Binary redistributions of `video-compare`, including installers, application bundles, and GUI
+frontends that package the executable, must include `LICENSE.md` and the applicable third-party
+notices and license texts. The simplest approach is to preserve the complete `licenses/` directory
+unchanged.
+
+Source code for each official release is available from the corresponding GitHub release and
+repository tag. Redistributors of binary builds must also provide access to the complete
+corresponding source code as required by GPLv2.
+
+Official release archives include `LICENSE.md` and the complete `licenses/` directory.

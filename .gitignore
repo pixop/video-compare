@@ -27,3 +27,6 @@ video-compare
 # PNG files
 *.png
 
+# Generated Windows FFmpeg source manifest (bundled in Windows artifacts only)
+licenses/FFMPEG-SOURCE.txt
+
