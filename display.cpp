@@ -17,7 +17,9 @@
 #include "format_converter.h"
 #include "png_saver.h"
 #include "scope_window.h"
+#include "font_selection.h"
 #include "source_code_pro_regular_ttf.h"
+#include "sarasa_mono_sc_regular_ttf.h"
 #include "version.h"
 #include "video_compare_icon.h"
 #include "vmaf_calculator.h"
@@ -68,6 +70,14 @@ template <typename T>
 inline T check_sdl(T value, const std::string& message) {
   if (!value) {
     throw std::runtime_error{"SDL " + message + " - " + SDL_GetError()};
+  }
+  return value;
+}
+
+template <typename T>
+inline T check_ttf(T value, const std::string& message) {
+  if (!value) {
+    throw std::runtime_error{"TTF " + message + " - " + TTF_GetError()};
   }
   return value;
 }
@@ -158,6 +168,20 @@ static std::string format_right_file_label(const std::string& left_file_name, co
   return right_file_name;
 }
 
+static std::pair<std::string, std::string> hud_filename_labels(const std::string& left_file_name, const std::string& right_file_name, const size_t active_right_index) {
+  return {left_file_name, format_right_file_label(left_file_name, right_file_name, active_right_index + 1)};
+}
+
+static const char* embedded_font_display_name(Display::EmbeddedFont font) {
+  switch (font) {
+    case Display::EmbeddedFont::SourceCodePro:
+      return "Source Code Pro";
+    case Display::EmbeddedFont::Sarasa:
+      return "Sarasa Mono SC";
+  }
+  return "unknown font";
+}
+
 std::string format_window_title(const std::string& left_file_name, const std::string& right_file_name) {
   return string_sprintf("%s  |  %s", get_file_name_and_extension(left_file_name).c_str(), get_file_name_and_extension(right_file_name).c_str());
 }
@@ -222,6 +246,7 @@ Display::Display(const int display_number,
                  const bool fit_window_to_usable_bounds,
                  const bool high_dpi_allowed,
                  const float ui_scale,
+                 const FontMode font_mode,
                  const AspectLockMode aspect_lock_mode,
                  const AspectViewMode aspect_view_mode,
                  const bool use_10_bpc,
@@ -241,6 +266,7 @@ Display::Display(const int display_number,
       fit_window_to_usable_bounds_{fit_window_to_usable_bounds},
       high_dpi_allowed_{high_dpi_allowed},
       ui_scale_{ui_scale},
+      font_mode_{font_mode},
       aspect_lock_mode_{aspect_lock_mode},
       aspect_view_mode_{aspect_view_mode},
       use_10_bpc_{use_10_bpc},
@@ -377,6 +403,10 @@ Display::Display(const int display_number,
   border_extension_ = 3 * font_scale_;
   double_border_extension_ = border_extension_ * 2;
 
+  left_file_name_ = left_file_name;
+  right_file_name_ = right_file_name;
+
+  resolve_font_for_current_labels();
   rebuild_fonts();
   update_hud_text_layout();
 
@@ -386,9 +416,6 @@ Display::Display(const int display_number,
 
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
 
-  // Store left/right names before reinitializing dimensions since it may refresh title text.
-  left_file_name_ = left_file_name;
-  right_file_name_ = right_file_name;
   last_window_title_.clear();
 
   reinitialize_video_dimensions(width, height);
@@ -642,6 +669,7 @@ void Display::print_verbose_info() {
   std::cout << "Display mode:          " << mode_to_string(mode_) << std::endl;
   std::cout << "Fit to usable bounds:  " << std::boolalpha << fit_window_to_usable_bounds_ << std::endl;
   std::cout << "High-DPI allowed:      " << std::boolalpha << high_dpi_allowed_ << std::endl;
+  std::cout << "UI font:               " << embedded_font_display_name(active_embedded_font_) << std::endl;
   std::cout << "UI scale:              " << ui_scale_ << std::endl;
   std::cout << "Aspect lock mode:      " << aspect_lock_mode_to_string(aspect_lock_mode_) << std::endl;
   std::cout << "Aspect view mode:      " << aspect_view_mode_to_string(aspect_view_mode_) << std::endl;
@@ -696,24 +724,73 @@ void Display::rebuild_fonts() {
   static constexpr int MIN_BIG_FONT_SIZE = 20;
   static constexpr int MAX_BIG_FONT_SIZE = 96;
 
-  if (small_font_ != nullptr) {
-    TTF_CloseFont(small_font_);
-    small_font_ = nullptr;
-  }
-  if (big_font_ != nullptr) {
-    TTF_CloseFont(big_font_);
-    big_font_ = nullptr;
-  }
-
-  SDL_RWops* embedded_font_small = check_sdl(SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN), "get pointer to font");
-  SDL_RWops* embedded_font_big = check_sdl(SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN), "get pointer to font");
-
   const float scaled_font = font_scale_ * ui_scale_;
   const int small_font_size = clamp_range(static_cast<int>(std::lround(16.0F * scaled_font)), MIN_SMALL_FONT_SIZE, MAX_SMALL_FONT_SIZE);
   const int big_font_size = clamp_range(static_cast<int>(std::lround(24.0F * scaled_font)), MIN_BIG_FONT_SIZE, MAX_BIG_FONT_SIZE);
 
-  small_font_ = check_sdl(TTF_OpenFontRW(embedded_font_small, 1, small_font_size), "font open");
-  big_font_ = check_sdl(TTF_OpenFontRW(embedded_font_big, 1, big_font_size), "font open");
+  TTF_Font* new_small_font = open_embedded_font(active_embedded_font_, small_font_size, "small font");
+  TTF_Font* new_big_font = nullptr;
+  try {
+    new_big_font = open_embedded_font(active_embedded_font_, big_font_size, "large font");
+  } catch (...) {
+    TTF_CloseFont(new_small_font);
+    throw;
+  }
+
+  if (small_font_ != nullptr) {
+    TTF_CloseFont(small_font_);
+  }
+  if (big_font_ != nullptr) {
+    TTF_CloseFont(big_font_);
+  }
+
+  small_font_ = new_small_font;
+  big_font_ = new_big_font;
+}
+
+TTF_Font* Display::open_embedded_font(EmbeddedFont family, int pt_size, const char* purpose) {
+  const char* family_name = embedded_font_display_name(family);
+  SDL_RWops* rw = nullptr;
+
+  switch (family) {
+    case EmbeddedFont::SourceCodePro:
+      rw = check_sdl(SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN), "get pointer to font");
+      break;
+    case EmbeddedFont::Sarasa:
+      rw = check_sdl(SDL_RWFromConstMem(SARASA_MONO_SC_REGULAR_TTF, SARASA_MONO_SC_REGULAR_TTF_LEN), "get pointer to font");
+      break;
+  }
+
+  TTF_Font* font = TTF_OpenFontRW(rw, 1, pt_size);
+  return check_ttf(font, string_sprintf("open %s %s (%d pt)", family_name, purpose, pt_size));
+}
+
+bool Display::resolve_font_for_current_labels() {
+  const EmbeddedFont previous = active_embedded_font_;
+  const auto labels = hud_filename_labels(left_file_name_, right_file_name_, active_right_index_);
+
+  if (font_mode_ == FontMode::Auto) {
+    bool malformed = false;
+    TTF_Font* probe = open_embedded_font(EmbeddedFont::SourceCodePro, 16, "probe");
+    active_embedded_font_ = resolve_auto_embedded_font(probe, labels.first, labels.second, &malformed);
+    TTF_CloseFont(probe);
+
+    if (malformed && pending_verbose_print_) {
+      std::cout << "WARNING: Malformed UTF-8 in filename label; selecting Sarasa (encoding is unchanged)." << std::endl;
+    }
+  } else {
+    active_embedded_font_ = embedded_font_for_forced_mode(font_mode_);
+  }
+
+  return active_embedded_font_ != previous;
+}
+
+void Display::rebuild_font_dependent_ui() {
+  rebuild_fonts();
+  update_hud_text_layout();
+  rebuild_side_ui_textures();
+  rebuild_help_textures();
+  metadata_dirty_ = true;
 }
 
 void Display::update_hud_text_layout() {
@@ -972,11 +1049,7 @@ void Display::handle_window_resize(const bool reset_forced_size_guard, const boo
   // Rebuild cached UI assets that are size-dependent (fonts, help, metadata, labels).
   SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
 
-  rebuild_fonts();
-  update_hud_text_layout();
-  rebuild_side_ui_textures();
-  rebuild_help_textures();
-  metadata_dirty_ = true;
+  rebuild_font_dependent_ui();
 
   // Clamp overlay scroll positions to the new size and refresh ROI-dependent title.
   clamp_overlay_offsets();
@@ -1946,27 +2019,29 @@ void Display::update_metadata(const VideoMetadata left_metadata, const VideoMeta
 }
 
 void Display::update_right_video(const std::string& right_file_name, const VideoMetadata right_metadata) {
-  // Update right metadata
   right_metadata_ = right_metadata;
-  metadata_dirty_ = true;
   right_file_name_ = right_file_name;
 
-  // Update right file stem
   side_ui_[RIGHT.as_simple_index()].file_stem = strip_ffmpeg_patterns(get_file_stem(right_file_name));
 
-  // Destroy old right texture
-  if (side_ui_[RIGHT.as_simple_index()].text_texture != nullptr) {
-    SDL_DestroyTexture(side_ui_[RIGHT.as_simple_index()].text_texture);
+  const bool font_family_changed = (font_mode_ == FontMode::Auto) && resolve_font_for_current_labels();
+
+  if (font_family_changed) {
+    rebuild_font_dependent_ui();
+  } else {
+    metadata_dirty_ = true;
+
+    if (side_ui_[RIGHT.as_simple_index()].text_texture != nullptr) {
+      SDL_DestroyTexture(side_ui_[RIGHT.as_simple_index()].text_texture);
+    }
+
+    SDL_Surface* text_surface = render_text_with_fallback(format_right_file_label(left_file_name_, right_file_name, active_right_index_ + 1));
+    side_ui_[RIGHT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
+    side_ui_[RIGHT.as_simple_index()].text_width = text_surface->w;
+    side_ui_[RIGHT.as_simple_index()].text_height = text_surface->h;
+    SDL_FreeSurface(text_surface);
   }
 
-  // Create new right texture
-  SDL_Surface* text_surface = render_text_with_fallback(format_right_file_label(left_file_name_, right_file_name, active_right_index_ + 1));
-  side_ui_[RIGHT.as_simple_index()].text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-  side_ui_[RIGHT.as_simple_index()].text_width = text_surface->w;
-  side_ui_[RIGHT.as_simple_index()].text_height = text_surface->h;
-  SDL_FreeSurface(text_surface);
-
-  // Update window title (may include ROI)
   update_window_title_with_current_roi();
 }
 

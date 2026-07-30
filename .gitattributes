@@ -1,5 +1,9 @@
-# exclude font and third party library from Linguist stats (it's going to skew the project towards being written in C if included)
-source_code_pro_regular_ttf.h linguist-vendored
+# Exclude embedded assets and vendored third-party code from Linguist statistics.
+# Disable diffs for machine-generated binary asset headers.
+source_code_pro_regular_ttf.h linguist-vendored -diff
+sarasa_mono_sc_regular_ttf.h linguist-vendored -diff
+video_compare_icon.h linguist-vendored -diff
+
 stb_image_write.h linguist-vendored
-video_compare_icon.h linguist-vendored
+
 *.sh text eol=lf
