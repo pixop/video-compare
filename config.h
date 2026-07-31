@@ -55,7 +55,7 @@ struct VideoCompareConfig {
   bool fit_window_to_usable_bounds{false};
   bool high_dpi_allowed{false};
   float ui_scale{1.0F};
-  FontMode font_mode{FontMode::Auto};
+  FontSelection font_selection{};
   bool use_10_bpc{false};
   bool fast_input_alignment{false};
   bool bilinear_texture_filtering{false};

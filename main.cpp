@@ -385,16 +385,20 @@ Display::AspectLockMode parse_aspect_lock_mode(const std::string& mode) {
   }
 }
 
-FontMode parse_font_mode(const std::string& value) {
-  if (value == "auto") {
-    return FontMode::Auto;
-  } else if (value == "scp") {
-    return FontMode::SourceCodePro;
-  } else if (value == "sarasa") {
-    return FontMode::Sarasa;
-  } else {
-    throw std::logic_error{"Invalid --font value '" + value + "'; expected auto, scp, or sarasa"};
+FontSelection parse_font_selection(const std::string& value) {
+  if (value.empty()) {
+    throw std::logic_error{"--font requires a non-empty value"};
   }
+  if (value == "auto") {
+    return FontSelection{FontMode::Auto, {}};
+  }
+  if (value == "scp") {
+    return FontSelection{FontMode::SourceCodePro, {}};
+  }
+  if (value == "sarasa") {
+    return FontSelection{FontMode::Sarasa, {}};
+  }
+  return FontSelection{FontMode::CustomFile, value};
 }
 
 Display::AspectViewMode parse_aspect_view_mode(const std::string& mode) {
@@ -567,7 +571,7 @@ int main(int argc, char** argv) {
          {"options-file", {"-o", "--options-file"}, "read additional command-line options from a file (contents are inserted before other arguments)", 1},
          {"fullscreen", {"-u", "--fullscreen"}, "start in fullscreen mode (desktop fullscreen without changing display mode/refresh rate)", 0},
          {"high-dpi", {"-d", "--high-dpi"}, "allow high DPI mode for e.g. displaying UHD content on Retina displays", 0},
-         {"font", {"-g", "--font"}, "UI font, 'auto' selects a font that can display both filenames (default), 'scp' for Source Code Pro, or 'sarasa' for Sarasa Mono SC", 1},
+         {"font", {"-g", "--font"}, "UI font, 'auto' selects a bundled font that can display both filenames (default), 'scp' or 'sarasa' selects a bundled font, otherwise load a font file from the specified path", 1},
          {"ui-scale", {"-U", "--ui-scale"}, "UI scale multiplier for on-screen text (e.g. 1.25), default is 1.0", 1},
          {"10-bpc", {"-b", "--10-bpc"}, "use 10 bits per color component instead of 8", 0},
          {"fast-alignment", {"-F", "--fast-alignment"}, "toggle fast bilinear scaling for aligning input source resolutions, replacing high-quality bicubic and chroma-accurate interpolation", 0},
@@ -682,7 +686,7 @@ int main(int argc, char** argv) {
       config.fit_window_to_usable_bounds = args["window-fit-display"];
       config.high_dpi_allowed = args["high-dpi"];
       if (args["font"]) {
-        config.font_mode = parse_font_mode(static_cast<const std::string&>(args["font"]));
+        config.font_selection = parse_font_selection(static_cast<const std::string&>(args["font"]));
       }
       if (args["ui-scale"]) {
         const std::string ui_scale_arg = args["ui-scale"];

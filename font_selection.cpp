@@ -1,6 +1,12 @@
 #include "font_selection.h"
 #include <cstdint>
 #include <stdexcept>
+#include "source_code_pro_regular_ttf.h"
+#include "sarasa_mono_sc_regular_ttf.h"
+#include "string_utils.h"
+extern "C" {
+#include <SDL2/SDL.h>
+}
 
 #if !SDL_TTF_VERSION_ATLEAST(2, 0, 18)
 #error "SDL2_ttf >= 2.0.18 required for TTF_GlyphIsProvided32"
@@ -93,16 +99,99 @@ bool decode_next_utf8_codepoint(const char*& ptr, const char* end, uint32_t& cp_
 
 }  // namespace
 
-Display::EmbeddedFont embedded_font_for_forced_mode(FontMode mode) {
+namespace {
+
+template <typename T>
+T check_sdl(T value, const char* context) {
+  if (!value) {
+    throw std::runtime_error{std::string("SDL ") + context + " - " + SDL_GetError()};
+  }
+  return value;
+}
+
+[[nodiscard]] TTF_Font* open_embedded_font(EmbeddedFont family, int point_size, const char* text_role) {
+  const char* family_name = embedded_font_display_name(family);
+  SDL_RWops* rw = nullptr;
+
+  switch (family) {
+    case EmbeddedFont::SourceCodePro:
+      rw = check_sdl(SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN), "get pointer to font");
+      break;
+    case EmbeddedFont::Sarasa:
+      rw = check_sdl(SDL_RWFromConstMem(SARASA_MONO_SC_REGULAR_TTF, SARASA_MONO_SC_REGULAR_TTF_LEN), "get pointer to font");
+      break;
+  }
+
+  TTF_Font* font = TTF_OpenFontRW(rw, 1, point_size);
+  if (font == nullptr) {
+    const char* ttf_error = TTF_GetError();
+    const std::string raw_error = (ttf_error != nullptr && *ttf_error != '\0') ? ttf_error : "unknown error";
+    throw std::runtime_error{string_sprintf("TTF open %s %s (%d pt) - %s", family_name, text_role, point_size, raw_error.c_str())};
+  }
+  return font;
+}
+
+}  // namespace
+
+EmbeddedFont embedded_font_for_forced_mode(FontMode mode) {
   switch (mode) {
     case FontMode::SourceCodePro:
-      return Display::EmbeddedFont::SourceCodePro;
+      return EmbeddedFont::SourceCodePro;
     case FontMode::Sarasa:
-      return Display::EmbeddedFont::Sarasa;
+      return EmbeddedFont::Sarasa;
     case FontMode::Auto:
       throw std::logic_error{"embedded_font_for_forced_mode called with FontMode::Auto"};
+    case FontMode::CustomFile:
+      throw std::logic_error{"embedded_font_for_forced_mode called with FontMode::CustomFile"};
   }
   throw std::logic_error{"unknown FontMode"};
+}
+
+const char* embedded_font_display_name(EmbeddedFont font) {
+  switch (font) {
+    case EmbeddedFont::SourceCodePro:
+      return "Source Code Pro";
+    case EmbeddedFont::Sarasa:
+      return "Sarasa Mono SC";
+  }
+  return "unknown font";
+}
+
+TTF_Font* open_ui_font_at_size(const FontSelection& selection, EmbeddedFont active_embedded_font, int point_size, const char* text_role) {
+  if (selection.mode == FontMode::CustomFile) {
+    if (selection.custom_file_path.empty()) {
+      throw std::logic_error{"CustomFile font mode requires a non-empty path"};
+    }
+    return open_custom_font_file(selection.custom_file_path, point_size, text_role);
+  }
+  return open_embedded_font(active_embedded_font, point_size, text_role);
+}
+
+namespace {
+
+std::string strip_duplicate_path_from_ttf_error(const std::string& path, const std::string& ttf_error) {
+  const std::string prefix = "Couldn't open " + path + ": ";
+  if (ttf_error.compare(0, prefix.size(), prefix) == 0) {
+    return ttf_error.substr(prefix.size());
+  }
+  return ttf_error;
+}
+
+}  // namespace
+
+std::string format_custom_font_open_error(const std::string& path, int point_size, const char* text_role, const char* ttf_error) {
+  const std::string raw_error = (ttf_error != nullptr && *ttf_error != '\0') ? ttf_error : "unknown error";
+  const std::string reason = strip_duplicate_path_from_ttf_error(path, raw_error);
+  return string_sprintf("failed to open custom UI font '%s' for %s (%d pt): %s", path.c_str(), text_role, point_size, reason.c_str());
+}
+
+TTF_Font* open_custom_font_file(const std::string& path, int point_size, const char* text_role) {
+  TTF_Font* font = TTF_OpenFont(path.c_str(), point_size);
+  if (font == nullptr) {
+    const char* ttf_error = TTF_GetError();
+    throw std::runtime_error{format_custom_font_open_error(path, point_size, text_role, ttf_error)};
+  }
+  return font;
 }
 
 bool font_supports_utf8_text(TTF_Font* font, const std::string& text, bool* malformed_utf8_out) {
@@ -135,7 +224,7 @@ bool font_supports_utf8_text(TTF_Font* font, const std::string& text, bool* malf
   return all_glyphs_supported;
 }
 
-Display::EmbeddedFont resolve_auto_embedded_font(TTF_Font* scp_probe_font,
+EmbeddedFont resolve_auto_embedded_font(TTF_Font* scp_probe_font,
                                         const std::string& left_label,
                                         const std::string& right_label,
                                         bool* malformed_utf8_out) {
@@ -153,5 +242,5 @@ Display::EmbeddedFont resolve_auto_embedded_font(TTF_Font* scp_probe_font,
     *malformed_utf8_out = left_malformed || right_malformed;
   }
 
-  return left_supported && right_supported ? Display::EmbeddedFont::SourceCodePro : Display::EmbeddedFont::Sarasa;
+  return left_supported && right_supported ? EmbeddedFont::SourceCodePro : EmbeddedFont::Sarasa;
 }

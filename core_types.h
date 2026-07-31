@@ -15,7 +15,14 @@ constexpr unsigned UNSET_PEAK_LUMINANCE = 0;
 
 enum class ToneMapping { Auto, Off, FullRange, Relative };
 enum class DynamicRange { Standard, PQ, HLG };
-enum class FontMode { Auto, SourceCodePro, Sarasa };
+enum class FontMode { Auto, SourceCodePro, Sarasa, CustomFile };
+
+// Auto, SourceCodePro, and Sarasa use an empty custom_file_path.
+// CustomFile requires a non-empty custom_file_path.
+struct FontSelection {
+  FontMode mode{FontMode::Auto};
+  std::string custom_file_path;
+};
 
 enum class SideType { None = -1, Left, Right };
 

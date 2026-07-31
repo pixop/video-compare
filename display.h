@@ -11,6 +11,7 @@
 #include <tuple>
 #include <vector>
 #include "core_types.h"
+#include "font_selection.h"
 #include "row_workers.h"
 #include "scope_window.h"
 #include "string_utils.h"
@@ -106,7 +107,6 @@ class Display {
  public:
   enum class Mode { Split, VStack, HStack };
   enum class Loop { Off, ForwardOnly, PingPong };
-  enum class EmbeddedFont { SourceCodePro, Sarasa };
   enum class AspectLockMode { Off, Window, Content };
   enum class AspectViewMode { Stretch, Original, Preset16x9, Preset4x3, Preset1x1 };
   enum class DiffMode { LegacyAbs, AbsLinear, AbsSqrt, SignedDiverging };
@@ -160,7 +160,7 @@ class Display {
   const bool fit_window_to_usable_bounds_;
   const bool high_dpi_allowed_;
   const float ui_scale_;
-  const FontMode font_mode_;
+  const FontSelection font_selection_;
   EmbeddedFont active_embedded_font_{EmbeddedFont::SourceCodePro};
   const AspectLockMode aspect_lock_mode_;
   AspectViewMode aspect_view_mode_;
@@ -341,8 +341,7 @@ class Display {
 
   void rebuild_fonts();
   void rebuild_font_dependent_ui();
-  bool resolve_font_for_current_labels();
-  TTF_Font* open_embedded_font(EmbeddedFont family, int pt_size, const char* purpose);
+  bool resolve_embedded_font_for_current_labels();
   void update_hud_text_layout();
   void rebuild_side_ui_textures();
   void rebuild_help_textures();
@@ -453,7 +452,7 @@ class Display {
           const bool fit_window_to_usable_bounds,
           const bool high_dpi_allowed,
           const float ui_scale,
-          const FontMode font_mode,
+          const FontSelection& font_selection,
           const AspectLockMode aspect_lock_mode,
           const AspectViewMode aspect_view_mode,
           const bool use_10_bpc,
