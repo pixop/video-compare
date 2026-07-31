@@ -357,7 +357,7 @@ Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://gi
 
 `video-compare` is licensed under the [GNU General Public License version 2](LICENSE.md).
 Third-party software and the corresponding license texts are listed in
-[`licenses/THIRD-PARTY-NOTICES.txt`](licenses/THIRD-PARTY-NOTICES.txt).
+[licenses/THIRD-PARTY-NOTICES.txt](licenses/THIRD-PARTY-NOTICES.txt).
 
 Binary redistributions of `video-compare`, including installers, application bundles, and GUI
 frontends that package the executable, must include `LICENSE.md` and the applicable third-party
@@ -367,5 +367,3 @@ unchanged.
 Source code for each official release is available from the corresponding GitHub release and
 repository tag. Redistributors of binary builds must also provide access to the complete
 corresponding source code as required by GPLv2.
-
-Official release archives include `LICENSE.md` and the complete `licenses/` directory.
