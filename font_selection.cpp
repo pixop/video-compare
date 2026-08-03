@@ -1,8 +1,8 @@
 #include "font_selection.h"
 #include <cstdint>
 #include <stdexcept>
-#include "source_code_pro_regular_ttf.h"
 #include "sarasa_mono_sc_regular_ttf.h"
+#include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
 extern "C" {
 #include <SDL2/SDL.h>
@@ -224,10 +224,7 @@ bool font_supports_utf8_text(TTF_Font* font, const std::string& text, bool* malf
   return all_glyphs_supported;
 }
 
-EmbeddedFont resolve_auto_embedded_font(TTF_Font* scp_probe_font,
-                                        const std::string& left_label,
-                                        const std::string& right_label,
-                                        bool* malformed_utf8_out) {
+EmbeddedFont resolve_auto_embedded_font(TTF_Font* scp_probe_font, const std::string& left_label, const std::string& right_label, bool* malformed_utf8_out) {
   if (malformed_utf8_out != nullptr) {
     *malformed_utf8_out = false;
   }

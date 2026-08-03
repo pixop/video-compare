@@ -59,10 +59,7 @@ DurationDeriver::Result DurationDeriver::derive(const Input& input) {
     result.source = Source::Fallback;
   }
 
-  const bool remember_resolved_duration =
-      result.source == Source::PtsDelta ||
-      result.source == Source::Prediction ||
-      (result.source == Source::Metadata && metadata_plausible);
+  const bool remember_resolved_duration = result.source == Source::PtsDelta || result.source == Source::Prediction || (result.source == Source::Metadata && metadata_plausible);
   if (remember_resolved_duration) {
     remember_duration(result.resolved_duration);
   }
