@@ -178,8 +178,8 @@ class VideoCompare {
 
     static Sample capture(const AVFrame* left_frame, const AVFrame* right_frame, const ScopeWindow::Roi& roi, const bool swapped) {
       return Sample{
-          get_frame_key(left_frame),
-          get_frame_key(right_frame),
+          FrameMetadata::require_key(left_frame),
+          FrameMetadata::require_key(right_frame),
           roi,
           swapped,
       };

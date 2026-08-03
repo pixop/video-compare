@@ -214,12 +214,6 @@ static std::string format_libav_version(unsigned version) {
   return string_sprintf("%2u.%2u.%3u", major, minor, micro);
 }
 
-auto get_metadata_int_value = [](const AVFrame* frame, const std::string& key, const int default_value) -> int {
-  const AVDictionaryEntry* entry = av_dict_get(frame->metadata, key.c_str(), nullptr, 0);
-
-  return entry ? std::atoi(entry->value) : default_value;
-};
-
 SDL::SDL() {
   check_sdl(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) == 0, "SDL init");
   check_sdl(TTF_Init() == 0, "TTF init");
@@ -2325,8 +2319,8 @@ void Display::save_selected_area(const AVFrame* left_frame, const AVFrame* right
 }
 
 bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_frame, const std::string& current_total_browsable) {
-  const std::string left_frame_key = get_frame_key(left_frame);
-  const std::string right_frame_key = get_frame_key(right_frame);
+  const std::string left_frame_key = FrameMetadata::require_key(left_frame);
+  const std::string right_frame_key = FrameMetadata::require_key(right_frame);
 
   const bool has_updated_left_frame = previous_left_frame_key_ != left_frame_key;
   const bool has_updated_right_frame = previous_right_frame_key_ != right_frame_key;
@@ -2383,12 +2377,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       const int pixel_video_x = mouse_video_x % video_width_;
       const int pixel_video_y = mouse_video_y % video_height_;
 
-      auto get_original_dimensions = [&](const AVFrame* frame) -> std::pair<int, int> {
-        const int original_width = get_metadata_int_value(frame, "original_width", frame->width);
-        const int original_height = get_metadata_int_value(frame, "original_height", frame->height);
-
-        return std::make_pair(original_width, original_height);
-      };
+      auto get_original_dimensions = [&](const AVFrame* frame) -> std::pair<int, int> { return {FrameMetadata::get_original_width(frame, frame->width), FrameMetadata::get_original_height(frame, frame->height)}; };
 
       auto original_left_dims = get_original_dimensions(left_frame);
       auto original_right_dims = get_original_dimensions(right_frame);

@@ -411,29 +411,10 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
   filtered_frame->pts = av_rescale_q(filtered_frame->pts, av_buffersink_get_time_base(buffersink_ctx_), AV_R_MICROSECONDS) - demuxer_->start_time();
   ffmpeg::frame_duration(filtered_frame) = av_rescale_q(ffmpeg::frame_duration(filtered_frame), time_base_, AV_R_MICROSECONDS);
 
-  // add filter generation and resolved filters to metadata
-  av_dict_set(&filtered_frame->metadata, "filter_generation", std::to_string(filter_generation_.load(std::memory_order_acquire)).c_str(), 0);
-  av_dict_set(&filtered_frame->metadata, "resolved_filters", resolved_filter_description().c_str(), 0);
+  FrameMetadata::set_filter_generation(filtered_frame, filter_generation_.load(std::memory_order_acquire));
+  FrameMetadata::set_resolved_filters(filtered_frame, resolved_filter_description());
 
   return true;
-}
-
-std::string VideoFilterer::get_resolved_filters_from_frame(const AVFrame* frame) {
-  if (frame == nullptr) {
-    return "";
-  }
-
-  const AVDictionaryEntry* filters_entry = av_dict_get(frame->metadata, "resolved_filters", nullptr, 0);
-  return (filters_entry != nullptr) ? filters_entry->value : "";
-}
-
-int VideoFilterer::get_filter_generation_from_frame(const AVFrame* frame) {
-  if (frame == nullptr) {
-    return -1;
-  }
-
-  const AVDictionaryEntry* generation_entry = av_dict_get(frame->metadata, "filter_generation", nullptr, 0);
-  return (generation_entry != nullptr) ? std::atoi(generation_entry->value) : -1;
 }
 
 std::string VideoFilterer::filter_description() const {

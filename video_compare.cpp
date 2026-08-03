@@ -1444,14 +1444,14 @@ void VideoCompare::compare() {
           const auto right_state_frame = right_ptr->frames_[frame_offset].get();
 
           auto refresh_from_frame_if_changed = [&](SideState& side_state, const AVFrame* frame) {
-            const int frame_filter_generation = VideoFilterer::get_filter_generation_from_frame(frame);
+            const int frame_filter_generation = FrameMetadata::get_filter_generation(frame);
 
             // Use filter generation as a cheap dirty bit and skip string work for unchanged frames.
             if (frame_filter_generation < 0 || frame_filter_generation == side_state.last_filter_generation_) {
               return false;
             }
 
-            const std::string frame_filters = VideoFilterer::get_resolved_filters_from_frame(frame);
+            const std::string frame_filters = FrameMetadata::get_resolved_filters(frame);
             if (frame_filters.empty()) {
               return false;
             }
@@ -1475,7 +1475,7 @@ void VideoCompare::compare() {
 
           // count the number of unique in-sync video frame combinations processed
           if (is_playback_in_sync) {
-            const std::string frame_combo_tag = get_frame_key(left_display_frame) + "|" + get_frame_key(right_display_frame);
+            const std::string frame_combo_tag = FrameMetadata::require_key(left_display_frame) + "|" + FrameMetadata::require_key(right_display_frame);
 
             if (frame_combo_tag != previous_frame_combo_tag) {
               unique_frame_combo_tags_processed++;

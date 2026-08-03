@@ -1,4 +1,5 @@
 #include "core_types.h"
+#include "ffmpeg.h"
 
 // Side class implementation
 
@@ -72,3 +73,28 @@ std::string Side::to_string() const {
 const Side LEFT = Side::Left();
 const Side RIGHT = Side::Right();
 const Side NONE = Side::None();
+
+namespace FrameMetadata {
+
+void set_string(AVFrame* frame, const char* key, const std::string& value) {
+  assert(frame != nullptr);
+  ffmpeg::check(av_dict_set(&frame->metadata, key, value.c_str(), 0));
+}
+
+void set_int(AVFrame* frame, const char* key, const int64_t value) {
+  assert(frame != nullptr);
+  ffmpeg::check(av_dict_set_int(&frame->metadata, key, value, 0));
+}
+
+std::string require_key(const AVFrame* frame) {
+  assert(frame != nullptr);
+
+  const char* value = detail::find_cstr(frame, KEY);
+  if (value == nullptr || value[0] == '\0') {
+    throw ffmpeg::Error{"required frame_key metadata is missing"};
+  }
+
+  return value;
+}
+
+}  // namespace FrameMetadata

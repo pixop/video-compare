@@ -148,14 +148,8 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
     reinit();
   }
 
-  av_dict_set(&dst->metadata, "original_width", std::to_string(src->width).c_str(), 0);
-  av_dict_set(&dst->metadata, "original_height", std::to_string(src->height).c_str(), 0);
-
-  const AVDictionaryEntry* filter_generation_entry = av_dict_get(src->metadata, "filter_generation", nullptr, 0);
-  const char* filter_generation = filter_generation_entry != nullptr ? filter_generation_entry->value : "0";
-  const std::string frame_key = std::to_string(src->pts) + ":" + filter_generation;
-
-  set_frame_key(dst, frame_key);
+  FrameMetadata::set_original_dimensions(dst, src->width, src->height);
+  FrameMetadata::set_key(dst, FrameMetadata::make_frame_key(src));
 
   sws_scale(conversion_context_,
             // Source
