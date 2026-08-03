@@ -1,6 +1,7 @@
 #include "format_converter.h"
 #include <iostream>
 #include "ffmpeg.h"
+#include "frame_metadata.h"
 
 static constexpr int FIXED_1_0 = (1 << 16);
 

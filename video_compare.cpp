@@ -1,4 +1,5 @@
 #include "video_compare.h"
+#include "frame_metadata.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>

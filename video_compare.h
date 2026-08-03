@@ -10,6 +10,7 @@
 #include <vector>
 #include "config.h"
 #include "core_types.h"
+#include "frame_metadata.h"
 #include "demuxer.h"
 #include "display.h"
 #include "format_converter.h"

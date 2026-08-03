@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include "ffmpeg.h"
+#include "frame_metadata.h"
 #include "string_utils.h"
 #include "video_filter_context.h"
 

@@ -1,4 +1,5 @@
 #include "display.h"
+#include "frame_metadata.h"
 #include <libgen.h>
 #include <algorithm>
 #include <atomic>
