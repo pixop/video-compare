@@ -17,7 +17,7 @@ class Demuxer : public SideAware {
 
   AVRational time_base() const;
   int64_t duration() const;
-  int64_t start_time() const;
+  int64_t video_start_time() const;
 
   int rotation() const;
 
@@ -32,6 +32,8 @@ class Demuxer : public SideAware {
   int64_t bit_rate();
 
  private:
+  int64_t container_start_time() const;
+
   AVFormatContext* format_context_{};
   int video_stream_index_{};
 };

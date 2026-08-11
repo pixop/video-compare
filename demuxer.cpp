@@ -84,8 +84,18 @@ int64_t Demuxer::duration() const {
   return stream_duration != AV_NOPTS_VALUE ? av_rescale_q(stream_duration, time_base(), AV_R_MICROSECONDS) : (format_context_->duration != AV_NOPTS_VALUE ? format_context_->duration : 0);
 }
 
-int64_t Demuxer::start_time() const {
+int64_t Demuxer::container_start_time() const {
   return format_context_->start_time != AV_NOPTS_VALUE ? format_context_->start_time : 0;
+}
+
+int64_t Demuxer::video_start_time() const {
+  const AVStream* video_stream = format_context_->streams[video_stream_index_];
+
+  if (video_stream->start_time != AV_NOPTS_VALUE) {
+    return av_rescale_q(video_stream->start_time, video_stream->time_base, AV_R_MICROSECONDS);
+  }
+
+  return container_start_time();
 }
 
 int Demuxer::rotation() const {

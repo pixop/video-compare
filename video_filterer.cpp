@@ -409,7 +409,7 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
   ffmpeg::check(ret);
 
   // convert PTS and duration to microseconds
-  filtered_frame->pts = av_rescale_q(filtered_frame->pts, av_buffersink_get_time_base(buffersink_ctx_), AV_R_MICROSECONDS) - demuxer_->start_time();
+  filtered_frame->pts = av_rescale_q(filtered_frame->pts, av_buffersink_get_time_base(buffersink_ctx_), AV_R_MICROSECONDS) - demuxer_->video_start_time();
   ffmpeg::frame_duration(filtered_frame) = av_rescale_q(ffmpeg::frame_duration(filtered_frame), time_base_, AV_R_MICROSECONDS);
 
   FrameMetadata::set_filter_generation(filtered_frame, filter_generation_.load(std::memory_order_acquire));

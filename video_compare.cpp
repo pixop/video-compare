@@ -822,7 +822,7 @@ void VideoCompare::dump_debug_info(const int frame_number, const int64_t effecti
 }
 
 struct SideState {
-  SideState(const Side& side, const Demuxer* demuxer) : side_(side), start_time_(demuxer->start_time() * AV_TIME_TO_SEC), frame_duration_deque_(8) {
+  SideState(const Side& side, const Demuxer* demuxer) : side_(side), start_time_(demuxer->video_start_time() * AV_TIME_TO_SEC), frame_duration_deque_(8) {
     if (start_time_ > 0) {
       sa_log_info(side, string_sprintf("Video has a start time of %s - timestamps will be shifted so they start at zero!", format_position(start_time_, true).c_str()));
     }
