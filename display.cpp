@@ -878,11 +878,13 @@ void Display::clamp_overlay_offsets() {
   clamp_offset(metadata_y_offset_, metadata_total_height_, metadata_textures_);
 }
 
-float Display::compute_content_aspect_ratio() const {
-  const float content_w = static_cast<float>(video_width_) * ((mode_ == Mode::HStack) ? 2.0F : 1.0F);
-  const float content_h = static_cast<float>(video_height_) * ((mode_ == Mode::VStack) ? 2.0F : 1.0F);
+Vector2D Display::video_layout_size() const {
+  return Vector2D(static_cast<float>(video_width_) * ((mode_ == Mode::HStack) ? 2.0F : 1.0F), static_cast<float>(video_height_) * ((mode_ == Mode::VStack) ? 2.0F : 1.0F));
+}
 
-  return content_w / std::max(content_h, 1.0F);
+float Display::compute_content_aspect_ratio() const {
+  const Vector2D layout = video_layout_size();
+  return layout.x() / std::max(layout.y(), 1.0F);
 }
 
 float Display::compute_active_content_aspect_ratio() const {
@@ -940,10 +942,10 @@ void Display::update_content_window_layout() {
     }
   }
 
-  const float content_w = static_cast<float>(std::max(1, video_width_)) * ((mode_ == Mode::HStack) ? 2.0F : 1.0F);
-  const float content_h = static_cast<float>(std::max(1, video_height_)) * ((mode_ == Mode::VStack) ? 2.0F : 1.0F);
-  video_to_window_width_factor_ = content_w / static_cast<float>(std::max(1, content_window_.w));
-  video_to_window_height_factor_ = content_h / static_cast<float>(std::max(1, content_window_.h));
+  const float layout_w = static_cast<float>(std::max(1, video_width_)) * ((mode_ == Mode::HStack) ? 2.0F : 1.0F);
+  const float layout_h = static_cast<float>(std::max(1, video_height_)) * ((mode_ == Mode::VStack) ? 2.0F : 1.0F);
+  video_to_window_width_factor_ = layout_w / static_cast<float>(std::max(1, content_window_.w));
+  video_to_window_height_factor_ = layout_h / static_cast<float>(std::max(1, content_window_.h));
 }
 
 void Display::handle_window_resize(const bool reset_forced_size_guard, const bool force_layout_refresh) {
@@ -2886,18 +2888,14 @@ float Display::compute_zoom_factor(const float zoom_level) const {
 Vector2D Display::compute_relative_move_offset(const Vector2D& zoom_point, const float zoom_factor) const {
   const float zoom_factor_change = zoom_factor / global_zoom_factor_;
 
-  const Vector2D view_center((static_cast<float>(content_window_.x) + static_cast<float>(content_window_.w) / 2.0F) * video_to_window_width_factor_,
-                             (static_cast<float>(content_window_.y) + static_cast<float>(content_window_.h) / 2.0F) * video_to_window_height_factor_);
-
-  // the center point has to be moved relative to the zoom point
-  const Vector2D new_move_offset = move_offset_ - (view_center + move_offset_ - zoom_point) * (1.0F - zoom_factor_change);
-
-  return new_move_offset;
+  // zoom_point, view_center, and move_offset are in layout coordinates
+  // (HStack/VStack layout spans two canvas slots). Do not include content_window_.x/y.
+  const Vector2D view_center = video_layout_size() * 0.5F;
+  return move_offset_ - (view_center + move_offset_ - zoom_point) * (1.0F - zoom_factor_change);
 }
 
 void Display::update_zoom_factor_and_move_offset(const float zoom_factor) {
-  const Vector2D zoom_point(static_cast<float>(video_width_) * (mode_ == Mode::HStack ? 1.0F : 0.5F), static_cast<float>(video_height_) * (mode_ == Mode::VStack ? 1.0F : 0.5F));
-  update_move_offset(compute_relative_move_offset(zoom_point, zoom_factor));
+  update_move_offset(compute_relative_move_offset(video_layout_size() * 0.5F, zoom_factor));
 
   update_zoom_factor(zoom_factor);
 }

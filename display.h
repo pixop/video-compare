@@ -356,6 +356,7 @@ class Display {
   bool detect_fullscreen_like_state() const;
   float compute_content_aspect_ratio() const;
   float compute_active_content_aspect_ratio() const;
+  Vector2D video_layout_size() const;
   std::array<int, 2> compute_mode_switch_target_window_size() const;
   void update_content_window_layout();
   void apply_window_size_and_relayout(int target_w, int target_h, bool force_layout_refresh);
