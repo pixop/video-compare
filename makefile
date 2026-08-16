@@ -70,9 +70,18 @@ $(target): $(obj)
 test: $(target)
 	./$(target) -w 800x screenshot_1.jpg screenshot_2.jpg
 
+test_frame_metadata_bin = tests/test_frame_metadata
+
+$(test_frame_metadata_bin): tests/test_frame_metadata.cpp frame_metadata.h
+	$(CXX) $(CXXFLAGS) -o $@ tests/test_frame_metadata.cpp $(LDLIBS)
+
+.PHONY: test-frame-metadata
+test-frame-metadata: $(test_frame_metadata_bin)
+	./$(test_frame_metadata_bin)
+
 .PHONY: clean
 clean:
-	$(RM) $(obj) $(target) $(dep)
+	$(RM) $(obj) $(target) $(dep) $(test_frame_metadata_bin)
 
 install: $(target)
 	install -s video-compare $(BINDIR)

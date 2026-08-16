@@ -108,7 +108,7 @@ class Display {
   enum class Mode { Split, VStack, HStack };
   enum class Loop { Off, ForwardOnly, PingPong };
   enum class AspectLockMode { Off, Window, Content };
-  enum class AspectViewMode { Stretch, Original, Preset16x9, Preset4x3, Preset1x1 };
+  enum class AspectViewMode { Stretch, Original, Dynamic, Preset16x9, Preset4x3, Preset1x1, Count };
   enum class DiffMode { LegacyAbs, AbsLinear, AbsSqrt, SignedDiverging };
 
   std::string mode_to_string(const Mode& mode) {
@@ -143,12 +143,15 @@ class Display {
         return "stretch";
       case AspectViewMode::Original:
         return "original";
+      case AspectViewMode::Dynamic:
+        return "dynamic";
       case AspectViewMode::Preset16x9:
         return "16:9";
       case AspectViewMode::Preset4x3:
         return "4:3";
       case AspectViewMode::Preset1x1:
         return "1:1";
+      case AspectViewMode::Count:
       default:
         return "unknown";
     }
@@ -195,6 +198,10 @@ class Display {
   float font_scale_;
   // Stored window aspect ratio used by AspectLockMode::Window.
   float window_aspect_ratio_{1.0F};
+  // Last known effective DAR of the currently displayed reference (original left-input) frame.
+  // Updated from possibly_refresh() even when AspectViewMode::Dynamic is inactive.
+  bool has_reference_display_aspect_{false};
+  AVRational reference_display_aspect_{1, 1};
 
   // Last size we programmatically forced (used to avoid resize feedback loops).
   std::array<int, 2> last_forced_window_size_{{-1, -1}};

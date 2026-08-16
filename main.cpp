@@ -406,6 +406,8 @@ Display::AspectViewMode parse_aspect_view_mode(const std::string& mode) {
     return Display::AspectViewMode::Stretch;
   } else if (mode == "original") {
     return Display::AspectViewMode::Original;
+  } else if (mode == "dynamic") {
+    return Display::AspectViewMode::Dynamic;
   } else if (mode == "16:9" || mode == "16x9") {
     return Display::AspectViewMode::Preset16x9;
   } else if (mode == "4:3" || mode == "4x3") {
@@ -413,7 +415,7 @@ Display::AspectViewMode parse_aspect_view_mode(const std::string& mode) {
   } else if (mode == "1:1" || mode == "1x1") {
     return Display::AspectViewMode::Preset1x1;
   } else {
-    throw std::logic_error{"Cannot parse aspect view mode (valid options: stretch, original, 16:9, 4:3, 1:1)"};
+    throw std::logic_error{"Cannot parse aspect view mode (valid options: stretch, original, dynamic, 16:9, 4:3, 1:1)"};
   }
 }
 
@@ -582,7 +584,7 @@ int main(int argc, char** argv) {
          {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
          {"window-fit-display", {"-W", "--window-fit-display"}, "calculate the window size to fit within the usable display bounds while maintaining the video aspect ratio", 0},
          {"aspect-lock", {"-k", "--aspect-lock"}, "aspect lock mode during resizing: 'off' (default), 'window' for initial window ratio, 'content' for current video/content ratio", 1},
-         {"aspect-view-mode", {"-x", "--aspect-view-mode"}, "initial aspect view mode: 'stretch' (default), 'original', '16:9', '4:3', or '1:1'", 1},
+         {"aspect-view-mode", {"-x", "--aspect-view-mode"}, "initial aspect view mode: 'stretch' (default), 'original' (shared canvas), 'dynamic' (current reference video display aspect; original left input remains the reference after visual swap), '16:9', '4:3', or '1:1'", 1},
          {"auto-loop-mode", {"-a", "--auto-loop-mode"}, "auto-loop playback when buffer fills, 'off' for continuous streaming (default), 'on' for forward-only mode, 'pp' for ping-pong mode", 1},
          {"frame-buffer-size", {"-f", "--frame-buffer-size"}, "frame buffer size (e.g. 10, 70 or 150), default is 50", 1},
          {"time-shift", {"-t", "--time-shift"}, "shift the time stamps of the right video by a user-specified time offset, optionally with a multiplier (e.g. 0.150, -0.1, x1.04+0.1, x25.025/24-1:30.5)", 1},

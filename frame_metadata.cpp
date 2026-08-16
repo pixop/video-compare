@@ -8,6 +8,7 @@
 extern "C" {
 #include <libavutil/dict.h>
 #include <libavutil/frame.h>
+#include <libavutil/rational.h>
 }
 
 namespace FrameMetadata {
@@ -100,6 +101,14 @@ void set_original_dimensions(AVFrame* frame, int width, int height) {
   assert(frame != nullptr);
   set_int(frame, ORIGINAL_WIDTH, width);
   set_int(frame, ORIGINAL_HEIGHT, height);
+}
+
+bool try_display_aspect_ratio(const AVFrame* frame, AVRational* dar) {
+  if (frame == nullptr || dar == nullptr) {
+    return false;
+  }
+
+  return display_aspect_ratio(get_original_width(frame, 0), get_original_height(frame, 0), frame->sample_aspect_ratio, dar);
 }
 
 std::string make_frame_key(const int64_t pts, int filter_generation) {

@@ -25,6 +25,7 @@
 extern "C" {
 #include <libavfilter/avfilter.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/rational.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
@@ -670,6 +671,9 @@ void Display::print_verbose_info() {
   std::cout << "UI scale:              " << ui_scale_ << std::endl;
   std::cout << "Aspect lock mode:      " << aspect_lock_mode_to_string(aspect_lock_mode_) << std::endl;
   std::cout << "Aspect view mode:      " << aspect_view_mode_to_string(aspect_view_mode_) << std::endl;
+  if (has_reference_display_aspect_) {
+    std::cout << "Reference display AR:  " << reference_display_aspect_.num << ":" << reference_display_aspect_.den << std::endl;
+  }
   std::cout << "Use 10 bpc:            " << std::boolalpha << use_10_bpc_ << std::endl;
   std::cout << "Fast input alignment:  " << std::boolalpha << fast_input_alignment_ << std::endl;
   std::cout << "Bilinear filtering:    " << std::boolalpha << bilinear_texture_filtering_ << std::endl;
@@ -901,7 +905,13 @@ float Display::compute_active_content_aspect_ratio() const {
       return apply_mode_layout_multiplier(4.0F / 3.0F);
     case AspectViewMode::Preset1x1:
       return apply_mode_layout_multiplier(1.0F);
+    case AspectViewMode::Dynamic:
+      if (has_reference_display_aspect_ && reference_display_aspect_.den > 0) {
+        return apply_mode_layout_multiplier(static_cast<float>(av_q2d(reference_display_aspect_)));
+      }
+      break;
     case AspectViewMode::Original:
+    case AspectViewMode::Count:
     default:
       break;
   }
@@ -2326,7 +2336,25 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   const bool has_updated_left_frame = previous_left_frame_key_ != left_frame_key;
   const bool has_updated_right_frame = previous_right_frame_key_ != right_frame_key;
 
-  if (!input_received_ && !has_updated_left_frame && !has_updated_right_frame && !timer_based_update_performed_ && pending_message_.empty()) {
+  // Callers pass visual-left/right after Swap. Recover the original left-input (seek master)
+  // for Dynamic DAR; do not use visual-left.
+  const AVFrame* reference_frame = swap_left_right_ ? right_frame : left_frame;
+
+  bool dynamic_layout_changed = false;
+  AVRational reference_dar{};
+  if (FrameMetadata::try_display_aspect_ratio(reference_frame, &reference_dar)) {
+    const bool dar_changed = !has_reference_display_aspect_ || av_cmp_q(reference_dar, reference_display_aspect_) != 0;
+    if (dar_changed) {
+      reference_display_aspect_ = reference_dar;
+      has_reference_display_aspect_ = true;
+      if (aspect_view_mode_ == AspectViewMode::Dynamic) {
+        update_content_window_layout();
+        dynamic_layout_changed = true;
+      }
+    }
+  }
+
+  if (!input_received_ && !has_updated_left_frame && !has_updated_right_frame && !timer_based_update_performed_ && pending_message_.empty() && !dynamic_layout_changed) {
     return false;
   }
 
@@ -3401,7 +3429,7 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_s: {
           if (is_shift_down) {
-            constexpr int kModeCount = 5;
+            const int kModeCount = static_cast<int>(AspectViewMode::Count);
             const int delta = is_ctrl_down ? -1 : 1;
             aspect_view_mode_ = static_cast<AspectViewMode>((static_cast<int>(aspect_view_mode_) + delta + kModeCount) % kModeCount);
 
@@ -3539,7 +3567,11 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_x:
           if (is_shift_down) {
-            notify_user(string_sprintf("Display state: window=%dx%d aspect=%s", window_width_, window_height_, aspect_view_mode_to_string(aspect_view_mode_).c_str()));
+            if (has_reference_display_aspect_) {
+              notify_user(string_sprintf("Display state: window=%dx%d aspect=%s dar=%d:%d", window_width_, window_height_, aspect_view_mode_to_string(aspect_view_mode_).c_str(), reference_display_aspect_.num, reference_display_aspect_.den));
+            } else {
+              notify_user(string_sprintf("Display state: window=%dx%d aspect=%s", window_width_, window_height_, aspect_view_mode_to_string(aspect_view_mode_).c_str()));
+            }
           } else {
             show_fps_ = true;
           }
