@@ -2359,6 +2359,9 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     return false;
   }
 
+  visual_left_pre_canvas_size_ = {FrameMetadata::get_original_width(left_frame, 0), FrameMetadata::get_original_height(left_frame, 0)};
+  visual_right_pre_canvas_size_ = {FrameMetadata::get_original_width(right_frame, 0), FrameMetadata::get_original_height(right_frame, 0)};
+
   std::array<uint8_t*, 3> planes_left{left_frame->data[0], left_frame->data[1], left_frame->data[2]};
   std::array<uint8_t*, 3> planes_right{right_frame->data[0], right_frame->data[1], right_frame->data[2]};
   std::array<size_t, 3> pitches_left{static_cast<size_t>(left_frame->linesize[0]), static_cast<size_t>(left_frame->linesize[1]), static_cast<size_t>(left_frame->linesize[2])};
@@ -3564,12 +3567,17 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_x:
           if (is_shift_down) {
-            if (has_reference_display_aspect_) {
-              notify_user(
-                  string_sprintf("Display state: window=%dx%d aspect=%s dar=%d:%d", window_width_, window_height_, aspect_view_mode_to_string(aspect_view_mode_).c_str(), reference_display_aspect_.num, reference_display_aspect_.den));
-            } else {
-              notify_user(string_sprintf("Display state: window=%dx%d aspect=%s", window_width_, window_height_, aspect_view_mode_to_string(aspect_view_mode_).c_str()));
+            std::string message = string_sprintf("Display state: window=%dx%d aspect=%s", window_width_, window_height_, aspect_view_mode_to_string(aspect_view_mode_).c_str());
+            if (visual_left_pre_canvas_size_.first > 0 && visual_left_pre_canvas_size_.second > 0) {
+              message += string_sprintf(" visual_left=%dx%d", visual_left_pre_canvas_size_.first, visual_left_pre_canvas_size_.second);
             }
+            if (visual_right_pre_canvas_size_.first > 0 && visual_right_pre_canvas_size_.second > 0) {
+              message += string_sprintf(" visual_right=%dx%d", visual_right_pre_canvas_size_.first, visual_right_pre_canvas_size_.second);
+            }
+            if (has_reference_display_aspect_) {
+              message += string_sprintf(" ref_dar=%d:%d", reference_display_aspect_.num, reference_display_aspect_.den);
+            }
+            notify_user(message);
           } else {
             show_fps_ = true;
           }

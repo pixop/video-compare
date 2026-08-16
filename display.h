@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 #include "core_types.h"
 #include "font_selection.h"
@@ -202,6 +203,10 @@ class Display {
   // Updated from possibly_refresh() even when AspectViewMode::Dynamic is inactive.
   bool has_reference_display_aspect_{false};
   AVRational reference_display_aspect_{1, 1};
+  // Last displayed visual-left/right pre-canvas (content) size. Visual order
+  // follows Swap; ref_dar stays the original left-input (seek master).
+  std::pair<int, int> visual_left_pre_canvas_size_{0, 0};
+  std::pair<int, int> visual_right_pre_canvas_size_{0, 0};
 
   // Last size we programmatically forced (used to avoid resize feedback loops).
   std::array<int, 2> last_forced_window_size_{{-1, -1}};
