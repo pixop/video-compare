@@ -1,5 +1,4 @@
 #include "display.h"
-#include "frame_metadata.h"
 #include <libgen.h>
 #include <algorithm>
 #include <atomic>
@@ -17,6 +16,7 @@
 #include "controls.h"
 #include "ffmpeg.h"
 #include "format_converter.h"
+#include "frame_metadata.h"
 #include "png_saver.h"
 #include "scope_window.h"
 #include "version.h"
@@ -671,9 +671,6 @@ void Display::print_verbose_info() {
   std::cout << "UI scale:              " << ui_scale_ << std::endl;
   std::cout << "Aspect lock mode:      " << aspect_lock_mode_to_string(aspect_lock_mode_) << std::endl;
   std::cout << "Aspect view mode:      " << aspect_view_mode_to_string(aspect_view_mode_) << std::endl;
-  if (has_reference_display_aspect_) {
-    std::cout << "Reference display AR:  " << reference_display_aspect_.num << ":" << reference_display_aspect_.den << std::endl;
-  }
   std::cout << "Use 10 bpc:            " << std::boolalpha << use_10_bpc_ << std::endl;
   std::cout << "Fast input alignment:  " << std::boolalpha << fast_input_alignment_ << std::endl;
   std::cout << "Bilinear filtering:    " << std::boolalpha << bilinear_texture_filtering_ << std::endl;
@@ -2344,11 +2341,13 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
   bool dynamic_layout_changed = false;
   AVRational reference_dar{};
+
   if (FrameMetadata::try_display_aspect_ratio(reference_frame, &reference_dar)) {
     const bool dar_changed = !has_reference_display_aspect_ || av_cmp_q(reference_dar, reference_display_aspect_) != 0;
     if (dar_changed) {
       reference_display_aspect_ = reference_dar;
       has_reference_display_aspect_ = true;
+
       if (aspect_view_mode_ == AspectViewMode::Dynamic) {
         update_content_window_layout();
         dynamic_layout_changed = true;
@@ -3566,7 +3565,8 @@ void Display::handle_event(const SDL_Event& event) {
         case SDLK_x:
           if (is_shift_down) {
             if (has_reference_display_aspect_) {
-              notify_user(string_sprintf("Display state: window=%dx%d aspect=%s dar=%d:%d", window_width_, window_height_, aspect_view_mode_to_string(aspect_view_mode_).c_str(), reference_display_aspect_.num, reference_display_aspect_.den));
+              notify_user(
+                  string_sprintf("Display state: window=%dx%d aspect=%s dar=%d:%d", window_width_, window_height_, aspect_view_mode_to_string(aspect_view_mode_).c_str(), reference_display_aspect_.num, reference_display_aspect_.den));
             } else {
               notify_user(string_sprintf("Display state: window=%dx%d aspect=%s", window_width_, window_height_, aspect_view_mode_to_string(aspect_view_mode_).c_str()));
             }

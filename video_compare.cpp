@@ -1,5 +1,4 @@
 #include "video_compare.h"
-#include "frame_metadata.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -9,6 +8,7 @@
 #include <limits>
 #include <thread>
 #include "ffmpeg.h"
+#include "frame_metadata.h"
 #include "scope_manager.h"
 #include "scope_window.h"
 #include "sdl_event_info.h"
