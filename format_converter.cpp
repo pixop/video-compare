@@ -1,7 +1,13 @@
 #include "format_converter.h"
-#include <iostream>
+#include <cstddef>
+#include <cstring>
+#include <stdexcept>
+#include <string>
 #include "ffmpeg.h"
 #include "frame_metadata.h"
+extern "C" {
+#include "libavutil/pixdesc.h"
+}
 
 static constexpr int FIXED_1_0 = (1 << 16);
 
@@ -37,6 +43,7 @@ FormatConverter::FormatConverter(const size_t src_width,
                                  const AVPixelFormat dest_pixel_format,
                                  const AVColorSpace src_color_space,
                                  const AVColorRange src_color_range,
+                                 const ConversionFit conversion_fit,
                                  const Side& side,
                                  const int flags)
     : SideAware(side),
@@ -46,12 +53,14 @@ FormatConverter::FormatConverter(const size_t src_width,
       dest_width_{dest_width},
       dest_height_{dest_height},
       dest_pixel_format_{dest_pixel_format},
+      conversion_fit_{conversion_fit},
       src_color_space_{src_color_space},
       src_color_range_{src_color_range},
       active_flags_(flags),
       pending_flags_(active_flags_) {
   ScopedLogSide scoped_log_side(side);
 
+  ensure_source_fits_canvas();
   init();
 }
 
@@ -59,16 +68,45 @@ FormatConverter::~FormatConverter() {
   free();
 }
 
+void FormatConverter::ensure_source_fits_canvas() const {
+  if (conversion_fit_ != ConversionFit::Native) {
+    return;
+  }
+  if (src_width_ > dest_width_ || src_height_ > dest_height_) {
+    throw std::runtime_error("Filtered frame " + std::to_string(src_width_) + "x" + std::to_string(src_height_) + " does not fit conversion canvas " + std::to_string(dest_width_) + "x" + std::to_string(dest_height_));
+  }
+}
+
+int FormatConverter::packed_dest_bytes_per_pixel() const {
+  const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(dest_pixel_format_);
+  if (desc == nullptr) {
+    throw ffmpeg::Error{"Unknown destination pixel format"};
+  }
+
+  const int bits = av_get_padded_bits_per_pixel(desc);
+  if (bits <= 0 || (bits % 8) != 0) {
+    throw ffmpeg::Error{"Destination pixel format is not packed byte RGB"};
+  }
+
+  return bits / 8;
+}
+
 void FormatConverter::init() {
+  const int sws_dest_w = (conversion_fit_ == ConversionFit::Native) ? static_cast<int>(src_width_) : static_cast<int>(dest_width_);
+  const int sws_dest_h = (conversion_fit_ == ConversionFit::Native) ? static_cast<int>(src_height_) : static_cast<int>(dest_height_);
+
   conversion_context_ = sws_getContext(
       // Source
-      src_width(), src_height(), src_pixel_format(),
+      static_cast<int>(src_width()), static_cast<int>(src_height()), src_pixel_format(),
       // Destination
-      dest_width(), dest_height(), dest_pixel_format(),
+      sws_dest_w, sws_dest_h, dest_pixel_format(),
       // Filters
       active_flags_, nullptr, nullptr, nullptr);
 
-  // set colorspace details
+  if (conversion_context_ == nullptr) {
+    throw ffmpeg::Error{"Could not initialize format conversion context"};
+  }
+
   const int sws_color_space = get_sws_colorspace(src_color_space_);
   const int sws_color_range = get_sws_range(src_color_range_);
   const int* yuv2rgb_coeffs = sws_getCoefficients(sws_color_space);
@@ -78,6 +116,7 @@ void FormatConverter::init() {
 
 void FormatConverter::free() {
   sws_freeContext(conversion_context_);
+  conversion_context_ = nullptr;
 }
 
 void FormatConverter::reinit() {
@@ -146,19 +185,40 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
   }
 
   if (must_reinit) {
+    ensure_source_fits_canvas();
     reinit();
   }
 
   FrameMetadata::set_original_dimensions(dst, src->width, src->height);
   FrameMetadata::set_key(dst, FrameMetadata::make_frame_key(src));
 
+  uint8_t* dst_planes[4] = {dst->data[0], dst->data[1], dst->data[2], dst->data[3]};
+  int dst_linesizes[4] = {dst->linesize[0], dst->linesize[1], dst->linesize[2], dst->linesize[3]};
+
+  if (conversion_fit_ == ConversionFit::Native) {
+    const ContentRect content = content_rect_in_canvas(conversion_fit_, static_cast<int>(dest_width_), static_cast<int>(dest_height_), static_cast<int>(src_width_), static_cast<int>(src_height_));
+    const bool has_padding = (content.x != 0) || (content.y != 0) || (content.width != static_cast<int>(dest_width_)) || (content.height != static_cast<int>(dest_height_));
+
+    if (has_padding) {
+      if (dst->data[0] != nullptr && dst->linesize[0] > 0) {
+        std::memset(dst->data[0], 0, static_cast<size_t>(dst->linesize[0]) * dest_height_);
+      }
+
+      const int bpp = packed_dest_bytes_per_pixel();
+      dst_planes[0] = dst->data[0] + static_cast<ptrdiff_t>(content.y) * dst->linesize[0] + static_cast<ptrdiff_t>(content.x) * bpp;
+      dst_planes[1] = nullptr;
+      dst_planes[2] = nullptr;
+      dst_planes[3] = nullptr;
+    }
+  }
+
   sws_scale(conversion_context_,
             // Source
-            src->data, src->linesize, 0, src_height_,
+            src->data, src->linesize, 0, static_cast<int>(src_height_),
             // Destination
-            dst->data, dst->linesize);
+            dst_planes, dst_linesizes);
 
   dst->format = dest_pixel_format();
-  dst->width = dest_width();
-  dst->height = dest_height();
+  dst->width = static_cast<int>(dest_width());
+  dst->height = static_cast<int>(dest_height());
 }

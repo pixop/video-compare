@@ -220,8 +220,8 @@ class VideoCompare {
 
   std::map<Side, std::vector<SDL_Rect>> crop_history_;
 
-  size_t max_width_;
-  size_t max_height_;
+  size_t canvas_width_;
+  size_t canvas_height_;
   double shortest_duration_;
 
   std::unique_ptr<Display> display_;

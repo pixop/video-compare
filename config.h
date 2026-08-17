@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include "conversion_geometry.h"
 #include "core_types.h"
 #include "display.h"
 extern "C" {
@@ -11,6 +12,14 @@ extern "C" {
 struct TimeShiftConfig {
   AVRational multiplier{1, 1};
   int64_t offset_ms{0};
+};
+
+enum class ConversionSizeMode { Max, Explicit };
+
+struct ConversionSize {
+  ConversionSizeMode mode{ConversionSizeMode::Max};
+  int width{0};
+  int height{0};
 };
 
 struct ScopesConfig {
@@ -64,6 +73,8 @@ struct VideoCompareConfig {
   bool start_in_fullscreen{false};
   Display::AspectLockMode aspect_lock_mode{Display::AspectLockMode::Off};
   Display::AspectViewMode aspect_view_mode{Display::AspectViewMode::Stretch};
+  ConversionSize conversion_size;
+  ConversionFit conversion_fit{ConversionFit::Stretch};
 
   int display_number{0};
   std::tuple<int, int> window_size{-1, -1};

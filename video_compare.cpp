@@ -7,6 +7,7 @@
 #include <iostream>
 #include <limits>
 #include <thread>
+#include "conversion_geometry.h"
 #include "ffmpeg.h"
 #include "frame_metadata.h"
 #include "scope_manager.h"
@@ -97,6 +98,14 @@ static inline std::pair<size_t, size_t> calculate_max_dest_dimensions(const std:
   }
 
   return {max_w, max_h};
+}
+
+static inline std::pair<size_t, size_t> calculate_canvas_dimensions(const VideoCompareConfig& config, const std::map<Side, std::unique_ptr<VideoFilterer>>& video_filterers) {
+  if (config.conversion_size.mode == ConversionSizeMode::Explicit) {
+    return {static_cast<size_t>(config.conversion_size.width), static_cast<size_t>(config.conversion_size.height)};
+  }
+
+  return calculate_max_dest_dimensions(video_filterers);
 }
 
 static inline double calculate_shortest_duration_seconds(const std::map<Side, std::unique_ptr<Demuxer>>& demuxers) {
@@ -223,11 +232,11 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
                                                       right_config.color_range, right_config.color_primaries, right_config.color_trc, &video_filter_context, config.disable_auto_filters));
   }
 
-  // Calculate max dimensions from all videos
+  // Calculate canvas dimensions from conversion-size policy
   {
-    const auto dims = calculate_max_dest_dimensions(video_filterers_);
-    max_width_ = dims.first;
-    max_height_ = dims.second;
+    const auto dims = calculate_canvas_dimensions(config_, video_filterers_);
+    canvas_width_ = dims.first;
+    canvas_height_ = dims.second;
   }
 
   // Initialize format converters
@@ -341,8 +350,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   const std::string right_file_name = (right_it != right_video_info_.end()) ? right_it->second.file_name : right_video_info_.begin()->second.file_name;
 
   display_ = std::make_unique<Display>(config_.display_number, config_.display_mode, config_.verbose, config_.fit_window_to_usable_bounds, config_.high_dpi_allowed, config_.ui_scale, config_.font_selection, config_.aspect_lock_mode,
-                                       config_.aspect_view_mode, config_.use_10_bpc, use_fast_input_alignment(config_), config_.bilinear_texture_filtering, config_.window_size, max_width_, max_height_, shortest_duration_,
-                                       config_.wheel_sensitivity, config_.start_in_subtraction_mode, config_.start_in_fullscreen, config_.left.file_name, right_file_name);
+                                       config_.aspect_view_mode, config_.use_10_bpc, use_fast_input_alignment(config_), config_.bilinear_texture_filtering, config_.conversion_fit, config_.window_size, canvas_width_, canvas_height_,
+                                       shortest_duration_, config_.wheel_sensitivity, config_.start_in_subtraction_mode, config_.start_in_fullscreen, config_.left.file_name, right_file_name);
   display_->set_num_right_videos(right_video_info_.size());
   display_->set_active_right_index(active_right_index_);
   display_->update_metadata(left_video_metadata_, right_video_info_[active_right].metadata);
@@ -360,8 +369,8 @@ void VideoCompare::recreate_format_converter_for_side(const Side& side, const in
 
   const auto& filterer = video_filterers_.at(side);
   ready_to_seek_.init(ReadyToSeek::ProcessorThread::Converter, side);
-  format_converters_[side] = std::make_unique<FormatConverter>(filterer->dest_width(), filterer->dest_height(), max_width_, max_height_, filterer->dest_pixel_format(), output_pixel_format, video_decoders_[side]->color_space(),
-                                                               video_decoders_[side]->color_range(), side, sws_flags);
+  format_converters_[side] = std::make_unique<FormatConverter>(filterer->dest_width(), filterer->dest_height(), canvas_width_, canvas_height_, filterer->dest_pixel_format(), output_pixel_format, video_decoders_[side]->color_space(),
+                                                               video_decoders_[side]->color_range(), config_.conversion_fit, side, sws_flags);
 }
 
 void VideoCompare::recreate_format_converters(const int sws_flags) {
@@ -701,48 +710,81 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
     return composed;
   };
 
-  auto apply_crop_for_side = [&](const Side& side) {
-    static constexpr int kMinCropDimension = 2;
+  static constexpr int kMinCropDimension = 2;
+
+  struct PreparedSideCrop {
+    bool valid{false};
+    bool no_content_intersection{false};
+    SDL_Rect mapped{};
+    SDL_Rect composed{};
+  };
+
+  auto prepare_crop_for_side = [&](const Side& side) -> PreparedSideCrop {
+    PreparedSideCrop result;
 
     const int side_w = std::max(1, static_cast<int>(video_filterers_[side]->dest_width()));
     const int side_h = std::max(1, static_cast<int>(video_filterers_[side]->dest_height()));
     const int src_w = std::max(1, static_cast<int>(video_filterers_[side]->src_width()));
     const int src_h = std::max(1, static_cast<int>(video_filterers_[side]->src_height()));
-    if (max_width_ == 0 || max_height_ == 0) {
-      return false;
+    if (canvas_width_ == 0 || canvas_height_ == 0) {
+      return result;
     }
     if (side_w < kMinCropDimension || side_h < kMinCropDimension || src_w < kMinCropDimension || src_h < kMinCropDimension) {
-      return false;
+      return result;
     }
     const auto clamp_to = [](const int value, const int min_value, const int max_value) { return std::max(min_value, std::min(value, max_value)); };
 
-    SDL_Rect mapped = {
-        clamp_to(static_cast<int>(std::llround(static_cast<double>(crop_request.rect.x) * side_w / max_width_)), 0, side_w - 1),
-        clamp_to(static_cast<int>(std::llround(static_cast<double>(crop_request.rect.y) * side_h / max_height_)), 0, side_h - 1),
-        std::max(kMinCropDimension, static_cast<int>(std::llround(static_cast<double>(crop_request.rect.w) * side_w / max_width_))),
-        std::max(kMinCropDimension, static_cast<int>(std::llround(static_cast<double>(crop_request.rect.h) * side_h / max_height_))),
-    };
+    SDL_Rect mapped;
+    if (config_.conversion_fit == ConversionFit::Native) {
+      const MappedContentRect mapped_content =
+          canvas_selection_to_content_crop(ConversionFit::Native, static_cast<int>(canvas_width_), static_cast<int>(canvas_height_), side_w, side_h, {crop_request.rect.x, crop_request.rect.y, crop_request.rect.w, crop_request.rect.h});
+      if (!mapped_content.valid) {
+        result.no_content_intersection = true;
+        return result;
+      }
+      mapped = {
+          clamp_to(mapped_content.x, 0, side_w - 1),
+          clamp_to(mapped_content.y, 0, side_h - 1),
+          std::max(kMinCropDimension, mapped_content.width),
+          std::max(kMinCropDimension, mapped_content.height),
+      };
+    } else {
+      // Stretch mapping is the pre-helper formula so a positive 1px canvas selection
+      // that rounds to 0 is still lifted to kMinCropDimension (see tests/test_conversion_geometry.cpp).
+      mapped = {
+          clamp_to(static_cast<int>(std::llround(static_cast<double>(crop_request.rect.x) * side_w / canvas_width_)), 0, side_w - 1),
+          clamp_to(static_cast<int>(std::llround(static_cast<double>(crop_request.rect.y) * side_h / canvas_height_)), 0, side_h - 1),
+          std::max(kMinCropDimension, static_cast<int>(std::llround(static_cast<double>(crop_request.rect.w) * side_w / canvas_width_))),
+          std::max(kMinCropDimension, static_cast<int>(std::llround(static_cast<double>(crop_request.rect.h) * side_h / canvas_height_))),
+      };
+    }
     mapped.w = std::min(mapped.w, side_w - mapped.x);
     mapped.h = std::min(mapped.h, side_h - mapped.y);
     if (mapped.w < kMinCropDimension || mapped.h < kMinCropDimension) {
-      return false;
+      return result;
     }
 
-    crop_history_[side].push_back(mapped);
-    SDL_Rect composed = compose_crop_history(crop_history_[side]);
+    std::vector<SDL_Rect> history = crop_history_[side];
+    history.push_back(mapped);
+    SDL_Rect composed = compose_crop_history(history);
     composed.x = clamp_to(composed.x, 0, src_w - kMinCropDimension);
     composed.y = clamp_to(composed.y, 0, src_h - kMinCropDimension);
     composed.w = std::min(std::max(kMinCropDimension, composed.w), src_w - composed.x);
     composed.h = std::min(std::max(kMinCropDimension, composed.h), src_h - composed.y);
     if (composed.w < kMinCropDimension || composed.h < kMinCropDimension) {
-      crop_history_[side].pop_back();
-      return false;
+      return result;
     }
 
-    const CropRect crop_rect{composed.x, composed.y, composed.w, composed.h};
-    const bool changed = video_filterers_[side]->set_crop_rect(&crop_rect);
+    result.valid = true;
+    result.mapped = mapped;
+    result.composed = composed;
+    return result;
+  };
 
-    return changed;
+  auto commit_crop_for_side = [&](const Side& side, const PreparedSideCrop& prepared) {
+    crop_history_[side].push_back(prepared.mapped);
+    const CropRect crop_rect{prepared.composed.x, prepared.composed.y, prepared.composed.w, prepared.composed.h};
+    return video_filterers_[side]->set_crop_rect(&crop_rect);
   };
 
   bool crop_changed = false;
@@ -763,11 +805,38 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
       }
     }
   } else if (crop_request.valid) {
-    if (crop_request.apply_left) {
-      crop_changed = apply_crop_for_side(resolved_left_side) || crop_changed;
-    }
-    if (crop_request.apply_right) {
-      crop_changed = apply_crop_for_side(resolved_right_side) || crop_changed;
+    const bool apply_both = crop_request.apply_left && crop_request.apply_right;
+    const PreparedSideCrop left_prep = crop_request.apply_left ? prepare_crop_for_side(resolved_left_side) : PreparedSideCrop{};
+    const PreparedSideCrop right_prep = crop_request.apply_right ? prepare_crop_for_side(resolved_right_side) : PreparedSideCrop{};
+
+    if (apply_both) {
+      if (!left_prep.valid || !right_prep.valid) {
+        if (left_prep.no_content_intersection || right_prep.no_content_intersection) {
+          display_->notify_user("Crop selection does not intersect content on both sides");
+        }
+      } else {
+        crop_changed = commit_crop_for_side(resolved_left_side, left_prep) || crop_changed;
+        crop_changed = commit_crop_for_side(resolved_right_side, right_prep) || crop_changed;
+      }
+    } else {
+      if (crop_request.apply_left) {
+        if (!left_prep.valid) {
+          if (left_prep.no_content_intersection && config_.conversion_fit == ConversionFit::Native) {
+            display_->notify_user(string_sprintf("Crop selection does not intersect %s content", resolved_left_side.to_string().c_str()));
+          }
+        } else {
+          crop_changed = commit_crop_for_side(resolved_left_side, left_prep) || crop_changed;
+        }
+      }
+      if (crop_request.apply_right) {
+        if (!right_prep.valid) {
+          if (right_prep.no_content_intersection && config_.conversion_fit == ConversionFit::Native) {
+            display_->notify_user(string_sprintf("Crop selection does not intersect %s content", resolved_right_side.to_string().c_str()));
+          }
+        } else {
+          crop_changed = commit_crop_for_side(resolved_right_side, right_prep) || crop_changed;
+        }
+      }
     }
   }
 
@@ -1061,16 +1130,17 @@ void VideoCompare::compare() {
           pair.second->reinit();
         }
 
-        // recalculate max dimensions
-        const auto dims = calculate_max_dest_dimensions(video_filterers_);
-        const bool dims_changed = (dims.first != max_width_) || (dims.second != max_height_);
-        max_width_ = dims.first;
-        max_height_ = dims.second;
+        // Recalculate canvas from the conversion-size policy. Explicit WxH stays fixed;
+        // max follows current filterer destinations, as before.
+        const auto dims = calculate_canvas_dimensions(config_, video_filterers_);
+        const bool dims_changed = (dims.first != canvas_width_) || (dims.second != canvas_height_);
+        canvas_width_ = dims.first;
+        canvas_height_ = dims.second;
 
-        // if dimensions changed, recreate format converters and reinitialize video dimensions
+        // Recreate converters/display only when the canvas size changed (same gate as before).
         if (dims_changed) {
           recreate_format_converters(format_conversion_sws_flags);
-          display_->reinitialize_video_dimensions(static_cast<unsigned>(max_width_), static_cast<unsigned>(max_height_));
+          display_->reinitialize_video_dimensions(static_cast<unsigned>(canvas_width_), static_cast<unsigned>(canvas_height_));
         }
 
         float next_left_position;

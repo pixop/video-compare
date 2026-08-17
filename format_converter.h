@@ -1,4 +1,5 @@
 #pragma once
+#include "conversion_geometry.h"
 #include "side_aware.h"
 extern "C" {
 #include "libavformat/avformat.h"
@@ -15,6 +16,7 @@ class FormatConverter : public SideAware {
                   const AVPixelFormat dest_pixel_format,
                   const AVColorSpace src_color_space,
                   const AVColorRange src_color_range,
+                  const ConversionFit conversion_fit = ConversionFit::Stretch,
                   const Side& side = NONE,
                   const int flags = SWS_FAST_BILINEAR);
   ~FormatConverter();
@@ -35,6 +37,9 @@ class FormatConverter : public SideAware {
   void operator()(AVFrame* src, AVFrame* dst);
 
  private:
+  void ensure_source_fits_canvas() const;
+  int packed_dest_bytes_per_pixel() const;
+
   size_t src_width_;
   size_t src_height_;
   AVPixelFormat src_pixel_format_;
@@ -42,6 +47,7 @@ class FormatConverter : public SideAware {
   const size_t dest_width_;
   const size_t dest_height_;
   const AVPixelFormat dest_pixel_format_;
+  const ConversionFit conversion_fit_;
 
   AVColorSpace src_color_space_;
   AVColorRange src_color_range_;

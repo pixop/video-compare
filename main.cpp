@@ -373,6 +373,16 @@ void resolve_mutual_placeholders(std::string& left, std::string& right, const st
   }
 }
 
+ConversionFit parse_conversion_fit(const std::string& mode) {
+  if (mode.empty() || mode == "stretch") {
+    return ConversionFit::Stretch;
+  } else if (mode == "native") {
+    return ConversionFit::Native;
+  } else {
+    throw std::logic_error{"Cannot parse conversion fit (valid options: stretch, native)"};
+  }
+}
+
 Display::AspectLockMode parse_aspect_lock_mode(const std::string& mode) {
   if (mode.empty() || mode == "off") {
     return Display::AspectLockMode::Off;
@@ -583,6 +593,8 @@ int main(int argc, char** argv) {
          {"display-mode", {"-m", "--mode"}, "display mode (layout), 'split' for split screen (default), 'vstack' for vertical stack, 'hstack' for horizontal stack", 1},
          {"window-size", {"-w", "--window-size"}, "override window size, specified as [width]x[height] (e.g. 800x600, 1280x or x480)", 1},
          {"window-fit-display", {"-W", "--window-fit-display"}, "calculate the window size to fit within the usable display bounds while maintaining the video aspect ratio", 0},
+         {"conversion-size", {"--conversion-size"}, "shared conversion canvas size: 'max' (default, axis-wise maximum of filtered destinations) or an explicit [width]x[height] (e.g. 1920x1440)", 1},
+         {"conversion-fit", {"--conversion-fit"}, "how filtered frames are placed on the conversion canvas: 'stretch' (default, scale to fill) or 'native' (1:1 centered samples with black padding)", 1},
          {"aspect-lock", {"-k", "--aspect-lock"}, "aspect lock mode during resizing: 'off' (default), 'window' for initial window ratio, 'content' for current video/content ratio", 1},
          {"aspect-view-mode",
           {"-x", "--aspect-view-mode"},
@@ -709,6 +721,28 @@ int main(int argc, char** argv) {
       }
       if (args["aspect-view-mode"]) {
         config.aspect_view_mode = parse_aspect_view_mode(static_cast<const std::string&>(args["aspect-view-mode"]));
+      }
+      if (args["conversion-size"]) {
+        const std::string conversion_size_arg = args["conversion-size"];
+        if (conversion_size_arg == "max") {
+          config.conversion_size = ConversionSize{};
+        } else {
+          std::smatch sm;
+          if (!std::regex_match(conversion_size_arg, sm, REQUIRED_DIMS_RE)) {
+            throw std::logic_error{"Cannot parse --conversion-size (valid options: max or [width]x[height], e.g. 1920x1440)"};
+          }
+          const int width = std::stoi(sm[1].str());
+          const int height = std::stoi(sm[2].str());
+          if (width < 1 || height < 1) {
+            throw std::logic_error{"Conversion size width and height must be at least 1"};
+          }
+          config.conversion_size.mode = ConversionSizeMode::Explicit;
+          config.conversion_size.width = width;
+          config.conversion_size.height = height;
+        }
+      }
+      if (args["conversion-fit"]) {
+        config.conversion_fit = parse_conversion_fit(static_cast<const std::string&>(args["conversion-fit"]));
       }
       config.use_10_bpc = args["10-bpc"];
       config.fast_input_alignment = args["fast-alignment"];

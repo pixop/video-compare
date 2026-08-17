@@ -237,6 +237,7 @@ Display::Display(const int display_number,
                  const bool use_10_bpc,
                  const bool fast_input_alignment,
                  const bool bilinear_texture_filtering,
+                 const ConversionFit conversion_fit,
                  const std::tuple<int, int> window_size,
                  const unsigned width,
                  const unsigned height,
@@ -257,6 +258,7 @@ Display::Display(const int display_number,
       use_10_bpc_{use_10_bpc},
       fast_input_alignment_{fast_input_alignment},
       bilinear_texture_filtering_{bilinear_texture_filtering},
+      conversion_fit_{conversion_fit},
       video_width_{0},
       video_height_{0},
       duration_{duration},
@@ -674,6 +676,7 @@ void Display::print_verbose_info() {
   std::cout << "Use 10 bpc:            " << std::boolalpha << use_10_bpc_ << std::endl;
   std::cout << "Fast input alignment:  " << std::boolalpha << fast_input_alignment_ << std::endl;
   std::cout << "Bilinear filtering:    " << std::boolalpha << bilinear_texture_filtering_ << std::endl;
+  std::cout << "Conversion fit:        " << conversion_fit_to_string(conversion_fit_) << std::endl;
   std::cout << "Mouse whl sensitivity: " << wheel_sensitivity_ << std::endl;
 
   SDL_version sdl_linked_version;
@@ -2415,10 +2418,19 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       auto original_left_dims = get_original_dimensions(left_frame);
       auto original_right_dims = get_original_dimensions(right_frame);
 
-      std::cout << "Left:  " << string_sprintf("[%4d,%4d]", pixel_video_x * original_left_dims.first / video_width_, pixel_video_y * original_left_dims.second / video_height_);
+      auto format_content_coord = [&](const std::pair<int, int>& original_dims) {
+        int content_x = 0;
+        int content_y = 0;
+        if (!canvas_point_to_content(conversion_fit_, video_width_, video_height_, original_dims.first, original_dims.second, pixel_video_x, pixel_video_y, &content_x, &content_y)) {
+          return std::string("[padding]");
+        }
+        return string_sprintf("[%4d,%4d]", content_x, content_y);
+      };
+
+      std::cout << "Left:  " << format_content_coord(original_left_dims);
       std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_left[0], pitches_left[0], left_frame, pixel_video_x, pixel_video_y);
       std::cout << " - ";
-      std::cout << "Right: " << string_sprintf("[%4d,%4d]", pixel_video_x * original_right_dims.first / video_width_, pixel_video_y * original_right_dims.second / video_height_);
+      std::cout << "Right: " << format_content_coord(original_right_dims);
       std::cout << ", " << get_and_format_rgb_yuv_pixel(planes_right[0], pitches_right[0], right_frame, pixel_video_x, pixel_video_y);
       std::cout << std::endl;
     }
@@ -2428,6 +2440,17 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
   // print image similarity metrics
   if (print_image_similarity_metrics_) {
+    if (conversion_fit_ == ConversionFit::Native && !metrics_padding_warned_) {
+      const int left_orig_w = FrameMetadata::get_original_width(left_frame, left_frame->width);
+      const int left_orig_h = FrameMetadata::get_original_height(left_frame, left_frame->height);
+      const int right_orig_w = FrameMetadata::get_original_width(right_frame, right_frame->width);
+      const int right_orig_h = FrameMetadata::get_original_height(right_frame, right_frame->height);
+      const bool has_padding = (left_orig_w > 0 && left_orig_h > 0 && (left_orig_w < video_width_ || left_orig_h < video_height_)) || (right_orig_w > 0 && right_orig_h > 0 && (right_orig_w < video_width_ || right_orig_h < video_height_));
+      if (has_padding) {
+        std::cerr << "Objective metrics may include conversion-canvas padding in native fit mode." << std::endl;
+        metrics_padding_warned_ = true;
+      }
+    }
     SDL_Rect roi = get_visible_roi_in_single_frame_coordinates();
 
     if (roi.w <= 0 || roi.h <= 0) {

@@ -11,6 +11,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include "conversion_geometry.h"
 #include "core_types.h"
 #include "font_selection.h"
 #include "row_workers.h"
@@ -171,6 +172,7 @@ class Display {
   const bool use_10_bpc_;
   bool fast_input_alignment_;
   bool bilinear_texture_filtering_;
+  const ConversionFit conversion_fit_;
   int video_width_;
   int video_height_;
   const double duration_;
@@ -241,6 +243,7 @@ class Display {
   bool save_image_frames_{false};
   bool print_mouse_position_and_color_{false};
   bool print_image_similarity_metrics_{false};
+  bool metrics_padding_warned_{false};
   bool mouse_is_inside_window_{false};
   float playback_speed_level_{0.0F};
   float playback_speed_factor_{1.0F};
@@ -471,6 +474,7 @@ class Display {
           const bool use_10_bpc,
           const bool fast_input_alignment,
           const bool bilinear_texture_filtering,
+          const ConversionFit conversion_fit,
           const std::tuple<int, int> window_size,
           const unsigned width,
           const unsigned height,
