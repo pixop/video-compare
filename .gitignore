@@ -30,3 +30,16 @@ video-compare
 # Generated Windows FFmpeg source manifest (bundled in Windows artifacts only)
 licenses/FFMPEG-SOURCE.txt
 
+# Additional files
+*.txt
+*.json
+*.sub
+*.bmp
+*.mp4
+*.mkv
+*.mov
+*.py
+*.csv
+*.avi
+*.ts
+vmaf_*
