@@ -39,6 +39,7 @@ class FormatConverter : public SideAware {
  private:
   void ensure_source_fits_canvas() const;
   int packed_dest_bytes_per_pixel() const;
+  void ensure_native_scratch(const int width, const int height);
 
   size_t src_width_;
   size_t src_height_;
@@ -56,4 +57,7 @@ class FormatConverter : public SideAware {
   int pending_flags_;
 
   SwsContext* conversion_context_{};
+  uint8_t* native_scratch_{};
+  int native_scratch_linesize_{};
+  size_t native_scratch_bytes_{};
 };

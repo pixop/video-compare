@@ -124,20 +124,28 @@ static void test_native_rgb24_odd_offset_and_linesize() {
 
   const int x0 = (canvas_w - src_w) / 2;
   const int y0 = (canvas_h - src_h) / 2;
-  bool ok = (x0 == 3) && (y0 == 2);
-  ok = ok && dst->linesize[0] > src_w * 3;
-  ok = ok && rgb24_is_black(dst, 0, 0) && rgb24_is_black(dst, x0 - 1, y0);
-  ok = ok && rgb24_is_black(dst, x0 + src_w, y0) && rgb24_is_black(dst, canvas_w - 1, canvas_h - 1);
-  for (int y = 0; y < src_h && ok; ++y) {
-    for (int x = 0; x < src_w && ok; ++x) {
-      ok = rgb24_pixel_eq(dst, x0 + x, y0 + y, x & 0xff, y & 0xff, 128);
+  const char* reason = nullptr;
+  if (x0 != 3 || y0 != 2) {
+    reason = "expected origin 3,2";
+  } else if (dst->linesize[0] <= src_w * 3) {
+    reason = "canvas linesize not larger than packed src width";
+  } else if (!rgb24_is_black(dst, 0, 0) || !rgb24_is_black(dst, x0 - 1, y0) || !rgb24_is_black(dst, x0 + src_w, y0) || !rgb24_is_black(dst, canvas_w - 1, canvas_h - 1)) {
+    reason = "padding not black";
+  } else {
+    for (int y = 0; y < src_h && reason == nullptr; ++y) {
+      for (int x = 0; x < src_w && reason == nullptr; ++x) {
+        if (!rgb24_pixel_eq(dst, x0 + x, y0 + y, x & 0xff, y & 0xff, 128)) {
+          reason = "content pixel mismatch";
+        }
+      }
     }
   }
 
-  if (ok) {
+  if (reason == nullptr) {
     pass("native RGB24 odd horizontal offset uses canvas linesize");
   } else {
-    fail("native RGB24 odd horizontal offset uses canvas linesize");
+    std::fprintf(stderr, "FAIL native RGB24 odd horizontal offset uses canvas linesize: %s (linesize=%d origin=%d,%d)\n", reason, dst->linesize[0], x0, y0);
+    failures++;
   }
 
   free_frame(src);
@@ -247,6 +255,114 @@ static void test_native_overflow_throws() {
   }
 }
 
+static bool native_rgb24_matches(const AVFrame* dst, const int src_w, const int src_h, const int canvas_w, const int canvas_h) {
+  const int x0 = (canvas_w - src_w) / 2;
+  const int y0 = (canvas_h - src_h) / 2;
+  if (x0 <= 0 || !rgb24_is_black(dst, 0, 0) || !rgb24_is_black(dst, x0 - 1, y0) || !rgb24_is_black(dst, x0 + src_w, y0) || !rgb24_is_black(dst, canvas_w - 1, canvas_h - 1)) {
+    return false;
+  }
+  for (int y = 0; y < src_h; ++y) {
+    for (int x = 0; x < src_w; ++x) {
+      if (!rgb24_pixel_eq(dst, x0 + x, y0 + y, x & 0xff, y & 0xff, 128)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+static void test_native_same_converter_resize() {
+  const int canvas_w = 32;
+  const int canvas_h = 16;
+  FormatConverter converter(5, 4, canvas_w, canvas_h, AV_PIX_FMT_RGB24, AV_PIX_FMT_RGB24, AVCOL_SPC_BT709, AVCOL_RANGE_JPEG, ConversionFit::Native, NONE, SWS_POINT);
+  AVFrame* dst = alloc_frame(canvas_w, canvas_h, AV_PIX_FMT_RGB24);
+
+  const int sizes[][2] = {{5, 4}, {25, 10}, {3, 3}};
+  bool ok = true;
+  const char* reason = nullptr;
+
+  for (const auto& size : sizes) {
+    const int src_w = size[0];
+    const int src_h = size[1];
+    AVFrame* src = alloc_frame(src_w, src_h, AV_PIX_FMT_RGB24);
+    fill_rgb24_pattern(src);
+    converter(src, dst);
+
+    const int x0 = (canvas_w - src_w) / 2;
+    if (x0 == 0) {
+      reason = "resize fixture must have a horizontal offset";
+      ok = false;
+    } else if (!native_rgb24_matches(dst, src_w, src_h, canvas_w, canvas_h)) {
+      reason = "content or padding mismatch";
+      ok = false;
+    }
+
+    free_frame(src);
+    if (!ok) {
+      break;
+    }
+  }
+
+  if (ok) {
+    pass("native same-converter resize");
+  } else {
+    std::fprintf(stderr, "FAIL native same-converter resize: %s\n", reason);
+    failures++;
+  }
+  free_frame(dst);
+}
+
+static void test_native_vertical_padding() {
+  const int src_w = 8;
+  const int src_h = 4;
+  const int canvas_w = 8;
+  const int canvas_h = 12;
+  FormatConverter converter(src_w, src_h, canvas_w, canvas_h, AV_PIX_FMT_RGB24, AV_PIX_FMT_RGB24, AVCOL_SPC_BT709, AVCOL_RANGE_JPEG, ConversionFit::Native, NONE, SWS_POINT);
+  AVFrame* src = alloc_frame(src_w, src_h, AV_PIX_FMT_RGB24);
+  AVFrame* dst = alloc_frame(canvas_w, canvas_h, AV_PIX_FMT_RGB24);
+  fill_rgb24_pattern(src);
+  converter(src, dst);
+
+  const int y0 = (canvas_h - src_h) / 2;
+  bool ok = ((canvas_w - src_w) / 2) == 0 && y0 > 0;
+  ok = ok && rgb24_is_black(dst, 0, 0) && rgb24_is_black(dst, canvas_w - 1, canvas_h - 1);
+  ok = ok && rgb24_is_black(dst, 0, y0 - 1);
+  for (int y = 0; y < src_h && ok; ++y) {
+    for (int x = 0; x < src_w && ok; ++x) {
+      ok = rgb24_pixel_eq(dst, x, y0 + y, x & 0xff, y & 0xff, 128);
+    }
+  }
+
+  if (ok) {
+    pass("native vertical-only padding");
+  } else {
+    fail("native vertical-only padding");
+  }
+  free_frame(src);
+  free_frame(dst);
+}
+
+static void test_native_scratch_rejects_planar_dest() {
+  bool threw = false;
+  FormatConverter converter(5, 4, 12, 8, AV_PIX_FMT_RGB24, AV_PIX_FMT_YUV444P, AVCOL_SPC_BT709, AVCOL_RANGE_JPEG, ConversionFit::Native, NONE, SWS_POINT);
+  AVFrame* src = alloc_frame(5, 4, AV_PIX_FMT_RGB24);
+  AVFrame* dst = alloc_frame(12, 8, AV_PIX_FMT_YUV444P);
+  fill_rgb24_pattern(src);
+  try {
+    converter(src, dst);
+  } catch (const std::runtime_error& e) {
+    threw = std::string(e.what()).find("packed byte RGB") != std::string::npos;
+  }
+  free_frame(src);
+  free_frame(dst);
+
+  if (threw) {
+    pass("native scratch rejects planar dest");
+  } else {
+    fail("native scratch rejects planar dest");
+  }
+}
+
 static void test_stretch_fills_canvas() {
   FormatConverter converter(4, 4, 8, 8, AV_PIX_FMT_RGB24, AV_PIX_FMT_RGB24, AVCOL_SPC_BT709, AVCOL_RANGE_JPEG, ConversionFit::Stretch, NONE, SWS_POINT);
   AVFrame* src = alloc_frame(4, 4, AV_PIX_FMT_RGB24);
@@ -271,6 +387,9 @@ int main() {
   test_native_src_equals_canvas();
   test_native_src_change_still_fits();
   test_native_overflow_throws();
+  test_native_same_converter_resize();
+  test_native_vertical_padding();
+  test_native_scratch_rejects_planar_dest();
   test_stretch_fills_canvas();
 
   if (failures != 0) {

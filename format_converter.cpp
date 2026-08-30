@@ -6,6 +6,8 @@
 #include "ffmpeg.h"
 #include "frame_metadata.h"
 extern "C" {
+#include "libavutil/imgutils.h"
+#include "libavutil/mem.h"
 #include "libavutil/pixdesc.h"
 }
 
@@ -66,6 +68,10 @@ FormatConverter::FormatConverter(const size_t src_width,
 
 FormatConverter::~FormatConverter() {
   free();
+  av_freep(&native_scratch_);
+
+  native_scratch_linesize_ = 0;
+  native_scratch_bytes_ = 0;
 }
 
 void FormatConverter::ensure_source_fits_canvas() const {
@@ -77,10 +83,41 @@ void FormatConverter::ensure_source_fits_canvas() const {
   }
 }
 
+void FormatConverter::ensure_native_scratch(const int width, const int height) {
+  int linesize[4] = {0, 0, 0, 0};
+
+  if (av_image_fill_linesizes(linesize, dest_pixel_format_, width) < 0) {
+    throw ffmpeg::Error{"Could not compute native conversion scratch linesize"};
+  }
+
+  const int aligned_linesize = (linesize[0] + 63) & ~63;
+  const size_t bytes = static_cast<size_t>(aligned_linesize) * static_cast<size_t>(height);
+
+  if (bytes > native_scratch_bytes_) {
+    uint8_t* scratch = static_cast<uint8_t*>(av_malloc(bytes));
+
+    if (scratch == nullptr) {
+      throw ffmpeg::Error{"Could not allocate native conversion scratch"};
+    }
+
+    av_freep(&native_scratch_);
+
+    native_scratch_ = scratch;
+    native_scratch_bytes_ = bytes;
+  }
+
+  native_scratch_linesize_ = aligned_linesize;
+}
+
 int FormatConverter::packed_dest_bytes_per_pixel() const {
   const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(dest_pixel_format_);
   if (desc == nullptr) {
     throw ffmpeg::Error{"Unknown destination pixel format"};
+  }
+
+  const bool packed_rgb = ((desc->flags & AV_PIX_FMT_FLAG_RGB) != 0) && ((desc->flags & AV_PIX_FMT_FLAG_PLANAR) == 0) && ((desc->flags & AV_PIX_FMT_FLAG_BITSTREAM) == 0);
+  if (!packed_rgb || av_pix_fmt_count_planes(dest_pixel_format_) != 1) {
+    throw ffmpeg::Error{"Destination pixel format is not packed byte RGB"};
   }
 
   const int bits = av_get_padded_bits_per_pixel(desc);
@@ -195,6 +232,8 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
   uint8_t* dst_planes[4] = {dst->data[0], dst->data[1], dst->data[2], dst->data[3]};
   int dst_linesizes[4] = {dst->linesize[0], dst->linesize[1], dst->linesize[2], dst->linesize[3]};
 
+  bool used_scratch = false;
+
   if (conversion_fit_ == ConversionFit::Native) {
     const ContentRect content = content_rect_in_canvas(conversion_fit_, static_cast<int>(dest_width_), static_cast<int>(dest_height_), static_cast<int>(src_width_), static_cast<int>(src_height_));
     const bool has_padding = (content.x != 0) || (content.y != 0) || (content.width != static_cast<int>(dest_width_)) || (content.height != static_cast<int>(dest_height_));
@@ -204,19 +243,41 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
         std::memset(dst->data[0], 0, static_cast<size_t>(dst->linesize[0]) * dest_height_);
       }
 
-      const int bpp = packed_dest_bytes_per_pixel();
-      dst_planes[0] = dst->data[0] + static_cast<ptrdiff_t>(content.y) * dst->linesize[0] + static_cast<ptrdiff_t>(content.x) * bpp;
-      dst_planes[1] = nullptr;
-      dst_planes[2] = nullptr;
-      dst_planes[3] = nullptr;
+      if (content.x != 0) {
+        // Avoid passing an interior, potentially unaligned packed-RGB
+        // destination pointer to sws_scale. Convert to aligned scratch, then blit.
+        const int bpp = packed_dest_bytes_per_pixel();
+
+        ensure_native_scratch(content.width, content.height);
+
+        uint8_t* scratch_planes[4] = {native_scratch_, nullptr, nullptr, nullptr};
+        int scratch_linesizes[4] = {native_scratch_linesize_, 0, 0, 0};
+
+        sws_scale(conversion_context_, src->data, src->linesize, 0, static_cast<int>(src_height_), scratch_planes, scratch_linesizes);
+
+        const int row_bytes = content.width * bpp;
+        for (int y = 0; y < content.height; ++y) {
+          std::memcpy(dst->data[0] + static_cast<ptrdiff_t>(content.y + y) * dst->linesize[0] + static_cast<ptrdiff_t>(content.x) * bpp, native_scratch_ + static_cast<ptrdiff_t>(y) * native_scratch_linesize_,
+                      static_cast<size_t>(row_bytes));
+        }
+
+        used_scratch = true;
+      } else if (content.y != 0) {
+        dst_planes[0] = dst->data[0] + static_cast<ptrdiff_t>(content.y) * dst->linesize[0];
+        dst_planes[1] = nullptr;
+        dst_planes[2] = nullptr;
+        dst_planes[3] = nullptr;
+      }
     }
   }
 
-  sws_scale(conversion_context_,
-            // Source
-            src->data, src->linesize, 0, static_cast<int>(src_height_),
-            // Destination
-            dst_planes, dst_linesizes);
+  if (!used_scratch) {
+    sws_scale(conversion_context_,
+              // Source
+              src->data, src->linesize, 0, static_cast<int>(src_height_),
+              // Destination
+              dst_planes, dst_linesizes);
+  }
 
   dst->format = dest_pixel_format();
   dst->width = static_cast<int>(dest_width());
