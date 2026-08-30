@@ -134,7 +134,9 @@ integration: $(integration_bin)
 	echo "Running $(integration_bin) seek"; \
 	$$wrap ./$(integration_bin) seek "$$media/seek_left_25.mp4" "$$media/seek_right_25.mp4"; \
 	echo "Running $(integration_bin) still-seek"; \
-	$$wrap ./$(integration_bin) still-seek docs/images/screenshot_1.jpg docs/images/screenshot_2.jpg
+	$$wrap ./$(integration_bin) still-seek docs/images/screenshot_1.jpg docs/images/screenshot_2.jpg; \
+	echo "Running $(integration_bin) sync-mismatch"; \
+	$$wrap ./$(integration_bin) sync-mismatch "$$media/sync_left_25.mp4" "$$media/sync_right_30.mp4"
 
 .PHONY: check-one
 check-one: tests/test_$(TEST)$(EXE)
