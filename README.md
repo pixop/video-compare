@@ -52,13 +52,13 @@ Download and extract the .zip-archive on your system, then run `video-compare.ex
 ## Screenshots
 
 Visual compare mode:
-![Visual compare mode](screenshot_1.jpg?raw=true)
+![Visual compare mode](docs/images/screenshot_1.jpg?raw=true)
 
 Subtraction mode (plus time-shift, 200% zoom, and magnification):
-![Subtraction mode"](screenshot_2.jpg?raw=true)
+![Subtraction mode"](docs/images/screenshot_2.jpg?raw=true)
 
 Vertically stacked mode:
-![Stacked mode"](screenshot_3.jpg?raw=true)
+![Stacked mode"](docs/images/screenshot_3.jpg?raw=true)
 
 
 ## Usage

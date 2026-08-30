@@ -77,7 +77,7 @@ $(target): $(obj)
 	@$(CXX) $(CXXFLAGS) $< -MM -MT $(@:.d=.o) >$@
 
 test: $(target)
-	./$(target) -w 800x screenshot_1.jpg screenshot_2.jpg
+	./$(target) -w 800x docs/images/screenshot_1.jpg docs/images/screenshot_2.jpg
 
 tests/test_%$(EXE): tests/test_%.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(TEST_LIBS)
