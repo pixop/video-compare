@@ -9,6 +9,7 @@
 #include <thread>
 #include "conversion_geometry.h"
 #include "ffmpeg.h"
+#include "playback_seek.h"
 #include "playback_timing.h"
 #include "frame_metadata.h"
 #include "scope_manager.h"
@@ -1106,75 +1107,52 @@ void VideoCompare::compare() {
           display_->reinitialize_video_dimensions(static_cast<unsigned>(canvas_width_), static_cast<unsigned>(canvas_height_));
         }
 
-        float next_left_position;
+        playback_seek::SeekRequest seek_request;
+        seek_request.seek_relative = seek_relative;
+        seek_request.seek_from_start = seek_from_start;
+        seek_request.force_seek_current_position = force_seek_current_position;
+        seek_request.all_sides_multi_frame = std::all_of(media_frame_detection_states_.cbegin(), media_frame_detection_states_.cend(),
+                                                        [](const auto& kv) { return kv.second.cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::MultiFrame; });
+        seek_request.shift_right_frames = shift_right_frames;
+        seek_request.shortest_duration = shortest_duration_;
+        seek_request.left_pts = left.pts_;
+        seek_request.unadjusted_static_right_time_shift = static_right_time_shift;
+        seek_request.time_shift_multiplier = time_shift_.multiplier;
+        seek_request.left.start_time = left.start_time_;
+        seek_request.left.first_pts = left.first_pts_;
+        seek_request.left.delta_pts = left.delta_pts_;
+        seek_request.left.single_frame = media_frame_detection_states_.at(LEFT).cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::SingleFrame;
 
-        // the left video is the "master"
-        const float min_left_position = (left.first_pts_ > INT64_MIN) ? (left.first_pts_ * AV_TIME_TO_SEC + left.start_time_) : left.start_time_;
-        const float left_position = left.pts_ * AV_TIME_TO_SEC + left.start_time_;
-        const bool left_is_single_frame = media_frame_detection_states_.at(LEFT).cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::SingleFrame;
-
-        if (seek_from_start && !left_is_single_frame) {
-          // seek from start based on the shortest stream duration in seconds
-          next_left_position = shortest_duration_ * seek_relative + left.start_time_;
-        } else {
-          if (left_is_single_frame) {
-            // force state transition for single frame media files
-            seek_relative = left.delta_pts_ * AV_TIME_TO_SEC;
+        for (const auto& pair : side_states) {
+          if (!pair.first.is_right()) {
+            continue;
           }
 
-          next_left_position = left_position + seek_relative;
+          playback_seek::SeekSideInput right_input;
+          right_input.start_time = pair.second.start_time_;
+          right_input.first_pts = pair.second.first_pts_;
+          right_input.delta_pts = pair.second.delta_pts_;
+          right_input.single_frame = media_frame_detection_states_.at(pair.first).cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::SingleFrame;
+          seek_request.rights.push_back(right_input);
         }
 
-        // Clamp seeks so we never go before the first decoded PTS.
-        next_left_position = std::max(next_left_position, min_left_position);
-
-        // determine if the seek is backward or forward
-        const auto all_media_are_multi_frame = [&]() -> bool {
-          return std::all_of(media_frame_detection_states_.cbegin(), media_frame_detection_states_.cend(), [](const auto& kv) { return kv.second.cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::MultiFrame; });
-        };
-        const bool backward = (seek_relative < 0.0F) || (shift_right_frames != 0) || (force_seek_current_position && all_media_are_multi_frame());
-
-        auto compute_right_position = [&](const SideState& right_state) -> float { return left.pts_ * AV_TIME_TO_SEC + right_state.start_time_; };
+        const playback_seek::SeekPlan seek_plan = playback_seek::plan_seek(seek_request);
 
         // Seek all right videos and track failures
         bool seek_failed = false;
+        size_t right_plan_index = 0;
 
         for (auto& pair : side_states) {
           const Side& side = pair.first;
 
           if (side.is_right()) {
-            SideState& right_state = pair.second;
-
-            float next_right_position;
-
-            const float min_right_position = (right_state.first_pts_ > INT64_MIN) ? (right_state.first_pts_ * AV_TIME_TO_SEC + right_state.start_time_) : right_state.start_time_;
-            const float right_position = compute_right_position(right_state);
-            const bool right_is_single_frame = media_frame_detection_states_.at(side).cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::SingleFrame;
-
-            if (seek_from_start && !right_is_single_frame) {
-              // seek from start based on the shortest stream duration in seconds
-              next_right_position = shortest_duration_ * seek_relative + right_state.start_time_;
-            } else {
-              if (right_is_single_frame) {
-                // force state transition for single frame media files
-                seek_relative = right_state.delta_pts_ * AV_TIME_TO_SEC;
-              }
-
-              next_right_position = right_position + seek_relative;
-            }
-
-            // Clamp seeks so we never go before the first decoded PTS.
-            next_right_position = std::max(next_right_position, min_right_position);
-
-            // Add the dynamic time shift and the delta PTS to the next right position
-            next_right_position += static_right_time_shift * AV_TIME_TO_SEC;
-            next_right_position += static_cast<float>(playback_timing::calculate_dynamic_time_shift(time_shift_.multiplier, (next_right_position - right_state.start_time_) / AV_TIME_TO_SEC, false)) * AV_TIME_TO_SEC;
+            const playback_seek::RightSeekTarget& right_target = seek_plan.rights[right_plan_index++];
 
 #ifdef _DEBUG
-            std::cout << "SEEK: next_right_position=" << (int)(next_right_position * 1000) << " (side=" << side.to_string() << "), backward=" << backward << std::endl;
+            std::cout << "SEEK: next_right_position=" << (int)(right_target.target_position * 1000) << " (side=" << side.to_string() << "), backward=" << seek_plan.backward << std::endl;
 #endif
-            const bool right_seek_result = demuxers_[side]->seek(next_right_position, backward);
-            if (!right_seek_result && !backward) {
+            const bool right_seek_result = demuxers_[side]->seek(right_target.target_position, seek_plan.backward);
+            if (!right_seek_result && !seek_plan.backward) {
               seek_failed = true;
             }
 #ifdef _DEBUG
@@ -1184,10 +1162,10 @@ void VideoCompare::compare() {
         }
 
 #ifdef _DEBUG
-        std::cout << "SEEK: next_left_position=" << (int)(next_left_position * 1000) << ", backward=" << backward << std::endl;
+        std::cout << "SEEK: next_left_position=" << (int)(seek_plan.left_target_position * 1000) << ", backward=" << seek_plan.backward << std::endl;
 #endif
-        const bool left_seek_result = demuxers_[LEFT]->seek(next_left_position, backward);
-        if (!left_seek_result && !backward) {
+        const bool left_seek_result = demuxers_[LEFT]->seek(seek_plan.left_target_position, seek_plan.backward);
+        if (!left_seek_result && !seek_plan.backward) {
           seek_failed = true;
         }
 #ifdef _DEBUG
@@ -1198,13 +1176,13 @@ void VideoCompare::compare() {
         if (seek_failed) {
           display_->set_pending_message("Unable to seek past end of file");
 
-          demuxers_[LEFT]->seek(left_position, true);
+          demuxers_[LEFT]->seek(seek_plan.left_restore_position, true);
 
+          right_plan_index = 0;
           for (auto& pair : side_states) {
             const Side& side = pair.first;
             if (side.is_right()) {
-              SideState& right_state = pair.second;
-              demuxers_[side]->seek(compute_right_position(right_state), true);
+              demuxers_[side]->seek(seek_plan.rights[right_plan_index++].restore_position, true);
             }
           }
         }
@@ -1250,12 +1228,7 @@ void VideoCompare::compare() {
 
         pop_and_reset(left);
 
-        // round away from zero to nearest 2 ms
-        if (static_right_time_shift > 0) {
-          static_right_time_shift = ((static_right_time_shift / 1000) + 2) * 1000;
-        } else if (static_right_time_shift < 0) {
-          static_right_time_shift = ((static_right_time_shift / 1000) - 2) * 1000;
-        }
+        static_right_time_shift = playback_seek::compute_post_seek_static_right_time_shift(static_right_time_shift);
 
         // Reset all right videos after seek
         for (auto& pair : side_states) {
@@ -1268,7 +1241,8 @@ void VideoCompare::compare() {
           }
         }
 
-        // don't sync until the next iteration to prevent freezing when comparing a single image
+        // After seek, skip fetch/store so a failed next-frame pop cannot null the
+        // post-seek frame before it is put back into the display buffer.
         skip_update = true;
       }
 
@@ -1310,7 +1284,9 @@ void VideoCompare::compare() {
         }
       };
 
-      // sync left with all right videos
+      // Sync left with all rights. min_delta is left + active right; pts_ stays frozen,
+      // so several rights ahead of left can pop left more than once. adjusting is set
+      // before Queue::pop, so a failed pop still marks the pass as adjusting.
       for (auto& pair : side_states) {
         if (pair.first.is_right()) {
           SideState& right_state = pair.second;
