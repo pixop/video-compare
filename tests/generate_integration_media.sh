@@ -34,3 +34,6 @@ generate_clip "$out_dir/seek_left_25.mp4" 4
 generate_clip "$out_dir/seek_right_25.mp4" 4
 generate_clip "$out_dir/sync_left_25.mp4" 2 25
 generate_clip "$out_dir/sync_right_30.mp4" 2 30
+generate_clip "$out_dir/multi_sync_left_30.mp4" 3 30
+generate_clip "$out_dir/multi_sync_right0_25.mp4" 3 25
+generate_clip "$out_dir/multi_sync_right1_25.mp4" 3 25
