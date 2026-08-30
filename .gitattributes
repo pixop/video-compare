@@ -8,6 +8,6 @@ third_party/circular_buffer.h linguist-vendored
 third_party/sorted_flat_deque.h linguist-vendored
 
 # Generated first-party application asset (not third-party source).
-src/video_compare_icon.h -diff
+src/video_compare_icon.h linguist-generated -diff
 
 *.sh text eol=lf
