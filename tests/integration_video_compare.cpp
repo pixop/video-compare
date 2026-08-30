@@ -18,7 +18,7 @@
 
 namespace {
 
-enum class Scenario { Baseline, EventInjection, Seek, StillSeek };
+enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch };
 
 void sleep_ms(const int ms) {
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
@@ -218,6 +218,12 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     // immediately after the seek. F dumps the presented stills.
     push_keydown(SDLK_f, SDL_SCANCODE_F, 0);
     sleep_ms(500);
+  } else if (scenario == Scenario::SyncMismatch) {
+    // Natural playback only. The shared 1000 ms settle plus this extra wait
+    // give 25-vs-30 enough dual-pops for right to cross min_delta repeatedly.
+    sleep_ms(800);
+    push_copy_timestamp();
+    sleep_ms(300);
   }
 
   push_quit();
@@ -257,7 +263,11 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
 
   prepare_dummy_software_sdl();
 
-  const VideoCompareConfig config = make_config(resolved);
+  VideoCompareConfig config = make_config(resolved);
+  if (scenario == Scenario::SyncMismatch) {
+    // Auto fps= would otherwise lift 25 fps to 30 and hide the sync path.
+    config.disable_auto_filters = true;
+  }
 
   std::ostringstream captured_out;
   std::streambuf* const old_out = std::cout.rdbuf(captured_out.rdbuf());
@@ -344,6 +354,21 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
         exit_code = EXIT_FAILURE;
       }
     }
+  } else if (scenario == Scenario::SyncMismatch) {
+    // Clipboard is left PTS only. A mid-clip timestamp after unpaused 25/30
+    // playback shows the loop kept presenting; it does not prove both sides'
+    // PTS stayed inside min_delta. Filter strings go to av_log/stderr, not here.
+    const std::vector<double> times = copied_positions(output);
+    if (times.size() < 1) {
+      std::fprintf(stderr, "FAIL sync-mismatch expected a copied timestamp after playback\n");
+      std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
+      exit_code = EXIT_FAILURE;
+    } else if (times[0] < 0.40 || times[0] > 2.20) {
+      std::fprintf(stderr, "FAIL sync-mismatch copied PTS %.3f not in [0.40, 2.20]\n", times[0]);
+      exit_code = EXIT_FAILURE;
+    } else {
+      std::printf("PASS sync-mismatch presented left PTS %.3f after mismatched-rate playback\n", times[0]);
+    }
   }
 
   if (exit_code == EXIT_SUCCESS) {
@@ -359,6 +384,7 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "  %s event-injection LEFT RIGHT0 RIGHT1\n", argv0);
   std::fprintf(stderr, "  %s seek LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s still-seek LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s sync-mismatch LEFT RIGHT\n", argv0);
 }
 
 }  // namespace
@@ -403,6 +429,13 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::StillSeek, files);
+    }
+    if (name == "sync-mismatch") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::SyncMismatch, files);
     }
   } catch (const std::exception& exception) {
     std::fprintf(stderr, "FAIL %s\n", exception.what());
