@@ -3,6 +3,7 @@
 #include <SDL2/SDL.h>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -18,7 +19,7 @@
 
 namespace {
 
-enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync };
+enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync, FrameNavigation };
 
 void sleep_ms(const int ms) {
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
@@ -232,6 +233,23 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(200);
     push_keydown(SDLK_TAB, SDL_SCANCODE_TAB, 0);
     sleep_ms(200);
+  } else if (scenario == Scenario::FrameNavigation) {
+    // Pause isolates one-frame movement from continuous fetch. SPACE
+    // toggles play_ to false; Shift+D still fetches via
+    // forward_navigate_frames, and Shift+A still enters the seek path.
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(300);
+    push_copy_timestamp();
+    sleep_ms(200);
+    // Shift only — do not combine with the clipboard modifier.
+    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, KMOD_SHIFT);
+    sleep_ms(500);
+    push_copy_timestamp();
+    sleep_ms(200);
+    push_keydown(SDLK_a, SDL_SCANCODE_A, 0, KMOD_SHIFT);
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(200);
   }
 
   push_quit();
@@ -396,6 +414,41 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     } else {
       std::printf("PASS multi-right-sync presented left PTS %.3f and switched active right to 2/2\n", times[0]);
     }
+  } else if (scenario == Scenario::FrameNavigation) {
+    const std::vector<double> times = copied_positions(output);
+    if (times.size() < 3) {
+      std::fprintf(stderr, "FAIL frame-navigation expected 3 copied timestamps, got %zu\n", times.size());
+      std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
+      exit_code = EXIT_FAILURE;
+    } else {
+      const double t0 = times[0];
+      const double t1 = times[1];
+      const double t2 = times[2];
+      const double forward = t1 - t0;
+      const double backward = t2 - t1;
+      const double roundtrip = t2 - t0;
+      std::printf("frame-navigation timestamps: T0=%.3f T1=%.3f T2=%.3f forward=%.3f backward=%.3f roundtrip=%.3f\n", t0, t1, t2, forward, backward, roundtrip);
+      // 25 fps intra clips should move exactly one frame (~0.040 s).
+      // Millisecond clipboard formatting can land on 0.039/0.041.
+      if (!(t1 > t0)) {
+        std::fprintf(stderr, "FAIL T1 (%.3f) is not greater than T0 (%.3f); forward=%.3f backward=%.3f\n", t1, t0, forward, backward);
+        exit_code = EXIT_FAILURE;
+      } else if (forward < 0.030 || forward > 0.050) {
+        std::fprintf(stderr, "FAIL forward delta %.3f not in [0.030, 0.050]; T0=%.3f T1=%.3f T2=%.3f backward=%.3f\n", forward, t0, t1, t2, backward);
+        exit_code = EXIT_FAILURE;
+      } else if (!(t2 < t1)) {
+        std::fprintf(stderr, "FAIL T2 (%.3f) is not less than T1 (%.3f); T0=%.3f forward=%.3f backward=%.3f\n", t2, t1, t0, forward, backward);
+        exit_code = EXIT_FAILURE;
+      } else if (backward < -0.050 || backward > -0.030) {
+        std::fprintf(stderr, "FAIL backward delta %.3f not in [-0.050, -0.030]; T0=%.3f T1=%.3f T2=%.3f forward=%.3f\n", backward, t0, t1, t2, forward);
+        exit_code = EXIT_FAILURE;
+      } else if (std::fabs(roundtrip) > 0.015) {
+        std::fprintf(stderr, "FAIL |T2-T0| %.3f exceeds 0.015; T0=%.3f T1=%.3f T2=%.3f forward=%.3f backward=%.3f\n", std::fabs(roundtrip), t0, t1, t2, forward, backward);
+        exit_code = EXIT_FAILURE;
+      } else {
+        std::printf("PASS Shift+D / Shift+A presented one frame forward then one frame backward\n");
+      }
+    }
   }
 
   if (exit_code == EXIT_SUCCESS) {
@@ -413,6 +466,7 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "  %s still-seek LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s sync-mismatch LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s multi-right-sync LEFT RIGHT0 RIGHT1\n", argv0);
+  std::fprintf(stderr, "  %s frame-navigation LEFT RIGHT\n", argv0);
 }
 
 }  // namespace
@@ -471,6 +525,13 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::MultiRightSync, files);
+    }
+    if (name == "frame-navigation") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::FrameNavigation, files);
     }
   } catch (const std::exception& exception) {
     std::fprintf(stderr, "FAIL %s\n", exception.what());
