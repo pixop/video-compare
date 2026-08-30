@@ -36,8 +36,7 @@ inline ZoomVec2 zoom_transform_origin(const float frame_width, const float frame
 inline ZoomVec2 compute_zoom_move_offset(const ZoomVec2 move_offset, const float current_zoom_factor, const ZoomVec2 zoom_point, const float new_zoom_factor, const float frame_width, const float frame_height) {
   const float zoom_factor_change = new_zoom_factor / current_zoom_factor;
   const ZoomVec2 transform_origin = zoom_transform_origin(frame_width, frame_height);
-  return {move_offset.x - (transform_origin.x + move_offset.x - zoom_point.x) * (1.0F - zoom_factor_change),
-          move_offset.y - (transform_origin.y + move_offset.y - zoom_point.y) * (1.0F - zoom_factor_change)};
+  return {move_offset.x - (transform_origin.x + move_offset.x - zoom_point.x) * (1.0F - zoom_factor_change), move_offset.y - (transform_origin.y + move_offset.y - zoom_point.y) * (1.0F - zoom_factor_change)};
 }
 
 // Display::update_move_offset()
