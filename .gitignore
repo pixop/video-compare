@@ -19,6 +19,9 @@ video-compare.exe
 # Unit-test binaries and debug symbols (keep sources)
 /tests/test_*
 !/tests/test_*.cpp
+/tests/integration_*
+!/tests/integration_*.cpp
+!/tests/integration_*.sh
 /tests/*.dSYM/
 
 # Dependencies
