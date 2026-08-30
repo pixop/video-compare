@@ -84,6 +84,8 @@ tests/test_%$(EXE): tests/test_%.o
 
 tests/test_frame_metadata$(EXE): TEST_LIBS = $(LDLIBS)
 
+tests/test_playback_timing$(EXE): TEST_LIBS = $(LDLIBS)
+
 tests/test_format_converter$(EXE): \
 	src/format_converter.o src/frame_metadata.o src/ffmpeg.o src/side_aware_logger.o src/core_types.o
 tests/test_format_converter$(EXE): TEST_LIBS = $(LDLIBS)
