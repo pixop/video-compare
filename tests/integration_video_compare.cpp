@@ -19,7 +19,7 @@
 
 namespace {
 
-enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync, FrameNavigation };
+enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync, FrameNavigation, BufferForwardOnly, BufferPingPong };
 
 void sleep_ms(const int ms) {
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
@@ -150,6 +150,36 @@ struct DumpDirectory {
   }
 };
 
+void print_pts_sequence(const char* label, const std::vector<double>& times) {
+  std::fprintf(stderr, "%s", label);
+  for (size_t i = 0; i < times.size(); ++i) {
+    std::fprintf(stderr, "%s%.3f", i == 0 ? "" : " ", times[i]);
+  }
+  std::fprintf(stderr, "\n");
+}
+
+std::vector<double> unique_pts(const std::vector<double>& times) {
+  std::vector<double> out;
+  for (const double t : times) {
+    if (out.empty() || std::fabs(t - out.back()) > 0.015) {
+      out.push_back(t);
+    }
+  }
+  return out;
+}
+
+bool pts_near(const double a, const double b) {
+  return std::fabs(a - b) <= 0.015;
+}
+
+void print_pts_stdout(const char* label, const std::vector<double>& times) {
+  std::printf("%s", label);
+  for (size_t i = 0; i < times.size(); ++i) {
+    std::printf("%s%.3f", i == 0 ? "" : " ", times[i]);
+  }
+  std::printf("\n");
+}
+
 std::vector<double> copied_positions(const std::string& output) {
   std::vector<double> times;
   const std::string prefix = "Copied to clipboard: ";
@@ -250,6 +280,32 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(200);
+  } else if (scenario == Scenario::BufferForwardOnly || scenario == Scenario::BufferPingPong) {
+    // Fill the 3-slot history, pause so offset 0 stays on the newest frame,
+    // then slow to 1/16x so timer-driven steps are ~640 ms. J is the
+    // ordinary playback-speed control (6 presses per octave).
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(300);
+    for (int i = 0; i < 24; ++i) {
+      push_keydown(SDLK_j, SDL_SCANCODE_J, 0);
+    }
+    sleep_ms(200);
+    push_copy_timestamp();
+    sleep_ms(200);
+    if (scenario == Scenario::BufferForwardOnly) {
+      push_keydown(SDLK_PERIOD, SDL_SCANCODE_PERIOD, 0);
+    } else {
+      push_keydown(SDLK_COMMA, SDL_SCANCODE_COMMA, 0);
+    }
+    // Period/comma pauses decode and starts timer-driven offset updates.
+    // The first step is armed on that same iteration after refresh.
+    // 1/16x makes each step ~640 ms; copy every 200 ms and collapse
+    // consecutive duplicates so we recover the logical sequence.
+    for (int i = 0; i < 18; ++i) {
+      sleep_ms(200);
+      push_copy_timestamp();
+    }
+    sleep_ms(200);
   }
 
   push_quit();
@@ -293,6 +349,11 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   if (scenario == Scenario::SyncMismatch || scenario == Scenario::MultiRightSync) {
     // Auto fps= would otherwise lift 25 fps to 30 and hide the sync path.
     config.disable_auto_filters = true;
+  }
+  if (scenario == Scenario::BufferForwardOnly || scenario == Scenario::BufferPingPong) {
+    // 3 slots: newest / middle / oldest. Smallest history that still has
+    // an interior frame plus both endpoints for wrap and bounce.
+    config.frame_buffer_size = 3;
   }
 
   std::ostringstream captured_out;
@@ -449,6 +510,82 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
         std::printf("PASS Shift+D / Shift+A presented one frame forward then one frame backward\n");
       }
     }
+  } else if (scenario == Scenario::BufferForwardOnly || scenario == Scenario::BufferPingPong) {
+    const std::vector<double> times = copied_positions(output);
+    const char* name = (scenario == Scenario::BufferForwardOnly) ? "ForwardOnly" : "PingPong";
+    print_pts_stdout((std::string(name) + " observed: ").c_str(), times);
+    if (times.size() < 8) {
+      std::fprintf(stderr, "FAIL %s expected at least 8 copied timestamps, got %zu\n", name, times.size());
+      print_pts_sequence((std::string(name) + " observed: ").c_str(), times);
+      exit_code = EXIT_FAILURE;
+    } else {
+      const double newest = times[0];
+      const double middle = newest - 0.040;
+      const double oldest = newest - 0.080;
+      const std::vector<double> unique = unique_pts(std::vector<double>(times.begin() + 1, times.end()));
+      print_pts_stdout((std::string(name) + " unique after start: ").c_str(), unique);
+
+      bool lattice_ok = true;
+      for (const double t : times) {
+        if (!pts_near(t, newest) && !pts_near(t, middle) && !pts_near(t, oldest)) {
+          lattice_ok = false;
+        }
+      }
+
+      size_t start = 0;
+      if (!unique.empty() && pts_near(unique[0], newest)) {
+        start = 1;
+      }
+
+      if (!lattice_ok) {
+        std::fprintf(stderr, "FAIL %s PTS left the 3-frame history lattice; newest=%.3f\n", name, newest);
+        print_pts_sequence((std::string(name) + " observed: ").c_str(), times);
+        exit_code = EXIT_FAILURE;
+      } else if (unique.size() <= start + 2) {
+        std::fprintf(stderr, "FAIL %s did not traverse history; newest=%.3f unique=%zu\n", name, newest, unique.size());
+        print_pts_sequence((std::string(name) + " observed: ").c_str(), times);
+        exit_code = EXIT_FAILURE;
+      } else if (scenario == Scenario::BufferForwardOnly) {
+        // Offset 0 wraps to last (oldest), then decrements toward newest.
+        const double cycle[3] = {oldest, middle, newest};
+        bool followed = true;
+        for (size_t i = start, step = 0; i < unique.size(); ++i, ++step) {
+          if (!pts_near(unique[i], cycle[step % 3])) {
+            followed = false;
+            break;
+          }
+        }
+        if (!followed) {
+          std::fprintf(stderr, "FAIL ForwardOnly unique sequence did not wrap oldest→middle→newest; newest=%.3f\n", newest);
+          print_pts_sequence("ForwardOnly observed: ", times);
+          exit_code = EXIT_FAILURE;
+        } else {
+          std::printf("PASS ForwardOnly wrapped from newest to oldest and replayed history\n");
+        }
+      } else {
+        // From offset 0 / forward: flip, step to middle, continue to oldest,
+        // bounce back through middle to newest. No stay-in-place endpoint.
+        const double cycle[4] = {middle, oldest, middle, newest};
+        bool followed = true;
+        bool bounced = false;
+        for (size_t i = start, step = 0; i < unique.size(); ++i, ++step) {
+          if (!pts_near(unique[i], cycle[step % 4])) {
+            followed = false;
+            break;
+          }
+          if (step >= 2) {
+            bounced = true;
+          }
+        }
+        if (!followed || !bounced) {
+          std::fprintf(stderr, "FAIL PingPong unique sequence did not bounce middle→oldest→middle→newest; newest=%.3f\n", newest);
+          print_pts_sequence("PingPong observed: ", times);
+          exit_code = EXIT_FAILURE;
+        } else {
+          std::printf("PASS PingPong reached the oldest frame and reversed through history\n");
+        }
+      }
+    }
   }
 
   if (exit_code == EXIT_SUCCESS) {
@@ -467,6 +604,8 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "  %s sync-mismatch LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s multi-right-sync LEFT RIGHT0 RIGHT1\n", argv0);
   std::fprintf(stderr, "  %s frame-navigation LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s buffer-forward-only LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s buffer-pingpong LEFT RIGHT\n", argv0);
 }
 
 }  // namespace
@@ -532,6 +671,20 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::FrameNavigation, files);
+    }
+    if (name == "buffer-forward-only") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::BufferForwardOnly, files);
+    }
+    if (name == "buffer-pingpong") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::BufferPingPong, files);
     }
   } catch (const std::exception& exception) {
     std::fprintf(stderr, "FAIL %s\n", exception.what());
