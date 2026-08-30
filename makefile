@@ -3,7 +3,10 @@ CXXFLAGS = -g3 -Ofast -std=c++14 -D__STDC_CONSTANT_MACROS \
 		   -Wdisabled-optimization -Wctor-dtor-privacy \
 		   -Woverloaded-virtual -Wno-unused -Wno-missing-field-initializers
 
+EXE =
+
 ifneq ($(filter MINGW%,$(shell uname)),)
+  EXE = .exe
   include windows_deps.mk
   FFMPEG_VERSION = $(GYAN_FFMPEG_VERSION)-$(GYAN_FFMPEG_VARIANT)
 
@@ -55,14 +58,19 @@ endif
 src = $(wildcard *.cpp)
 obj = $(src:.cpp=.o)
 dep = $(obj:.o=.d)
-target = video-compare
+target = video-compare$(EXE)
+
+test_src = $(wildcard tests/test_*.cpp)
+test_obj = $(test_src:.cpp=.o)
+test_dep = $(test_obj:.o=.d)
+test_bin = $(patsubst %.cpp,%$(EXE),$(test_src))
 
 all: $(target)
 
 $(target): $(obj)
 	$(CXX) -o $@ $^ $(LDLIBS)
 
--include $(dep)
+-include $(dep) $(test_dep)
 
 %.d: %.cpp
 	@$(CXX) $(CXXFLAGS) $< -MM -MT $(@:.d=.o) >$@
@@ -70,18 +78,30 @@ $(target): $(obj)
 test: $(target)
 	./$(target) -w 800x screenshot_1.jpg screenshot_2.jpg
 
-test_frame_metadata_bin = tests/test_frame_metadata
+tests/test_%$(EXE): tests/test_%.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(TEST_LIBS)
 
-$(test_frame_metadata_bin): tests/test_frame_metadata.cpp frame_metadata.h
-	$(CXX) $(CXXFLAGS) -o $@ tests/test_frame_metadata.cpp $(LDLIBS)
+tests/test_frame_metadata$(EXE): TEST_LIBS = $(LDLIBS)
 
-.PHONY: test-frame-metadata
-test-frame-metadata: $(test_frame_metadata_bin)
-	./$(test_frame_metadata_bin)
+tests/test_format_converter$(EXE): \
+	format_converter.o frame_metadata.o ffmpeg.o side_aware_logger.o core_types.o
+tests/test_format_converter$(EXE): TEST_LIBS = $(LDLIBS)
+
+.PHONY: check
+check: $(test_bin)
+	@set -e; \
+	for test in $(test_bin); do \
+		echo "Running $$test"; \
+		./$$test; \
+	done
+
+.PHONY: check-one
+check-one: tests/test_$(TEST)$(EXE)
+	./tests/test_$(TEST)$(EXE)
 
 .PHONY: clean
 clean:
-	$(RM) $(obj) $(target) $(dep) $(test_frame_metadata_bin)
+	$(RM) $(obj) $(target) $(dep) $(test_obj) $(test_dep) $(test_bin)
 
 install: $(target)
-	install -s video-compare $(BINDIR)
+	install -s $(target) $(BINDIR)

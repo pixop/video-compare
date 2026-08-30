@@ -80,6 +80,12 @@ jobs:
               cp -f "/mingw64/bin/$dll" .
             done
 
+      - name: Run unit tests
+        shell: msys2 {0}
+        run: |
+          set -euxo pipefail
+          mingw32-make check
+
       - name: Verify build output
         shell: powershell
         run: |
@@ -243,6 +249,9 @@ jobs:
       - name: Build
         run: make -j$(nproc)
 
+      - name: Run unit tests
+        run: make check
+
       - name: Verify build output
         run: |
           if [ -f "video-compare" ]; then
@@ -290,6 +299,9 @@ jobs:
 
       - name: Build
         run: make -j$(sysctl -n hw.ncpu)
+
+      - name: Run unit tests
+        run: make check
 
       - name: Verify build output
         run: |
