@@ -22,6 +22,7 @@
 #include "version.h"
 #include "video_compare_icon.h"
 #include "vmaf_calculator.h"
+#include "zoom_transform.h"
 extern "C" {
 #include <libavfilter/avfilter.h>
 #include <libavutil/imgutils.h>
@@ -2911,12 +2912,17 @@ float Display::compute_zoom_factor(const float zoom_level) const {
 }
 
 Vector2D Display::compute_relative_move_offset(const Vector2D& zoom_point, const float zoom_factor) const {
-  const float zoom_factor_change = zoom_factor / global_zoom_factor_;
-
-  // zoom_point, view_center, and move_offset are in layout coordinates
-  // (HStack/VStack layout spans two canvas slots). Do not include content_window_.x/y.
-  const Vector2D view_center = video_layout_size() * 0.5F;
-  return move_offset_ - (view_center + move_offset_ - zoom_point) * (1.0F - zoom_factor_change);
+  // zoom_point is the layout-space focal point (cursor, or the stack seam for
+  // keys 4-9). The transform origin/pivot is the single-frame center; do not
+  // include content_window_.x/y (zoom_point is already content-relative).
+  const auto next = zoom_transform::compute_zoom_move_offset(
+      {move_offset_.x(), move_offset_.y()},
+      global_zoom_factor_,
+      {zoom_point.x(), zoom_point.y()},
+      zoom_factor,
+      static_cast<float>(video_width_),
+      static_cast<float>(video_height_));
+  return Vector2D(next.x, next.y);
 }
 
 void Display::update_zoom_factor_and_move_offset(const float zoom_factor) {
@@ -2933,16 +2939,21 @@ void Display::update_zoom_factor(const float zoom_factor) {
 
 void Display::update_move_offset(const Vector2D& move_offset) {
   move_offset_ = move_offset;
-  global_center_ = Vector2D(move_offset_.x() / video_width_ + 0.5F, move_offset_.y() / video_height_ + 0.5F);
+  const auto center = zoom_transform::zoom_global_center_from_move_offset(
+      {move_offset_.x(), move_offset_.y()},
+      static_cast<float>(video_width_),
+      static_cast<float>(video_height_));
+  global_center_ = Vector2D(center.x, center.y);
   on_view_transform_changed();
 }
 
 Display::ZoomRect Display::compute_zoom_rect() const {
-  const Vector2D video_extent(video_width_, video_height_);
-  const Vector2D zoom_rect_start((global_center_ - global_zoom_factor_ * 0.5F) * video_extent);
-  const Vector2D zoom_rect_end((global_center_ + global_zoom_factor_ * 0.5F) * video_extent);
-  const Vector2D zoom_rect_size(zoom_rect_end - zoom_rect_start);
-  return {zoom_rect_start, zoom_rect_end, zoom_rect_size, global_zoom_factor_};
+  const auto state = zoom_transform::compute_zoom_rect_state(
+      {global_center_.x(), global_center_.y()},
+      global_zoom_factor_,
+      static_cast<float>(video_width_),
+      static_cast<float>(video_height_));
+  return {Vector2D(state.start.x, state.start.y), Vector2D(state.end.x, state.end.y), Vector2D(state.size.x, state.size.y), state.zoom_factor};
 }
 
 Vector2D Display::window_to_video_position(const int window_x_position, const int window_y_position, const Display::ZoomRect& zoom_rect, const bool floor_result) const {
@@ -2950,16 +2961,30 @@ Vector2D Display::window_to_video_position(const int window_x_position, const in
 
   const float window_x_in_content = static_cast<float>(window_x_position - content_window_.x);
   const float window_y_in_content = static_cast<float>(window_y_position - content_window_.y);
-  const int video_x = floor_or_ceil((window_x_in_content * video_to_window_width_factor_ - zoom_rect.start.x()) * static_cast<float>(video_width_) / zoom_rect.size.x());
-  const int video_y = floor_or_ceil((window_y_in_content * video_to_window_height_factor_ - zoom_rect.start.y()) * static_cast<float>(video_height_) / zoom_rect.size.y());
+  const zoom_transform::ZoomRectState state{
+      {zoom_rect.start.x(), zoom_rect.start.y()},
+      {zoom_rect.end.x(), zoom_rect.end.y()},
+      {zoom_rect.size.x(), zoom_rect.size.y()},
+      zoom_rect.zoom_factor};
+  const auto video = zoom_transform::zoom_space_to_video_point(
+      {window_x_in_content * video_to_window_width_factor_, window_y_in_content * video_to_window_height_factor_},
+      state,
+      static_cast<float>(video_width_),
+      static_cast<float>(video_height_));
 
-  return Vector2D(video_x, video_y);
+  return Vector2D(floor_or_ceil(video.x), floor_or_ceil(video.y));
 }
 
 SDL_FRect Display::video_to_zoom_space(const SDL_Rect& video_rect, const Display::ZoomRect& zoom_rect) const {
-  // transform video coordinates to the currently zoomed area space
-  return SDL_FRect({zoom_rect.start.x() + float(video_rect.x) * zoom_rect.zoom_factor, zoom_rect.start.y() + float(video_rect.y) * zoom_rect.zoom_factor, std::min(float(video_rect.w) * zoom_rect.zoom_factor, zoom_rect.size.x()),
-                    std::min(float(video_rect.h) * zoom_rect.zoom_factor, zoom_rect.size.y())});
+  const zoom_transform::ZoomRectState state{
+      {zoom_rect.start.x(), zoom_rect.start.y()},
+      {zoom_rect.end.x(), zoom_rect.end.y()},
+      {zoom_rect.size.x(), zoom_rect.size.y()},
+      zoom_rect.zoom_factor};
+  const auto mapped = zoom_transform::video_point_to_zoom_space(
+      {static_cast<float>(video_rect.x), static_cast<float>(video_rect.y)},
+      state);
+  return SDL_FRect({mapped.x, mapped.y, std::min(float(video_rect.w) * zoom_rect.zoom_factor, zoom_rect.size.x()), std::min(float(video_rect.h) * zoom_rect.zoom_factor, zoom_rect.size.y())});
 };
 
 std::pair<SDL_Rect, SDL_Rect> Display::get_visible_rois_in_single_frame_coordinates() const {
