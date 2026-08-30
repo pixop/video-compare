@@ -9,6 +9,7 @@
 #include <thread>
 #include "conversion_geometry.h"
 #include "ffmpeg.h"
+#include "playback_timing.h"
 #include "frame_metadata.h"
 #include "scope_manager.h"
 #include "scope_window.h"
@@ -51,43 +52,6 @@ static auto avframe_and_data_deleter = [](AVFrame* frame) {
   avframe_deleter(frame);
 };
 
-static inline bool is_behind(int64_t frame1_pts, int64_t frame2_pts, int64_t delta_pts) {
-  const float t1 = static_cast<float>(frame1_pts) * AV_TIME_TO_SEC;
-  const float t2 = static_cast<float>(frame2_pts) * AV_TIME_TO_SEC;
-  const float delta_s = static_cast<float>(delta_pts) * AV_TIME_TO_SEC - 1e-5F;
-
-  const float diff = t1 - t2;
-  const float tolerance = std::max(delta_s, 1.0F / 480.0F);
-
-  return diff < -tolerance;
-}
-
-static inline int64_t compute_min_delta(const int64_t delta_left_pts, const int64_t delta_right_pts) {
-  return std::min(delta_left_pts, delta_right_pts) * 8 / 10;
-};
-
-static inline bool is_in_sync(const int64_t left_pts, const int64_t right_pts, const int64_t delta_left_pts, const int64_t delta_right_pts) {
-  const int64_t min_delta = compute_min_delta(delta_left_pts, delta_right_pts);
-
-  return !is_behind(left_pts, right_pts, min_delta) && !is_behind(right_pts, left_pts, min_delta);
-};
-
-static inline int64_t compute_frame_delay(const int64_t left_pts, const int64_t right_pts) {
-  return std::max(left_pts, right_pts);
-}
-
-static inline int64_t time_ms_to_av_time(const double time_ms) {
-  return time_ms * MILLISEC_TO_AV_TIME;
-}
-
-static inline int64_t calculate_dynamic_time_shift(const AVRational& multiplier, const int64_t original_pts, const bool inverse) {
-  // Calculate the time shift as the difference between original and scaled PTS
-  const int64_t time_shift =
-      inverse ? (original_pts - av_rescale_q(original_pts, AVRational{multiplier.den, multiplier.num}, AVRational{1, 1})) : (av_rescale_q(original_pts, AVRational{multiplier.num, multiplier.den}, AVRational{1, 1}) - original_pts);
-
-  return time_shift;
-}
-
 static inline std::pair<size_t, size_t> calculate_max_dest_dimensions(const std::map<Side, std::unique_ptr<VideoFilterer>>& video_filterers) {
   size_t max_w = 0;
   size_t max_h = 0;
@@ -118,7 +82,7 @@ static inline double calculate_shortest_duration_seconds(const std::map<Side, st
   return shortest;
 }
 
-static const int64_t NEAR_ZERO_TIME_SHIFT_THRESHOLD = time_ms_to_av_time(0.5);
+static const int64_t NEAR_ZERO_TIME_SHIFT_THRESHOLD = playback_timing::time_ms_to_av_time(0.5);
 
 static bool compare_av_dictionaries(AVDictionary* dict1, AVDictionary* dict2) {
   if (av_dict_count(dict1) != av_dict_count(dict2)) {
@@ -176,7 +140,7 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
       auto_loop_mode_(config.auto_loop_mode),
       frame_buffer_size_(config.frame_buffer_size),
       time_shift_(config.time_shift),
-      time_shift_offset_av_time_(time_ms_to_av_time(static_cast<double>(config.time_shift.offset_ms))) {
+      time_shift_offset_av_time_(playback_timing::time_ms_to_av_time(static_cast<double>(config.time_shift.offset_ms))) {
   auto install_processor = [&](auto& processor_map, const ReadyToSeek::ProcessorThread thread, const Side& side, auto processor) {
     processor_map[side] = std::move(processor);
     ready_to_seek_.init(thread, side);
@@ -1052,8 +1016,7 @@ void VideoCompare::compare() {
       const int frame_navigation_delta = display_->get_frame_navigation_delta();
 
       // Normalize delta values to a sane fallback so we can reuse them for seeks/time shifts.
-      const auto normalized_delta = [](const int64_t delta) { return delta > 0 ? delta : 10000; };
-      const int64_t right_delta = normalized_delta(right_ptr->delta_pts_);
+      const int64_t right_delta = playback_timing::normalized_delta(right_ptr->delta_pts_);
       const int64_t left_or_right_delta = (left.delta_pts_ > 0) ? left.delta_pts_ : right_delta;
 
       // Positive delta means "decode N next frames" (shift+D).
@@ -1205,7 +1168,7 @@ void VideoCompare::compare() {
 
             // Add the dynamic time shift and the delta PTS to the next right position
             next_right_position += static_right_time_shift * AV_TIME_TO_SEC;
-            next_right_position += static_cast<float>(calculate_dynamic_time_shift(time_shift_.multiplier, (next_right_position - right_state.start_time_) / AV_TIME_TO_SEC, false)) * AV_TIME_TO_SEC;
+            next_right_position += static_cast<float>(playback_timing::calculate_dynamic_time_shift(time_shift_.multiplier, (next_right_position - right_state.start_time_) / AV_TIME_TO_SEC, false)) * AV_TIME_TO_SEC;
 
 #ifdef _DEBUG
             std::cout << "SEEK: next_right_position=" << (int)(next_right_position * 1000) << " (side=" << side.to_string() << "), backward=" << backward << std::endl;
@@ -1270,7 +1233,7 @@ void VideoCompare::compare() {
 
             // if the effective time shift is provided, update it and subtract it from the PTS
             if (effective_time_shift != nullptr) {
-              *effective_time_shift += calculate_dynamic_time_shift(time_shift_.multiplier, side_state.frame_->pts, true);
+              *effective_time_shift += playback_timing::calculate_dynamic_time_shift(time_shift_.multiplier, side_state.frame_->pts, true);
               side_state.pts_ -= *effective_time_shift;
             }
 
@@ -1318,11 +1281,11 @@ void VideoCompare::compare() {
       const bool fetch_next_frame = display_->get_play() || (forward_navigate_frames > 0);
 
       // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
-      const int64_t min_delta = compute_min_delta(left.delta_pts_, right_ptr->delta_pts_);
+      const int64_t min_delta = playback_timing::compute_min_delta(left.delta_pts_, right_ptr->delta_pts_);
 
 #ifdef _DEBUG
-      const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, effective_right_time_shift=%5d", left.pts_ / 1000, is_behind(left.pts_, right_ptr->pts_, min_delta),
-                                                       (right_ptr->pts_ + static_right_time_shift) / 1000, is_behind(right_ptr->pts_, left.pts_, min_delta), min_delta / 1000, right_ptr->effective_time_shift_ / 1000);
+      const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, effective_right_time_shift=%5d", left.pts_ / 1000, playback_timing::is_behind(left.pts_, right_ptr->pts_, min_delta),
+                                                       (right_ptr->pts_ + static_right_time_shift) / 1000, playback_timing::is_behind(right_ptr->pts_, left.pts_, min_delta), min_delta / 1000, right_ptr->effective_time_shift_ / 1000);
 
       if (current_state != previous_state) {
         std::cout << current_state << std::endl;
@@ -1340,7 +1303,7 @@ void VideoCompare::compare() {
         return result;
       };
       auto sync_frame_queue = [&](SideState& side_state, const SideState& other_side) {
-        if (is_behind(side_state.pts_, other_side.pts_, min_delta)) {
+        if (playback_timing::is_behind(side_state.pts_, other_side.pts_, min_delta)) {
           adjusting = true;
 
           pop_frame(side_state);
@@ -1379,13 +1342,13 @@ void VideoCompare::compare() {
             for (auto& pair : side_states) {
               if (pair.first.is_right()) {
                 auto& side_state = pair.second;
-                side_state.effective_time_shift_ = static_right_time_shift + calculate_dynamic_time_shift(time_shift_.multiplier, side_state.frame_->pts, true);
+                side_state.effective_time_shift_ = static_right_time_shift + playback_timing::calculate_dynamic_time_shift(time_shift_.multiplier, side_state.frame_->pts, true);
               }
             }
 
             // update timer for regular playback
             if (frame_number > 0) {
-              const int64_t play_frame_delay = compute_frame_delay(left.frame_->pts - left.pts_, right_ptr->frame_->pts - right_ptr->pts_ - right_ptr->effective_time_shift_);
+              const int64_t play_frame_delay = playback_timing::compute_frame_delay(left.frame_->pts - left.pts_, right_ptr->frame_->pts - right_ptr->pts_ - right_ptr->effective_time_shift_);
 
               const float pace_divisor = display_->get_play() ? display_->get_playback_speed_factor() : 1.0f;
               timer_->shift_target(static_cast<int64_t>(play_frame_delay / pace_divisor));
@@ -1500,7 +1463,7 @@ void VideoCompare::compare() {
       bool ui_refresh_performed = false;
 
       if (frame_offset >= 0 && !left.frames_.empty() && !right_ptr->frames_.empty()) {
-        const bool is_playback_in_sync = is_in_sync(left.pts_, right_ptr->pts_, left.delta_pts_, right_ptr->delta_pts_);
+        const bool is_playback_in_sync = playback_timing::is_in_sync(left.pts_, right_ptr->pts_, left.delta_pts_, right_ptr->delta_pts_);
 
         // reduce refresh rate to 10 Hz for faster re-syncing
         const bool skip_refresh = !is_playback_in_sync && display_refresh_timer.us_until_target() > -RESYNC_UPDATE_RATE_US;
@@ -1628,7 +1591,7 @@ void VideoCompare::compare() {
             }
 
             // update timer for accurate in-buffer playback
-            const int64_t in_buffer_frame_delay = compute_frame_delay(ffmpeg::frame_duration(left.frames_[frame_offset].get()), ffmpeg::frame_duration(right_ptr->frames_[frame_offset].get()));
+            const int64_t in_buffer_frame_delay = playback_timing::compute_frame_delay(ffmpeg::frame_duration(left.frames_[frame_offset].get()), ffmpeg::frame_duration(right_ptr->frames_[frame_offset].get()));
 
             timer_->shift_target(in_buffer_frame_delay / display_->get_playback_speed_factor());
           }
