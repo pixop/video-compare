@@ -66,12 +66,19 @@ test_obj = $(test_src:.cpp=.o)
 test_dep = $(test_obj:.o=.d)
 test_bin = $(patsubst %.cpp,%$(EXE),$(test_src))
 
+integration_src = tests/integration_video_compare.cpp
+integration_obj = $(integration_src:.cpp=.o)
+integration_dep = $(integration_obj:.o=.d)
+integration_bin = tests/integration_video_compare$(EXE)
+integration_app_obj = $(filter-out src/main.o,$(obj))
+integration_timeout_s ?= 20
+
 all: $(target)
 
 $(target): $(obj)
 	$(CXX) -o $@ $^ $(LDLIBS)
 
--include $(dep) $(test_dep)
+-include $(dep) $(test_dep) $(integration_dep)
 
 %.d: %.cpp
 	@$(CXX) $(CXXFLAGS) $< -MM -MT $(@:.d=.o) >$@
@@ -97,6 +104,9 @@ tests/test_format_converter$(EXE): TEST_LIBS = $(LDLIBS)
 tests/test_font_selection$(EXE): src/font_selection.o
 tests/test_font_selection$(EXE): TEST_LIBS = $(LDLIBS)
 
+$(integration_bin): $(integration_obj) $(integration_app_obj)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS)
+
 .PHONY: check
 check: $(test_bin)
 	@set -e; \
@@ -105,6 +115,23 @@ check: $(test_bin)
 		./$$test; \
 	done
 
+.PHONY: integration
+integration: $(integration_bin)
+	@set -e; \
+	if command -v timeout >/dev/null 2>&1; then \
+		wrap="timeout $(integration_timeout_s)s"; \
+	else \
+		wrap=""; \
+	fi; \
+	media=$$(mktemp -d); \
+	trap 'rm -rf "$$media"' EXIT; \
+	echo "Generating integration fixtures in $$media"; \
+	tests/generate_integration_media.sh "$$media"; \
+	echo "Running $(integration_bin) baseline"; \
+	$$wrap ./$(integration_bin) baseline "$$media/left_25.mp4" "$$media/right0_25.mp4"; \
+	echo "Running $(integration_bin) event-injection"; \
+	$$wrap ./$(integration_bin) event-injection "$$media/left_25.mp4" "$$media/right0_25.mp4" "$$media/right1_25.mp4"
+
 .PHONY: check-one
 check-one: tests/test_$(TEST)$(EXE)
 	./tests/test_$(TEST)$(EXE)
@@ -112,7 +139,7 @@ check-one: tests/test_$(TEST)$(EXE)
 .PHONY: clean
 clean:
 	# Also remove root-level objects/deps left by the pre-src/ layout.
-	$(RM) $(obj) $(target) $(dep) $(test_obj) $(test_dep) $(test_bin) $(notdir $(obj)) $(notdir $(dep))
+	$(RM) $(obj) $(target) $(dep) $(test_obj) $(test_dep) $(test_bin) $(integration_obj) $(integration_dep) $(integration_bin) $(notdir $(obj)) $(notdir $(dep))
 
 install: $(target)
 	install -s $(target) $(BINDIR)
