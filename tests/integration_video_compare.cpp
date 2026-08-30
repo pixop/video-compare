@@ -18,7 +18,7 @@
 
 namespace {
 
-enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch };
+enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync };
 
 void sleep_ms(const int ms) {
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
@@ -224,6 +224,14 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(800);
     push_copy_timestamp();
     sleep_ms(300);
+  } else if (scenario == Scenario::MultiRightSync) {
+    // Unpaused 30/25/25 playback. Tab is after the sync window so it does
+    // not change active-right tolerance while the repeated-left-pop path runs.
+    sleep_ms(1000);
+    push_copy_timestamp();
+    sleep_ms(200);
+    push_keydown(SDLK_TAB, SDL_SCANCODE_TAB, 0);
+    sleep_ms(200);
   }
 
   push_quit();
@@ -264,7 +272,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   prepare_dummy_software_sdl();
 
   VideoCompareConfig config = make_config(resolved);
-  if (scenario == Scenario::SyncMismatch) {
+  if (scenario == Scenario::SyncMismatch || scenario == Scenario::MultiRightSync) {
     // Auto fps= would otherwise lift 25 fps to 30 and hide the sync path.
     config.disable_auto_filters = true;
   }
@@ -369,6 +377,25 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     } else {
       std::printf("PASS sync-mismatch presented left PTS %.3f after mismatched-rate playback\n", times[0]);
     }
+  } else if (scenario == Scenario::MultiRightSync) {
+    // Clipboard is left PTS only; Tab proves the second right is still live.
+    // Same-iteration double left-pop is inferred from the frozen-pts sync loop
+    // plus coverage, not asserted from this output.
+    const std::vector<double> times = copied_positions(output);
+    if (times.size() < 1) {
+      std::fprintf(stderr, "FAIL multi-right-sync expected a copied timestamp after playback\n");
+      std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
+      exit_code = EXIT_FAILURE;
+    } else if (times[0] < 0.40 || times[0] > 3.20) {
+      std::fprintf(stderr, "FAIL multi-right-sync copied PTS %.3f not in [0.40, 3.20]\n", times[0]);
+      exit_code = EXIT_FAILURE;
+    } else if (output.find("Active right video: 2/2") == std::string::npos) {
+      std::fprintf(stderr, "FAIL multi-right-sync Tab did not produce 'Active right video: 2/2'\n");
+      std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
+      exit_code = EXIT_FAILURE;
+    } else {
+      std::printf("PASS multi-right-sync presented left PTS %.3f and switched active right to 2/2\n", times[0]);
+    }
   }
 
   if (exit_code == EXIT_SUCCESS) {
@@ -385,6 +412,7 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "  %s seek LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s still-seek LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s sync-mismatch LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s multi-right-sync LEFT RIGHT0 RIGHT1\n", argv0);
 }
 
 }  // namespace
@@ -436,6 +464,13 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::SyncMismatch, files);
+    }
+    if (name == "multi-right-sync") {
+      if (files.size() != 3) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::MultiRightSync, files);
     }
   } catch (const std::exception& exception) {
     std::fprintf(stderr, "FAIL %s\n", exception.what());
