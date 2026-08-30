@@ -9,6 +9,7 @@
 #include <thread>
 #include "conversion_geometry.h"
 #include "ffmpeg.h"
+#include "playback_navigation.h"
 #include "playback_seek.h"
 #include "playback_timing.h"
 #include "frame_metadata.h"
@@ -1030,7 +1031,7 @@ void VideoCompare::compare() {
 
       // Negative delta means "seek backward by N frames" (shift+A) using average frame duration.
       if (frame_navigation_delta < 0) {
-        seek_relative += static_cast<float>(frame_navigation_delta) * (static_cast<float>(left_or_right_delta) * AV_TIME_TO_SEC);
+        seek_relative = playback_navigation::seek_relative_after_backward_navigation(seek_relative, frame_navigation_delta, left_or_right_delta);
         seek_from_start = false;
       }
 
@@ -1432,9 +1433,7 @@ void VideoCompare::compare() {
 
       const int last_common_frame_index = static_cast<int>(std::min(left.frames_.size(), right_ptr->frames_.size()) - 1);
 
-      auto adjust_frame_offset = [last_common_frame_index](const int frame_offset, const int adjustment) { return std::min(std::max(0, frame_offset + adjustment), last_common_frame_index); };
-
-      frame_offset = adjust_frame_offset(frame_offset, display_->get_frame_buffer_offset_delta());
+      frame_offset = playback_navigation::adjusted_frame_offset(frame_offset, display_->get_frame_buffer_offset_delta(), last_common_frame_index);
 
       bool ui_refresh_performed = false;
 
@@ -1550,18 +1549,17 @@ void VideoCompare::compare() {
             // auto-adjust current frame during in-buffer playback
             switch (display_->get_buffer_play_loop_mode()) {
               case Display::Loop::ForwardOnly:
-                if (frame_offset == 0) {
-                  frame_offset = last_common_frame_index;
-                } else {
-                  frame_offset = adjust_frame_offset(frame_offset, -1);
-                }
+                frame_offset = playback_navigation::next_forward_only_offset(frame_offset, last_common_frame_index);
                 break;
-              case Display::Loop::PingPong:
-                if (last_common_frame_index >= 1 && (frame_offset == 0 || frame_offset == last_common_frame_index)) {
+              case Display::Loop::PingPong: {
+                const bool buffer_play_forward = display_->get_buffer_play_forward();
+                const playback_navigation::PingPongStep step = playback_navigation::next_ping_pong_step(frame_offset, last_common_frame_index, buffer_play_forward);
+                if (step.forward != buffer_play_forward) {
                   display_->toggle_buffer_play_direction();
                 }
-                frame_offset = adjust_frame_offset(frame_offset, display_->get_buffer_play_forward() ? -1 : 1);
+                frame_offset = step.offset;
                 break;
+              }
               default:
                 break;
             }
