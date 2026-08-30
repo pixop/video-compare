@@ -48,4 +48,4 @@ licenses/FFMPEG-SOURCE.txt
 *.csv
 *.avi
 *.ts
-vmaf_*
+/vmaf_*

@@ -1,4 +1,4 @@
-#include "../frame_metadata.h"
+#include "frame_metadata.h"
 #include <cstdio>
 #include <cstdlib>
 

@@ -1,9 +1,13 @@
 # Exclude embedded assets and vendored third-party code from Linguist statistics.
 # Disable diffs for machine-generated binary asset headers.
-source_code_pro_regular_ttf.h linguist-vendored -diff
-sarasa_mono_sc_regular_ttf.h linguist-vendored -diff
-video_compare_icon.h linguist-vendored -diff
+third_party/source_code_pro_regular_ttf.h linguist-vendored -diff
+third_party/sarasa_mono_sc_regular_ttf.h linguist-vendored -diff
+third_party/stb_image_write.h linguist-vendored
+third_party/argagg.h linguist-vendored
+third_party/circular_buffer.h linguist-vendored
+third_party/sorted_flat_deque.h linguist-vendored
 
-stb_image_write.h linguist-vendored
+# Generated first-party application asset (not third-party source).
+src/video_compare_icon.h -diff
 
 *.sh text eol=lf

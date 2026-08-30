@@ -2,6 +2,7 @@ CXXFLAGS = -g3 -Ofast -std=c++14 -D__STDC_CONSTANT_MACROS \
 		   -Wall -Wextra -Wno-deprecated -Wno-deprecated-declarations \
 		   -Wdisabled-optimization -Wctor-dtor-privacy \
 		   -Woverloaded-virtual -Wno-unused -Wno-missing-field-initializers
+CXXFLAGS += -Isrc -Ithird_party
 
 EXE =
 
@@ -55,7 +56,7 @@ else
   LDLIBS += -lavformat -lavcodec -lavfilter -lavutil -lswscale -lswresample -lSDL2_ttf -lSDL2
 endif
 
-src = $(wildcard *.cpp)
+src = $(wildcard src/*.cpp)
 obj = $(src:.cpp=.o)
 dep = $(obj:.o=.d)
 target = video-compare$(EXE)
@@ -84,7 +85,7 @@ tests/test_%$(EXE): tests/test_%.o
 tests/test_frame_metadata$(EXE): TEST_LIBS = $(LDLIBS)
 
 tests/test_format_converter$(EXE): \
-	format_converter.o frame_metadata.o ffmpeg.o side_aware_logger.o core_types.o
+	src/format_converter.o src/frame_metadata.o src/ffmpeg.o src/side_aware_logger.o src/core_types.o
 tests/test_format_converter$(EXE): TEST_LIBS = $(LDLIBS)
 
 .PHONY: check
@@ -101,7 +102,8 @@ check-one: tests/test_$(TEST)$(EXE)
 
 .PHONY: clean
 clean:
-	$(RM) $(obj) $(target) $(dep) $(test_obj) $(test_dep) $(test_bin)
+	# Also remove root-level objects/deps left by the pre-src/ layout.
+	$(RM) $(obj) $(target) $(dep) $(test_obj) $(test_dep) $(test_bin) $(notdir $(obj)) $(notdir $(dep))
 
 install: $(target)
 	install -s $(target) $(BINDIR)

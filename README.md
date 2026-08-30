@@ -290,7 +290,7 @@ Compile the source code via GNU Make:
 make
 ```
 
-The linked `video-compare` executable will be created in the source code directory. To perform a system wide installation:
+The linked `video-compare` executable will be created in the repository root. To perform a system wide installation:
 
 ```sh
 make install

@@ -12,7 +12,7 @@ One suite:
 make check-one TEST=zoom_transform
 ```
 
-`make test` is a separate GUI smoke (`video-compare` plus screenshots) and is not part of `check`. Any `tests/test_*.cpp` is picked up by `check` automatically. Header-only tests need no makefile change; tests that link production objects or FFmpeg still declare those extras in the makefile.
+`make test` is a separate GUI smoke (`video-compare` plus screenshots) and is not part of `check`. Any `tests/test_*.cpp` is picked up by `check` automatically. Header-only tests need no makefile change; tests that link production objects or FFmpeg still declare those extras in the makefile. Tests include production headers as `"foo.h"` via `-Isrc`.
 
 Covers effective DAR from width/height × SAR (invalid SAR → 1:1; non-positive dims → unavailable).
 

@@ -1,5 +1,5 @@
-#include "../format_converter.h"
-#include "../frame_metadata.h"
+#include "format_converter.h"
+#include "frame_metadata.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
