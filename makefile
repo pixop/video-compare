@@ -138,7 +138,9 @@ integration: $(integration_bin)
 	echo "Running $(integration_bin) sync-mismatch"; \
 	$$wrap ./$(integration_bin) sync-mismatch "$$media/sync_left_25.mp4" "$$media/sync_right_30.mp4"; \
 	echo "Running $(integration_bin) multi-right-sync"; \
-	$$wrap ./$(integration_bin) multi-right-sync "$$media/multi_sync_left_30.mp4" "$$media/multi_sync_right0_25.mp4" "$$media/multi_sync_right1_25.mp4"
+	$$wrap ./$(integration_bin) multi-right-sync "$$media/multi_sync_left_30.mp4" "$$media/multi_sync_right0_25.mp4" "$$media/multi_sync_right1_25.mp4"; \
+	echo "Running $(integration_bin) frame-navigation"; \
+	$$wrap ./$(integration_bin) frame-navigation "$$media/seek_left_25.mp4" "$$media/seek_right_25.mp4"
 
 .PHONY: check-one
 check-one: tests/test_$(TEST)$(EXE)
