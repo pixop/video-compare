@@ -7,14 +7,18 @@
 #include <cstdlib>
 #include <exception>
 #include <iostream>
+#include <limits.h>
+#include <memory>
 #include <sstream>
 #include <string>
+#include <sys/stat.h>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 namespace {
 
-enum class Scenario { Baseline, EventInjection, Seek };
+enum class Scenario { Baseline, EventInjection, Seek, StillSeek };
 
 void sleep_ms(const int ms) {
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
@@ -90,6 +94,61 @@ bool parse_hhmmss(const std::string& text, double* seconds) {
   return true;
 }
 
+bool file_is_non_empty(const char* path) {
+  struct stat st;
+  return stat(path, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0;
+}
+
+std::string resolve_path(const std::string& path) {
+  char resolved[PATH_MAX];
+  if (realpath(path.c_str(), resolved) == nullptr) {
+    throw std::runtime_error("cannot resolve path: " + path);
+  }
+  return resolved;
+}
+
+// F writes PNGs into cwd. Isolate still-seek dumps so the repo root stays clean.
+struct DumpDirectory {
+  std::string previous;
+  std::string path;
+
+  explicit DumpDirectory(const char* prefix) {
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) == nullptr) {
+      throw std::runtime_error("getcwd failed");
+    }
+    previous = cwd;
+
+    const char* tmp = std::getenv("TMPDIR");
+    if (tmp == nullptr || tmp[0] == '\0') {
+      tmp = std::getenv("TEMP");
+    }
+    if (tmp == nullptr || tmp[0] == '\0') {
+      tmp = "/tmp";
+    }
+
+    std::string tmpl = std::string(tmp) + "/" + prefix + "XXXXXX";
+    std::vector<char> buf(tmpl.begin(), tmpl.end());
+    buf.push_back('\0');
+    if (mkdtemp(buf.data()) == nullptr) {
+      throw std::runtime_error("mkdtemp failed");
+    }
+    path = buf.data();
+    if (chdir(path.c_str()) != 0) {
+      throw std::runtime_error("chdir to dump directory failed");
+    }
+  }
+
+  ~DumpDirectory() {
+    const char* names[] = {"screenshot_1_0001.png", "screenshot_2_0001.png", "screenshot_1_screenshot_2_osd_0001.png"};
+    for (const char* name : names) {
+      unlink((path + "/" + name).c_str());
+    }
+    chdir(previous.c_str());
+    rmdir(path.c_str());
+  }
+};
+
 std::vector<double> copied_positions(const std::string& output) {
   std::vector<double> times;
   const std::string prefix = "Copied to clipboard: ";
@@ -146,6 +205,19 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(300);
+  } else if (scenario == Scenario::StillSeek) {
+    // JPEG/image2 becomes SingleFrame after the first unique PTS, then EOF.
+    // The 1000 ms settle above is required: a JPEG input alone does not mean
+    // single_frame is already true when the first event arrives.
+    // RIGHT only: plan_seek rewrites seek_relative from left.delta_pts
+    // before the backward decision, so LEFT (-1.0) becomes the same
+    // forward still-seek when delta_pts > 0.
+    push_keydown(SDLK_RIGHT, SDL_SCANCODE_RIGHT, 0);
+    sleep_ms(600);
+    // Proof of life after skip_update + buffer restore. Do not quit
+    // immediately after the seek. F dumps the presented stills.
+    push_keydown(SDLK_f, SDL_SCANCODE_F, 0);
+    sleep_ms(500);
   }
 
   push_quit();
@@ -170,13 +242,22 @@ VideoCompareConfig make_config(const std::vector<std::string>& files) {
 }
 
 int run_scenario(const Scenario scenario, const std::vector<std::string>& files) {
-  for (const std::string& file : files) {
+  std::vector<std::string> resolved = files;
+  std::unique_ptr<DumpDirectory> dump_directory;
+  if (scenario == Scenario::StillSeek) {
+    for (std::string& file : resolved) {
+      file = resolve_path(file);
+    }
+    dump_directory.reset(new DumpDirectory("vc-still-seek-"));
+  }
+
+  for (const std::string& file : resolved) {
     require_readable_file(file.c_str());
   }
 
   prepare_dummy_software_sdl();
 
-  const VideoCompareConfig config = make_config(files);
+  const VideoCompareConfig config = make_config(resolved);
 
   std::ostringstream captured_out;
   std::streambuf* const old_out = std::cout.rdbuf(captured_out.rdbuf());
@@ -238,6 +319,31 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
         std::printf("PASS keyboard seek moved presented PTS forward then backward\n");
       }
     }
+  } else if (scenario == Scenario::StillSeek) {
+    // A still seek often lands on the same PTS, so clipboard deltas are not
+    // used as proof. F after the seek proves the post-seek stills were still
+    // presentable (frames in the display buffer, refresh + PNG write succeeded).
+    // It does not prove pixel-perfect equality or that PTS moved.
+    const char* saved = "Saved screenshot_1_0001.png, screenshot_2_0001.png and screenshot_1_screenshot_2_osd_0001.png";
+    const char* dumps[] = {"screenshot_1_0001.png", "screenshot_2_0001.png", "screenshot_1_screenshot_2_osd_0001.png"};
+    if (output.find(saved) == std::string::npos) {
+      std::fprintf(stderr, "FAIL still-seek did not save post-seek PNGs\n");
+      std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
+      exit_code = EXIT_FAILURE;
+    } else {
+      bool all_present = true;
+      for (const char* dump : dumps) {
+        if (!file_is_non_empty(dump)) {
+          std::fprintf(stderr, "FAIL still-seek dump missing or empty: %s\n", dump);
+          all_present = false;
+        }
+      }
+      if (all_present) {
+        std::printf("PASS still-seek left presentable frames after skip_update (PNG dumps exist and are non-empty)\n");
+      } else {
+        exit_code = EXIT_FAILURE;
+      }
+    }
   }
 
   if (exit_code == EXIT_SUCCESS) {
@@ -252,6 +358,7 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "  %s baseline LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s event-injection LEFT RIGHT0 RIGHT1\n", argv0);
   std::fprintf(stderr, "  %s seek LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s still-seek LEFT RIGHT\n", argv0);
 }
 
 }  // namespace
@@ -289,6 +396,13 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::Seek, files);
+    }
+    if (name == "still-seek") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::StillSeek, files);
     }
   } catch (const std::exception& exception) {
     std::fprintf(stderr, "FAIL %s\n", exception.what());
