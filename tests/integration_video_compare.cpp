@@ -14,7 +14,7 @@
 
 namespace {
 
-enum class Scenario { Baseline, EventInjection };
+enum class Scenario { Baseline, EventInjection, Seek };
 
 void sleep_ms(const int ms) {
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
@@ -50,7 +50,7 @@ void push_quit() {
   }
 }
 
-void push_keydown(const SDL_Keycode key, const SDL_Scancode scancode, const Uint32 window_id) {
+void push_keydown(const SDL_Keycode key, const SDL_Scancode scancode, const Uint32 window_id, const SDL_Keymod mod = KMOD_NONE) {
   SDL_Event event{};
   event.type = SDL_KEYDOWN;
   event.key.type = SDL_KEYDOWN;
@@ -60,19 +60,59 @@ void push_keydown(const SDL_Keycode key, const SDL_Scancode scancode, const Uint
   event.key.repeat = 0;
   event.key.keysym.scancode = scancode;
   event.key.keysym.sym = key;
-  event.key.keysym.mod = KMOD_NONE;
+  event.key.keysym.mod = mod;
   if (SDL_PushEvent(&event) < 0) {
     std::fprintf(stderr, "SDL_PushEvent(KEYDOWN) failed: %s\n", SDL_GetError());
   }
 }
 
+SDL_Keymod clipboard_mod() {
+#ifdef __APPLE__
+  return static_cast<SDL_Keymod>(KMOD_GUI);
+#else
+  return static_cast<SDL_Keymod>(KMOD_CTRL);
+#endif
+}
+
+void push_copy_timestamp() {
+  push_keydown(SDLK_c, SDL_SCANCODE_C, 0, clipboard_mod());
+}
+
+bool parse_hhmmss(const std::string& text, double* seconds) {
+  int hours = 0;
+  int minutes = 0;
+  int secs = 0;
+  int millis = 0;
+  if (std::sscanf(text.c_str(), "%d:%d:%d.%d", &hours, &minutes, &secs, &millis) != 4) {
+    return false;
+  }
+  *seconds = static_cast<double>(hours * 3600 + minutes * 60 + secs) + static_cast<double>(millis) / 1000.0;
+  return true;
+}
+
+std::vector<double> copied_positions(const std::string& output) {
+  std::vector<double> times;
+  const std::string prefix = "Copied to clipboard: ";
+  size_t pos = 0;
+  while ((pos = output.find(prefix, pos)) != std::string::npos) {
+    pos += prefix.size();
+    const size_t end = output.find_first_of("\r\n", pos);
+    const std::string token = output.substr(pos, end == std::string::npos ? std::string::npos : end - pos);
+    double seconds = 0.0;
+    if (parse_hhmmss(token, &seconds)) {
+      times.push_back(seconds);
+    }
+  }
+  return times;
+}
+
 void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
   std::thread watchdog([&finished]() {
-    for (int i = 0; i < 80 && !finished.load(); ++i) {
+    for (int i = 0; i < 120 && !finished.load(); ++i) {
       sleep_ms(100);
     }
     if (!finished.load()) {
-      std::fprintf(stderr, "watchdog: pushing SDL_QUIT after 8s deadline\n");
+      std::fprintf(stderr, "watchdog: pushing SDL_QUIT after 12s deadline\n");
       push_quit();
     }
   });
@@ -89,6 +129,23 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     std::fprintf(stderr, "event-injection: first SDL window id=%u; pushing Tab with windowID=0\n", existing_window_id);
     push_keydown(SDLK_TAB, SDL_SCANCODE_TAB, 0);
     sleep_ms(500);
+  } else if (scenario == Scenario::Seek) {
+    // Pause so the copied PTS is a stable pre-seek landing, not a moving playhead.
+    // The seek transaction itself does not consult play_; pause only freezes fetch.
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(400);
+    push_copy_timestamp();
+    sleep_ms(300);
+    // RIGHT/LEFT are relative ±1.0s (KMOD_NONE). begin_input_frame clears
+    // seek_from_start, so these are not timeline-from-start seeks.
+    push_keydown(SDLK_RIGHT, SDL_SCANCODE_RIGHT, 0);
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(300);
+    push_keydown(SDLK_LEFT, SDL_SCANCODE_LEFT, 0);
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(300);
   }
 
   push_quit();
@@ -159,6 +216,28 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     } else {
       std::printf("PASS injected Tab switched active right to 2/2\n");
     }
+  } else if (scenario == Scenario::Seek) {
+    const std::vector<double> times = copied_positions(output);
+    if (times.size() < 3) {
+      std::fprintf(stderr, "FAIL seek expected 3 copied timestamps, got %zu\n", times.size());
+      std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
+      exit_code = EXIT_FAILURE;
+    } else {
+      const double forward = times[1] - times[0];
+      const double backward = times[1] - times[2];
+      std::printf("seek timestamps: before=%.3f after+1s=%.3f after-1s=%.3f\n", times[0], times[1], times[2]);
+      // Intra mpeg4 should land near ±1s. Allow decoder/PTS slack without
+      // accepting a no-op (identical timestamps).
+      if (forward < 0.40 || forward > 1.75) {
+        std::fprintf(stderr, "FAIL forward seek delta %.3f not in [0.40, 1.75]\n", forward);
+        exit_code = EXIT_FAILURE;
+      } else if (backward < 0.40 || backward > 1.75) {
+        std::fprintf(stderr, "FAIL backward seek delta %.3f not in [0.40, 1.75]\n", backward);
+        exit_code = EXIT_FAILURE;
+      } else {
+        std::printf("PASS keyboard seek moved presented PTS forward then backward\n");
+      }
+    }
   }
 
   if (exit_code == EXIT_SUCCESS) {
@@ -172,6 +251,7 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "usage:\n");
   std::fprintf(stderr, "  %s baseline LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s event-injection LEFT RIGHT0 RIGHT1\n", argv0);
+  std::fprintf(stderr, "  %s seek LEFT RIGHT\n", argv0);
 }
 
 }  // namespace
@@ -202,6 +282,13 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::EventInjection, files);
+    }
+    if (name == "seek") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::Seek, files);
     }
   } catch (const std::exception& exception) {
     std::fprintf(stderr, "FAIL %s\n", exception.what());
