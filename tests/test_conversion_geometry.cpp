@@ -98,10 +98,14 @@ int main() {
 
   int cx = -1;
   int cy = -1;
-  expect_point("native point in content", canvas_point_to_content(ConversionFit::Native, 1920, 1440, 1440, 1080, 240, 180, &cx, &cy), cx, cy, true, 0, 0);
-  expect_point("native point in padding", canvas_point_to_content(ConversionFit::Native, 1920, 1440, 1440, 1080, 0, 0, &cx, &cy), cx, cy, false, 0, 0);
-  expect_point("native point with oversized content", canvas_point_to_content(ConversionFit::Native, 1920, 1080, 2048, 1080, 0, 0, &cx, &cy), cx, cy, false, 0, 0);
-  expect_point("stretch point scales", canvas_point_to_content(ConversionFit::Stretch, 1920, 1080, 1280, 720, 960, 540, &cx, &cy), cx, cy, true, 640, 360);
+  bool ok = canvas_point_to_content(ConversionFit::Native, 1920, 1440, 1440, 1080, 240, 180, &cx, &cy);
+  expect_point("native point in content", ok, cx, cy, true, 0, 0);
+  ok = canvas_point_to_content(ConversionFit::Native, 1920, 1440, 1440, 1080, 0, 0, &cx, &cy);
+  expect_point("native point in padding", ok, cx, cy, false, 0, 0);
+  ok = canvas_point_to_content(ConversionFit::Native, 1920, 1080, 2048, 1080, 0, 0, &cx, &cy);
+  expect_point("native point with oversized content", ok, cx, cy, false, 0, 0);
+  ok = canvas_point_to_content(ConversionFit::Stretch, 1920, 1080, 1280, 720, 960, 540, &cx, &cy);
+  expect_point("stretch point scales", ok, cx, cy, true, 640, 360);
 
   if (failures != 0) {
     std::fprintf(stderr, "%d failure(s)\n", failures);
