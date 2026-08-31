@@ -1,0 +1,146 @@
+# Deterministic unit + integration tests. Stress is not part of this workflow.
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            ffmpeg \
+            libavformat-dev \
+            libavcodec-dev \
+            libavfilter-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libswresample-dev \
+            libsdl2-dev \
+            libsdl2-ttf-dev \
+            pkg-config
+
+      - name: Environment
+        run: |
+          uname -s -m
+          g++ --version | head -1
+          ffmpeg -version | head -1
+          pkg-config --modversion sdl2
+          pkg-config --modversion SDL2_ttf
+          command -v timeout
+
+      - name: Build
+        run: make -j"$(nproc)"
+
+      - name: Unit tests
+        run: make check
+
+      - name: Integration tests
+        run: make integration
+
+  integration-macos:
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install dependencies via Homebrew
+        run: |
+          brew install ffmpeg sdl2 sdl2_ttf pkg-config
+
+      - name: Environment
+        run: |
+          uname -s -m
+          echo "HOMEBREW_PREFIX=${HOMEBREW_PREFIX:-}"
+          g++ --version | head -1
+          ffmpeg -version | head -1
+          pkg-config --modversion sdl2
+          pkg-config --modversion SDL2_ttf
+          command -v timeout || echo "timeout not installed (optional)"
+
+      - name: Build
+        run: make -j"$(sysctl -n hw.ncpu)"
+
+      - name: Unit tests
+        run: make check
+
+      - name: Integration tests
+        run: make integration
+
+  integration-windows:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup MSYS2 (UCRT64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: make coreutils
+          pacboy: >-
+            gcc:p
+            make:p
+            ffmpeg:p
+            SDL2:p
+            SDL2_ttf:p
+            pkgconf:p
+
+      - name: Environment
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          uname -s -m
+          echo "MSYSTEM=${MSYSTEM}"
+          g++ --version | head -1
+          ffmpeg -version | head -1
+          pkg-config --modversion sdl2
+          pkg-config --modversion SDL2_ttf
+          command -v timeout
+          timeout --version | head -1
+          command -v make
+          command -v ffmpeg
+          command -v g++
+
+      - name: Build
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          make -j"$(nproc)"
+
+      - name: Unit tests
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          make check
+
+      - name: Integration tests
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          make integration
