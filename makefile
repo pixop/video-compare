@@ -8,21 +8,28 @@ EXE =
 
 ifneq ($(filter MINGW%,$(shell uname)),)
   EXE = .exe
-  include windows_deps.mk
-  FFMPEG_VERSION = $(GYAN_FFMPEG_VERSION)-$(GYAN_FFMPEG_VARIANT)
+  ifeq ($(MSYSTEM),UCRT64)
+    # MSYS2 UCRT64 toolchain packages (CI integration). Headers/libs are on the
+    # default g++ search path; do not pull the Gyan/MinGW download layout.
+    CXX = g++
+    LDLIBS = -pthread
+  else
+    include windows_deps.mk
+    FFMPEG_VERSION = $(GYAN_FFMPEG_VERSION)-$(GYAN_FFMPEG_VARIANT)
 
-  FFMPEG_PATH = ffmpeg-$(FFMPEG_VERSION)
-  SDL2_PATH = SDL2-devel-$(SDL2_VERSION)-mingw/SDL2-$(SDL2_VERSION)/x86_64-w64-mingw32
-  SDL2_TTF_PATH = SDL2_ttf-devel-$(SDL2_TTF_VERSION)-mingw/SDL2_ttf-$(SDL2_TTF_VERSION)/x86_64-w64-mingw32
+    FFMPEG_PATH = ffmpeg-$(FFMPEG_VERSION)
+    SDL2_PATH = SDL2-devel-$(SDL2_VERSION)-mingw/SDL2-$(SDL2_VERSION)/x86_64-w64-mingw32
+    SDL2_TTF_PATH = SDL2_ttf-devel-$(SDL2_TTF_VERSION)-mingw/SDL2_ttf-$(SDL2_TTF_VERSION)/x86_64-w64-mingw32
 
-  CXX = x86_64-w64-mingw32-g++
-  CXXFLAGS += -I$(FFMPEG_PATH)/include/ \
-              -I$(SDL2_PATH)/include/ \
-              -I$(SDL2_PATH)/include/SDL2/ \
-              -I$(SDL2_TTF_PATH)/include/
-  LDLIBS += -L$(FFMPEG_PATH)/lib/ \
-            -L$(SDL2_PATH)/lib/ \
-            -L$(SDL2_TTF_PATH)/lib/
+    CXX = x86_64-w64-mingw32-g++
+    CXXFLAGS += -I$(FFMPEG_PATH)/include/ \
+                -I$(SDL2_PATH)/include/ \
+                -I$(SDL2_PATH)/include/SDL2/ \
+                -I$(SDL2_TTF_PATH)/include/
+    LDLIBS += -L$(FFMPEG_PATH)/lib/ \
+              -L$(SDL2_PATH)/lib/ \
+              -L$(SDL2_TTF_PATH)/lib/
+  endif
 else
   CXX = g++
   LDLIBS = -pthread
@@ -121,7 +128,7 @@ check: $(test_bin)
 .PHONY: integration
 integration: $(integration_bin)
 	@set -e; \
-	if command -v timeout >/dev/null 2>&1; then \
+	if command -v timeout >/dev/null 2>&1 && timeout --version >/dev/null 2>&1; then \
 		wrap="timeout $(integration_timeout_s)s"; \
 	else \
 		wrap=""; \
@@ -152,7 +159,7 @@ integration: $(integration_bin)
 .PHONY: stress
 stress: $(integration_bin)
 	@set -e; \
-	if command -v timeout >/dev/null 2>&1; then \
+	if command -v timeout >/dev/null 2>&1 && timeout --version >/dev/null 2>&1; then \
 		wrap="timeout $(stress_timeout_s)s"; \
 	else \
 		wrap=""; \
