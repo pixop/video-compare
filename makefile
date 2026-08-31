@@ -72,6 +72,9 @@ integration_dep = $(integration_obj:.o=.d)
 integration_bin = tests/integration_video_compare$(EXE)
 integration_app_obj = $(filter-out src/main.o,$(obj))
 integration_timeout_s ?= 20
+stress_timeout_s ?= 35
+# Override with STRESS_RUNS=100 make stress
+stress_runs ?= $(if $(STRESS_RUNS),$(STRESS_RUNS),20)
 
 all: $(target)
 
@@ -145,6 +148,28 @@ integration: $(integration_bin)
 	$$wrap ./$(integration_bin) buffer-forward-only "$$media/seek_left_25.mp4" "$$media/seek_right_25.mp4"; \
 	echo "Running $(integration_bin) buffer-pingpong"; \
 	$$wrap ./$(integration_bin) buffer-pingpong "$$media/seek_left_25.mp4" "$$media/seek_right_25.mp4"
+
+.PHONY: stress
+stress: $(integration_bin)
+	@set -e; \
+	if command -v timeout >/dev/null 2>&1; then \
+		wrap="timeout $(stress_timeout_s)s"; \
+	else \
+		wrap=""; \
+	fi; \
+	runs="$(stress_runs)"; \
+	media=$$(mktemp -d); \
+	trap 'rm -rf "$$media"' EXIT; \
+	echo "Generating stress fixtures in $$media"; \
+	tests/generate_integration_media.sh "$$media" --stress; \
+	i=1; \
+	while [ "$$i" -le "$$runs" ]; do \
+		echo "Running $(integration_bin) seek-burst-forward $$i/$$runs"; \
+		STRESS_ITERATION=$$i $$wrap ./$(integration_bin) seek-burst-forward "$$media/stress_left_25.mp4" "$$media/stress_right_25.mp4"; \
+		echo "Running $(integration_bin) seek-burst-mixed $$i/$$runs"; \
+		STRESS_ITERATION=$$i $$wrap ./$(integration_bin) seek-burst-mixed "$$media/stress_left_25.mp4" "$$media/stress_right_25.mp4"; \
+		i=$$((i + 1)); \
+	done
 
 .PHONY: check-one
 check-one: tests/test_$(TEST)$(EXE)
