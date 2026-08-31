@@ -19,7 +19,57 @@
 
 namespace {
 
-enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync, FrameNavigation, BufferForwardOnly, BufferPingPong };
+enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync, FrameNavigation, BufferForwardOnly, BufferPingPong, SeekBurstForward, SeekBurstMixed };
+
+std::atomic<int> events_pushed{0};
+std::atomic<bool> watchdog_fired{false};
+
+void reset_helper_counters() {
+  events_pushed.store(0);
+  watchdog_fired.store(false);
+}
+
+bool is_stress_scenario(const Scenario scenario) {
+  return scenario == Scenario::SeekBurstForward || scenario == Scenario::SeekBurstMixed;
+}
+
+const char* scenario_name(const Scenario scenario) {
+  switch (scenario) {
+    case Scenario::Baseline:
+      return "baseline";
+    case Scenario::EventInjection:
+      return "event-injection";
+    case Scenario::Seek:
+      return "seek";
+    case Scenario::StillSeek:
+      return "still-seek";
+    case Scenario::SyncMismatch:
+      return "sync-mismatch";
+    case Scenario::MultiRightSync:
+      return "multi-right-sync";
+    case Scenario::FrameNavigation:
+      return "frame-navigation";
+    case Scenario::BufferForwardOnly:
+      return "buffer-forward-only";
+    case Scenario::BufferPingPong:
+      return "buffer-pingpong";
+    case Scenario::SeekBurstForward:
+      return "seek-burst-forward";
+    case Scenario::SeekBurstMixed:
+      return "seek-burst-mixed";
+  }
+  return "unknown";
+}
+
+const char* stress_iteration_label() {
+  const char* value = std::getenv("STRESS_ITERATION");
+  return (value != nullptr && value[0] != '\0') ? value : "?";
+}
+
+int watchdog_ticks_for(const Scenario scenario) {
+  // 100 ms per tick. Stress seeks serialize on drain/restart; 12 s is too tight.
+  return is_stress_scenario(scenario) ? 250 : 120;
+}
 
 void sleep_ms(const int ms) {
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
@@ -52,6 +102,8 @@ void push_quit() {
   event.type = SDL_QUIT;
   if (SDL_PushEvent(&event) < 0) {
     std::fprintf(stderr, "SDL_PushEvent(SDL_QUIT) failed: %s\n", SDL_GetError());
+  } else {
+    events_pushed.fetch_add(1);
   }
 }
 
@@ -68,6 +120,8 @@ void push_keydown(const SDL_Keycode key, const SDL_Scancode scancode, const Uint
   event.key.keysym.mod = mod;
   if (SDL_PushEvent(&event) < 0) {
     std::fprintf(stderr, "SDL_PushEvent(KEYDOWN) failed: %s\n", SDL_GetError());
+  } else {
+    events_pushed.fetch_add(1);
   }
 }
 
@@ -135,7 +189,7 @@ struct DumpDirectory {
       throw std::runtime_error("mkdtemp failed");
     }
     path = buf.data();
-    if (chdir(path.c_str()) != 0) {
+    if (::chdir(path.c_str()) != 0) {
       throw std::runtime_error("chdir to dump directory failed");
     }
   }
@@ -145,7 +199,9 @@ struct DumpDirectory {
     for (const char* name : names) {
       unlink((path + "/" + name).c_str());
     }
-    chdir(previous.c_str());
+    if (::chdir(previous.c_str()) != 0) {
+      std::fprintf(stderr, "warning: failed to restore working directory to %s\n", previous.c_str());
+    }
     rmdir(path.c_str());
   }
 };
@@ -196,13 +252,42 @@ std::vector<double> copied_positions(const std::string& output) {
   return times;
 }
 
+void push_relative_seek(const int direction) {
+  if (direction > 0) {
+    push_keydown(SDLK_RIGHT, SDL_SCANCODE_RIGHT, 0);
+  } else {
+    push_keydown(SDLK_LEFT, SDL_SCANCODE_LEFT, 0);
+  }
+}
+
+void print_stress_failure(const Scenario scenario, const char* message, const std::vector<double>& times, const double expected_storm) {
+  std::fprintf(stderr, "FAIL %s iteration=%s events_pushed=%d watchdog=%s", scenario_name(scenario), stress_iteration_label(), events_pushed.load(),
+               watchdog_fired.load() ? "fired" : "idle");
+  if (times.size() > 0) {
+    std::fprintf(stderr, " T0=%.3f", times[0]);
+  }
+  if (times.size() > 1) {
+    std::fprintf(stderr, " T1=%.3f storm=%.3f expected_storm=%.3f", times[1], times[1] - times[0], expected_storm);
+  }
+  if (times.size() > 2) {
+    std::fprintf(stderr, " T2=%.3f T2-T1=%.3f", times[2], times[2] - times[1]);
+  }
+  if (!times.empty()) {
+    std::fprintf(stderr, " last_pts=%.3f", times.back());
+  }
+  std::fprintf(stderr, " %s\n", message);
+}
+
 void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
-  std::thread watchdog([&finished]() {
-    for (int i = 0; i < 120 && !finished.load(); ++i) {
+  const int watchdog_ticks = watchdog_ticks_for(scenario);
+  std::thread watchdog([scenario, watchdog_ticks, &finished]() {
+    for (int i = 0; i < watchdog_ticks && !finished.load(); ++i) {
       sleep_ms(100);
     }
     if (!finished.load()) {
-      std::fprintf(stderr, "watchdog: pushing SDL_QUIT after 12s deadline\n");
+      watchdog_fired.store(true);
+      std::fprintf(stderr, "watchdog: pushing SDL_QUIT after %ds deadline (%s iteration=%s)\n", watchdog_ticks / 10, scenario_name(scenario),
+                   stress_iteration_label());
       push_quit();
     }
   });
@@ -306,6 +391,46 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
       push_copy_timestamp();
     }
     sleep_ms(200);
+  } else if (scenario == Scenario::SeekBurstForward || scenario == Scenario::SeekBurstMixed) {
+    // Pause so clipboard copies are a stable playhead and the post-storm
+    // Shift+D health probe is a one-frame fetch, not continuous playback.
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(400);
+    push_copy_timestamp();
+    sleep_ms(300);
+
+    if (scenario == Scenario::SeekBurstForward) {
+      // Same-poll accumulation: five RIGHT with no delay.
+      for (int i = 0; i < 5; ++i) {
+        push_relative_seek(1);
+      }
+      // Faster-than-service burst. Drain/seek is tens of ms; 10 ms spacing
+      // lets later events queue while the first transaction is still running.
+      for (int i = 0; i < 5; ++i) {
+        push_relative_seek(1);
+        sleep_ms(10);
+      }
+      sleep_ms(1200);
+    } else {
+      // Move well into the 20 s clip before LEFT events so we stay off 0.
+      for (int i = 0; i < 5; ++i) {
+        push_relative_seek(1);
+      }
+      sleep_ms(800);
+      const int mixed[] = {1, 1, 1, 1, 1, -1, -1, -1, 1, 1, 1, 1, -1, -1};
+      for (const int direction : mixed) {
+        push_relative_seek(direction);
+        sleep_ms(10);
+      }
+      sleep_ms(1500);
+    }
+
+    push_copy_timestamp();
+    sleep_ms(300);
+    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, KMOD_SHIFT);
+    sleep_ms(500);
+    push_copy_timestamp();
+    sleep_ms(200);
   }
 
   push_quit();
@@ -344,6 +469,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   }
 
   prepare_dummy_software_sdl();
+  reset_helper_counters();
 
   VideoCompareConfig config = make_config(resolved);
   if (scenario == Scenario::SyncMismatch || scenario == Scenario::MultiRightSync) {
@@ -586,6 +712,41 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
         }
       }
     }
+  } else if (is_stress_scenario(scenario)) {
+    const std::vector<double> times = copied_positions(output);
+    const double expected_storm = (scenario == Scenario::SeekBurstForward) ? 10.0 : 9.0;
+    if (watchdog_fired.load()) {
+      print_stress_failure(scenario, "in-process watchdog fired before helper finished", times, expected_storm);
+      exit_code = EXIT_FAILURE;
+    } else if (times.size() < 3) {
+      print_stress_failure(scenario, "expected T0 T1 T2 copied timestamps", times, expected_storm);
+      exit_code = EXIT_FAILURE;
+    } else {
+      const double t0 = times[0];
+      const double t1 = times[1];
+      const double t2 = times[2];
+      const double storm = t1 - t0;
+      const double step = t2 - t1;
+      std::printf("%s timestamps: T0=%.3f T1=%.3f T2=%.3f storm=%.3f step=%.3f events=%d\n", scenario_name(scenario), t0, t1, t2, storm, step, events_pushed.load());
+      if (t0 < 0.0 || t0 > 8.0) {
+        print_stress_failure(scenario, "T0 is not a plausible paused start PTS", times, expected_storm);
+        exit_code = EXIT_FAILURE;
+      } else if (t1 < 0.0 || t1 > 19.50) {
+        print_stress_failure(scenario, "T1 is outside the 20s fixture", times, expected_storm);
+        exit_code = EXIT_FAILURE;
+      } else if (!pts_near(storm, expected_storm)) {
+        print_stress_failure(scenario, "storm delta does not match the sum of all seek commands", times, expected_storm);
+        exit_code = EXIT_FAILURE;
+      } else if (!(t2 > t1)) {
+        print_stress_failure(scenario, "post-storm Shift+D did not advance PTS", times, expected_storm);
+        exit_code = EXIT_FAILURE;
+      } else if (step < 0.030 || step > 0.050) {
+        print_stress_failure(scenario, "post-storm Shift+D was not one 25 fps frame", times, expected_storm);
+        exit_code = EXIT_FAILURE;
+      } else {
+        std::printf("PASS %s accounted for all seek commands and Shift+D advanced one frame\n", scenario_name(scenario));
+      }
+    }
   }
 
   if (exit_code == EXIT_SUCCESS) {
@@ -606,6 +767,8 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "  %s frame-navigation LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s buffer-forward-only LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s buffer-pingpong LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s seek-burst-forward LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s seek-burst-mixed LEFT RIGHT\n", argv0);
 }
 
 }  // namespace
@@ -685,6 +848,20 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::BufferPingPong, files);
+    }
+    if (name == "seek-burst-forward") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::SeekBurstForward, files);
+    }
+    if (name == "seek-burst-mixed") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::SeekBurstMixed, files);
     }
   } catch (const std::exception& exception) {
     std::fprintf(stderr, "FAIL %s\n", exception.what());

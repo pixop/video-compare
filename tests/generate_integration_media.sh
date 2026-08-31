@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 1 ]; then
-  echo "usage: $0 OUT_DIR" >&2
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "usage: $0 OUT_DIR [--stress]" >&2
   exit 1
 fi
 
@@ -26,6 +26,12 @@ generate_clip() {
     -pix_fmt yuv420p -c:v mpeg4 -q:v 5 -g 1 \
     "$dest"
 }
+
+if [ "${2:-}" = "--stress" ]; then
+  generate_clip "$out_dir/stress_left_25.mp4" 20
+  generate_clip "$out_dir/stress_right_25.mp4" 20
+  exit 0
+fi
 
 generate_clip "$out_dir/left_25.mp4" 1
 generate_clip "$out_dir/right0_25.mp4" 1
