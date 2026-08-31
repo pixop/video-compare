@@ -12,15 +12,40 @@ One suite:
 make check-one TEST=zoom_transform
 ```
 
-`make test` is a separate GUI smoke (`video-compare` plus screenshots) and is not part of `check`. `make integration` runs the real `VideoCompare` compare loop under SDL dummy/software with ffmpeg-generated clips and the existing JPEG stills; it is also not part of `check`. GitHub Actions runs `make`, `make check`, and `make integration` on Ubuntu 24.04, macOS 15 Intel, and Windows/MSYS2 UCRT64. Scenarios (`baseline`, `event-injection`, `seek`, `still-seek`, `sync-mismatch`, `multi-right-sync`, `frame-navigation`, `buffer-forward-only`, `buffer-pingpong`) each run in a fresh process. `make stress` is a third target: it reuses `tests/integration_video_compare` for `seek-burst-forward` and `seek-burst-mixed` against longer GOP-1 clips, repeating each scenario 20 times by default (`STRESS_RUNS=100 make stress`). Stress is not part of `check` or `integration`. Any `tests/test_*.cpp` is picked up by `check` automatically. The integration source is `tests/integration_video_compare.cpp` so that wildcard does not include it. Header-only tests need no makefile change; tests that link production objects or FFmpeg still declare those extras in the makefile. Tests include production headers as `"foo.h"` via `-Isrc`. The integration target requires the `ffmpeg` CLI.
+Other targets (not part of `check`):
 
-Covers effective DAR from width/height × SAR (invalid SAR → 1:1; non-positive dims → unavailable).
+- `make test` — GUI smoke: `video-compare` plus screenshots.
+- `make integration` — real `VideoCompare` compare loop under SDL dummy/software. Uses ffmpeg-generated clips and the existing JPEG stills. Needs the `ffmpeg` CLI.
+- `make stress` — same binary as integration. Runs `seek-burst-forward` and `seek-burst-mixed` on longer GOP-1 clips, 20 times each by default (`STRESS_RUNS=100 make stress`). Not part of `integration` either.
 
-Conversion geometry covers native centering (including odd extra pixels on the right/bottom), oversized native content returning an empty rect, stretch fill-rect, crop mapping for inside/partial/padding-only selections, canvas-point mapping, and the stretch 1px-selection → min 2×2 crop regression.
+GitHub Actions runs `make`, `make check`, and `make integration` on Ubuntu 24.04, macOS 15 Intel, and Windows/MSYS2 UCRT64.
 
-Format converter tests cover native RGB24/RGB48LE placement (including odd horizontal offsets and canvas linesize larger than content width), src==canvas, mid-stream src growth that still fits, overflow errors, and stretch fill.
+Integration scenarios (one fresh process each):
 
-Zoom transform tests cover focal-point stability (the layout-space cursor or stack seam stays put) for Split / HStack / VStack, including letterboxed/pillarboxed windows, pan-then-zoom, keyboard 5/6/7 seam focal points, zoom-out, and repeated zoom steps. They use the production helpers also called by `Display::compute_relative_move_offset`, `update_move_offset`, `compute_zoom_rect`, `video_to_zoom_space`, and `window_to_video_position`. HStack/VStack use the single-frame center as the zoom transform origin while preserving layout-space focal points such as the cursor or stack seam. `./tests/test_zoom_transform --pre-fix` is a test-only replay of the old layout-center origin; it is not a production API.
+- `baseline`
+- `event-injection`
+- `seek`
+- `still-seek`
+- `sync-mismatch`
+- `multi-right-sync`
+- `frame-navigation`
+- `buffer-forward-only`
+- `buffer-pingpong`
+
+Adding a unit test:
+
+- `check` picks up `tests/test_*.cpp` automatically.
+- Integration is `tests/integration_video_compare.cpp`, so that wildcard skips it.
+- Header-only tests need no makefile change.
+- Tests that link production objects or FFmpeg still declare those extras in the makefile.
+- Production headers are included as `"foo.h"` via `-Isrc`.
+
+What `check` covers:
+
+- **Frame metadata** — effective DAR from width/height × SAR. Invalid SAR → 1:1. Non-positive dims → unavailable.
+- **Conversion geometry** — native centering (odd extra pixels land on the right/bottom); oversized native content → empty rect; stretch fill-rect; crop mapping for inside / partial / padding-only selections; canvas-point mapping; stretch 1px selection → min 2×2 crop.
+- **Format converter** — native RGB24 / RGB48LE placement (odd horizontal offsets; canvas linesize larger than content width); src==canvas; mid-stream src growth that still fits; overflow errors; stretch fill.
+- **Zoom transform** — the layout-space cursor or stack seam stays put for Split / HStack / VStack (letterboxed and pillarboxed windows, pan-then-zoom, keyboard 5/6/7 seam focals, zoom-out, repeated steps). Uses the same helpers as `Display::compute_relative_move_offset`, `update_move_offset`, `compute_zoom_rect`, `video_to_zoom_space`, and `window_to_video_position`. HStack/VStack zoom from the single-frame center while keeping those layout-space focals. `./tests/test_zoom_transform --pre-fix` replays the old layout-center origin; it is not a production API.
 
 Font selection tests cover forced embedded fonts, custom-file open/error formatting, UTF-8 well-formedness and glyph coverage, and Auto mode choosing Source Code Pro vs Sarasa from the two video labels.
 
