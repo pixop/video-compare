@@ -207,6 +207,9 @@ static void test_format_custom_font_open_error() {
              "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): No such file or directory",
          "strip duplicated path from common SDL_ttf error");
 
+  expect(format_custom_font_open_error(path, 16, "small text", "Couldn't open /tmp/My Font.ttf") == "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): unknown error",
+         "strip path-only SDL_ttf error without errno suffix");
+
   expect(format_custom_font_open_error(path, 24, "large text", "Library not initialized") == "failed to open custom UI font '/tmp/My Font.ttf' for large text (24 pt): Library not initialized", "preserve unrelated SDL_ttf error");
 
   expect(format_custom_font_open_error(path, 16, "small text", nullptr) == "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): unknown error", "null ttf error");
@@ -217,6 +220,10 @@ static void test_format_custom_font_open_error() {
   expect(format_custom_font_open_error(spaced_path, 16, "small text", "Couldn't open /path/with spaces/font: permission denied") ==
              "failed to open custom UI font '/path/with spaces/font' for small text (16 pt): permission denied",
          "strip duplicated path when path contains spaces");
+
+  expect(format_custom_font_open_error(spaced_path, 16, "small text", "Couldn't open /path/with spaces/font") ==
+             "failed to open custom UI font '/path/with spaces/font' for small text (16 pt): unknown error",
+         "strip path-only SDL_ttf error when path contains spaces");
 }
 
 static void expect_open_error_matches(const std::string& path, int point_size, const char* text_role, const std::string& label) {
