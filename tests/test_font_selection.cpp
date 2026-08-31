@@ -231,6 +231,20 @@ static void test_format_custom_font_open_error() {
   expect(format_custom_font_open_error(path, 16, "small text", "Couldn't open /tmp/My Font.ttf.bak: ignored") ==
              "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): Couldn't open /tmp/My Font.ttf.bak: ignored",
          "do not strip when path is only a filename prefix");
+
+  const std::string boundary_path = "/tmp/font.ttf";
+  expect(format_custom_font_open_error(boundary_path, 16, "small text", "Couldn't open /tmp/font.ttf: No such file") ==
+             "failed to open custom UI font '/tmp/font.ttf' for small text (16 pt): No such file",
+         "strip strerror form at exact path boundary");
+  expect(format_custom_font_open_error(boundary_path, 16, "small text", "Couldn't open /tmp/font.ttf") ==
+             "failed to open custom UI font '/tmp/font.ttf' for small text (16 pt): unknown error",
+         "strip path-only form at exact path boundary");
+  expect(format_custom_font_open_error(boundary_path, 16, "small text", "Couldn't open /tmp/font.ttf\r\n") ==
+             "failed to open custom UI font '/tmp/font.ttf' for small text (16 pt): unknown error",
+         "strip path-only form with trailing CRLF");
+  expect(format_custom_font_open_error(boundary_path, 16, "small text", "Couldn't open /tmp/font.ttf.backup: No such file") ==
+             "failed to open custom UI font '/tmp/font.ttf' for small text (16 pt): Couldn't open /tmp/font.ttf.backup: No such file",
+         "do not strip longer path sharing the same prefix");
 }
 
 static void expect_open_error_matches(const std::string& path, int point_size, const char* text_role, const std::string& label) {

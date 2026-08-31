@@ -169,28 +169,41 @@ TTF_Font* open_ui_font_at_size(const FontSelection& selection, EmbeddedFont acti
 
 namespace {
 
-// SDL_RWFromFile names the path in every current build:
-//   Windows / older Unix: "Couldn't open <path>"
-//   newer Unix/macOS:     "Couldn't open <path>: <strerror>"
+// Observed SDL_RWFromFile messages (not assumed for every build):
+//   "Couldn't open <path>"
+//   "Couldn't open <path>: <reason>"
+// Trailing CR/LF immediately after the path is tolerated. A longer filename
+// that only shares this prefix is left unchanged.
 std::string strip_duplicate_path_from_ttf_error(const std::string& path, const std::string& ttf_error) {
   const std::string prefix = "Couldn't open " + path;
   if (ttf_error.compare(0, prefix.size(), prefix) != 0) {
     return ttf_error;
   }
 
-  size_t i = prefix.size();
-  while (i < ttf_error.size() && (ttf_error[i] == '\r' || ttf_error[i] == '\n')) {
-    ++i;
-  }
+  const size_t i = prefix.size();
   if (i == ttf_error.size()) {
     return {};
   }
-  if (ttf_error[i] == ':') {
-    ++i;
-    if (i < ttf_error.size() && ttf_error[i] == ' ') {
-      ++i;
+
+  const char boundary = ttf_error[i];
+  if (boundary != ':' && boundary != '\r' && boundary != '\n') {
+    return ttf_error;
+  }
+
+  if (boundary == ':') {
+    size_t j = i + 1;
+    if (j < ttf_error.size() && ttf_error[j] == ' ') {
+      ++j;
     }
-    return ttf_error.substr(i);
+    return ttf_error.substr(j);
+  }
+
+  size_t j = i;
+  while (j < ttf_error.size() && (ttf_error[j] == '\r' || ttf_error[j] == '\n')) {
+    ++j;
+  }
+  if (j == ttf_error.size()) {
+    return {};
   }
   return ttf_error;
 }
