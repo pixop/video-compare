@@ -59,7 +59,7 @@ FormatConverter::FormatConverter(const size_t src_width,
       src_color_space_{src_color_space},
       src_color_range_{src_color_range},
       active_flags_(flags),
-      pending_flags_(active_flags_) {
+      pending_flags_(flags) {
   ScopedLogSide scoped_log_side(side);
 
   ensure_source_fits_canvas();
@@ -186,7 +186,7 @@ AVPixelFormat FormatConverter::dest_pixel_format() const {
 }
 
 void FormatConverter::set_pending_flags(const int flags) {
-  pending_flags_ = flags;
+  pending_flags_.store(flags, std::memory_order_relaxed);
 }
 
 void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
@@ -216,8 +216,9 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
     src_color_range_ = src->color_range;
     must_reinit = true;
   }
-  if (pending_flags_ != active_flags_) {
-    active_flags_ = pending_flags_;
+  const int pending_flags = pending_flags_.load(std::memory_order_relaxed);
+  if (pending_flags != active_flags_) {
+    active_flags_ = pending_flags;
     must_reinit = true;
   }
 
