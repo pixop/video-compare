@@ -12,6 +12,9 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#ifdef _WIN32
+#include <stdlib.h>
+#endif
 #include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
@@ -155,10 +158,17 @@ bool file_is_non_empty(const char* path) {
 }
 
 std::string resolve_path(const std::string& path) {
-  char resolved[PATH_MAX];
-  if (realpath(path.c_str(), resolved) == nullptr) {
+#if defined(_WIN32)
+  char resolved[_MAX_PATH];
+  if (::_fullpath(resolved, path.c_str(), sizeof(resolved)) == nullptr) {
     throw std::runtime_error("cannot resolve path: " + path);
   }
+#else
+  char resolved[PATH_MAX];
+  if (::realpath(path.c_str(), resolved) == nullptr) {
+    throw std::runtime_error("cannot resolve path: " + path);
+  }
+#endif
   return resolved;
 }
 
