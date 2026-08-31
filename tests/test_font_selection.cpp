@@ -131,7 +131,7 @@ class TempFontFile {
 
 static bool utf8_is_well_formed(TTF_Font* probe, const std::string& text) {
   bool malformed = false;
-  font_supports_utf8_text(probe, text, &malformed);
+  (void)font_supports_utf8_text(probe, text, &malformed);
   return !malformed;
 }
 
@@ -173,7 +173,7 @@ static void test_font_supports_utf8_text(TTF_Font* probe) {
 
   bool threw = false;
   try {
-    font_supports_utf8_text(nullptr, "hello");
+    (void)font_supports_utf8_text(nullptr, "hello");
   } catch (const std::logic_error&) {
     threw = true;
   }
@@ -186,7 +186,7 @@ static void test_forced_modes() {
 
   bool threw = false;
   try {
-    embedded_font_for_forced_mode(FontMode::Auto);
+    (void)embedded_font_for_forced_mode(FontMode::Auto);
   } catch (const std::logic_error&) {
     threw = true;
   }
@@ -194,7 +194,7 @@ static void test_forced_modes() {
 
   threw = false;
   try {
-    embedded_font_for_forced_mode(FontMode::CustomFile);
+    (void)embedded_font_for_forced_mode(FontMode::CustomFile);
   } catch (const std::logic_error&) {
     threw = true;
   }
@@ -210,6 +210,9 @@ static void test_format_custom_font_open_error() {
   expect(format_custom_font_open_error(path, 16, "small text", "Couldn't open /tmp/My Font.ttf") == "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): unknown error",
          "strip path-only SDL_ttf error without errno suffix");
 
+  expect(format_custom_font_open_error(path, 16, "small text", "Couldn't open /tmp/My Font.ttf\r") == "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): unknown error",
+         "strip path-only SDL_ttf error with trailing CR");
+
   expect(format_custom_font_open_error(path, 24, "large text", "Library not initialized") == "failed to open custom UI font '/tmp/My Font.ttf' for large text (24 pt): Library not initialized", "preserve unrelated SDL_ttf error");
 
   expect(format_custom_font_open_error(path, 16, "small text", nullptr) == "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): unknown error", "null ttf error");
@@ -224,12 +227,16 @@ static void test_format_custom_font_open_error() {
   expect(format_custom_font_open_error(spaced_path, 16, "small text", "Couldn't open /path/with spaces/font") ==
              "failed to open custom UI font '/path/with spaces/font' for small text (16 pt): unknown error",
          "strip path-only SDL_ttf error when path contains spaces");
+
+  expect(format_custom_font_open_error(path, 16, "small text", "Couldn't open /tmp/My Font.ttf.bak: ignored") ==
+             "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): Couldn't open /tmp/My Font.ttf.bak: ignored",
+         "do not strip when path is only a filename prefix");
 }
 
 static void expect_open_error_matches(const std::string& path, int point_size, const char* text_role, const std::string& label) {
   bool threw = false;
   try {
-    open_custom_font_file(path, point_size, text_role);
+    (void)open_custom_font_file(path, point_size, text_role);
   } catch (const std::runtime_error& e) {
     threw = true;
     const std::string msg = e.what();
@@ -275,7 +282,7 @@ static void test_open_ui_font_at_size() {
 
   bool threw = false;
   try {
-    open_ui_font_at_size(FontSelection{FontMode::CustomFile, {}}, EmbeddedFont::SourceCodePro, 16, "small text");
+    (void)open_ui_font_at_size(FontSelection{FontMode::CustomFile, {}}, EmbeddedFont::SourceCodePro, 16, "small text");
   } catch (const std::logic_error&) {
     threw = true;
   }
@@ -283,7 +290,7 @@ static void test_open_ui_font_at_size() {
 
   bool missing_threw = false;
   try {
-    open_ui_font_at_size(FontSelection{FontMode::CustomFile, "/nonexistent/vc_font_test.ttf"}, EmbeddedFont::SourceCodePro, 16, "small text");
+    (void)open_ui_font_at_size(FontSelection{FontMode::CustomFile, "/nonexistent/vc_font_test.ttf"}, EmbeddedFont::SourceCodePro, 16, "small text");
   } catch (const std::runtime_error& e) {
     missing_threw = true;
     const std::string msg = e.what();

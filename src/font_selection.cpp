@@ -169,10 +169,28 @@ TTF_Font* open_ui_font_at_size(const FontSelection& selection, EmbeddedFont acti
 
 namespace {
 
+// SDL_RWFromFile names the path in every current build:
+//   Windows / older Unix: "Couldn't open <path>"
+//   newer Unix/macOS:     "Couldn't open <path>: <strerror>"
 std::string strip_duplicate_path_from_ttf_error(const std::string& path, const std::string& ttf_error) {
-  const std::string prefix = "Couldn't open " + path + ": ";
-  if (ttf_error.compare(0, prefix.size(), prefix) == 0) {
-    return ttf_error.substr(prefix.size());
+  const std::string prefix = "Couldn't open " + path;
+  if (ttf_error.compare(0, prefix.size(), prefix) != 0) {
+    return ttf_error;
+  }
+
+  size_t i = prefix.size();
+  while (i < ttf_error.size() && (ttf_error[i] == '\r' || ttf_error[i] == '\n')) {
+    ++i;
+  }
+  if (i == ttf_error.size()) {
+    return {};
+  }
+  if (ttf_error[i] == ':') {
+    ++i;
+    if (i < ttf_error.size() && ttf_error[i] == ' ') {
+      ++i;
+    }
+    return ttf_error.substr(i);
   }
   return ttf_error;
 }
@@ -181,7 +199,10 @@ std::string strip_duplicate_path_from_ttf_error(const std::string& path, const s
 
 std::string format_custom_font_open_error(const std::string& path, int point_size, const char* text_role, const char* ttf_error) {
   const std::string raw_error = (ttf_error != nullptr && *ttf_error != '\0') ? ttf_error : "unknown error";
-  const std::string reason = strip_duplicate_path_from_ttf_error(path, raw_error);
+  std::string reason = strip_duplicate_path_from_ttf_error(path, raw_error);
+  if (reason.empty()) {
+    reason = "unknown error";
+  }
   return string_sprintf("failed to open custom UI font '%s' for %s (%d pt): %s", path.c_str(), text_role, point_size, reason.c_str());
 }
 
