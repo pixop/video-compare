@@ -22,6 +22,8 @@ Format converter tests cover native RGB24/RGB48LE placement (including odd horiz
 
 Zoom transform tests cover focal-point stability (the layout-space cursor or stack seam stays put) for Split / HStack / VStack, including letterboxed/pillarboxed windows, pan-then-zoom, keyboard 5/6/7 seam focal points, zoom-out, and repeated zoom steps. They use the production helpers also called by `Display::compute_relative_move_offset`, `update_move_offset`, `compute_zoom_rect`, `video_to_zoom_space`, and `window_to_video_position`. HStack/VStack use the single-frame center as the zoom transform origin while preserving layout-space focal points such as the cursor or stack seam. `./tests/test_zoom_transform --pre-fix` is a test-only replay of the old layout-center origin; it is not a production API.
 
+Font selection tests cover forced embedded fonts, custom-file open/error formatting, UTF-8 well-formedness and glyph coverage, and Auto mode choosing Source Code Pro vs Sarasa from the two video labels.
+
 ## Manual / generated-stream checks
 
 These exercise the real pipeline. Generate clips with ffmpeg as needed.

@@ -88,6 +88,9 @@ tests/test_format_converter$(EXE): \
 	src/format_converter.o src/frame_metadata.o src/ffmpeg.o src/side_aware_logger.o src/core_types.o
 tests/test_format_converter$(EXE): TEST_LIBS = $(LDLIBS)
 
+tests/test_font_selection$(EXE): src/font_selection.o
+tests/test_font_selection$(EXE): TEST_LIBS = $(LDLIBS)
+
 .PHONY: check
 check: $(test_bin)
 	@set -e; \
