@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include "conversion_geometry.h"
 #include "side_aware.h"
 extern "C" {
@@ -54,7 +55,7 @@ class FormatConverter : public SideAware {
   AVColorRange src_color_range_;
 
   int active_flags_;
-  int pending_flags_;
+  std::atomic<int> pending_flags_;
 
   SwsContext* conversion_context_{};
   uint8_t* native_scratch_{};
