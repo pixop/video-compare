@@ -229,12 +229,12 @@ see all supported options.
 - `F2`: Toggle Vectorscope window
 - `F3`: Toggle Waveform window
 - `Alt+Enter`: Toggle fullscreen
-- `Backspace`: Undo last crop operation
-- `Shift+O`: Copy left crop to all other videos
-- `Shift+I`: Copy right crop to left
 - `Shift+L`: Crop left video interactively
 - `Shift+R`: Crop right video interactively
 - `Shift+B`: Crop both videos to the same area
+- `Shift+O`: Copy left crop to all other videos
+- `Shift+I`: Copy right crop to left
+- `Backspace`: Undo last crop operation
 - `Shift+D`: Decode and advance one frame
 - `Shift+A`: Seek to the previous frame (best with intra-frame formats)
 - `Shift+M`: Cycle display mode
