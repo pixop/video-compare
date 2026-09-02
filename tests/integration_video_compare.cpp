@@ -22,7 +22,7 @@
 
 namespace {
 
-enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync, FrameNavigation, BufferForwardOnly, BufferPingPong, SeekBurstForward, SeekBurstMixed };
+enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync, FrameNavigation, BufferForwardOnly, BufferPingPong, SeekBurstForward, SeekBurstMixed, CropCopy };
 
 std::atomic<int> events_pushed{0};
 std::atomic<bool> watchdog_fired{false};
@@ -60,6 +60,8 @@ const char* scenario_name(const Scenario scenario) {
       return "seek-burst-forward";
     case Scenario::SeekBurstMixed:
       return "seek-burst-mixed";
+    case Scenario::CropCopy:
+      return "crop-copy";
   }
   return "unknown";
 }
@@ -71,6 +73,10 @@ const char* stress_iteration_label() {
 
 int watchdog_ticks_for(const Scenario scenario) {
   // 100 ms per tick. Stress seeks serialize on drain/restart; 12 s is too tight.
+  // crop-copy walks several crop/copy/undo/Shift+X rounds after the shared settle.
+  if (scenario == Scenario::CropCopy) {
+    return 400;
+  }
   return is_stress_scenario(scenario) ? 250 : 120;
 }
 
@@ -138,6 +144,177 @@ SDL_Keymod clipboard_mod() {
 
 void push_copy_timestamp() {
   push_keydown(SDLK_c, SDL_SCANCODE_C, 0, clipboard_mod());
+}
+
+void push_mouse_motion(const int x, const int y) {
+  const Uint32 window_id = first_sdl_window_id();
+  SDL_Window* window = SDL_GetWindowFromID(window_id);
+  if (window != nullptr) {
+    SDL_WarpMouseInWindow(window, x, y);
+  }
+
+  SDL_Event event{};
+  event.type = SDL_MOUSEMOTION;
+  event.motion.type = SDL_MOUSEMOTION;
+  event.motion.timestamp = SDL_GetTicks();
+  event.motion.windowID = 0;
+  event.motion.x = x;
+  event.motion.y = y;
+  if (SDL_PushEvent(&event) < 0) {
+    std::fprintf(stderr, "SDL_PushEvent(MOUSEMOTION) failed: %s\n", SDL_GetError());
+  } else {
+    events_pushed.fetch_add(1);
+  }
+}
+
+void push_mouse_button(const Uint32 type, const int x, const int y) {
+  SDL_Event event{};
+  event.type = type;
+  event.button.type = type;
+  event.button.timestamp = SDL_GetTicks();
+  event.button.windowID = 0;
+  event.button.button = SDL_BUTTON_LEFT;
+  event.button.state = (type == SDL_MOUSEBUTTONDOWN) ? SDL_PRESSED : SDL_RELEASED;
+  event.button.clicks = 1;
+  event.button.x = x;
+  event.button.y = y;
+  if (SDL_PushEvent(&event) < 0) {
+    std::fprintf(stderr, "SDL_PushEvent(MOUSEBUTTON) failed: %s\n", SDL_GetError());
+  } else {
+    events_pushed.fetch_add(1);
+  }
+}
+
+void wait_for_filter_refresh() {
+  // Crop/copy/undo force a same-position seek and filter rebuild. Shift+X
+  // reads Display metadata, which updates only after the new frames refresh.
+  sleep_ms(700);
+}
+
+void dump_display_filters() {
+  push_keydown(SDLK_x, SDL_SCANCODE_X, 0, KMOD_SHIFT);
+  sleep_ms(200);
+}
+
+void select_right_video(const int index) {
+  push_keydown(static_cast<SDL_Keycode>(SDLK_1 + index), static_cast<SDL_Scancode>(SDL_SCANCODE_1 + index), 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+  sleep_ms(300);
+}
+
+void toggle_swap() {
+  push_keydown(SDLK_s, SDL_SCANCODE_S, 0);
+  sleep_ms(200);
+}
+
+void interactive_crop(const SDL_Keycode side_key, const SDL_Scancode side_scancode, const int x0, const int y0, const int x1, const int y1) {
+  // Shift+L/R enters crop mode. Display reads mouse_x_/mouse_y_ from
+  // SDL_GetMouseState on motion, then mouse-up completes the rectangle.
+  push_keydown(side_key, side_scancode, 0, KMOD_SHIFT);
+  sleep_ms(150);
+  push_mouse_motion(x0, y0);
+  sleep_ms(50);
+  push_mouse_button(SDL_MOUSEBUTTONDOWN, x0, y0);
+  sleep_ms(50);
+  push_mouse_motion(x1, y1);
+  sleep_ms(50);
+  push_mouse_button(SDL_MOUSEBUTTONUP, x1, y1);
+  wait_for_filter_refresh();
+}
+
+void copy_visual_left_crop_to_others() {
+  push_keydown(SDLK_o, SDL_SCANCODE_O, 0, KMOD_SHIFT);
+  wait_for_filter_refresh();
+}
+
+void copy_visual_right_crop_to_left() {
+  push_keydown(SDLK_i, SDL_SCANCODE_I, 0, KMOD_SHIFT);
+  wait_for_filter_refresh();
+}
+
+void undo_last_crop() {
+  push_keydown(SDLK_BACKSPACE, SDL_SCANCODE_BACKSPACE, 0);
+  wait_for_filter_refresh();
+}
+
+std::string extract_quoted_field(const std::string& line, const std::string& key) {
+  const std::string prefix = key + "=\"";
+  const size_t start = line.find(prefix);
+  if (start == std::string::npos) {
+    return std::string();
+  }
+  std::string value;
+  for (size_t i = start + prefix.size(); i < line.size(); ++i) {
+    if (line[i] == '\\' && i + 1 < line.size()) {
+      value.push_back(line[i + 1]);
+      ++i;
+      continue;
+    }
+    if (line[i] == '"') {
+      break;
+    }
+    value.push_back(line[i]);
+  }
+  return value;
+}
+
+std::string extract_unquoted_field(const std::string& line, const std::string& key) {
+  const std::string token = " " + key + "=";
+  const size_t start = line.find(token);
+  if (start == std::string::npos) {
+    return std::string();
+  }
+  const size_t value_start = start + token.size();
+  const size_t value_end = line.find(' ', value_start);
+  return line.substr(value_start, value_end == std::string::npos ? std::string::npos : value_end - value_start);
+}
+
+struct FilterDump {
+  std::string left;
+  std::string right;
+  std::string swapped;
+  std::string right_id;
+  std::string visual_left;
+  std::string visual_right;
+};
+
+std::vector<FilterDump> parse_display_filters(const std::string& output) {
+  std::vector<FilterDump> dumps;
+  std::istringstream in(output);
+  std::string line;
+  while (std::getline(in, line)) {
+    if (line.find("Display state:") == std::string::npos) {
+      continue;
+    }
+    FilterDump dump;
+    dump.left = extract_quoted_field(line, "filters_left");
+    dump.right = extract_quoted_field(line, "filters_right");
+    dump.swapped = extract_unquoted_field(line, "swapped");
+    dump.right_id = extract_unquoted_field(line, "right");
+    dump.visual_left = extract_unquoted_field(line, "visual_left");
+    dump.visual_right = extract_unquoted_field(line, "visual_right");
+    dumps.push_back(dump);
+  }
+  return dumps;
+}
+
+std::string crop_token(const std::string& filters) {
+  const size_t start = filters.find("crop=");
+  if (start == std::string::npos) {
+    return std::string();
+  }
+  size_t end = start;
+  while (end < filters.size() && filters[end] != ',' && filters[end] != '"') {
+    ++end;
+  }
+  return filters.substr(start, end - start);
+}
+
+void print_filter_dumps(const std::vector<FilterDump>& dumps) {
+  for (size_t i = 0; i < dumps.size(); ++i) {
+    std::printf("crop-copy dump %zu: swapped=%s right=%s visual_left=%s visual_right=%s left=\"%s\" right_filters=\"%s\" crop_left=%s crop_right=%s\n", i, dumps[i].swapped.c_str(),
+                dumps[i].right_id.c_str(), dumps[i].visual_left.c_str(), dumps[i].visual_right.c_str(), dumps[i].left.c_str(), dumps[i].right.c_str(), crop_token(dumps[i].left).c_str(),
+                crop_token(dumps[i].right).empty() ? "(none)" : crop_token(dumps[i].right).c_str());
+  }
 }
 
 bool parse_hhmmss(const std::string& text, double* seconds) {
@@ -441,6 +618,98 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(500);
     push_copy_timestamp();
     sleep_ms(200);
+  } else if (scenario == Scenario::CropCopy) {
+    // Window and generated clips are both 320x180. Distinct drags produce
+    // distinct crop= tokens in the Shift+X filter dump. Do not hard-code the
+    // mapped pixels; later assertions compare those captured tokens.
+    const int left_x0 = 20, left_y0 = 20, left_x1 = 140, left_y1 = 100;
+    const int right1_x0 = 50, right1_y0 = 40, right1_x1 = 170, right1_y1 = 120;
+    const int right0_x0 = 30, right0_y0 = 50, right0_x1 = 150, right0_y1 = 130;
+    const int right1_again_x0 = 70, right1_again_y0 = 20, right1_again_x1 = 190, right1_again_y1 = 90;
+
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(400);
+
+    // 1. Normal Shift+O: crop logical left, give R0 and R1 different crops,
+    //    leave R2 uncropped, copy visual left to all rights, then undo.
+    interactive_crop(SDLK_l, SDL_SCANCODE_L, left_x0, left_y0, left_x1, left_y1);
+    dump_display_filters();
+    toggle_swap();
+    dump_display_filters();
+    toggle_swap();
+
+    select_right_video(1);
+    interactive_crop(SDLK_r, SDL_SCANCODE_R, right1_x0, right1_y0, right1_x1, right1_y1);
+    dump_display_filters();
+
+    select_right_video(0);
+    interactive_crop(SDLK_r, SDL_SCANCODE_R, right0_x0, right0_y0, right0_x1, right0_y1);
+    dump_display_filters();
+
+    copy_visual_left_crop_to_others();
+    dump_display_filters();
+    select_right_video(1);
+    dump_display_filters();
+    select_right_video(2);
+    dump_display_filters();
+
+    undo_last_crop();
+    select_right_video(0);
+    dump_display_filters();
+    select_right_video(1);
+    dump_display_filters();
+    select_right_video(2);
+    dump_display_filters();
+
+    // 2. Swapped Shift+O: R1 on visual left is the source.
+    select_right_video(1);
+    toggle_swap();
+    copy_visual_left_crop_to_others();
+    dump_display_filters();
+    select_right_video(0);
+    dump_display_filters();
+    select_right_video(2);
+    dump_display_filters();
+
+    undo_last_crop();
+    select_right_video(0);
+    dump_display_filters();
+    select_right_video(1);
+    dump_display_filters();
+    select_right_video(2);
+    dump_display_filters();
+    toggle_swap();
+
+    // 3. Shift+I normal (current right -> logical left) then swapped
+    //    (logical left -> current right).
+    select_right_video(1);
+    copy_visual_right_crop_to_left();
+    dump_display_filters();
+    select_right_video(0);
+    dump_display_filters();
+    undo_last_crop();
+    select_right_video(1);
+    dump_display_filters();
+
+    select_right_video(0);
+    toggle_swap();
+    copy_visual_right_crop_to_left();
+    dump_display_filters();
+    undo_last_crop();
+    dump_display_filters();
+    toggle_swap();
+
+    // 4. Undo keeps the concrete side from the operation, not the later
+    //    selected right. Crop R1, switch to R2, Backspace.
+    select_right_video(1);
+    interactive_crop(SDLK_r, SDL_SCANCODE_R, right1_again_x0, right1_again_y0, right1_again_x1, right1_again_y1);
+    dump_display_filters();
+    select_right_video(2);
+    dump_display_filters();
+    undo_last_crop();
+    dump_display_filters();
+    select_right_video(1);
+    dump_display_filters();
   }
 
   push_quit();
@@ -482,8 +751,9 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   reset_helper_counters();
 
   VideoCompareConfig config = make_config(resolved);
-  if (scenario == Scenario::SyncMismatch || scenario == Scenario::MultiRightSync) {
+  if (scenario == Scenario::SyncMismatch || scenario == Scenario::MultiRightSync || scenario == Scenario::CropCopy) {
     // Auto fps= would otherwise lift 25 fps to 30 and hide the sync path.
+    // crop-copy also wants a clean Shift+X chain so crop= is the only extra filter.
     config.disable_auto_filters = true;
   }
   if (scenario == Scenario::BufferForwardOnly || scenario == Scenario::BufferPingPong) {
@@ -757,6 +1027,120 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
         std::printf("PASS %s accounted for all seek commands and Shift+D advanced one frame\n", scenario_name(scenario));
       }
     }
+  } else if (scenario == Scenario::CropCopy) {
+    const std::vector<FilterDump> dumps = parse_display_filters(output);
+    print_filter_dumps(dumps);
+
+    auto fail_crop = [&](const char* message) {
+      std::fprintf(stderr, "FAIL crop-copy: %s\n", message);
+      std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
+      exit_code = EXIT_FAILURE;
+    };
+
+    // dump  0 left crop A (R0 selected, uncropped)
+    // dump  1 after Swap only (same selection, logical filters unchanged)
+    // dump  2 R1 crop B
+    // dump  3 R0 crop C
+    // dump  4 after Shift+O, R0
+    // dump  5 after Shift+O, R1
+    // dump  6 after Shift+O, R2
+    // dump  7 after undo, R0
+    // dump  8 after undo, R1
+    // dump  9 after undo, R2
+    // dump 10 swapped Shift+O, R1 (source)
+    // dump 11 swapped Shift+O, R0
+    // dump 12 swapped Shift+O, R2
+    // dump 13 swapped undo, R0
+    // dump 14 swapped undo, R1
+    // dump 15 swapped undo, R2
+    // dump 16 Shift+I normal, R1 (source)
+    // dump 17 Shift+I normal, R0 (untouched)
+    // dump 18 Shift+I undo, R1
+    // dump 19 Shift+I swapped, R0 (dest)
+    // dump 20 Shift+I swapped undo, R0
+    // dump 21 R1 recrop D
+    // dump 22 R2 after R1 recrop
+    // dump 23 after undo while R2 selected
+    // dump 24 R1 after that undo
+    constexpr size_t kExpectedDumps = 25;
+    if (dumps.size() < kExpectedDumps) {
+      fail_crop("expected 25 Shift+X filter dumps");
+    } else if (output.find("Copied left crop to all other videos") == std::string::npos) {
+      fail_crop("normal/swapped Shift+O did not notify");
+    } else if (output.find("Copied right crop to left") == std::string::npos) {
+      fail_crop("Shift+I did not notify");
+    } else if (output.find("Active right video: 2/3") == std::string::npos || output.find("Active right video: 3/3") == std::string::npos) {
+      fail_crop("did not select Right 1 and Right 2");
+    } else {
+      const std::string crop_a = crop_token(dumps[0].left);
+      const std::string crop_b = crop_token(dumps[2].right);
+      const std::string crop_c = crop_token(dumps[3].right);
+      const std::string crop_d = crop_token(dumps[21].right);
+
+      if (crop_a.empty() || crop_b.empty() || crop_c.empty() || crop_d.empty()) {
+        fail_crop("interactive crops did not appear in the effective filter chain");
+      } else if (crop_a == crop_b || crop_a == crop_c || crop_b == crop_c || crop_d == crop_b) {
+        fail_crop("interactive crops were not distinct");
+      } else if (dumps[0].swapped != "false" || dumps[0].right_id != "1") {
+        fail_crop("initial Shift+X did not report swapped=false right=1");
+      } else if (dumps[1].swapped != "true" || dumps[1].right_id != "1") {
+        fail_crop("Swap did not report swapped=true with the same right=1");
+      } else if (dumps[0].visual_left.empty() || dumps[0].visual_right.empty() || dumps[0].visual_left == dumps[0].visual_right) {
+        fail_crop("pre-Swap visual sizes were missing or identical");
+      } else if (dumps[1].visual_left != dumps[0].visual_right || dumps[1].visual_right != dumps[0].visual_left) {
+        fail_crop("Swap did not exchange visual_left/visual_right");
+      } else if (dumps[1].left != dumps[0].left || dumps[1].right != dumps[0].right) {
+        fail_crop("Swap exchanged or changed logical filters_left/right");
+      } else if (dumps[2].swapped != "false" || dumps[2].right_id != "2") {
+        fail_crop("selecting Right 1 did not report right=2");
+      } else if (crop_token(dumps[0].right) != "" || crop_token(dumps[2].left) != crop_a) {
+        fail_crop("left crop leaked onto R0, or left changed while cropping R1");
+      } else if (crop_token(dumps[4].left) != crop_a || crop_token(dumps[4].right) != crop_a) {
+        fail_crop("normal Shift+O did not copy left crop onto R0, or changed left");
+      } else if (crop_token(dumps[5].left) != crop_a || crop_token(dumps[5].right) != crop_a) {
+        fail_crop("normal Shift+O did not copy left crop onto R1");
+      } else if (crop_token(dumps[6].left) != crop_a || crop_token(dumps[6].right) != crop_a) {
+        fail_crop("normal Shift+O did not copy left crop onto R2");
+      } else if (crop_token(dumps[7].left) != crop_a || crop_token(dumps[7].right) != crop_c) {
+        fail_crop("undo Shift+O did not restore R0's previous crop, or changed left");
+      } else if (crop_token(dumps[8].left) != crop_a || crop_token(dumps[8].right) != crop_b) {
+        fail_crop("undo Shift+O did not restore R1's previous crop");
+      } else if (crop_token(dumps[9].left) != crop_a || crop_token(dumps[9].right) != "") {
+        fail_crop("undo Shift+O did not restore R2 to uncropped");
+      } else if (crop_token(dumps[10].left) != crop_b || crop_token(dumps[10].right) != crop_b) {
+        fail_crop("swapped Shift+O did not copy R1 crop onto logical left, or changed the R1 source");
+      } else if (crop_token(dumps[11].left) != crop_b || crop_token(dumps[11].right) != crop_b) {
+        fail_crop("swapped Shift+O did not copy R1 crop onto R0");
+      } else if (crop_token(dumps[12].left) != crop_b || crop_token(dumps[12].right) != crop_b) {
+        fail_crop("swapped Shift+O did not copy R1 crop onto R2");
+      } else if (crop_token(dumps[13].left) != crop_a || crop_token(dumps[13].right) != crop_c) {
+        fail_crop("undo swapped Shift+O did not restore left/R0");
+      } else if (crop_token(dumps[14].left) != crop_a || crop_token(dumps[14].right) != crop_b) {
+        fail_crop("undo swapped Shift+O changed the R1 source");
+      } else if (crop_token(dumps[15].left) != crop_a || crop_token(dumps[15].right) != "") {
+        fail_crop("undo swapped Shift+O did not restore R2");
+      } else if (crop_token(dumps[16].left) != crop_b || crop_token(dumps[16].right) != crop_b) {
+        fail_crop("Shift+I normal did not copy R1 crop onto logical left");
+      } else if (crop_token(dumps[17].left) != crop_b || crop_token(dumps[17].right) != crop_c) {
+        fail_crop("Shift+I normal changed R0, or left was not the only destination");
+      } else if (crop_token(dumps[18].left) != crop_a || crop_token(dumps[18].right) != crop_b) {
+        fail_crop("undo Shift+I normal did not restore only logical left");
+      } else if (crop_token(dumps[19].left) != crop_a || crop_token(dumps[19].right) != crop_a) {
+        fail_crop("Shift+I swapped did not copy logical left onto R0");
+      } else if (crop_token(dumps[20].left) != crop_a || crop_token(dumps[20].right) != crop_c) {
+        fail_crop("undo Shift+I swapped did not restore only R0");
+      } else if (crop_token(dumps[21].left) != crop_a || crop_token(dumps[21].right) != crop_d) {
+        fail_crop("R1 recrop did not change only R1");
+      } else if (crop_token(dumps[22].left) != crop_a || crop_token(dumps[22].right) != "") {
+        fail_crop("R1 recrop changed R2");
+      } else if (crop_token(dumps[23].left) != crop_a || crop_token(dumps[23].right) != "") {
+        fail_crop("undo after selecting R2 changed R2");
+      } else if (crop_token(dumps[24].left) != crop_a || crop_token(dumps[24].right) != crop_b) {
+        fail_crop("undo after selecting R2 did not restore R1");
+      } else {
+        std::printf("PASS crop-copy wired Shift+O/I and Backspace through the real filter chain (A=%s B=%s C=%s D=%s)\n", crop_a.c_str(), crop_b.c_str(), crop_c.c_str(), crop_d.c_str());
+      }
+    }
   }
 
   if (exit_code == EXIT_SUCCESS) {
@@ -779,6 +1163,7 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "  %s buffer-pingpong LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s seek-burst-forward LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s seek-burst-mixed LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s crop-copy LEFT RIGHT0 RIGHT1 RIGHT2\n", argv0);
 }
 
 }  // namespace
@@ -872,6 +1257,13 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::SeekBurstMixed, files);
+    }
+    if (name == "crop-copy") {
+      if (files.size() != 4) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::CropCopy, files);
     }
   } catch (const std::exception& exception) {
     std::fprintf(stderr, "FAIL %s\n", exception.what());

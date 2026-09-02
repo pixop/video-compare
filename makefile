@@ -78,7 +78,7 @@ integration_obj = $(integration_src:.cpp=.o)
 integration_dep = $(integration_obj:.o=.d)
 integration_bin = tests/integration_video_compare$(EXE)
 integration_app_obj = $(filter-out src/main.o,$(obj))
-integration_timeout_s ?= 20
+integration_timeout_s ?= 45
 stress_timeout_s ?= 35
 # Override with STRESS_RUNS=100 make stress
 stress_runs ?= $(if $(STRESS_RUNS),$(STRESS_RUNS),20)
@@ -154,7 +154,9 @@ integration: $(integration_bin)
 	echo "Running $(integration_bin) buffer-forward-only"; \
 	$$wrap ./$(integration_bin) buffer-forward-only "$$media/seek_left_25.mp4" "$$media/seek_right_25.mp4"; \
 	echo "Running $(integration_bin) buffer-pingpong"; \
-	$$wrap ./$(integration_bin) buffer-pingpong "$$media/seek_left_25.mp4" "$$media/seek_right_25.mp4"
+	$$wrap ./$(integration_bin) buffer-pingpong "$$media/seek_left_25.mp4" "$$media/seek_right_25.mp4"; \
+	echo "Running $(integration_bin) crop-copy"; \
+	$$wrap ./$(integration_bin) crop-copy "$$media/left_25.mp4" "$$media/right0_25.mp4" "$$media/right1_25.mp4" "$$media/right2_25.mp4"
 
 .PHONY: stress
 stress: $(integration_bin)

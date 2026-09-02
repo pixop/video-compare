@@ -245,6 +245,28 @@ int main() {
   video_filter_state::append_display_state_filters(crop_line, "crop=300:200:10:20", "setparams=colorspace=bt709,crop=100:50:0:0");
   expect_str("display state with filters", crop_line, "Display state: window=800x640 filters_left=\"crop=300:200:10:20\" filters_right=\"setparams=colorspace=bt709,crop=100:50:0:0\"");
 
+  expect_size("right-video ID is user-facing 1-based", video_filter_state::display_state_right_id(1), 2);
+
+  std::string unswapped = "Display state: window=800x450 aspect=stretch";
+  video_filter_state::append_display_state_mapping(unswapped, false, 1);
+  video_filter_state::append_display_state_filters(unswapped, "crop=443:327:190:185", "crop=175:152:299:263");
+  expect_str("display state unswapped keeps logical filters", unswapped,
+             "Display state: window=800x450 aspect=stretch swapped=false right=2 filters_left=\"crop=443:327:190:185\" filters_right=\"crop=175:152:299:263\"");
+
+  std::string swapped = "Display state: window=800x450 aspect=stretch";
+  video_filter_state::append_display_state_mapping(swapped, true, 1);
+  video_filter_state::append_display_state_filters(swapped, "crop=443:327:190:185", "crop=175:152:299:263");
+  expect_str("display state swapped does not exchange logical filters", swapped,
+             "Display state: window=800x450 aspect=stretch swapped=true right=2 filters_left=\"crop=443:327:190:185\" filters_right=\"crop=175:152:299:263\"");
+
+  std::string selected = "Display state: window=800x450 aspect=stretch";
+  video_filter_state::append_display_state_mapping(selected, false, 2);
+  expect_str("display state right ID follows selection", selected, "Display state: window=800x450 aspect=stretch swapped=false right=3");
+
+  std::string swap_keeps_right = "Display state: window=800x450 aspect=stretch";
+  video_filter_state::append_display_state_mapping(swap_keeps_right, true, 2);
+  expect_str("display state swap does not change right ID", swap_keeps_right, "Display state: window=800x450 aspect=stretch swapped=true right=3");
+
   const auto swap_l = video_filter_state::resolve_interactive_crop_targets(true, false, true, 1);
   expect_bool("Shift+L + swap applies to logical right", swap_l.apply_to_right, true);
   expect_bool("Shift+L + swap does not apply to logical left", swap_l.apply_to_left, false);

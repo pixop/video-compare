@@ -3617,6 +3617,7 @@ void Display::handle_event(const SDL_Event& event) {
         case SDLK_x:
           if (is_shift_down) {
             std::string message = string_sprintf("Display state: window=%dx%d aspect=%s", window_width_, window_height_, aspect_view_mode_to_string(aspect_view_mode_).c_str());
+            video_filter_state::append_display_state_mapping(message, swap_left_right_, active_right_index_);
             if (visual_left_pre_canvas_size_.first > 0 && visual_left_pre_canvas_size_.second > 0) {
               message += string_sprintf(" visual_left=%dx%d", visual_left_pre_canvas_size_.first, visual_left_pre_canvas_size_.second);
             }

@@ -285,6 +285,15 @@ inline std::string quote_display_state_value(const std::string& value) {
   return quoted;
 }
 
+inline size_t display_state_right_id(const size_t zero_based_right_index) {
+  return zero_based_right_index + 1;
+}
+
+inline void append_display_state_mapping(std::string& message, const bool swapped, const size_t zero_based_right_index) {
+  message += swapped ? " swapped=true" : " swapped=false";
+  message += " right=" + std::to_string(display_state_right_id(zero_based_right_index));
+}
+
 inline void append_display_state_filters(std::string& message, const std::string& left_filters, const std::string& right_filters) {
   message += " filters_left=" + quote_display_state_value(filters_for_display_state(left_filters));
   message += " filters_right=" + quote_display_state_value(filters_for_display_state(right_filters));

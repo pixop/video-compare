@@ -36,6 +36,7 @@ fi
 generate_clip "$out_dir/left_25.mp4" 1
 generate_clip "$out_dir/right0_25.mp4" 1
 generate_clip "$out_dir/right1_25.mp4" 1
+generate_clip "$out_dir/right2_25.mp4" 1
 generate_clip "$out_dir/seek_left_25.mp4" 4
 generate_clip "$out_dir/seek_right_25.mp4" 4
 generate_clip "$out_dir/sync_left_25.mp4" 2 25
