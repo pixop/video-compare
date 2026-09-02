@@ -7,18 +7,12 @@
 #include "side_aware.h"
 #include "video_decoder.h"
 #include "video_filter_context.h"
+#include "video_filter_state.h"
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
 }
-
-struct CropRect {
-  int x{0};
-  int y{0};
-  int w{0};
-  int h{0};
-};
 
 class VideoFilterer : public SideAware {
  public:
@@ -56,14 +50,11 @@ class VideoFilterer : public SideAware {
   AVPixelFormat dest_pixel_format() const;
 
   bool set_crop_rect(const CropRect* rect);
+  bool set_crop_state(const CropState& state);
+  CropState crop_state() const;
   bool consume_filter_change();
 
  private:
-  struct CropSnapshot {
-    CropRect rect{};
-    bool enabled{false};
-  };
-
   int init_filters();
 
   void mark_filter_changed();
@@ -90,8 +81,8 @@ class VideoFilterer : public SideAware {
   DynamicRange dynamic_range_;
   unsigned peak_luminance_nits_;
 
-  CropSnapshot crop_{};
-  CropSnapshot pending_crop_{};
+  CropState crop_{};
+  CropState pending_crop_{};
   mutable std::mutex pending_crop_mutex_;
 
   std::atomic_bool filter_changed_{false};

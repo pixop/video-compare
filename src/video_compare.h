@@ -151,6 +151,11 @@ class VideoCompare {
   void refresh_side_filter_metadata(const Side& side, const std::string& filters);
 
   bool handle_pending_crop_request(const Side& active_right);
+  bool handle_pending_crop_copy();
+  bool push_crop_state_to_side(const Side& dest, const CropState& source);
+  bool pop_crop_state_from_side(const Side& dest);
+  bool undo_last_crop_operation();
+  void record_crop_operation(std::vector<Side> sides);
   std::vector<Side> consume_filter_changes();
 
   void dump_debug_info(const int frame_number, const int64_t effective_right_time_shift, const int average_refresh_time);
@@ -218,7 +223,8 @@ class VideoCompare {
   std::map<Side, std::unique_ptr<FrameQueue>> filtered_frame_queues_;
   std::map<Side, std::unique_ptr<FrameQueue>> converted_frame_queues_;
 
-  std::map<Side, std::vector<SDL_Rect>> crop_history_;
+  std::map<Side, std::vector<CropState>> crop_history_;
+  std::vector<std::vector<Side>> crop_operations_;
 
   size_t canvas_width_;
   size_t canvas_height_;

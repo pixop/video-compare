@@ -9,10 +9,10 @@
 #include <thread>
 #include "conversion_geometry.h"
 #include "ffmpeg.h"
+#include "frame_metadata.h"
 #include "playback_navigation.h"
 #include "playback_seek.h"
 #include "playback_timing.h"
-#include "frame_metadata.h"
 #include "scope_manager.h"
 #include "scope_window.h"
 #include "sdl_event_info.h"
@@ -20,6 +20,7 @@
 #include "sorted_flat_deque.h"
 #include "string_utils.h"
 #include "video_filter_context.h"
+#include "video_filter_state.h"
 extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/pixdesc.h>
@@ -654,27 +655,11 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
   if (!crop_request.clear_requested && !crop_request.valid) {
     return false;
   }
-  const Side target_right = crop_request.apply_right ? Side::Right(std::min(crop_request.right_target_index, right_video_info_.empty() ? 0UL : (right_video_info_.size() - 1))) : active_right;
-  const bool swap_left_right = display_->get_swap_left_right();
-  const Side resolved_left_side = swap_left_right ? active_right : LEFT;
-  const Side resolved_right_side = swap_left_right ? LEFT : target_right;
 
-  auto compose_crop_history = [&](const std::vector<SDL_Rect>& history) {
-    SDL_Rect composed = {0, 0, 0, 0};
-    bool initialized = false;
-    for (const SDL_Rect& rect : history) {
-      if (!initialized) {
-        composed = rect;
-        initialized = true;
-        continue;
-      }
-      composed.x += rect.x;
-      composed.y += rect.y;
-      composed.w = rect.w;
-      composed.h = rect.h;
-    }
-    return composed;
-  };
+  const video_filter_state::InteractiveCropTargets crop_targets = video_filter_state::resolve_interactive_crop_targets(crop_request.apply_left, crop_request.apply_right, crop_request.swap_left_right, crop_request.right_target_index);
+  const video_filter_state::SelectedRight selected_right = video_filter_state::selected_right(crop_targets.right_index, right_video_info_.size());
+  const Side resolved_left_side = LEFT;
+  const Side resolved_right_side = selected_right.valid ? Side::Right(selected_right.index) : active_right;
 
   static constexpr int kMinCropDimension = 2;
 
@@ -730,9 +715,9 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
       return result;
     }
 
-    std::vector<SDL_Rect> history = crop_history_[side];
-    history.push_back(mapped);
-    SDL_Rect composed = compose_crop_history(history);
+    const CropState previous = video_filter_state::current_crop_from_history(crop_history_[side]);
+    const CropState composed_state = video_filter_state::compose_mapped_crop(previous, {mapped.x, mapped.y, mapped.w, mapped.h});
+    SDL_Rect composed{composed_state.rect.x, composed_state.rect.y, composed_state.rect.w, composed_state.rect.h};
     composed.x = clamp_to(composed.x, 0, src_w - kMinCropDimension);
     composed.y = clamp_to(composed.y, 0, src_h - kMinCropDimension);
     composed.w = std::min(std::max(kMinCropDimension, composed.w), src_w - composed.x);
@@ -747,33 +732,23 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
     return result;
   };
 
+  std::vector<Side> affected;
   auto commit_crop_for_side = [&](const Side& side, const PreparedSideCrop& prepared) {
-    crop_history_[side].push_back(prepared.mapped);
-    const CropRect crop_rect{prepared.composed.x, prepared.composed.y, prepared.composed.w, prepared.composed.h};
-    return video_filterers_[side]->set_crop_rect(&crop_rect);
+    const CropState next{{prepared.composed.x, prepared.composed.y, prepared.composed.w, prepared.composed.h}, true};
+    if (!push_crop_state_to_side(side, next)) {
+      return false;
+    }
+    affected.push_back(side);
+    return true;
   };
 
   bool crop_changed = false;
   if (crop_request.clear_requested) {
-    if (!crop_request.apply_left && !crop_request.apply_right) {
-      for (auto& pair : video_filterers_) {
-        crop_history_[pair.first].clear();
-        crop_changed = pair.second->set_crop_rect(nullptr) || crop_changed;
-      }
-    } else {
-      if (crop_request.apply_left) {
-        crop_history_[resolved_left_side].clear();
-        crop_changed = video_filterers_[resolved_left_side]->set_crop_rect(nullptr) || crop_changed;
-      }
-      if (crop_request.apply_right) {
-        crop_history_[resolved_right_side].clear();
-        crop_changed = video_filterers_[resolved_right_side]->set_crop_rect(nullptr) || crop_changed;
-      }
-    }
+    return undo_last_crop_operation();
   } else if (crop_request.valid) {
-    const bool apply_both = crop_request.apply_left && crop_request.apply_right;
-    const PreparedSideCrop left_prep = crop_request.apply_left ? prepare_crop_for_side(resolved_left_side) : PreparedSideCrop{};
-    const PreparedSideCrop right_prep = crop_request.apply_right ? prepare_crop_for_side(resolved_right_side) : PreparedSideCrop{};
+    const bool apply_both = crop_targets.apply_to_left && crop_targets.apply_to_right;
+    const PreparedSideCrop left_prep = crop_targets.apply_to_left ? prepare_crop_for_side(resolved_left_side) : PreparedSideCrop{};
+    const PreparedSideCrop right_prep = crop_targets.apply_to_right ? prepare_crop_for_side(resolved_right_side) : PreparedSideCrop{};
 
     if (apply_both) {
       if (!left_prep.valid || !right_prep.valid) {
@@ -785,7 +760,7 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
         crop_changed = commit_crop_for_side(resolved_right_side, right_prep) || crop_changed;
       }
     } else {
-      if (crop_request.apply_left) {
+      if (crop_targets.apply_to_left) {
         if (!left_prep.valid) {
           if (left_prep.no_content_intersection && config_.conversion_fit == ConversionFit::Native) {
             display_->notify_user(string_sprintf("Crop selection does not intersect %s content", resolved_left_side.to_string().c_str()));
@@ -794,7 +769,7 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
           crop_changed = commit_crop_for_side(resolved_left_side, left_prep) || crop_changed;
         }
       }
-      if (crop_request.apply_right) {
+      if (crop_targets.apply_to_right) {
         if (!right_prep.valid) {
           if (right_prep.no_content_intersection && config_.conversion_fit == ConversionFit::Native) {
             display_->notify_user(string_sprintf("Crop selection does not intersect %s content", resolved_right_side.to_string().c_str()));
@@ -810,6 +785,102 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
     return false;
   }
 
+  record_crop_operation(affected);
+  scope_update_state_.reset();
+  return true;
+}
+
+bool VideoCompare::push_crop_state_to_side(const Side& dest, const CropState& source) {
+  CropState next;
+  if (!video_filter_state::record_crop_if_changed(crop_history_[dest], video_filterers_.at(dest)->crop_state(), source, next)) {
+    return false;
+  }
+  return video_filterers_.at(dest)->set_crop_state(next);
+}
+
+bool VideoCompare::pop_crop_state_from_side(const Side& dest) {
+  auto& history = crop_history_[dest];
+  if (history.empty()) {
+    return false;
+  }
+  history.pop_back();
+  return video_filterers_.at(dest)->set_crop_state(video_filter_state::current_crop_from_history(history));
+}
+
+void VideoCompare::record_crop_operation(std::vector<Side> sides) {
+  if (!sides.empty()) {
+    crop_operations_.push_back(std::move(sides));
+  }
+}
+
+bool VideoCompare::undo_last_crop_operation() {
+  if (crop_operations_.empty()) {
+    return false;
+  }
+  const std::vector<Side> sides = crop_operations_.back();
+  crop_operations_.pop_back();
+  bool changed = false;
+  for (const Side& side : sides) {
+    changed = pop_crop_state_from_side(side) || changed;
+  }
+  if (changed) {
+    scope_update_state_.reset();
+  }
+  return changed;
+}
+
+bool VideoCompare::handle_pending_crop_copy() {
+  const PendingCropCopy pending = display_->get_and_clear_pending_crop_copy();
+  if (pending.request == CropCopyRequest::None) {
+    return false;
+  }
+
+  const video_filter_state::CropCopyPlan plan = video_filter_state::resolve_crop_copy(pending.request, pending.swap_left_right, pending.right_target_index, right_video_info_.size());
+  if (!plan.valid) {
+    return false;
+  }
+
+  const Side source_side = plan.source_is_left ? LEFT : Side::Right(plan.source_right_index);
+  if (video_filterers_.find(source_side) == video_filterers_.end()) {
+    return false;
+  }
+  const CropState source = video_filterers_.at(source_side)->crop_state();
+
+  std::vector<Side> destinations;
+  if (plan.dest_is_left) {
+    destinations.push_back(LEFT);
+  }
+  if (plan.copy_to_all_rights) {
+    for (const auto& pair : video_filterers_) {
+      if (pair.first.is_right()) {
+        destinations.push_back(pair.first);
+      }
+    }
+  } else if (!plan.dest_is_left) {
+    destinations.push_back(Side::Right(plan.dest_right_index));
+  }
+
+  std::vector<Side> affected;
+  for (const Side& dest : destinations) {
+    if (video_filterers_.find(dest) == video_filterers_.end()) {
+      continue;
+    }
+    if (push_crop_state_to_side(dest, source)) {
+      affected.push_back(dest);
+    }
+  }
+
+  if (affected.empty()) {
+    return false;
+  }
+
+  if (pending.request == CropCopyRequest::LeftToAllRights) {
+    display_->notify_user("Copied left crop to all other videos");
+  } else {
+    display_->notify_user("Copied right crop to left");
+  }
+
+  record_crop_operation(affected);
   scope_update_state_.reset();
   return true;
 }
@@ -1037,8 +1108,8 @@ void VideoCompare::compare() {
 
       bool skip_update = false;
 
-      // handle pending crop request
-      const bool force_seek_current_position = handle_pending_crop_request(active_right);
+      // handle pending crop request / crop copy
+      const bool force_seek_current_position = handle_pending_crop_request(active_right) || handle_pending_crop_copy();
 
       const int shift_right_frames = display_->get_shift_right_frames();
 
@@ -1112,8 +1183,8 @@ void VideoCompare::compare() {
         seek_request.seek_relative = seek_relative;
         seek_request.seek_from_start = seek_from_start;
         seek_request.force_seek_current_position = force_seek_current_position;
-        seek_request.all_sides_multi_frame = std::all_of(media_frame_detection_states_.cbegin(), media_frame_detection_states_.cend(),
-                                                        [](const auto& kv) { return kv.second.cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::MultiFrame; });
+        seek_request.all_sides_multi_frame =
+            std::all_of(media_frame_detection_states_.cbegin(), media_frame_detection_states_.cend(), [](const auto& kv) { return kv.second.cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::MultiFrame; });
         seek_request.shift_right_frames = shift_right_frames;
         seek_request.shortest_duration = shortest_duration_;
         seek_request.left_pts = left.pts_;
@@ -1259,8 +1330,9 @@ void VideoCompare::compare() {
       const int64_t min_delta = playback_timing::compute_min_delta(left.delta_pts_, right_ptr->delta_pts_);
 
 #ifdef _DEBUG
-      const std::string current_state = string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, effective_right_time_shift=%5d", left.pts_ / 1000, playback_timing::is_behind(left.pts_, right_ptr->pts_, min_delta),
-                                                       (right_ptr->pts_ + static_right_time_shift) / 1000, playback_timing::is_behind(right_ptr->pts_, left.pts_, min_delta), min_delta / 1000, right_ptr->effective_time_shift_ / 1000);
+      const std::string current_state =
+          string_sprintf("left_pts=%5d, left_is_behind=%d, right_pts=%5d, right_is_behind=%d, min_delta=%5d, effective_right_time_shift=%5d", left.pts_ / 1000, playback_timing::is_behind(left.pts_, right_ptr->pts_, min_delta),
+                         (right_ptr->pts_ + static_right_time_shift) / 1000, playback_timing::is_behind(right_ptr->pts_, left.pts_, min_delta), min_delta / 1000, right_ptr->effective_time_shift_ / 1000);
 
       if (current_state != previous_state) {
         std::cout << current_state << std::endl;

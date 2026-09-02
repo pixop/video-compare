@@ -2243,10 +2243,12 @@ void Display::possibly_apply_crop() {
   } else {
     pending_crop_request_.rect = selection_rect;
     pending_crop_request_.valid = true;
+    pending_crop_request_.swap_left_right = swap_left_right_;
 
     switch (crop_target_side_) {
       case CropTargetSide::Left:
         pending_crop_request_.apply_left = true;
+        pending_crop_request_.right_target_index = active_right_index_;
         break;
       case CropTargetSide::Right:
         pending_crop_request_.apply_right = true;
@@ -2266,6 +2268,16 @@ void Display::possibly_apply_crop() {
   selection_state_ = SelectionState::None;
   crop_mode_ = false;
   crop_target_side_ = CropTargetSide::Undefined;
+}
+
+void Display::commit_crop_selection_for_copy() {
+  if (!crop_mode_) {
+    return;
+  }
+  if (selection_state_ == SelectionState::Started) {
+    selection_state_ = SelectionState::Completed;
+  }
+  possibly_apply_crop();
 }
 
 void Display::save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame, const SDL_Rect& selection_rect) {
@@ -3442,8 +3454,23 @@ void Display::handle_event(const SDL_Event& event) {
           }
           break;
         case SDLK_i:
-          fast_input_alignment_ = !fast_input_alignment_;
-          notify_user(string_sprintf("Input alignment resizing filter set to '%s' (takes effect for the next decoded frame)", fast_input_alignment_ ? "BILINEAR (fast)" : "BICUBIC (high-quality)"));
+          if (is_shift_down) {
+            commit_crop_selection_for_copy();
+            pending_crop_copy_.request = CropCopyRequest::ActiveRightToLeft;
+            pending_crop_copy_.right_target_index = active_right_index_;
+            pending_crop_copy_.swap_left_right = swap_left_right_;
+          } else {
+            fast_input_alignment_ = !fast_input_alignment_;
+            notify_user(string_sprintf("Input alignment resizing filter set to '%s' (takes effect for the next decoded frame)", fast_input_alignment_ ? "BILINEAR (fast)" : "BICUBIC (high-quality)"));
+          }
+          break;
+        case SDLK_o:
+          if (is_shift_down) {
+            commit_crop_selection_for_copy();
+            pending_crop_copy_.request = CropCopyRequest::LeftToAllRights;
+            pending_crop_copy_.right_target_index = active_right_index_;
+            pending_crop_copy_.swap_left_right = swap_left_right_;
+          }
           break;
         case SDLK_t:
           bilinear_texture_filtering_ = !bilinear_texture_filtering_;
@@ -3599,6 +3626,7 @@ void Display::handle_event(const SDL_Event& event) {
             if (has_reference_display_aspect_) {
               message += string_sprintf(" ref_dar=%d:%d", reference_display_aspect_.num, reference_display_aspect_.den);
             }
+            video_filter_state::append_display_state_filters(message, left_metadata_.get(MetadataProperties::FILTERS, "copy"), right_metadata_.get(MetadataProperties::FILTERS, "copy"));
             notify_user(message);
           } else {
             show_fps_ = true;
@@ -3774,6 +3802,12 @@ PendingCropRequest Display::get_and_clear_pending_crop_request() {
   const PendingCropRequest request = pending_crop_request_;
   pending_crop_request_ = PendingCropRequest{};
   return request;
+}
+
+PendingCropCopy Display::get_and_clear_pending_crop_copy() {
+  const PendingCropCopy pending = pending_crop_copy_;
+  pending_crop_copy_ = PendingCropCopy{};
+  return pending;
 }
 
 void Display::set_num_right_videos(const size_t num_right_videos) {

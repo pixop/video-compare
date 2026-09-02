@@ -7,34 +7,9 @@
 #include "frame_metadata.h"
 #include "string_utils.h"
 #include "video_filter_context.h"
+#include "video_filter_state.h"
 
 static constexpr char VIDEO_FILTER_GROUP_DELIMITER = '|';
-
-static std::string crop_filter(const CropRect& rect) {
-  return string_sprintf("crop=%d:%d:%d:%d", rect.w, rect.h, rect.x, rect.y);
-}
-
-static std::string compose_filters(const std::string& pre_filters, const std::string& post_filters, const CropRect& rect, const bool crop_enabled) {
-  std::vector<std::string> filter_groups;
-
-  if (!pre_filters.empty()) {
-    filter_groups.push_back(pre_filters);
-  }
-
-  if (crop_enabled) {
-    filter_groups.push_back(crop_filter(rect));
-  }
-
-  if (!post_filters.empty()) {
-    filter_groups.push_back(post_filters);
-  }
-
-  if (filter_groups.empty()) {
-    return "copy";
-  }
-
-  return string_join(filter_groups, ",");
-}
 
 static unsigned get_content_light_level_or_zero(const AVFrame* frame) {
   AVFrameSideData* frame_side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
@@ -419,7 +394,7 @@ bool VideoFilterer::receive(AVFrame* filtered_frame) {
 }
 
 std::string VideoFilterer::filter_description() const {
-  return compose_filters(pre_filter_description_, post_filter_description_, crop_.rect, crop_.enabled);
+  return video_filter_state::compose_filters(pre_filter_description_, post_filter_description_, crop_.rect, crop_.enabled);
 }
 
 std::string VideoFilterer::resolved_filter_description() const {
@@ -456,16 +431,14 @@ void VideoFilterer::mark_filter_changed() {
 }
 
 bool VideoFilterer::set_crop_rect(const CropRect* rect) {
-  CropSnapshot next;
+  return set_crop_state(video_filter_state::crop_state_from_rect(rect));
+}
 
-  if (rect != nullptr && rect->w > 0 && rect->h > 0) {
-    next.rect = *rect;
-    next.enabled = true;
-  }
+bool VideoFilterer::set_crop_state(const CropState& state) {
+  const CropState next = video_filter_state::copied_crop_state(state);
 
   std::lock_guard<std::mutex> lock(pending_crop_mutex_);
-  const bool changed = (pending_crop_.enabled != next.enabled) || (next.enabled && (pending_crop_.rect.x != next.rect.x || pending_crop_.rect.y != next.rect.y || pending_crop_.rect.w != next.rect.w || pending_crop_.rect.h != next.rect.h));
-  if (!changed) {
+  if (video_filter_state::crop_states_equal(pending_crop_, next)) {
     return false;
   }
   pending_crop_ = next;
@@ -474,13 +447,18 @@ bool VideoFilterer::set_crop_rect(const CropRect* rect) {
   return true;
 }
 
+CropState VideoFilterer::crop_state() const {
+  std::lock_guard<std::mutex> lock(pending_crop_mutex_);
+  return pending_crop_;
+}
+
 bool VideoFilterer::consume_filter_change() {
   const bool changed = filter_changed_.exchange(false, std::memory_order_acq_rel);
   if (!changed) {
     return false;
   }
 
-  CropSnapshot snapshot;
+  CropState snapshot;
   {
     std::lock_guard<std::mutex> lock(pending_crop_mutex_);
     snapshot = pending_crop_;

@@ -17,6 +17,7 @@
 #include "row_workers.h"
 #include "scope_window.h"
 #include "string_utils.h"
+#include "video_filter_state.h"
 extern "C" {
 #include <libavutil/frame.h>
 }
@@ -103,6 +104,7 @@ struct PendingCropRequest {
   bool apply_left{false};
   bool apply_right{false};
   size_t right_target_index{0};
+  bool swap_left_right{false};
 };
 
 class Display {
@@ -269,6 +271,7 @@ class Display {
   bool crop_mode_{false};
   CropTargetSide crop_target_side_{CropTargetSide::Undefined};
   PendingCropRequest pending_crop_request_;
+  PendingCropCopy pending_crop_copy_;
 
   bool input_received_{true};
   int64_t previous_left_frame_pts_;
@@ -441,6 +444,7 @@ class Display {
   void draw_selection_rect();
   void possibly_save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame);
   void possibly_apply_crop();
+  void commit_crop_selection_for_copy();
   void save_selected_area(const AVFrame* left_frame, const AVFrame* right_frame, const SDL_Rect& selection_rect);
 
   float compute_zoom_factor(const float zoom_level) const;
@@ -538,6 +542,7 @@ class Display {
   bool get_toggle_scope_window_requested(const ScopeWindow::Type type) const;
 
   PendingCropRequest get_and_clear_pending_crop_request();
+  PendingCropCopy get_and_clear_pending_crop_copy();
 
   // Multiple right video support
   void set_num_right_videos(const size_t num_right_videos);

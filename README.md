@@ -229,7 +229,9 @@ see all supported options.
 - `F2`: Toggle Vectorscope window
 - `F3`: Toggle Waveform window
 - `Alt+Enter`: Toggle fullscreen
-- `Backspace`: Clear crop(s)
+- `Backspace`: Undo last crop operation
+- `Shift+O`: Copy left crop to all other videos
+- `Shift+I`: Copy right crop to left
 - `Shift+L`: Crop left video interactively
 - `Shift+R`: Crop right video interactively
 - `Shift+B`: Crop both videos to the same area
