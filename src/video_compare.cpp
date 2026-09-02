@@ -845,6 +845,7 @@ bool VideoCompare::handle_pending_crop_copy() {
     return false;
   }
   const CropState source = video_filterers_.at(source_side)->crop_state();
+  const std::pair<int, int> source_space = video_filterers_.at(source_side)->crop_space_dimensions();
 
   std::vector<Side> destinations;
   if (plan.dest_is_left) {
@@ -865,7 +866,9 @@ bool VideoCompare::handle_pending_crop_copy() {
     if (video_filterers_.find(dest) == video_filterers_.end()) {
       continue;
     }
-    if (push_crop_state_to_side(dest, source)) {
+    const std::pair<int, int> dest_space = video_filterers_.at(dest)->crop_space_dimensions();
+    const CropState mapped = video_filter_state::map_crop_state(source, source_space.first, source_space.second, dest_space.first, dest_space.second);
+    if (push_crop_state_to_side(dest, mapped)) {
       affected.push_back(dest);
     }
   }

@@ -114,6 +114,8 @@ tests/test_format_converter$(EXE): TEST_LIBS = $(LDLIBS)
 tests/test_font_selection$(EXE): src/font_selection.o
 tests/test_font_selection$(EXE): TEST_LIBS = $(LDLIBS)
 
+tests/test_video_filterer$(EXE): TEST_LIBS = $(LDLIBS)
+
 $(integration_bin): $(integration_obj) $(integration_app_obj)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS)
 
@@ -156,7 +158,7 @@ integration: $(integration_bin)
 	echo "Running $(integration_bin) buffer-pingpong"; \
 	$$wrap ./$(integration_bin) buffer-pingpong "$$media/seek_left_25.mp4" "$$media/seek_right_25.mp4"; \
 	echo "Running $(integration_bin) crop-copy"; \
-	$$wrap ./$(integration_bin) crop-copy "$$media/left_25.mp4" "$$media/right0_25.mp4" "$$media/right1_25.mp4" "$$media/right2_25.mp4"
+	$$wrap ./$(integration_bin) crop-copy "$$media/crop_left_320.mp4" "$$media/crop_right0_640.mp4" "$$media/crop_right1_320.mp4" "$$media/crop_right2_160.mp4"
 
 .PHONY: stress
 stress: $(integration_bin)

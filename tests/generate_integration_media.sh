@@ -21,8 +21,9 @@ generate_clip() {
   dest=$1
   duration=$2
   rate=${3:-25}
+  size=${4:-320x180}
   ffmpeg -hide_banner -loglevel error -y \
-    -f lavfi -i "testsrc=size=320x180:rate=${rate}:duration=${duration}" \
+    -f lavfi -i "testsrc=size=${size}:rate=${rate}:duration=${duration}" \
     -pix_fmt yuv420p -c:v mpeg4 -q:v 5 -g 1 \
     "$dest"
 }
@@ -44,3 +45,7 @@ generate_clip "$out_dir/sync_right_30.mp4" 2 30
 generate_clip "$out_dir/multi_sync_left_30.mp4" 3 30
 generate_clip "$out_dir/multi_sync_right0_25.mp4" 3 25
 generate_clip "$out_dir/multi_sync_right1_25.mp4" 3 25
+generate_clip "$out_dir/crop_left_320.mp4" 1 25 320x180
+generate_clip "$out_dir/crop_right0_640.mp4" 1 25 640x360
+generate_clip "$out_dir/crop_right1_320.mp4" 1 25 320x180
+generate_clip "$out_dir/crop_right2_160.mp4" 1 25 160x90

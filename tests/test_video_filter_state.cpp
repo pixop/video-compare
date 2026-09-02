@@ -233,6 +233,11 @@ int main() {
   expect_str("pre crop post chain", video_filter_state::compose_filters("setparams=colorspace=bt709", "format=gray", {0, 0, 100, 50}, true), "setparams=colorspace=bt709,crop=100:50:0:0,format=gray");
   expect_str("existing copy is kept", video_filter_state::filters_for_display_state("copy"), "copy");
 
+  expect_size("empty filter string has no instances", static_cast<size_t>(video_filter_state::count_linear_filter_instances("")), 0);
+  expect_size("single filter instance", static_cast<size_t>(video_filter_state::count_linear_filter_instances("setparams=colorspace=bt709")), 1);
+  expect_size("comma-separated pre-filters", static_cast<size_t>(video_filter_state::count_linear_filter_instances("scale=iw*sar:ih,fps=30.000,transpose=clock")), 3);
+  expect_size("quoted comma stays one instance", static_cast<size_t>(video_filter_state::count_linear_filter_instances("geq=lum='X,Y'")), 1);
+
   expect_str("quote plain filters", video_filter_state::quote_display_state_value("copy"), "\"copy\"");
   expect_str("quote escapes quotes", video_filter_state::quote_display_state_value("a\"b"), "\"a\\\"b\"");
   expect_str("quote escapes backslash", video_filter_state::quote_display_state_value("a\\b"), "\"a\\\\b\"");
@@ -266,6 +271,85 @@ int main() {
   std::string swap_keeps_right = "Display state: window=800x450 aspect=stretch";
   video_filter_state::append_display_state_mapping(swap_keeps_right, true, 2);
   expect_str("display state swap does not change right ID", swap_keeps_right, "Display state: window=800x450 aspect=stretch swapped=true right=3");
+
+  const CropState hd_crop{{100, 50, 1600, 900}, true};
+  expect_crop("same-size map is identical", video_filter_state::map_crop_state(hd_crop, 1920, 1080, 1920, 1080), hd_crop);
+  expect_crop("exact 2x map scales edges", video_filter_state::map_crop_state(hd_crop, 1920, 1080, 3840, 2160), CropState{{200, 100, 3200, 1800}, true});
+  expect_crop("exact 1/2 map scales edges", video_filter_state::map_crop_state(CropState{{200, 100, 3200, 1800}, true}, 3840, 2160, 1920, 1080), hd_crop);
+  const CropState mapped_720 = video_filter_state::map_crop_state(hd_crop, 1920, 1080, 1280, 720);
+  expect_crop("non-integer 2/3 map uses edges", mapped_720, CropState{{67, 33, 1066, 600}, true});
+  expect_bool("2/3 mapped x0 is round(100*1280/1920)", mapped_720.rect.x == video_filter_state::map_crop_edge(100, 1920, 1280), true);
+  expect_bool("2/3 mapped x1 is round(1700*1280/1920)", mapped_720.rect.x + mapped_720.rect.w == video_filter_state::map_crop_edge(1700, 1920, 1280), true);
+  const CropState mapped_wide = video_filter_state::map_crop_state(hd_crop, 1920, 1080, 1920, 800);
+  expect_crop("different aspect preserves normalized y edges", mapped_wide, CropState{{100, 37, 1600, 667}, true});
+  expect_crop("disabled source maps to disabled dest", video_filter_state::map_crop_state(no_crop, 1920, 1080, 3840, 2160), no_crop);
+  const CropState overflowing = video_filter_state::map_crop_state({{10, 10, 3000, 2000}, true}, 1920, 1080, 640, 360);
+  expect_bool("mapped crop stays inside dest x", overflowing.rect.x >= 0 && overflowing.rect.x + overflowing.rect.w <= 640, true);
+  expect_bool("mapped crop stays inside dest y", overflowing.rect.y >= 0 && overflowing.rect.y + overflowing.rect.h <= 360, true);
+  expect_bool("mapped crop keeps min size", overflowing.rect.w >= 2 && overflowing.rect.h >= 2, true);
+
+  video_filter_state::CropTarget sized[4];
+  sized[kLeft].width = 1920;
+  sized[kLeft].height = 1080;
+  sized[kRight0].width = 3840;
+  sized[kRight0].height = 2160;
+  sized[kRight1].width = 1920;
+  sized[kRight1].height = 1080;
+  sized[kRight2].width = 1280;
+  sized[kRight2].height = 720;
+  sized[kLeft].crop = hd_crop;
+  sized[kLeft].history = {hd_crop};
+  sized[kRight0].crop = right_a;
+  sized[kRight0].history = {right_a};
+  sized[kRight1].crop = right_b;
+  sized[kRight1].history = {right_b};
+  std::vector<video_filter_state::CropOperation> sized_ops;
+  expect_bool("Shift+O maps left crop to each right's size", video_filter_state::copy_crop(sized, sized_ops, CropCopyRequest::LeftToAllRights, false, kLeft, kRight0, 3, 0), true);
+  expect_crop("Shift+O 3840 dest is 2x", sized[kRight0].crop, CropState{{200, 100, 3200, 1800}, true});
+  expect_crop("Shift+O same-size dest is identical", sized[kRight1].crop, hd_crop);
+  expect_crop("Shift+O 1280 dest is edge-mapped", sized[kRight2].crop, mapped_720);
+  expect_crop("Shift+O leaves source left", sized[kLeft].crop, hd_crop);
+  expect_bool("undo sized Shift+O", video_filter_state::undo_last_crop_operation(sized, sized_ops), true);
+  expect_crop("undo sized Shift+O restores Right 0 pixels", sized[kRight0].crop, right_a);
+  expect_crop("undo sized Shift+O restores Right 1 pixels", sized[kRight1].crop, right_b);
+  expect_crop("undo sized Shift+O restores Right 2 none", sized[kRight2].crop, no_crop);
+
+  sized[kRight1].crop = hd_crop;
+  sized[kRight1].history = {right_b, hd_crop};
+  expect_bool("swapped Shift+O maps selected right across sizes", video_filter_state::copy_crop(sized, sized_ops, CropCopyRequest::LeftToAllRights, true, kLeft, kRight0, 3, 1), true);
+  expect_crop("swapped Shift+O left same-size stays identical", sized[kLeft].crop, hd_crop);
+  expect_crop("swapped Shift+O Right 0 is 2x", sized[kRight0].crop, CropState{{200, 100, 3200, 1800}, true});
+  expect_crop("swapped Shift+O source Right 1 unchanged", sized[kRight1].crop, hd_crop);
+  expect_crop("swapped Shift+O Right 2 is edge-mapped", sized[kRight2].crop, mapped_720);
+  expect_bool("undo swapped sized Shift+O", video_filter_state::undo_last_crop_operation(sized, sized_ops), true);
+  expect_crop("undo swapped sized Shift+O restores Right 0", sized[kRight0].crop, right_a);
+  expect_crop("undo swapped sized Shift+O leaves Right 1", sized[kRight1].crop, hd_crop);
+
+  sized[kRight1].crop = right_b;
+  sized[kRight1].history = {right_b};
+  expect_bool("Shift+I maps current right onto left", video_filter_state::copy_crop(sized, sized_ops, CropCopyRequest::ActiveRightToLeft, false, kLeft, kRight0, 3, 1), true);
+  expect_crop("Shift+I same-size left received Right 1", sized[kLeft].crop, right_b);
+  expect_bool("undo sized Shift+I", video_filter_state::undo_last_crop_operation(sized, sized_ops), true);
+  expect_crop("undo sized Shift+I restores left pixels", sized[kLeft].crop, hd_crop);
+  expect_bool("swapped Shift+I maps left onto 3840 right", video_filter_state::copy_crop(sized, sized_ops, CropCopyRequest::ActiveRightToLeft, true, kLeft, kRight0, 3, 0), true);
+  expect_crop("swapped Shift+I Right 0 received 2x left", sized[kRight0].crop, CropState{{200, 100, 3200, 1800}, true});
+  expect_crop("swapped Shift+I leaves left", sized[kLeft].crop, hd_crop);
+  expect_bool("undo swapped sized Shift+I", video_filter_state::undo_last_crop_operation(sized, sized_ops), true);
+  expect_crop("undo swapped sized Shift+I restores Right 0 pixels", sized[kRight0].crop, right_a);
+
+  // Crop-space is the pre-crop insertion size. A destination whose post-filter
+  // output is 1280x720 must still map against 1920x1080 crop-space.
+  video_filter_state::CropTarget post_scale[2];
+  post_scale[kLeft].width = 1920;
+  post_scale[kLeft].height = 1080;
+  post_scale[kLeft].crop = hd_crop;
+  post_scale[kLeft].history = {hd_crop};
+  post_scale[kRight0].width = 1920;
+  post_scale[kRight0].height = 1080;
+  std::vector<video_filter_state::CropOperation> post_scale_ops;
+  expect_bool("copy onto dest whose post-filter output is smaller still uses crop-space", video_filter_state::copy_crop(post_scale, post_scale_ops, CropCopyRequest::LeftToAllRights, false, kLeft, kRight0, 1, 0), true);
+  expect_crop("post-filter dest maps in 1920x1080 crop-space, not 1280x720 output", post_scale[kRight0].crop, hd_crop);
+  expect_bool("1280 dest mapping would have been a different rect", !video_filter_state::crop_states_equal(post_scale[kRight0].crop, mapped_720), true);
 
   const auto swap_l = video_filter_state::resolve_interactive_crop_targets(true, false, true, 1);
   expect_bool("Shift+L + swap applies to logical right", swap_l.apply_to_right, true);

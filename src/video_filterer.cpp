@@ -1,4 +1,5 @@
 #include "video_filterer.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -41,6 +42,8 @@ VideoFilterer::VideoFilterer(const Side& side,
       tone_mapping_mode_(tone_mapping_mode),
       width_(video_decoder->width()),
       height_(video_decoder->height()),
+      crop_space_width_(std::max(1, static_cast<int>(video_decoder->width()))),
+      crop_space_height_(std::max(1, static_cast<int>(video_decoder->height()))),
       pixel_format_(video_decoder->pixel_format()),
       color_space_(video_decoder->color_space()),
       color_range_(video_decoder->color_range()),
@@ -298,6 +301,10 @@ int VideoFilterer::init_filters() {
     if ((ret = avfilter_graph_parse_ptr(filter_graph_, filters.c_str(), &inputs, &outputs, nullptr)) >= 0) {
       ret = avfilter_graph_config(filter_graph_, nullptr);
     }
+
+    if (ret >= 0) {
+      capture_crop_space_dimensions();
+    }
   }
 
   avfilter_inout_free(&inputs);
@@ -424,6 +431,16 @@ size_t VideoFilterer::dest_height() const {
 
 AVPixelFormat VideoFilterer::dest_pixel_format() const {
   return static_cast<AVPixelFormat>(buffersink_ctx_->inputs[0]->format);
+}
+
+void VideoFilterer::capture_crop_space_dimensions() {
+  const std::pair<int, int> space = video_filter_state::crop_space_from_configured_chain(buffersrc_ctx_, buffersink_ctx_, video_filter_state::count_linear_filter_instances(pre_filter_description_), width_, height_);
+  crop_space_width_ = space.first;
+  crop_space_height_ = space.second;
+}
+
+std::pair<int, int> VideoFilterer::crop_space_dimensions() const {
+  return {crop_space_width_, crop_space_height_};
 }
 
 void VideoFilterer::mark_filter_changed() {

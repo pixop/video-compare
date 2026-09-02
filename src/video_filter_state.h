@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -29,6 +31,8 @@ namespace video_filter_state {
 struct CropTarget {
   CropState crop;
   std::vector<CropState> history;
+  int width{0};
+  int height{0};
 };
 
 using CropOperation = std::vector<size_t>;
@@ -66,6 +70,46 @@ inline bool record_crop_if_changed(std::vector<CropState>& history, const CropSt
   }
   history.push_back(applied);
   return true;
+}
+
+constexpr int kMinCropDimension = 2;
+
+// Same rounding as Shift+B stretch mapping in VideoCompare / conversion_geometry.
+inline int map_crop_edge(const int edge, const int source_extent, const int dest_extent) {
+  if (source_extent == dest_extent) {
+    return edge;
+  }
+  return static_cast<int>(std::llround(static_cast<double>(edge) * dest_extent / source_extent));
+}
+
+inline CropState map_crop_state(const CropState& source, const int source_width, const int source_height, const int dest_width, const int dest_height) {
+  if (!source.enabled) {
+    return {};
+  }
+  if (source_width <= 0 || source_height <= 0 || dest_width <= 0 || dest_height <= 0) {
+    return source;
+  }
+  if (source_width == dest_width && source_height == dest_height) {
+    return source;
+  }
+
+  int x0 = map_crop_edge(source.rect.x, source_width, dest_width);
+  int y0 = map_crop_edge(source.rect.y, source_height, dest_height);
+  int x1 = map_crop_edge(source.rect.x + source.rect.w, source_width, dest_width);
+  int y1 = map_crop_edge(source.rect.y + source.rect.h, source_height, dest_height);
+
+  x0 = std::max(0, std::min(x0, dest_width - kMinCropDimension));
+  y0 = std::max(0, std::min(y0, dest_height - kMinCropDimension));
+  x1 = std::max(x0 + kMinCropDimension, std::min(x1, dest_width));
+  y1 = std::max(y0 + kMinCropDimension, std::min(y1, dest_height));
+
+  CropState mapped;
+  mapped.enabled = true;
+  mapped.rect.x = x0;
+  mapped.rect.y = y0;
+  mapped.rect.w = x1 - x0;
+  mapped.rect.h = y1 - y0;
+  return mapped;
 }
 
 inline CropState compose_mapped_crop(const CropState& previous, const CropRect& mapped) {
@@ -240,11 +284,54 @@ bool copy_crop(Target* targets,
   } else if (!plan.dest_is_left) {
     destinations.push_back(first_right_index + plan.dest_right_index);
   }
-  return apply_crop_to_indices(targets, operations, destinations.data(), destinations.size(), targets[source_index].crop);
+
+  CropOperation changed;
+  const CropState source_crop = targets[source_index].crop;
+  for (const size_t dest_index : destinations) {
+    const CropState mapped = map_crop_state(source_crop, targets[source_index].width, targets[source_index].height, targets[dest_index].width, targets[dest_index].height);
+    if (push_crop(targets[dest_index], mapped)) {
+      changed.push_back(dest_index);
+    }
+  }
+  if (changed.empty()) {
+    return false;
+  }
+  operations.push_back(changed);
+  return true;
 }
 
 inline std::string crop_filter(const CropRect& rect) {
   return "crop=" + std::to_string(rect.w) + ":" + std::to_string(rect.h) + ":" + std::to_string(rect.x) + ":" + std::to_string(rect.y);
+}
+
+// Top-level comma-separated filter instances in a linear graph fragment.
+// Quotes and backslash escapes are respected so option values may contain commas.
+inline int count_linear_filter_instances(const std::string& description) {
+  if (description.empty()) {
+    return 0;
+  }
+
+  int count = 1;
+  bool escaped = false;
+  bool in_single_quote = false;
+  for (const char ch : description) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch == '\\') {
+      escaped = true;
+      continue;
+    }
+    if (ch == '\'') {
+      in_single_quote = !in_single_quote;
+      continue;
+    }
+    if (ch == ',' && !in_single_quote) {
+      ++count;
+    }
+  }
+  return count;
 }
 
 inline std::string compose_filters(const std::string& pre_filters, const std::string& post_filters, const CropRect& rect, const bool crop_enabled) {

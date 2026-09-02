@@ -297,6 +297,24 @@ std::vector<FilterDump> parse_display_filters(const std::string& output) {
   return dumps;
 }
 
+CropState crop_state_from_token(const std::string& token) {
+  CropState state;
+  int width = 0;
+  int height = 0;
+  int x = 0;
+  int y = 0;
+  if (std::sscanf(token.c_str(), "crop=%d:%d:%d:%d", &width, &height, &x, &y) == 4) {
+    state.enabled = true;
+    state.rect = {x, y, width, height};
+  }
+  return state;
+}
+
+std::string mapped_crop_token(const std::string& source_token, const int source_w, const int source_h, const int dest_w, const int dest_h) {
+  const CropState mapped = video_filter_state::map_crop_state(crop_state_from_token(source_token), source_w, source_h, dest_w, dest_h);
+  return mapped.enabled ? video_filter_state::crop_filter(mapped.rect) : std::string();
+}
+
 std::string crop_token(const std::string& filters) {
   const size_t start = filters.find("crop=");
   if (start == std::string::npos) {
@@ -1076,6 +1094,11 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       const std::string crop_b = crop_token(dumps[2].right);
       const std::string crop_c = crop_token(dumps[3].right);
       const std::string crop_d = crop_token(dumps[21].right);
+      const std::string crop_a_640 = mapped_crop_token(crop_a, 320, 180, 640, 360);
+      const std::string crop_a_160 = mapped_crop_token(crop_a, 320, 180, 160, 90);
+      const std::string crop_b_320 = mapped_crop_token(crop_b, 320, 180, 320, 180);
+      const std::string crop_b_640 = mapped_crop_token(crop_b, 320, 180, 640, 360);
+      const std::string crop_b_160 = mapped_crop_token(crop_b, 320, 180, 160, 90);
 
       if (crop_a.empty() || crop_b.empty() || crop_c.empty() || crop_d.empty()) {
         fail_crop("interactive crops did not appear in the effective filter chain");
@@ -1095,38 +1118,38 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
         fail_crop("selecting Right 1 did not report right=2");
       } else if (crop_token(dumps[0].right) != "" || crop_token(dumps[2].left) != crop_a) {
         fail_crop("left crop leaked onto R0, or left changed while cropping R1");
-      } else if (crop_token(dumps[4].left) != crop_a || crop_token(dumps[4].right) != crop_a) {
-        fail_crop("normal Shift+O did not copy left crop onto R0, or changed left");
+      } else if (crop_token(dumps[4].left) != crop_a || crop_token(dumps[4].right) != crop_a_640) {
+        fail_crop("normal Shift+O did not map left crop onto 640x360 R0, or changed left");
       } else if (crop_token(dumps[5].left) != crop_a || crop_token(dumps[5].right) != crop_a) {
-        fail_crop("normal Shift+O did not copy left crop onto R1");
-      } else if (crop_token(dumps[6].left) != crop_a || crop_token(dumps[6].right) != crop_a) {
-        fail_crop("normal Shift+O did not copy left crop onto R2");
+        fail_crop("normal Shift+O did not copy left crop onto same-size R1");
+      } else if (crop_token(dumps[6].left) != crop_a || crop_token(dumps[6].right) != crop_a_160) {
+        fail_crop("normal Shift+O did not map left crop onto 160x90 R2");
       } else if (crop_token(dumps[7].left) != crop_a || crop_token(dumps[7].right) != crop_c) {
         fail_crop("undo Shift+O did not restore R0's previous crop, or changed left");
       } else if (crop_token(dumps[8].left) != crop_a || crop_token(dumps[8].right) != crop_b) {
         fail_crop("undo Shift+O did not restore R1's previous crop");
       } else if (crop_token(dumps[9].left) != crop_a || crop_token(dumps[9].right) != "") {
         fail_crop("undo Shift+O did not restore R2 to uncropped");
-      } else if (crop_token(dumps[10].left) != crop_b || crop_token(dumps[10].right) != crop_b) {
+      } else if (crop_token(dumps[10].left) != crop_b_320 || crop_token(dumps[10].right) != crop_b) {
         fail_crop("swapped Shift+O did not copy R1 crop onto logical left, or changed the R1 source");
-      } else if (crop_token(dumps[11].left) != crop_b || crop_token(dumps[11].right) != crop_b) {
-        fail_crop("swapped Shift+O did not copy R1 crop onto R0");
-      } else if (crop_token(dumps[12].left) != crop_b || crop_token(dumps[12].right) != crop_b) {
-        fail_crop("swapped Shift+O did not copy R1 crop onto R2");
+      } else if (crop_token(dumps[11].left) != crop_b_320 || crop_token(dumps[11].right) != crop_b_640) {
+        fail_crop("swapped Shift+O did not map R1 crop onto 640x360 R0");
+      } else if (crop_token(dumps[12].left) != crop_b_320 || crop_token(dumps[12].right) != crop_b_160) {
+        fail_crop("swapped Shift+O did not map R1 crop onto 160x90 R2");
       } else if (crop_token(dumps[13].left) != crop_a || crop_token(dumps[13].right) != crop_c) {
         fail_crop("undo swapped Shift+O did not restore left/R0");
       } else if (crop_token(dumps[14].left) != crop_a || crop_token(dumps[14].right) != crop_b) {
         fail_crop("undo swapped Shift+O changed the R1 source");
       } else if (crop_token(dumps[15].left) != crop_a || crop_token(dumps[15].right) != "") {
         fail_crop("undo swapped Shift+O did not restore R2");
-      } else if (crop_token(dumps[16].left) != crop_b || crop_token(dumps[16].right) != crop_b) {
+      } else if (crop_token(dumps[16].left) != crop_b_320 || crop_token(dumps[16].right) != crop_b) {
         fail_crop("Shift+I normal did not copy R1 crop onto logical left");
-      } else if (crop_token(dumps[17].left) != crop_b || crop_token(dumps[17].right) != crop_c) {
+      } else if (crop_token(dumps[17].left) != crop_b_320 || crop_token(dumps[17].right) != crop_c) {
         fail_crop("Shift+I normal changed R0, or left was not the only destination");
       } else if (crop_token(dumps[18].left) != crop_a || crop_token(dumps[18].right) != crop_b) {
         fail_crop("undo Shift+I normal did not restore only logical left");
-      } else if (crop_token(dumps[19].left) != crop_a || crop_token(dumps[19].right) != crop_a) {
-        fail_crop("Shift+I swapped did not copy logical left onto R0");
+      } else if (crop_token(dumps[19].left) != crop_a || crop_token(dumps[19].right) != crop_a_640) {
+        fail_crop("Shift+I swapped did not map logical left onto 640x360 R0");
       } else if (crop_token(dumps[20].left) != crop_a || crop_token(dumps[20].right) != crop_c) {
         fail_crop("undo Shift+I swapped did not restore only R0");
       } else if (crop_token(dumps[21].left) != crop_a || crop_token(dumps[21].right) != crop_d) {
@@ -1138,7 +1161,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       } else if (crop_token(dumps[24].left) != crop_a || crop_token(dumps[24].right) != crop_b) {
         fail_crop("undo after selecting R2 did not restore R1");
       } else {
-        std::printf("PASS crop-copy wired Shift+O/I and Backspace through the real filter chain (A=%s B=%s C=%s D=%s)\n", crop_a.c_str(), crop_b.c_str(), crop_c.c_str(), crop_d.c_str());
+        std::printf("PASS crop-copy wired normalized Shift+O/I (A=%s A640=%s A160=%s B=%s C=%s D=%s)\n", crop_a.c_str(), crop_a_640.c_str(), crop_a_160.c_str(), crop_b.c_str(), crop_c.c_str(), crop_d.c_str());
       }
     }
   }

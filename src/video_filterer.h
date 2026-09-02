@@ -1,6 +1,8 @@
 #pragma once
+#include <algorithm>
 #include <atomic>
 #include <mutex>
+#include <utility>
 #include "config.h"
 #include "core_types.h"
 #include "demuxer.h"
@@ -10,9 +12,41 @@
 #include "video_filter_state.h"
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavfilter/avfilter.h>
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
 }
+
+namespace video_filter_state {
+
+// Output of the pre-filter chain on an already-configured linear graph:
+// buffersrc -> [pre-filters] -> [crop?] -> [post-filters] -> buffersink.
+// Walks only the pre-filter links, so crop presence and post-filter geometry
+// cannot change the result.
+inline std::pair<int, int> crop_space_from_configured_chain(AVFilterContext* buffersrc, AVFilterContext* buffersink, const int pre_filter_count, const int fallback_width, const int fallback_height) {
+  int width = std::max(1, fallback_width);
+  int height = std::max(1, fallback_height);
+  if (buffersrc == nullptr || buffersrc->nb_outputs == 0 || buffersrc->outputs[0] == nullptr) {
+    return {width, height};
+  }
+
+  AVFilterLink* link = buffersrc->outputs[0];
+  width = std::max(1, link->w);
+  height = std::max(1, link->h);
+
+  for (int i = 0; i < pre_filter_count; ++i) {
+    if (link->dst == nullptr || link->dst == buffersink || link->dst->nb_outputs == 0 || link->dst->outputs[0] == nullptr) {
+      break;
+    }
+    link = link->dst->outputs[0];
+    width = std::max(1, link->w);
+    height = std::max(1, link->h);
+  }
+
+  return {width, height};
+}
+
+}  // namespace video_filter_state
 
 class VideoFilterer : public SideAware {
  public:
@@ -48,6 +82,9 @@ class VideoFilterer : public SideAware {
   size_t dest_width() const;
   size_t dest_height() const;
   AVPixelFormat dest_pixel_format() const;
+  // Pre-crop insertion size (after pre-filters, before crop/post-filters).
+  // Independent of whether a crop is currently enabled.
+  std::pair<int, int> crop_space_dimensions() const;
 
   bool set_crop_rect(const CropRect* rect);
   bool set_crop_state(const CropState& state);
@@ -56,6 +93,7 @@ class VideoFilterer : public SideAware {
 
  private:
   int init_filters();
+  void capture_crop_space_dimensions();
 
   void mark_filter_changed();
 
@@ -68,6 +106,8 @@ class VideoFilterer : public SideAware {
 
   int width_;
   int height_;
+  int crop_space_width_;
+  int crop_space_height_;
   AVPixelFormat pixel_format_;
   AVColorSpace color_space_;
   AVColorRange color_range_;
