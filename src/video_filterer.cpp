@@ -9,6 +9,7 @@
 #include "string_utils.h"
 #include "video_filter_context.h"
 #include "video_filter_state.h"
+#include "video_filterer_classify.h"
 
 static constexpr char VIDEO_FILTER_GROUP_DELIMITER = '|';
 
@@ -244,6 +245,7 @@ void VideoFilterer::init() {
 }
 
 void VideoFilterer::free() {
+  interactive_crop_supported_ = false;
   avfilter_graph_free(&filter_graph_);
 }
 
@@ -253,6 +255,8 @@ void VideoFilterer::reinit() {
 }
 
 int VideoFilterer::init_filters() {
+  interactive_crop_supported_ = false;
+
   AVFilterInOut* outputs = avfilter_inout_alloc();
   AVFilterInOut* inputs = avfilter_inout_alloc();
 
@@ -304,6 +308,7 @@ int VideoFilterer::init_filters() {
 
     if (ret >= 0) {
       capture_crop_space_dimensions();
+      capture_interactive_crop_support();
     }
   }
 
@@ -441,6 +446,14 @@ void VideoFilterer::capture_crop_space_dimensions() {
 
 std::pair<int, int> VideoFilterer::crop_space_dimensions() const {
   return {crop_space_width_, crop_space_height_};
+}
+
+void VideoFilterer::capture_interactive_crop_support() {
+  interactive_crop_supported_ = video_filterer_detail::interactive_crop_supported_from_configured_chain(buffersrc_ctx_, buffersink_ctx_, video_filter_state::count_linear_filter_instances(pre_filter_description_), crop_.enabled);
+}
+
+bool VideoFilterer::interactive_crop_supported() const {
+  return interactive_crop_supported_;
 }
 
 void VideoFilterer::mark_filter_changed() {

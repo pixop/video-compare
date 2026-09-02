@@ -675,12 +675,11 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
 
     const int side_w = std::max(1, static_cast<int>(video_filterers_[side]->dest_width()));
     const int side_h = std::max(1, static_cast<int>(video_filterers_[side]->dest_height()));
-    const int src_w = std::max(1, static_cast<int>(video_filterers_[side]->src_width()));
-    const int src_h = std::max(1, static_cast<int>(video_filterers_[side]->src_height()));
+    const std::pair<int, int> crop_space = video_filterers_[side]->crop_space_dimensions();
     if (canvas_width_ == 0 || canvas_height_ == 0) {
       return result;
     }
-    if (side_w < kMinCropDimension || side_h < kMinCropDimension || src_w < kMinCropDimension || src_h < kMinCropDimension) {
+    if (side_w < kMinCropDimension || side_h < kMinCropDimension || crop_space.first < kMinCropDimension || crop_space.second < kMinCropDimension) {
       return result;
     }
     const auto clamp_to = [](const int value, const int min_value, const int max_value) { return std::max(min_value, std::min(value, max_value)); };
@@ -716,19 +715,14 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
     }
 
     const CropState previous = video_filter_state::current_crop_from_history(crop_history_[side]);
-    const CropState composed_state = video_filter_state::compose_mapped_crop(previous, {mapped.x, mapped.y, mapped.w, mapped.h});
-    SDL_Rect composed{composed_state.rect.x, composed_state.rect.y, composed_state.rect.w, composed_state.rect.h};
-    composed.x = clamp_to(composed.x, 0, src_w - kMinCropDimension);
-    composed.y = clamp_to(composed.y, 0, src_h - kMinCropDimension);
-    composed.w = std::min(std::max(kMinCropDimension, composed.w), src_w - composed.x);
-    composed.h = std::min(std::max(kMinCropDimension, composed.h), src_h - composed.y);
-    if (composed.w < kMinCropDimension || composed.h < kMinCropDimension) {
+    const CropState composed_state = video_filter_state::map_display_rect_to_crop_space({mapped.x, mapped.y, mapped.w, mapped.h}, side_w, side_h, previous, crop_space.first, crop_space.second);
+    if (composed_state.rect.w < kMinCropDimension || composed_state.rect.h < kMinCropDimension) {
       return result;
     }
 
     result.valid = true;
     result.mapped = mapped;
-    result.composed = composed;
+    result.composed = {composed_state.rect.x, composed_state.rect.y, composed_state.rect.w, composed_state.rect.h};
     return result;
   };
 
@@ -747,6 +741,19 @@ bool VideoCompare::handle_pending_crop_request(const Side& active_right) {
     return undo_last_crop_operation();
   } else if (crop_request.valid) {
     const bool apply_both = crop_targets.apply_to_left && crop_targets.apply_to_right;
+    const bool left_supported = !crop_targets.apply_to_left || (video_filterers_.find(resolved_left_side) != video_filterers_.end() && video_filterers_.at(resolved_left_side)->interactive_crop_supported());
+    const bool right_supported = !crop_targets.apply_to_right || (video_filterers_.find(resolved_right_side) != video_filterers_.end() && video_filterers_.at(resolved_right_side)->interactive_crop_supported());
+    if (!left_supported || !right_supported) {
+      if (crop_request.apply_left && crop_request.apply_right) {
+        display_->notify_user("Cannot apply crop: post-filters change spatial coordinates");
+      } else if (crop_request.apply_left) {
+        display_->notify_user("Cannot crop left: post-filters change spatial coordinates");
+      } else {
+        display_->notify_user("Cannot crop right: post-filters change spatial coordinates");
+      }
+      return false;
+    }
+
     const PreparedSideCrop left_prep = crop_targets.apply_to_left ? prepare_crop_for_side(resolved_left_side) : PreparedSideCrop{};
     const PreparedSideCrop right_prep = crop_targets.apply_to_right ? prepare_crop_for_side(resolved_right_side) : PreparedSideCrop{};
 

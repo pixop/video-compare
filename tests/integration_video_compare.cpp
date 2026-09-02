@@ -22,7 +22,7 @@
 
 namespace {
 
-enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync, FrameNavigation, BufferForwardOnly, BufferPingPong, SeekBurstForward, SeekBurstMixed, CropCopy };
+enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync, FrameNavigation, BufferForwardOnly, BufferPingPong, SeekBurstForward, SeekBurstMixed, CropCopy, InteractiveCrop };
 
 std::atomic<int> events_pushed{0};
 std::atomic<bool> watchdog_fired{false};
@@ -62,6 +62,8 @@ const char* scenario_name(const Scenario scenario) {
       return "seek-burst-mixed";
     case Scenario::CropCopy:
       return "crop-copy";
+    case Scenario::InteractiveCrop:
+      return "interactive-crop";
   }
   return "unknown";
 }
@@ -76,6 +78,9 @@ int watchdog_ticks_for(const Scenario scenario) {
   // crop-copy walks several crop/copy/undo/Shift+X rounds after the shared settle.
   if (scenario == Scenario::CropCopy) {
     return 400;
+  }
+  if (scenario == Scenario::InteractiveCrop) {
+    return 250;
   }
   return is_stress_scenario(scenario) ? 250 : 120;
 }
@@ -728,6 +733,27 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     dump_display_filters();
     select_right_video(1);
     dump_display_filters();
+  } else if (scenario == Scenario::InteractiveCrop) {
+    // Left dest is 160x90 after post-scale; right dest stays 320x180. Canvas
+    // is 320x180. The same window drag must become crop=120:80:20:20 in
+    // 320x180 crop-space, not dest-space crop=60:40:10:10.
+    const int x0 = 20, y0 = 20, x1 = 140, y1 = 100;
+
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(400);
+
+    dump_display_filters();
+    interactive_crop(SDLK_b, SDL_SCANCODE_B, x0, y0, x1, y1);
+    dump_display_filters();
+    interactive_crop(SDLK_l, SDL_SCANCODE_L, x0, y0, x1, y1);
+    dump_display_filters();
+    undo_last_crop();
+    dump_display_filters();
+    interactive_crop(SDLK_r, SDL_SCANCODE_R, x0, y0, x1, y1);
+    dump_display_filters();
+    toggle_swap();
+    interactive_crop(SDLK_l, SDL_SCANCODE_L, x0, y0, x1, y1);
+    dump_display_filters();
   }
 
   push_quit();
@@ -769,10 +795,14 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   reset_helper_counters();
 
   VideoCompareConfig config = make_config(resolved);
-  if (scenario == Scenario::SyncMismatch || scenario == Scenario::MultiRightSync || scenario == Scenario::CropCopy) {
+  if (scenario == Scenario::SyncMismatch || scenario == Scenario::MultiRightSync || scenario == Scenario::CropCopy || scenario == Scenario::InteractiveCrop) {
     // Auto fps= would otherwise lift 25 fps to 30 and hide the sync path.
     // crop-copy also wants a clean Shift+X chain so crop= is the only extra filter.
     config.disable_auto_filters = true;
+  }
+  if (scenario == Scenario::InteractiveCrop) {
+    config.left.video_filters = "scale=160:90";
+    config.right_videos[0].video_filters = "hflip";
   }
   if (scenario == Scenario::BufferForwardOnly || scenario == Scenario::BufferPingPong) {
     // 3 slots: newest / middle / oldest. Smallest history that still has
@@ -1164,6 +1194,69 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
         std::printf("PASS crop-copy wired normalized Shift+O/I (A=%s A640=%s A160=%s B=%s C=%s D=%s)\n", crop_a.c_str(), crop_a_640.c_str(), crop_a_160.c_str(), crop_b.c_str(), crop_c.c_str(), crop_d.c_str());
       }
     }
+  } else if (scenario == Scenario::InteractiveCrop) {
+    const std::vector<FilterDump> dumps = parse_display_filters(output);
+    print_filter_dumps(dumps);
+
+    auto fail_crop = [&](const char* message) {
+      std::fprintf(stderr, "FAIL interactive-crop: %s\n", message);
+      std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
+      exit_code = EXIT_FAILURE;
+    };
+
+    // dump 0 initial
+    // dump 1 after refused Shift+B
+    // dump 2 after Shift+L
+    // dump 3 after Backspace
+    // dump 4 after refused Shift+R
+    // dump 5 after Swap + refused Shift+L
+    constexpr size_t kExpectedDumps = 6;
+    if (dumps.size() < kExpectedDumps) {
+      fail_crop("expected 6 Shift+X filter dumps");
+    } else if (output.find("Cannot apply crop: post-filters change spatial coordinates") == std::string::npos) {
+      fail_crop("Shift+B did not notify that post-filters change spatial coordinates");
+    } else if (output.find("Cannot crop right: post-filters change spatial coordinates") == std::string::npos) {
+      fail_crop("Shift+R did not notify using the visual right side");
+    } else if (output.find("Cannot crop left: post-filters change spatial coordinates") == std::string::npos) {
+      fail_crop("swapped Shift+L did not notify using the visual left side");
+    } else {
+      const std::string left0 = crop_token(dumps[0].left);
+      const std::string right0 = crop_token(dumps[0].right);
+      const std::string left_b = crop_token(dumps[1].left);
+      const std::string right_b = crop_token(dumps[1].right);
+      const std::string left_l = crop_token(dumps[2].left);
+      const std::string right_l = crop_token(dumps[2].right);
+      const std::string left_undo = crop_token(dumps[3].left);
+      const std::string right_undo = crop_token(dumps[3].right);
+      const std::string left_r = crop_token(dumps[4].left);
+      const std::string right_r = crop_token(dumps[4].right);
+      const std::string left_swap = crop_token(dumps[5].left);
+      const std::string right_swap = crop_token(dumps[5].right);
+
+      if (left0 != "" || right0 != "") {
+        fail_crop("initial filters already contained an application crop");
+      } else if (left_b != "" || right_b != "") {
+        fail_crop("Shift+B changed a crop state when one side is unsupported");
+      } else if (dumps[1].left != dumps[0].left || dumps[1].right != dumps[0].right) {
+        fail_crop("Shift+B changed filter chains");
+      } else if (left_l != "crop=120:80:20:20") {
+        fail_crop("Shift+L did not emit crop=120:80:20:20 in 320x180 crop-space");
+      } else if (left_l == "crop=60:40:10:10") {
+        fail_crop("Shift+L used dest-space 160x90 instead of crop-space");
+      } else if (dumps[2].left.find("scale=160:90") == std::string::npos) {
+        fail_crop("Shift+L lost the post-scale filter");
+      } else if (right_l != "") {
+        fail_crop("Shift+L changed the unsupported right crop");
+      } else if (left_undo != "" || right_undo != "") {
+        fail_crop("Backspace did not restore the pre-Shift+L crop state");
+      } else if (left_r != "" || right_r != "") {
+        fail_crop("Shift+R changed crop state on an unsupported right");
+      } else if (left_swap != "" || right_swap != "") {
+        fail_crop("swapped Shift+L changed crop state");
+      } else {
+        std::printf("PASS interactive-crop post-scale Shift+L and atomic Shift+B\n");
+      }
+    }
   }
 
   if (exit_code == EXIT_SUCCESS) {
@@ -1187,6 +1280,7 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "  %s seek-burst-forward LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s seek-burst-mixed LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s crop-copy LEFT RIGHT0 RIGHT1 RIGHT2\n", argv0);
+  std::fprintf(stderr, "  %s interactive-crop LEFT RIGHT\n", argv0);
 }
 
 }  // namespace
@@ -1287,6 +1381,13 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::CropCopy, files);
+    }
+    if (name == "interactive-crop") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::InteractiveCrop, files);
     }
   } catch (const std::exception& exception) {
     std::fprintf(stderr, "FAIL %s\n", exception.what());

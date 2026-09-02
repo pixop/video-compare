@@ -3,7 +3,6 @@
 #include <atomic>
 #include <mutex>
 #include <utility>
-#include "config.h"
 #include "core_types.h"
 #include "demuxer.h"
 #include "side_aware.h"
@@ -85,6 +84,7 @@ class VideoFilterer : public SideAware {
   // Pre-crop insertion size (after pre-filters, before crop/post-filters).
   // Independent of whether a crop is currently enabled.
   std::pair<int, int> crop_space_dimensions() const;
+  bool interactive_crop_supported() const;
 
   bool set_crop_rect(const CropRect* rect);
   bool set_crop_state(const CropState& state);
@@ -94,6 +94,7 @@ class VideoFilterer : public SideAware {
  private:
   int init_filters();
   void capture_crop_space_dimensions();
+  void capture_interactive_crop_support();
 
   void mark_filter_changed();
 
@@ -108,6 +109,7 @@ class VideoFilterer : public SideAware {
   int height_;
   int crop_space_width_;
   int crop_space_height_;
+  bool interactive_crop_supported_{false};
   AVPixelFormat pixel_format_;
   AVColorSpace color_space_;
   AVColorRange color_range_;

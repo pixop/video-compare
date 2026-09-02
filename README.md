@@ -235,6 +235,7 @@ see all supported options.
 - `Shift+L`: Crop left video interactively
 - `Shift+R`: Crop right video interactively
 - `Shift+B`: Crop both videos to the same area
+  Interactive crop maps through post-resizing filters such as `scale`. Post-filters that alter spatial coordinates (for example `crop`, `pad`, `transpose`, or `rotate`) cannot be interactively inverted; place those filters before the crop point using the pre-filter form (`filters|`) when interactive cropping is needed.
 - `Shift+D`: Decode and advance one frame
 - `Shift+A`: Seek to the previous frame (best with intra-frame formats)
 - `Shift+M`: Cycle display mode

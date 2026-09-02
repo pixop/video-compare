@@ -161,6 +161,34 @@ int main() {
   expect_crop("stacked interactive crop is previous plus mapped", stacked, CropState{{14, 25, 20, 10}, true});
   expect_crop("first interactive crop uses mapped rect", video_filter_state::compose_mapped_crop(no_crop, {10, 20, 300, 200}), left_crop);
 
+  const CropRect display_hd_sel{480, 270, 960, 540};
+  expect_crop("display map identity dest==crop-space", video_filter_state::map_display_rect_to_crop_space(display_hd_sel, 1920, 1080, no_crop, 1920, 1080), CropState{{480, 270, 960, 540}, true});
+  expect_crop("display map post-scale 25-75 percent", video_filter_state::map_display_rect_to_crop_space({320, 180, 640, 360}, 1280, 720, no_crop, 1920, 1080), CropState{{480, 270, 960, 540}, true});
+  const CropState existing_extent{{200, 100, 1000, 500}, true};
+  expect_crop("display map existing crop plus post-scale middle 50", video_filter_state::map_display_rect_to_crop_space({320, 180, 640, 360}, 1280, 720, existing_extent, 1920, 1080), CropState{{450, 225, 500, 250}, true});
+  expect_crop("display map identity dest==current extent", video_filter_state::map_display_rect_to_crop_space({40, 20, 200, 100}, 1000, 500, existing_extent, 1920, 1080), CropState{{240, 120, 200, 100}, true});
+  expect_crop("display map clips to current extent", video_filter_state::map_display_rect_to_crop_space({0, 0, 1280, 720}, 1280, 720, existing_extent, 1920, 1080), existing_extent);
+  expect_crop("display map no-current-crop uses full crop-space", video_filter_state::map_display_rect_to_crop_space({0, 0, 1280, 720}, 1280, 720, no_crop, 1920, 1080), CropState{{0, 0, 1920, 1080}, true});
+  const int round_x0 = video_filter_state::map_crop_edge(1, 1280, 1920);
+  const int round_x1 = video_filter_state::map_crop_edge(11, 1280, 1920);
+  const int round_y0 = video_filter_state::map_crop_edge(1, 720, 1080);
+  const int round_y1 = video_filter_state::map_crop_edge(11, 720, 1080);
+  expect_crop("display map rounds edges with llround", video_filter_state::map_display_rect_to_crop_space({1, 1, 10, 10}, 1280, 720, no_crop, 1920, 1080), CropState{{round_x0, round_y0, round_x1 - round_x0, round_y1 - round_y0}, true});
+  expect_crop("display map anisotropic dest", video_filter_state::map_display_rect_to_crop_space({100, 50, 1600, 700}, 1920, 800, no_crop, 1920, 1080),
+             CropState{{100, video_filter_state::map_crop_edge(50, 800, 1080), 1600, video_filter_state::map_crop_edge(750, 800, 1080) - video_filter_state::map_crop_edge(50, 800, 1080)}, true});
+  const CropState tiny = video_filter_state::map_display_rect_to_crop_space({0, 0, 1, 1}, 1280, 720, no_crop, 1920, 1080);
+  expect_bool("display map keeps min 2x2", tiny.rect.w >= 2 && tiny.rect.h >= 2, true);
+  const CropState overflow = video_filter_state::map_display_rect_to_crop_space({0, 0, 1280, 720}, 1280, 720, {{1800, 1000, 200, 100}, true}, 1920, 1080);
+  expect_bool("display map stays inside crop-space x", overflow.rect.x >= 0 && overflow.rect.x + overflow.rect.w <= 1920, true);
+  expect_bool("display map stays inside crop-space y", overflow.rect.y >= 0 && overflow.rect.y + overflow.rect.h <= 1080, true);
+  expect_crop("display map pre-transpose crop-space is not src-clamped", video_filter_state::map_display_rect_to_crop_space({0, 0, 1080, 1920}, 1080, 1920, no_crop, 1080, 1920), CropState{{0, 0, 1080, 1920}, true});
+
+  const CropRect both_canvas_on_left{20, 20, 120, 80};
+  const CropRect both_canvas_on_right{40, 40, 240, 160};
+  expect_crop("Shift+B left maps independently", video_filter_state::map_display_rect_to_crop_space(both_canvas_on_left, 320, 180, no_crop, 320, 180), CropState{{20, 20, 120, 80}, true});
+  expect_crop("Shift+B right maps independently", video_filter_state::map_display_rect_to_crop_space(both_canvas_on_right, 640, 360, no_crop, 640, 360), CropState{{40, 40, 240, 160}, true});
+  expect_crop("Shift+B right with existing crop uses that extent", video_filter_state::map_display_rect_to_crop_space({0, 0, 320, 180}, 320, 180, {{10, 10, 300, 160}, true}, 640, 360), CropState{{10, 10, 300, 160}, true});
+
   video_filter_state::CropTarget left_before_empty_rights[1];
   left_before_empty_rights[0].crop = left_crop;
   left_before_empty_rights[0].history = {left_crop};

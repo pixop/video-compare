@@ -1,3 +1,4 @@
+#define SDL_MAIN_HANDLED
 #include "video_filterer.h"
 #include <cstdio>
 #include <cstdlib>
@@ -5,6 +6,7 @@
 #include <string>
 #include <utility>
 #include "video_filter_state.h"
+#include "video_filterer_classify.h"
 extern "C" {
 #include <libavutil/error.h>
 }
@@ -122,6 +124,20 @@ static std::pair<int, int> crop_space(const ConfiguredGraph& graph, const std::s
   return video_filter_state::crop_space_from_configured_chain(graph.src, graph.sink, video_filter_state::count_linear_filter_instances(pre_filters), src_w, src_h);
 }
 
+static bool crop_supported(const ConfiguredGraph& graph, const std::string& pre_filters, const bool app_crop_enabled) {
+  return video_filterer_detail::interactive_crop_supported_from_configured_chain(graph.src, graph.sink, video_filter_state::count_linear_filter_instances(pre_filters), app_crop_enabled);
+}
+
+static bool try_build_graph(const int width, const int height, const std::string& filters, ConfiguredGraph* built) {
+  try {
+    *built = build_graph(width, height, filters);
+    return true;
+  } catch (const std::exception& exception) {
+    std::printf("SKIP graph '%s': %s\n", filters.c_str(), exception.what());
+    return false;
+  }
+}
+
 int main() {
   const int src_w = 1920;
   const int src_h = 1080;
@@ -180,6 +196,76 @@ int main() {
     expect_pair("pre-scale without post matches dest", crop_space(pre, "scale=1280:720", src_w, src_h), 1280, 720);
     expect_pair("pre-scale dest", dest_size(pre), 1280, 720);
     free_graph(pre);
+
+    const std::string scale_post = video_filter_state::compose_filters("", "scale=1280:720", {}, false);
+    const std::string scale_post_crop = video_filter_state::compose_filters("", "scale=1280:720", hd_crop.rect, true);
+    ConfiguredGraph scale_off = build_graph(src_w, src_h, scale_post);
+    ConfiguredGraph scale_on = build_graph(src_w, src_h, scale_post_crop);
+    expect_bool("post scale is supported without app crop", crop_supported(scale_off, "", false), true);
+    expect_bool("post scale is supported with app crop", crop_supported(scale_on, "", true), true);
+    expect_bool("app crop does not change scale support", crop_supported(scale_off, "", false) == crop_supported(scale_on, "", true), true);
+    free_graph(scale_off);
+    free_graph(scale_on);
+
+    ConfiguredGraph format_g = build_graph(src_w, src_h, video_filter_state::compose_filters("", "format=yuv420p", {}, false));
+    expect_bool("post format is supported", crop_supported(format_g, "", false), true);
+    free_graph(format_g);
+
+    ConfiguredGraph setsar_g = build_graph(src_w, src_h, video_filter_state::compose_filters("", "setsar=1", {}, false));
+    expect_bool("post setsar is supported", crop_supported(setsar_g, "", false), true);
+    free_graph(setsar_g);
+
+    ConfiguredGraph hflip_g = build_graph(src_w, src_h, video_filter_state::compose_filters("", "hflip", {}, false));
+    ConfiguredGraph hflip_crop = build_graph(src_w, src_h, video_filter_state::compose_filters("", "hflip", hd_crop.rect, true));
+    expect_bool("post hflip is unsupported", crop_supported(hflip_g, "", false), false);
+    expect_bool("app crop does not change hflip support", crop_supported(hflip_g, "", false) == crop_supported(hflip_crop, "", true), true);
+    free_graph(hflip_g);
+    free_graph(hflip_crop);
+
+    ConfiguredGraph transpose_post = build_graph(src_w, src_h, video_filter_state::compose_filters("", "transpose=clock", {}, false));
+    expect_bool("post transpose is unsupported", crop_supported(transpose_post, "", false), false);
+    free_graph(transpose_post);
+
+    ConfiguredGraph pad_g = build_graph(src_w, src_h, video_filter_state::compose_filters("", "pad=2000:1200:40:60", {}, false));
+    expect_bool("post pad is unsupported", crop_supported(pad_g, "", false), false);
+    free_graph(pad_g);
+
+    ConfiguredGraph user_crop = build_graph(src_w, src_h, video_filter_state::compose_filters("", "crop=100:80:10:20", {}, false));
+    expect_bool("post user crop is unsupported", crop_supported(user_crop, "", false), false);
+    free_graph(user_crop);
+
+    ConfiguredGraph eq_g = build_graph(src_w, src_h, video_filter_state::compose_filters("", "eq=contrast=1", {}, false));
+    expect_bool("unknown same-size eq is supported", crop_supported(eq_g, "", false), true);
+    free_graph(eq_g);
+
+    ConfiguredGraph zscale_g;
+    if (avfilter_get_by_name("zscale") != nullptr && try_build_graph(src_w, src_h, video_filter_state::compose_filters("", "zscale=w=1280:h=720", {}, false), &zscale_g)) {
+      expect_bool("post zscale is supported", crop_supported(zscale_g, "", false), true);
+      free_graph(zscale_g);
+    } else {
+      std::printf("SKIP zscale not available\n");
+    }
+
+    ConfiguredGraph tile_g;
+    if (try_build_graph(src_w, src_h, video_filter_state::compose_filters("", "tile=2x1", {}, false), &tile_g)) {
+      expect_bool("unknown dimension-changing tile is unsupported", crop_supported(tile_g, "", false), false);
+      free_graph(tile_g);
+    }
+
+    const std::string pre_clock = "transpose=clock";
+    ConfiguredGraph pre_clock_g = build_graph(src_w, src_h, video_filter_state::compose_filters(pre_clock, "", {}, false));
+    expect_pair("pre transpose crop-space is 1080x1920", crop_space(pre_clock_g, pre_clock, src_w, src_h), src_h, src_w);
+    expect_bool("pre transpose does not clamp crop-space to decoded src", crop_space(pre_clock_g, pre_clock, src_w, src_h) != std::make_pair(src_w, src_h), true);
+    expect_bool("empty post after pre transpose is supported", crop_supported(pre_clock_g, pre_clock, false), true);
+    const CropState pre_clock_sel = video_filter_state::map_display_rect_to_crop_space({0, 0, src_h, src_w}, src_h, src_w, {}, src_h, src_w);
+    expect_crop("pre-transpose geometry uses full crop-space", pre_clock_sel, CropState{{0, 0, src_h, src_w}, true});
+    free_graph(pre_clock_g);
+
+    ConfiguredGraph branch_g;
+    if (try_build_graph(src_w, src_h, "split[a][b];[a][b]hstack", &branch_g)) {
+      expect_bool("non-linear post chain is unsupported", crop_supported(branch_g, "", false), false);
+      free_graph(branch_g);
+    }
   } catch (const std::exception& exception) {
     std::fprintf(stderr, "FAIL graph setup: %s\n", exception.what());
     return EXIT_FAILURE;

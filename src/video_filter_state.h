@@ -112,6 +112,56 @@ inline CropState map_crop_state(const CropState& source, const int source_width,
   return mapped;
 }
 
+// Display-space rectangle (already mapped onto dest) -> absolute crop-space.
+// dest == current extent is an identity path so ordinary no-post-resize
+// interactive crop keeps today's pixel rectangles.
+inline CropState map_display_rect_to_crop_space(const CropRect& display_rect, const int dest_width, const int dest_height, const CropState& current, const int crop_space_width, const int crop_space_height) {
+  const int space_w = std::max(1, crop_space_width);
+  const int space_h = std::max(1, crop_space_height);
+
+  int base_x = 0;
+  int base_y = 0;
+  int base_w = space_w;
+  int base_h = space_h;
+  if (current.enabled) {
+    base_x = current.rect.x;
+    base_y = current.rect.y;
+    base_w = current.rect.w;
+    base_h = current.rect.h;
+  }
+
+  CropRect mapped = display_rect;
+  if (dest_width != base_w || dest_height != base_h) {
+    if (dest_width > 0 && dest_height > 0 && base_w > 0 && base_h > 0) {
+      int x0 = map_crop_edge(display_rect.x, dest_width, base_w);
+      int y0 = map_crop_edge(display_rect.y, dest_height, base_h);
+      int x1 = map_crop_edge(display_rect.x + display_rect.w, dest_width, base_w);
+      int y1 = map_crop_edge(display_rect.y + display_rect.h, dest_height, base_h);
+      x0 = std::max(0, std::min(x0, base_w - kMinCropDimension));
+      y0 = std::max(0, std::min(y0, base_h - kMinCropDimension));
+      x1 = std::max(x0 + kMinCropDimension, std::min(x1, base_w));
+      y1 = std::max(y0 + kMinCropDimension, std::min(y1, base_h));
+      mapped.x = x0;
+      mapped.y = y0;
+      mapped.w = x1 - x0;
+      mapped.h = y1 - y0;
+    }
+  }
+
+  CropState out;
+  out.enabled = true;
+  out.rect.x = base_x + mapped.x;
+  out.rect.y = base_y + mapped.y;
+  out.rect.w = mapped.w;
+  out.rect.h = mapped.h;
+
+  out.rect.x = std::max(0, std::min(out.rect.x, space_w - kMinCropDimension));
+  out.rect.y = std::max(0, std::min(out.rect.y, space_h - kMinCropDimension));
+  out.rect.w = std::min(std::max(kMinCropDimension, out.rect.w), space_w - out.rect.x);
+  out.rect.h = std::min(std::max(kMinCropDimension, out.rect.h), space_h - out.rect.y);
+  return out;
+}
+
 inline CropState compose_mapped_crop(const CropState& previous, const CropRect& mapped) {
   CropState next;
   next.enabled = true;
