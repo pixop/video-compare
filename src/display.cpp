@@ -3454,23 +3454,8 @@ void Display::handle_event(const SDL_Event& event) {
           }
           break;
         case SDLK_i:
-          if (is_shift_down) {
-            commit_crop_selection_for_copy();
-            pending_crop_copy_.request = CropCopyRequest::ActiveRightToLeft;
-            pending_crop_copy_.right_target_index = active_right_index_;
-            pending_crop_copy_.swap_left_right = swap_left_right_;
-          } else {
-            fast_input_alignment_ = !fast_input_alignment_;
-            notify_user(string_sprintf("Input alignment resizing filter set to '%s' (takes effect for the next decoded frame)", fast_input_alignment_ ? "BILINEAR (fast)" : "BICUBIC (high-quality)"));
-          }
-          break;
-        case SDLK_o:
-          if (is_shift_down) {
-            commit_crop_selection_for_copy();
-            pending_crop_copy_.request = CropCopyRequest::LeftToAllRights;
-            pending_crop_copy_.right_target_index = active_right_index_;
-            pending_crop_copy_.swap_left_right = swap_left_right_;
-          }
+          fast_input_alignment_ = !fast_input_alignment_;
+          notify_user(string_sprintf("Input alignment resizing filter set to '%s' (takes effect for the next decoded frame)", fast_input_alignment_ ? "BILINEAR (fast)" : "BICUBIC (high-quality)"));
           break;
         case SDLK_t:
           bilinear_texture_filtering_ = !bilinear_texture_filtering_;
@@ -3571,7 +3556,12 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         }
         case SDLK_r:
-          if (is_shift_down) {
+          if (is_ctrl_down && is_shift_down) {
+            commit_crop_selection_for_copy();
+            pending_crop_copy_.request = CropCopyRequest::ActiveRightToLeft;
+            pending_crop_copy_.right_target_index = active_right_index_;
+            pending_crop_copy_.swap_left_right = swap_left_right_;
+          } else if (is_shift_down) {
             toggle_crop_mode_for_side(CropTargetSide::Right);
           } else if (is_ctrl_down) {
             pending_crop_clear_.request = CropClearRequest::VisualRight;
@@ -3607,7 +3597,12 @@ void Display::handle_event(const SDL_Event& event) {
           possibly_tick_playback_ = true;
           break;
         case SDLK_l:
-          if (is_shift_down) {
+          if (is_ctrl_down && is_shift_down) {
+            commit_crop_selection_for_copy();
+            pending_crop_copy_.request = CropCopyRequest::LeftToAllRights;
+            pending_crop_copy_.right_target_index = active_right_index_;
+            pending_crop_copy_.swap_left_right = swap_left_right_;
+          } else if (is_shift_down) {
             toggle_crop_mode_for_side(CropTargetSide::Left);
           } else if (is_ctrl_down) {
             pending_crop_clear_.request = CropClearRequest::VisualLeft;

@@ -231,11 +231,11 @@ see all supported options.
 - `Alt+Enter`: Toggle fullscreen
 - `Shift+L`: Crop left video interactively
 - `Ctrl+L`: Clear crop on left video
+- `Ctrl+Shift+L`: Copy left crop to all right videos
 - `Shift+R`: Crop right video interactively
 - `Ctrl+R`: Clear crop on right video
+- `Ctrl+Shift+R`: Copy right crop to left
 - `Shift+B`: Crop both videos to the same area
-- `Shift+O`: Copy left crop to all right videos
-- `Shift+I`: Copy right crop to left
 - `Backspace`: Undo last crop operation
 - `Shift+D`: Decode and advance one frame
 - `Shift+A`: Seek to the previous frame (best with intra-frame formats)
