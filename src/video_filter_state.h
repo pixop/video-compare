@@ -276,15 +276,18 @@ inline CropCopyPlan resolve_crop_copy(const CropCopyRequest request, const bool 
       if (!selected.valid) {
         return {};
       }
+      // Visual left is the selected right; copy only onto the visual right
+      // (logical left). Other logical rights stay unchanged.
       plan.source_is_left = false;
       plan.source_right_index = selected.index;
+      plan.copy_to_all_rights = false;
+      plan.dest_is_left = true;
     } else {
       plan.source_is_left = true;
+      plan.copy_to_all_rights = true;
+      plan.dest_is_left = false;
     }
     plan.valid = true;
-    plan.copy_to_all_rights = true;
-    // After Swap the visual right is the logical left; include it so the on-screen pair updates.
-    plan.dest_is_left = swap_left_right;
     return plan;
   }
 

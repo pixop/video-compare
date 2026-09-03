@@ -885,7 +885,7 @@ bool VideoCompare::handle_pending_crop_copy() {
   }
 
   if (pending.request == CropCopyRequest::LeftToAllRights) {
-    display_->notify_user("Copied left crop to all other videos");
+    display_->notify_user("Copied left crop to all right videos");
   } else {
     display_->notify_user("Copied right crop to left");
   }

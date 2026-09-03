@@ -227,6 +227,7 @@ void interactive_crop(const SDL_Keycode side_key, const SDL_Scancode side_scanco
 }
 
 void copy_visual_left_crop_to_others() {
+  // Shift+O: visual-left crop -> right-side video(s). After Swap that is only the visual right.
   push_keydown(SDLK_o, SDL_SCANCODE_O, 0, KMOD_SHIFT);
   wait_for_filter_refresh();
 }
@@ -684,7 +685,8 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     select_right_video(2);
     dump_display_filters();
 
-    // 2. Swapped Shift+O: R1 on visual left is the source.
+    // 2. Swapped Shift+O: R1 on visual left is the source. Only the visual
+    //    right (logical left) is a destination.
     select_right_video(1);
     toggle_swap();
     copy_visual_left_crop_to_others();
@@ -1095,9 +1097,9 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     // dump  7 after undo, R0
     // dump  8 after undo, R1
     // dump  9 after undo, R2
-    // dump 10 swapped Shift+O, R1 (source)
-    // dump 11 swapped Shift+O, R0
-    // dump 12 swapped Shift+O, R2
+    // dump 10 swapped Shift+O, R1 (source); only visual right / logical left updated
+    // dump 11 swapped Shift+O, R0 unchanged
+    // dump 12 swapped Shift+O, R2 unchanged
     // dump 13 swapped undo, R0
     // dump 14 swapped undo, R1
     // dump 15 swapped undo, R2
@@ -1113,7 +1115,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     constexpr size_t kExpectedDumps = 25;
     if (dumps.size() < kExpectedDumps) {
       fail_crop("expected 25 Shift+X filter dumps");
-    } else if (output.find("Copied left crop to all other videos") == std::string::npos) {
+    } else if (output.find("Copied left crop to all right videos") == std::string::npos) {
       fail_crop("normal/swapped Shift+O did not notify");
     } else if (output.find("Copied right crop to left") == std::string::npos) {
       fail_crop("Shift+I did not notify");
@@ -1161,17 +1163,17 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       } else if (crop_token(dumps[9].left) != crop_a || crop_token(dumps[9].right) != "") {
         fail_crop("undo Shift+O did not restore R2 to uncropped");
       } else if (crop_token(dumps[10].left) != crop_b_320 || crop_token(dumps[10].right) != crop_b) {
-        fail_crop("swapped Shift+O did not copy R1 crop onto logical left, or changed the R1 source");
-      } else if (crop_token(dumps[11].left) != crop_b_320 || crop_token(dumps[11].right) != crop_b_640) {
-        fail_crop("swapped Shift+O did not map R1 crop onto 640x360 R0");
-      } else if (crop_token(dumps[12].left) != crop_b_320 || crop_token(dumps[12].right) != crop_b_160) {
-        fail_crop("swapped Shift+O did not map R1 crop onto 160x90 R2");
+        fail_crop("swapped Shift+O did not copy R1 crop onto visual right (logical left), or changed the R1 source");
+      } else if (crop_token(dumps[11].left) != crop_b_320 || crop_token(dumps[11].right) != crop_c) {
+        fail_crop("swapped Shift+O changed R0, or lost the visual-right copy");
+      } else if (crop_token(dumps[12].left) != crop_b_320 || crop_token(dumps[12].right) != "") {
+        fail_crop("swapped Shift+O changed R2, or lost the visual-right copy");
       } else if (crop_token(dumps[13].left) != crop_a || crop_token(dumps[13].right) != crop_c) {
-        fail_crop("undo swapped Shift+O did not restore left/R0");
+        fail_crop("undo swapped Shift+O did not restore left, or changed R0");
       } else if (crop_token(dumps[14].left) != crop_a || crop_token(dumps[14].right) != crop_b) {
         fail_crop("undo swapped Shift+O changed the R1 source");
       } else if (crop_token(dumps[15].left) != crop_a || crop_token(dumps[15].right) != "") {
-        fail_crop("undo swapped Shift+O did not restore R2");
+        fail_crop("undo swapped Shift+O changed R2");
       } else if (crop_token(dumps[16].left) != crop_b_320 || crop_token(dumps[16].right) != crop_b) {
         fail_crop("Shift+I normal did not copy R1 crop onto logical left");
       } else if (crop_token(dumps[17].left) != crop_b_320 || crop_token(dumps[17].right) != crop_c) {

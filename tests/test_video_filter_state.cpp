@@ -342,16 +342,25 @@ int main() {
   expect_crop("undo sized Shift+O restores Right 1 pixels", sized[kRight1].crop, right_b);
   expect_crop("undo sized Shift+O restores Right 2 none", sized[kRight2].crop, no_crop);
 
+  sized[kLeft].crop = right_b;
+  sized[kLeft].history = {hd_crop, right_b};
   sized[kRight1].crop = hd_crop;
   sized[kRight1].history = {right_b, hd_crop};
-  expect_bool("swapped Shift+O maps selected right across sizes", video_filter_state::copy_crop(sized, sized_ops, CropCopyRequest::LeftToAllRights, true, kLeft, kRight0, 3, 1), true);
-  expect_crop("swapped Shift+O left same-size stays identical", sized[kLeft].crop, hd_crop);
-  expect_crop("swapped Shift+O Right 0 is 2x", sized[kRight0].crop, CropState{{200, 100, 3200, 1800}, true});
+  const CropState sized_right0_before_swap_o = sized[kRight0].crop;
+  const size_t sized_right0_history_before_swap_o = sized[kRight0].history.size();
+  expect_bool("swapped Shift+O maps selected right onto visual right only", video_filter_state::copy_crop(sized, sized_ops, CropCopyRequest::LeftToAllRights, true, kLeft, kRight0, 3, 1), true);
+  expect_crop("swapped Shift+O visual right received source crop", sized[kLeft].crop, hd_crop);
+  expect_crop("swapped Shift+O does not copy onto other rights", sized[kRight0].crop, sized_right0_before_swap_o);
+  expect_size("swapped Shift+O does not push history on other rights", sized[kRight0].history.size(), sized_right0_history_before_swap_o);
   expect_crop("swapped Shift+O source Right 1 unchanged", sized[kRight1].crop, hd_crop);
-  expect_crop("swapped Shift+O Right 2 is edge-mapped", sized[kRight2].crop, mapped_720);
+  expect_crop("swapped Shift+O leaves unselected Right 2", sized[kRight2].crop, no_crop);
   expect_bool("undo swapped sized Shift+O", video_filter_state::undo_last_crop_operation(sized, sized_ops), true);
-  expect_crop("undo swapped sized Shift+O restores Right 0", sized[kRight0].crop, right_a);
+  expect_crop("undo swapped sized Shift+O restores visual right", sized[kLeft].crop, right_b);
+  expect_crop("undo swapped sized Shift+O leaves Right 0", sized[kRight0].crop, sized_right0_before_swap_o);
   expect_crop("undo swapped sized Shift+O leaves Right 1", sized[kRight1].crop, hd_crop);
+
+  sized[kLeft].crop = hd_crop;
+  sized[kLeft].history = {hd_crop};
 
   sized[kRight1].crop = right_b;
   sized[kRight1].history = {right_b};
@@ -415,8 +424,8 @@ int main() {
   const auto o_swap = video_filter_state::resolve_crop_copy(CropCopyRequest::LeftToAllRights, true, 1, 3);
   expect_bool("Shift+O swapped source is current right", o_swap.source_is_left, false);
   expect_size("Shift+O swapped source is snapshotted Right 1", o_swap.source_right_index, 1);
-  expect_bool("Shift+O swapped destinations stay all rights", o_swap.copy_to_all_rights, true);
-  expect_bool("Shift+O swapped also copies to visual right (logical left)", o_swap.dest_is_left, true);
+  expect_bool("Shift+O swapped destinations are not all rights", o_swap.copy_to_all_rights, false);
+  expect_bool("Shift+O swapped copies only onto visual right (logical left)", o_swap.dest_is_left, true);
   expect_bool("Shift+O normal does not copy onto logical left", o_normal.dest_is_left, false);
   const auto i_normal = video_filter_state::resolve_crop_copy(CropCopyRequest::ActiveRightToLeft, false, 1, 3);
   expect_bool("Shift+I normal source is current right", i_normal.source_is_left, false);
@@ -433,6 +442,7 @@ int main() {
   expect_bool("deferred Shift+O keeps snapshotted Swap source as current right", deferred_o_plan.source_is_left, false);
   expect_size("deferred Shift+O keeps snapshotted Right 1", deferred_o_plan.source_right_index, 1);
   expect_bool("deferred Shift+O keeps snapshotted visual-right dest", deferred_o_plan.dest_is_left, true);
+  expect_bool("deferred Shift+O does not copy onto other rights", deferred_o_plan.copy_to_all_rights, false);
   expect_bool("later live unswap would have used logical left as source", deferred_o_if_live.source_is_left, true);
   expect_bool("later live unswap would not copy onto logical left", deferred_o_if_live.dest_is_left, false);
   const PendingCropCopy deferred_i{CropCopyRequest::ActiveRightToLeft, 1, true};
@@ -449,7 +459,10 @@ int main() {
   expect_bool("visual seed left", video_filter_state::apply_crop_to_indices(visual, visual_ops, left_only, 1, left_crop), true);
   expect_bool("visual seed Right 0 A", video_filter_state::apply_crop_to_indices(visual, visual_ops, right0_only, 1, right_a), true);
   expect_bool("visual seed Right 1 B", video_filter_state::apply_crop_to_indices(visual, visual_ops, right1_only, 1, right_b), true);
+  const size_t left_history_before_swap_o = visual[kLeft].history.size();
+  const size_t right0_history_before_swap_o = visual[kRight0].history.size();
   const size_t right1_history_before_swap_o = visual[kRight1].history.size();
+  const size_t right2_history_before_swap_o = visual[kRight2].history.size();
 
   expect_bool("Shift+O normal copies logical left to all rights", video_filter_state::copy_crop(visual, visual_ops, CropCopyRequest::LeftToAllRights, false, kLeft, kRight0, 3, 0), true);
   expect_operation("Shift+O normal records all rights", visual_ops.back(), {kRight0, kRight1, kRight2});
@@ -463,18 +476,21 @@ int main() {
   expect_crop("Shift+O normal undo restores Right 2", visual[kRight2].crop, no_crop);
   expect_crop("Shift+O normal undo leaves left", visual[kLeft].crop, left_crop);
 
-  expect_bool("Shift+O swapped copies current right to all rights", video_filter_state::copy_crop(visual, visual_ops, CropCopyRequest::LeftToAllRights, true, kLeft, kRight0, 3, 1), true);
-  expect_operation("Shift+O swapped records visual right plus other rights", visual_ops.back(), {kLeft, kRight0, kRight2});
+  expect_bool("Shift+O swapped copies visual left onto visual right only", video_filter_state::copy_crop(visual, visual_ops, CropCopyRequest::LeftToAllRights, true, kLeft, kRight0, 3, 1), true);
+  expect_operation("Shift+O swapped records visual right only", visual_ops.back(), {kLeft});
   expect_crop("Shift+O swapped visual right (logical left) received source crop", visual[kLeft].crop, right_b);
-  expect_crop("Shift+O swapped Right 0 received Right 1 crop", visual[kRight0].crop, right_b);
+  expect_crop("Shift+O swapped leaves other Right 0", visual[kRight0].crop, right_a);
   expect_crop("Shift+O swapped source Right 1 unchanged", visual[kRight1].crop, right_b);
-  expect_crop("Shift+O swapped Right 2 received Right 1 crop", visual[kRight2].crop, right_b);
+  expect_crop("Shift+O swapped leaves other Right 2", visual[kRight2].crop, no_crop);
+  expect_size("Shift+O swapped records visual right (logical left)", visual[kLeft].history.size(), left_history_before_swap_o + 1);
+  expect_size("Shift+O swapped does not push history on other Right 0", visual[kRight0].history.size(), right0_history_before_swap_o);
   expect_size("Shift+O swapped does not push history on source right", visual[kRight1].history.size(), right1_history_before_swap_o);
+  expect_size("Shift+O swapped does not push history on other Right 2", visual[kRight2].history.size(), right2_history_before_swap_o);
   expect_bool("undo Shift+O swapped after later swap/selection", video_filter_state::undo_last_crop_operation(visual, visual_ops), true);
   expect_crop("Shift+O swapped undo restores left", visual[kLeft].crop, left_crop);
-  expect_crop("Shift+O swapped undo restores Right 0", visual[kRight0].crop, right_a);
+  expect_crop("Shift+O swapped undo leaves Right 0", visual[kRight0].crop, right_a);
   expect_crop("Shift+O swapped undo leaves source Right 1", visual[kRight1].crop, right_b);
-  expect_crop("Shift+O swapped undo restores Right 2", visual[kRight2].crop, no_crop);
+  expect_crop("Shift+O swapped undo leaves Right 2", visual[kRight2].crop, no_crop);
 
   expect_bool("Shift+I normal copies current right to left", video_filter_state::copy_crop(visual, visual_ops, CropCopyRequest::ActiveRightToLeft, false, kLeft, kRight0, 3, 0), true);
   expect_operation("Shift+I normal records left only", visual_ops.back(), {kLeft});

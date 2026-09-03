@@ -232,7 +232,7 @@ see all supported options.
 - `Shift+L`: Crop left video interactively
 - `Shift+R`: Crop right video interactively
 - `Shift+B`: Crop both videos to the same area
-- `Shift+O`: Copy left crop to all other videos
+- `Shift+O`: Copy left crop to all right videos
 - `Shift+I`: Copy right crop to left
 - `Backspace`: Undo last crop operation
 - `Shift+D`: Decode and advance one frame
