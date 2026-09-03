@@ -895,6 +895,36 @@ bool VideoCompare::handle_pending_crop_copy() {
   return true;
 }
 
+bool VideoCompare::handle_pending_crop_clear() {
+  const PendingCropClear pending = display_->get_and_clear_pending_crop_clear();
+  if (pending.request == CropClearRequest::None) {
+    return false;
+  }
+
+  const video_filter_state::CropClearPlan plan = video_filter_state::resolve_crop_clear(pending.request, pending.swap_left_right, pending.right_target_index, right_video_info_.size());
+  if (!plan.valid) {
+    return false;
+  }
+
+  const Side dest = plan.dest_is_left ? LEFT : Side::Right(plan.dest_right_index);
+  if (video_filterers_.find(dest) == video_filterers_.end()) {
+    return false;
+  }
+  if (!push_crop_state_to_side(dest, CropState{})) {
+    return false;
+  }
+
+  if (pending.request == CropClearRequest::VisualLeft) {
+    display_->notify_user("Cleared left crop");
+  } else {
+    display_->notify_user("Cleared right crop");
+  }
+
+  record_crop_operation({dest});
+  scope_update_state_.reset();
+  return true;
+}
+
 std::vector<Side> VideoCompare::consume_filter_changes() {
   std::vector<Side> changed_sides;
   for (const auto& pair : video_filterers_) {
@@ -1118,8 +1148,8 @@ void VideoCompare::compare() {
 
       bool skip_update = false;
 
-      // handle pending crop request / crop copy
-      const bool force_seek_current_position = handle_pending_crop_request(active_right) || handle_pending_crop_copy();
+      // handle pending crop request / crop copy / crop clear
+      const bool force_seek_current_position = handle_pending_crop_request(active_right) || handle_pending_crop_copy() || handle_pending_crop_clear();
 
       const int shift_right_frames = display_->get_shift_right_frames();
 

@@ -152,6 +152,7 @@ class VideoCompare {
 
   bool handle_pending_crop_request(const Side& active_right);
   bool handle_pending_crop_copy();
+  bool handle_pending_crop_clear();
   bool push_crop_state_to_side(const Side& dest, const CropState& source);
   bool pop_crop_state_from_side(const Side& dest);
   bool undo_last_crop_operation();

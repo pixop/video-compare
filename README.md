@@ -230,7 +230,9 @@ see all supported options.
 - `F3`: Toggle Waveform window
 - `Alt+Enter`: Toggle fullscreen
 - `Shift+L`: Crop left video interactively
+- `Ctrl+L`: Clear crop on left video
 - `Shift+R`: Crop right video interactively
+- `Ctrl+R`: Clear crop on right video
 - `Shift+B`: Crop both videos to the same area
 - `Shift+O`: Copy left crop to all right videos
 - `Shift+I`: Copy right crop to left

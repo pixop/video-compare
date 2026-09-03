@@ -191,7 +191,7 @@ void push_mouse_button(const Uint32 type, const int x, const int y) {
 }
 
 void wait_for_filter_refresh() {
-  // Crop/copy/undo force a same-position seek and filter rebuild. Shift+X
+  // Crop/copy/clear/undo force a same-position seek and filter rebuild. Shift+X
   // reads Display metadata, which updates only after the new frames refresh.
   sleep_ms(700);
 }
@@ -234,6 +234,18 @@ void copy_visual_left_crop_to_others() {
 
 void copy_visual_right_crop_to_left() {
   push_keydown(SDLK_i, SDL_SCANCODE_I, 0, KMOD_SHIFT);
+  wait_for_filter_refresh();
+}
+
+void clear_visual_left_crop() {
+  // Ctrl+L: clear the video currently displayed on the left.
+  push_keydown(SDLK_l, SDL_SCANCODE_L, 0, KMOD_CTRL);
+  wait_for_filter_refresh();
+}
+
+void clear_visual_right_crop() {
+  // Ctrl+R: clear the video currently displayed on the right.
+  push_keydown(SDLK_r, SDL_SCANCODE_R, 0, KMOD_CTRL);
   wait_for_filter_refresh();
 }
 
@@ -735,6 +747,31 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     dump_display_filters();
     select_right_video(1);
     dump_display_filters();
+
+    // 5. Ctrl+L/R follow visual sides and only the displayed video.
+    clear_visual_left_crop();
+    dump_display_filters();
+    undo_last_crop();
+    clear_visual_right_crop();
+    dump_display_filters();
+    select_right_video(0);
+    dump_display_filters();
+    undo_last_crop();
+    select_right_video(1);
+    dump_display_filters();
+
+    toggle_swap();
+    clear_visual_left_crop();
+    dump_display_filters();
+    select_right_video(0);
+    dump_display_filters();
+    undo_last_crop();
+    select_right_video(1);
+    clear_visual_right_crop();
+    dump_display_filters();
+    undo_last_crop();
+    dump_display_filters();
+    toggle_swap();
   } else if (scenario == Scenario::InteractiveCrop) {
     // Left dest is 160x90 after post-scale; right dest stays 320x180. Canvas
     // is 320x180. The same window drag must become crop=120:80:20:20 in
@@ -1112,13 +1149,23 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     // dump 22 R2 after R1 recrop
     // dump 23 after undo while R2 selected
     // dump 24 R1 after that undo
-    constexpr size_t kExpectedDumps = 25;
+    // dump 25 Ctrl+L, R1 (left cleared)
+    // dump 26 Ctrl+R, R1 (R1 cleared)
+    // dump 27 Ctrl+R, R0 unchanged
+    // dump 28 undo Ctrl+R, R1 restored
+    // dump 29 swapped Ctrl+L, R1 cleared; left unchanged
+    // dump 30 swapped Ctrl+L, R0 unchanged
+    // dump 31 swapped Ctrl+R, left cleared; R1 unchanged
+    // dump 32 undo swapped Ctrl+R, left restored
+    constexpr size_t kExpectedDumps = 33;
     if (dumps.size() < kExpectedDumps) {
-      fail_crop("expected 25 Shift+X filter dumps");
+      fail_crop("expected 33 Shift+X filter dumps");
     } else if (output.find("Copied left crop to all right videos") == std::string::npos) {
       fail_crop("normal/swapped Shift+O did not notify");
     } else if (output.find("Copied right crop to left") == std::string::npos) {
       fail_crop("Shift+I did not notify");
+    } else if (output.find("Cleared left crop") == std::string::npos || output.find("Cleared right crop") == std::string::npos) {
+      fail_crop("Ctrl+L/R did not notify");
     } else if (output.find("Active right video: 2/3") == std::string::npos || output.find("Active right video: 3/3") == std::string::npos) {
       fail_crop("did not select Right 1 and Right 2");
     } else {
@@ -1192,8 +1239,24 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
         fail_crop("undo after selecting R2 changed R2");
       } else if (crop_token(dumps[24].left) != crop_a || crop_token(dumps[24].right) != crop_b) {
         fail_crop("undo after selecting R2 did not restore R1");
+      } else if (crop_token(dumps[25].left) != "" || crop_token(dumps[25].right) != crop_b) {
+        fail_crop("Ctrl+L did not clear only logical left");
+      } else if (crop_token(dumps[26].left) != crop_a || crop_token(dumps[26].right) != "") {
+        fail_crop("Ctrl+R did not clear only R1, or undo did not restore left");
+      } else if (crop_token(dumps[27].left) != crop_a || crop_token(dumps[27].right) != crop_c) {
+        fail_crop("Ctrl+R changed R0");
+      } else if (crop_token(dumps[28].left) != crop_a || crop_token(dumps[28].right) != crop_b) {
+        fail_crop("undo Ctrl+R did not restore R1");
+      } else if (crop_token(dumps[29].left) != crop_a || crop_token(dumps[29].right) != "") {
+        fail_crop("swapped Ctrl+L did not clear only R1");
+      } else if (crop_token(dumps[30].left) != crop_a || crop_token(dumps[30].right) != crop_c) {
+        fail_crop("swapped Ctrl+L changed R0");
+      } else if (crop_token(dumps[31].left) != "" || crop_token(dumps[31].right) != crop_b) {
+        fail_crop("swapped Ctrl+R did not clear only logical left, or undo did not restore R1");
+      } else if (crop_token(dumps[32].left) != crop_a || crop_token(dumps[32].right) != crop_b) {
+        fail_crop("undo swapped Ctrl+R did not restore left");
       } else {
-        std::printf("PASS crop-copy wired normalized Shift+O/I (A=%s A640=%s A160=%s B=%s C=%s D=%s)\n", crop_a.c_str(), crop_a_640.c_str(), crop_a_160.c_str(), crop_b.c_str(), crop_c.c_str(), crop_d.c_str());
+        std::printf("PASS crop-copy wired normalized Shift+O/I and Ctrl+L/R (A=%s A640=%s A160=%s B=%s C=%s D=%s)\n", crop_a.c_str(), crop_a_640.c_str(), crop_a_160.c_str(), crop_b.c_str(), crop_c.c_str(), crop_d.c_str());
       }
     }
   } else if (scenario == Scenario::InteractiveCrop) {

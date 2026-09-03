@@ -513,6 +513,91 @@ int main() {
   expect_crop("Shift+I swapped undo leaves Right 0", visual[kRight0].crop, right_a);
   expect_crop("Shift+I swapped undo leaves Right 2", visual[kRight2].crop, no_crop);
 
+  video_filter_state::CropTarget cleared[4];
+  std::vector<video_filter_state::CropOperation> cleared_ops;
+  expect_bool("clear seed left", video_filter_state::apply_crop_to_indices(cleared, cleared_ops, left_only, 1, left_crop), true);
+  expect_bool("clear seed Right 0 A", video_filter_state::apply_crop_to_indices(cleared, cleared_ops, right0_only, 1, right_a), true);
+  expect_bool("clear seed Right 1 B", video_filter_state::apply_crop_to_indices(cleared, cleared_ops, right1_only, 1, right_b), true);
+  const size_t clear_left_history = cleared[kLeft].history.size();
+  const size_t clear_right0_history = cleared[kRight0].history.size();
+  const size_t clear_right1_history = cleared[kRight1].history.size();
+  const size_t clear_right2_history = cleared[kRight2].history.size();
+
+  expect_bool("Ctrl+L normal clears logical left", video_filter_state::clear_crop(cleared, cleared_ops, CropClearRequest::VisualLeft, false, kLeft, kRight0, 3, 0), true);
+  expect_operation("Ctrl+L normal records left only", cleared_ops.back(), {kLeft});
+  expect_crop("Ctrl+L normal left disabled", cleared[kLeft].crop, no_crop);
+  expect_crop("Ctrl+L normal leaves Right 0", cleared[kRight0].crop, right_a);
+  expect_crop("Ctrl+L normal leaves Right 1", cleared[kRight1].crop, right_b);
+  expect_size("Ctrl+L normal left history grew", cleared[kLeft].history.size(), clear_left_history + 1);
+  expect_size("Ctrl+L normal does not push Right 0 history", cleared[kRight0].history.size(), clear_right0_history);
+  expect_bool("undo Ctrl+L normal", video_filter_state::undo_last_crop_operation(cleared, cleared_ops), true);
+  expect_crop("undo Ctrl+L normal restores left", cleared[kLeft].crop, left_crop);
+
+  expect_bool("Ctrl+R normal clears selected Right 1", video_filter_state::clear_crop(cleared, cleared_ops, CropClearRequest::VisualRight, false, kLeft, kRight0, 3, 1), true);
+  expect_operation("Ctrl+R normal records Right 1 only", cleared_ops.back(), {kRight1});
+  expect_crop("Ctrl+R normal Right 1 disabled", cleared[kRight1].crop, no_crop);
+  expect_crop("Ctrl+R normal leaves left", cleared[kLeft].crop, left_crop);
+  expect_crop("Ctrl+R normal leaves Right 0", cleared[kRight0].crop, right_a);
+  expect_crop("Ctrl+R normal leaves Right 2", cleared[kRight2].crop, no_crop);
+  expect_size("Ctrl+R normal Right 1 history grew", cleared[kRight1].history.size(), clear_right1_history + 1);
+  expect_size("Ctrl+R normal does not push Right 2 history", cleared[kRight2].history.size(), clear_right2_history);
+  expect_bool("undo Ctrl+R normal", video_filter_state::undo_last_crop_operation(cleared, cleared_ops), true);
+  expect_crop("undo Ctrl+R normal restores Right 1", cleared[kRight1].crop, right_b);
+
+  expect_bool("Ctrl+L swapped clears selected Right 1", video_filter_state::clear_crop(cleared, cleared_ops, CropClearRequest::VisualLeft, true, kLeft, kRight0, 3, 1), true);
+  expect_operation("Ctrl+L swapped records Right 1 only", cleared_ops.back(), {kRight1});
+  expect_crop("Ctrl+L swapped Right 1 disabled", cleared[kRight1].crop, no_crop);
+  expect_crop("Ctrl+L swapped leaves left", cleared[kLeft].crop, left_crop);
+  expect_crop("Ctrl+L swapped leaves Right 0", cleared[kRight0].crop, right_a);
+  expect_crop("Ctrl+L swapped leaves Right 2", cleared[kRight2].crop, no_crop);
+  expect_bool("undo Ctrl+L swapped after later selection", video_filter_state::undo_last_crop_operation(cleared, cleared_ops), true);
+  expect_crop("undo Ctrl+L swapped restores Right 1", cleared[kRight1].crop, right_b);
+
+  expect_bool("Ctrl+R swapped clears logical left", video_filter_state::clear_crop(cleared, cleared_ops, CropClearRequest::VisualRight, true, kLeft, kRight0, 3, 1), true);
+  expect_operation("Ctrl+R swapped records left only", cleared_ops.back(), {kLeft});
+  expect_crop("Ctrl+R swapped left disabled", cleared[kLeft].crop, no_crop);
+  expect_crop("Ctrl+R swapped leaves Right 1", cleared[kRight1].crop, right_b);
+  expect_crop("Ctrl+R swapped leaves Right 0", cleared[kRight0].crop, right_a);
+  expect_bool("undo Ctrl+R swapped", video_filter_state::undo_last_crop_operation(cleared, cleared_ops), true);
+  expect_crop("undo Ctrl+R swapped restores left", cleared[kLeft].crop, left_crop);
+
+  expect_bool("Ctrl+R no-op when selected right has no crop", video_filter_state::clear_crop(cleared, cleared_ops, CropClearRequest::VisualRight, false, kLeft, kRight0, 3, 2), false);
+  expect_crop("Ctrl+R no-op leaves Right 2 empty", cleared[kRight2].crop, no_crop);
+  expect_size("Ctrl+R no-op does not push Right 2 history", cleared[kRight2].history.size(), clear_right2_history);
+  const size_t ops_before_empty_left_clear = cleared_ops.size();
+  expect_bool("Ctrl+L clears left before no-op", video_filter_state::clear_crop(cleared, cleared_ops, CropClearRequest::VisualLeft, false, kLeft, kRight0, 3, 0), true);
+  const size_t left_history_after_clear = cleared[kLeft].history.size();
+  const size_t ops_after_empty_left_clear = cleared_ops.size();
+  expect_bool("Ctrl+L no-op when left has no crop", video_filter_state::clear_crop(cleared, cleared_ops, CropClearRequest::VisualLeft, false, kLeft, kRight0, 3, 0), false);
+  expect_size("Ctrl+L no-op does not add an operation", cleared_ops.size(), ops_after_empty_left_clear);
+  expect_size("Ctrl+L no-op does not push history", cleared[kLeft].history.size(), left_history_after_clear);
+  expect_size("Ctrl+L no-op did not rewind earlier operations", ops_after_empty_left_clear, ops_before_empty_left_clear + 1);
+
+  const auto clear_l_normal = video_filter_state::resolve_crop_clear(CropClearRequest::VisualLeft, false, 1, 3);
+  expect_bool("Ctrl+L normal dest is logical left", clear_l_normal.dest_is_left, true);
+  const auto clear_r_normal = video_filter_state::resolve_crop_clear(CropClearRequest::VisualRight, false, 1, 3);
+  expect_bool("Ctrl+R normal dest is selected right", clear_r_normal.dest_is_left, false);
+  expect_size("Ctrl+R normal dest is snapshotted Right 1", clear_r_normal.dest_right_index, 1);
+  const auto clear_l_swap = video_filter_state::resolve_crop_clear(CropClearRequest::VisualLeft, true, 1, 3);
+  expect_bool("Ctrl+L swapped dest is selected right", clear_l_swap.dest_is_left, false);
+  expect_size("Ctrl+L swapped dest is snapshotted Right 1", clear_l_swap.dest_right_index, 1);
+  const auto clear_r_swap = video_filter_state::resolve_crop_clear(CropClearRequest::VisualRight, true, 1, 3);
+  expect_bool("Ctrl+R swapped dest is logical left", clear_r_swap.dest_is_left, true);
+  expect_bool("Ctrl+L swapped dest is not logical left", clear_l_swap.dest_is_left, false);
+
+  const PendingCropClear deferred_clear_l{CropClearRequest::VisualLeft, 1, true};
+  const auto deferred_clear_l_plan = video_filter_state::resolve_crop_clear(deferred_clear_l.request, deferred_clear_l.swap_left_right, deferred_clear_l.right_target_index, 3);
+  const auto deferred_clear_l_if_live = video_filter_state::resolve_crop_clear(deferred_clear_l.request, false, 2, 3);
+  expect_bool("deferred Ctrl+L keeps snapshotted Swap dest as current right", deferred_clear_l_plan.dest_is_left, false);
+  expect_size("deferred Ctrl+L keeps snapshotted Right 1", deferred_clear_l_plan.dest_right_index, 1);
+  expect_bool("later live unswap would have cleared logical left", deferred_clear_l_if_live.dest_is_left, true);
+  const PendingCropClear deferred_clear_r{CropClearRequest::VisualRight, 1, true};
+  const auto deferred_clear_r_plan = video_filter_state::resolve_crop_clear(deferred_clear_r.request, deferred_clear_r.swap_left_right, deferred_clear_r.right_target_index, 3);
+  const auto deferred_clear_r_if_live = video_filter_state::resolve_crop_clear(deferred_clear_r.request, false, 2, 3);
+  expect_bool("deferred Ctrl+R keeps snapshotted Swap dest as logical left", deferred_clear_r_plan.dest_is_left, true);
+  expect_bool("later live unswap would have cleared Right 2", deferred_clear_r_if_live.dest_is_left, false);
+  expect_size("later live unswap would have used Right 2", deferred_clear_r_if_live.dest_right_index, 2);
+
   expect_bool("selected right in range is valid", video_filter_state::selected_right(1, 3).valid, true);
   expect_size("selected right in range", video_filter_state::selected_right(1, 3).index, 1);
   expect_size("selected right first", video_filter_state::selected_right(0, 2).index, 0);

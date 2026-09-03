@@ -272,6 +272,7 @@ class Display {
   CropTargetSide crop_target_side_{CropTargetSide::Undefined};
   PendingCropRequest pending_crop_request_;
   PendingCropCopy pending_crop_copy_;
+  PendingCropClear pending_crop_clear_;
 
   bool input_received_{true};
   int64_t previous_left_frame_pts_;
@@ -543,6 +544,7 @@ class Display {
 
   PendingCropRequest get_and_clear_pending_crop_request();
   PendingCropCopy get_and_clear_pending_crop_copy();
+  PendingCropClear get_and_clear_pending_crop_clear();
 
   // Multiple right video support
   void set_num_right_videos(const size_t num_right_videos);

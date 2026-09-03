@@ -3573,6 +3573,11 @@ void Display::handle_event(const SDL_Event& event) {
         case SDLK_r:
           if (is_shift_down) {
             toggle_crop_mode_for_side(CropTargetSide::Right);
+          } else if (is_ctrl_down) {
+            pending_crop_clear_.request = CropClearRequest::VisualRight;
+            pending_crop_clear_.right_target_index = active_right_index_;
+            pending_crop_clear_.swap_left_right = swap_left_right_;
+            reset_crop_mode();
           } else {
             move_offset_ = Vector2D(0.0F, 0.0F);
             global_center_ = Vector2D(0.5F, 0.5F);
@@ -3604,6 +3609,11 @@ void Display::handle_event(const SDL_Event& event) {
         case SDLK_l:
           if (is_shift_down) {
             toggle_crop_mode_for_side(CropTargetSide::Left);
+          } else if (is_ctrl_down) {
+            pending_crop_clear_.request = CropClearRequest::VisualLeft;
+            pending_crop_clear_.right_target_index = active_right_index_;
+            pending_crop_clear_.swap_left_right = swap_left_right_;
+            reset_crop_mode();
           } else {
             update_playback_speed(1.0F * playback_speed_scale);
             tick_playback_ = true;
@@ -3808,6 +3818,12 @@ PendingCropRequest Display::get_and_clear_pending_crop_request() {
 PendingCropCopy Display::get_and_clear_pending_crop_copy() {
   const PendingCropCopy pending = pending_crop_copy_;
   pending_crop_copy_ = PendingCropCopy{};
+  return pending;
+}
+
+PendingCropClear Display::get_and_clear_pending_crop_clear() {
+  const PendingCropClear pending = pending_crop_clear_;
+  pending_crop_clear_ = PendingCropClear{};
   return pending;
 }
 

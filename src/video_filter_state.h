@@ -19,9 +19,16 @@ struct CropState {
 };
 
 enum class CropCopyRequest { None, LeftToAllRights, ActiveRightToLeft };
+enum class CropClearRequest { None, VisualLeft, VisualRight };
 
 struct PendingCropCopy {
   CropCopyRequest request{CropCopyRequest::None};
+  size_t right_target_index{0};
+  bool swap_left_right{false};
+};
+
+struct PendingCropClear {
+  CropClearRequest request{CropClearRequest::None};
   size_t right_target_index{0};
   bool swap_left_right{false};
 };
@@ -309,6 +316,58 @@ inline CropCopyPlan resolve_crop_copy(const CropCopyRequest request, const bool 
   }
 
   return {};
+}
+
+struct CropClearPlan {
+  bool valid{false};
+  bool dest_is_left{false};
+  size_t dest_right_index{0};
+};
+
+// Visual left/right at keypress, matching Shift+L / Shift+R after Swap.
+inline CropClearPlan resolve_crop_clear(const CropClearRequest request, const bool swap_left_right, const size_t snapshotted_right_index, const size_t right_count) {
+  if (request == CropClearRequest::None) {
+    return {};
+  }
+
+  const bool visual_left = request == CropClearRequest::VisualLeft;
+  const InteractiveCropTargets targets = resolve_interactive_crop_targets(visual_left, !visual_left, swap_left_right, snapshotted_right_index);
+  CropClearPlan plan;
+  if (targets.apply_to_left) {
+    plan.valid = true;
+    plan.dest_is_left = true;
+    return plan;
+  }
+
+  const SelectedRight selected = selected_right(targets.right_index, right_count);
+  if (!selected.valid) {
+    return {};
+  }
+  plan.valid = true;
+  plan.dest_right_index = selected.index;
+  return plan;
+}
+
+template <typename Target>
+bool clear_crop(Target* targets,
+                std::vector<CropOperation>& operations,
+                const CropClearRequest request,
+                const bool swap_left_right,
+                const size_t left_index,
+                const size_t first_right_index,
+                const size_t right_count,
+                const size_t snapshotted_right_index) {
+  const CropClearPlan plan = resolve_crop_clear(request, swap_left_right, snapshotted_right_index, right_count);
+  if (!plan.valid || targets == nullptr) {
+    return false;
+  }
+
+  const size_t dest_index = plan.dest_is_left ? left_index : (first_right_index + plan.dest_right_index);
+  if (!push_crop(targets[dest_index], CropState{})) {
+    return false;
+  }
+  operations.push_back({dest_index});
+  return true;
 }
 
 template <typename Target>
