@@ -25,7 +25,10 @@ jobs:
       - name: Setup MSYS2 (MINGW64)
         uses: msys2/setup-msys2@v2
         with:
+          # Release links the pinned Gyan/SDL MinGW import libs. UCRT64 is the
+          # integration-test toolchain and does not use that download layout.
           msystem: MINGW64
+          suppress-deprecation-warnings: msystem-mingw64
           release: true
           update: true
           install: >-
@@ -133,7 +136,7 @@ jobs:
   release-windows:
     if: startsWith(github.ref, 'refs/tags/')
     needs: build-windows
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       id-token: write
@@ -281,7 +284,7 @@ jobs:
           retention-days: 90
 
   build-macos:
-    runs-on: macos-26
+    runs-on: macos-26-intel
     permissions:
       contents: read
 
