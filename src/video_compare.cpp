@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <deque>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <thread>
@@ -133,6 +134,32 @@ static inline bool use_fast_input_alignment(const VideoCompareConfig& config) {
 static void sleep_for_ms(const uint32_t ms) {
   std::chrono::milliseconds sleep(ms);
   std::this_thread::sleep_for(sleep);
+}
+
+// Show a centered "Press H for help" hint the first time video-compare runs.
+// An empty marker in the SDL per-user preference directory records that the hint was shown.
+// Persistence failures are ignored so startup can continue.
+static void maybe_show_first_launch_help_hint(Display& display) {
+  char* pref_path = SDL_GetPrefPath("Pixop", "video-compare");
+  if (pref_path == nullptr) {
+    std::cerr << "Unable to locate preferences directory; skipping first-launch help hint (" << SDL_GetError() << ")" << std::endl;
+    return;
+  }
+
+  const std::string marker_path = std::string(pref_path) + "help_hint_seen";
+  SDL_free(pref_path);
+
+  std::ifstream marker(marker_path.c_str());
+  if (marker) {
+    return;
+  }
+
+  display.set_pending_message("Press H for help");
+
+  std::ofstream created(marker_path.c_str());
+  if (!created) {
+    std::cerr << "Unable to record first-launch help hint (" << marker_path << ")" << std::endl;
+  }
 }
 
 VideoCompare::~VideoCompare() = default;
@@ -329,6 +356,9 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   if (config.scopes.histogram || config.scopes.vectorscope || config.scopes.waveform) {
     display_->focus_main_window();
   }
+
+  // Display is constructed (SDL is initialized and the centered-message path is ready).
+  maybe_show_first_launch_help_hint(*display_);
 }
 
 void VideoCompare::recreate_format_converter_for_side(const Side& side, const int sws_flags) {
