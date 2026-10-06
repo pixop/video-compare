@@ -160,7 +160,9 @@ integration: $(integration_bin)
 	echo "Running $(integration_bin) crop-copy"; \
 	$$wrap ./$(integration_bin) crop-copy "$$media/crop_left_320.mp4" "$$media/crop_right0_640.mp4" "$$media/crop_right1_320.mp4" "$$media/crop_right2_160.mp4"; \
 	echo "Running $(integration_bin) interactive-crop"; \
-	$$wrap ./$(integration_bin) interactive-crop "$$media/crop_left_320.mp4" "$$media/crop_right1_320.mp4"
+	$$wrap ./$(integration_bin) interactive-crop "$$media/crop_left_320.mp4" "$$media/crop_right1_320.mp4"; \
+	echo "Running $(integration_bin) dynamic-swap"; \
+	$$wrap ./$(integration_bin) dynamic-swap "$$media/dynamic_left_43.mp4" "$$media/dynamic_right_169.mp4"
 
 .PHONY: stress
 stress: $(integration_bin)

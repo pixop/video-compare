@@ -49,3 +49,5 @@ generate_clip "$out_dir/crop_left_320.mp4" 1 25 320x180
 generate_clip "$out_dir/crop_right0_640.mp4" 1 25 640x360
 generate_clip "$out_dir/crop_right1_320.mp4" 1 25 320x180
 generate_clip "$out_dir/crop_right2_160.mp4" 1 25 160x90
+generate_clip "$out_dir/dynamic_left_43.mp4" 1 25 320x240
+generate_clip "$out_dir/dynamic_right_169.mp4" 1 25 640x360

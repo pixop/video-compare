@@ -33,6 +33,7 @@ Integration scenarios (one fresh process each):
 - `buffer-pingpong`
 - `crop-copy` — Shift+L/R mouse crop, Ctrl+Shift+L/R, Ctrl+L/R visual-side clear, Backspace undo, and right-video selection through the real Display → VideoCompare → VideoFilterer path. Asserts `crop=` in the Shift+X filter dump, plus `swapped` / `right` / visual-size ownership across Swap. Uses 320×180 / 640×360 / 160×90 rights so copy is normalized, not pixel-identical.
 - `interactive-crop` — isolated post-scale Shift+L plus atomic Shift+B. Left is 320×180 with `scale=160:90`; right is 320×180 with `hflip`. Asserts the application `crop=` is in 320×180 crop-space (not the 160×90 dest), Backspace restores it, and Shift+B / unsupported visual-side crops change neither side.
+- `dynamic-swap` — 320×240 (4:3) left and 640×360 (16:9) right with Dynamic. The shared canvas is 16:9, so the content viewport pillarboxes to the original left input. Shift+X before and after visual Swap (`S`) must keep `ref_dar` at 4:3 and the same letterbox; following the visually-left side would switch the reference and viewport to 16:9.
 
 Adding a unit test:
 
@@ -60,7 +61,6 @@ These exercise the real pipeline. Generate clips with ffmpeg as needed.
 
 - Mid-stream `720×480 SAR 8:9` → `SAR 1:1`, with auto-filters on and with `--disable-auto-filters`: Dynamic letterboxes; OS window size stays put; Original is unchanged.
 - `1920×1080` → `1280×720`: Dynamic does not change letterboxing (DAR remains 16:9).
-- Mixed 4:3 left / 16:9 right: Dynamic follows the original left input; visual Swap (`S`) does not change the reference or letterboxing.
 - Crop `1920×1080` → `1440×1080`: Dynamic becomes 4:3 after that frame is shown.
 - `-x dynamic` startup: window is sized to the shared canvas; the first anamorphic reference frame letterboxes only (no extra `SDL_SetWindowSize`).
 - Shift+S into Dynamic resizes the window once when windowed, or only relayouts `content_window_` in fullscreen.

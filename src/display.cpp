@@ -5,6 +5,7 @@
 #include <future>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <numeric>
@@ -3033,7 +3034,13 @@ Display::ZoomRect Display::compute_zoom_rect() const {
 }
 
 Vector2D Display::window_to_video_position(const int window_x_position, const int window_y_position, const Display::ZoomRect& zoom_rect, const bool floor_result) const {
-  auto floor_or_ceil = [&](const float value) -> int { return floor_result ? std::floor(value) : std::ceil(value); };
+  auto floor_or_ceil = [&](const float value) -> int {
+    // -Ofast may evaluate an exact pixel boundary one ULP to either side
+    // (for example 20.0 as 19.999998). Bias by one representable float
+    // toward the requested integer direction before floor/ceil.
+    const float biased = std::nextafter(value, floor_result ? std::numeric_limits<float>::infinity() : -std::numeric_limits<float>::infinity());
+    return floor_result ? std::floor(biased) : std::ceil(biased);
+  };
 
   const float window_x_in_content = static_cast<float>(window_x_position - content_window_.x);
   const float window_y_in_content = static_cast<float>(window_y_position - content_window_.y);
@@ -3708,7 +3715,10 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_x:
           if (is_shift_down) {
-            std::string message = string_sprintf("Display state: window=%dx%d aspect=%s", window_width_, window_height_, aspect_view_mode_to_string(aspect_view_mode_).c_str());
+            // content= is the letterbox viewport in window coordinates. Dynamic
+            // sizes it from the original left input; visual Swap must not retarget it.
+            std::string message = string_sprintf("Display state: window=%dx%d content=%d,%d,%dx%d aspect=%s", window_width_, window_height_, content_window_.x, content_window_.y, content_window_.w, content_window_.h,
+                                                 aspect_view_mode_to_string(aspect_view_mode_).c_str());
             video_filter_state::append_display_state_mapping(message, swap_left_right_, active_right_index_);
             if (visual_left_pre_canvas_size_.first > 0 && visual_left_pre_canvas_size_.second > 0) {
               message += string_sprintf(" visual_left=%dx%d", visual_left_pre_canvas_size_.first, visual_left_pre_canvas_size_.second);

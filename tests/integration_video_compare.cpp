@@ -22,7 +22,7 @@
 
 namespace {
 
-enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync, FrameNavigation, BufferForwardOnly, BufferPingPong, SeekBurstForward, SeekBurstMixed, CropCopy, InteractiveCrop };
+enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync, FrameNavigation, BufferForwardOnly, BufferPingPong, SeekBurstForward, SeekBurstMixed, CropCopy, InteractiveCrop, DynamicSwap };
 
 std::atomic<int> events_pushed{0};
 std::atomic<bool> watchdog_fired{false};
@@ -64,6 +64,8 @@ const char* scenario_name(const Scenario scenario) {
       return "crop-copy";
     case Scenario::InteractiveCrop:
       return "interactive-crop";
+    case Scenario::DynamicSwap:
+      return "dynamic-swap";
   }
   return "unknown";
 }
@@ -293,6 +295,10 @@ struct FilterDump {
   std::string right_id;
   std::string visual_left;
   std::string visual_right;
+  std::string aspect;
+  std::string window;
+  std::string content;
+  std::string ref_dar;
 };
 
 std::vector<FilterDump> parse_display_filters(const std::string& output) {
@@ -310,6 +316,10 @@ std::vector<FilterDump> parse_display_filters(const std::string& output) {
     dump.right_id = extract_unquoted_field(line, "right");
     dump.visual_left = extract_unquoted_field(line, "visual_left");
     dump.visual_right = extract_unquoted_field(line, "visual_right");
+    dump.aspect = extract_unquoted_field(line, "aspect");
+    dump.window = extract_unquoted_field(line, "window");
+    dump.content = extract_unquoted_field(line, "content");
+    dump.ref_dar = extract_unquoted_field(line, "ref_dar");
     dumps.push_back(dump);
   }
   return dumps;
@@ -331,6 +341,56 @@ CropState crop_state_from_token(const std::string& token) {
 std::string mapped_crop_token(const std::string& source_token, const int source_w, const int source_h, const int dest_w, const int dest_h) {
   const CropState mapped = video_filter_state::map_crop_state(crop_state_from_token(source_token), source_w, source_h, dest_w, dest_h);
   return mapped.enabled ? video_filter_state::crop_filter(mapped.rect) : std::string();
+}
+
+struct WindowSize {
+  int w{0};
+  int h{0};
+};
+
+struct ContentViewport {
+  int x{0};
+  int y{0};
+  int w{0};
+  int h{0};
+};
+
+bool same_viewport(const ContentViewport& a, const ContentViewport& b) {
+  return a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h;
+}
+
+bool parse_window_size(const std::string& text, WindowSize* size) {
+  return std::sscanf(text.c_str(), "%dx%d", &size->w, &size->h) == 2 && size->w > 0 && size->h > 0;
+}
+
+bool parse_content_viewport(const std::string& text, ContentViewport* viewport) {
+  return std::sscanf(text.c_str(), "%d,%d,%dx%d", &viewport->x, &viewport->y, &viewport->w, &viewport->h) == 4 && viewport->w > 0 && viewport->h > 0;
+}
+
+bool parse_dar(const std::string& text, int* num, int* den) {
+  return std::sscanf(text.c_str(), "%d:%d", num, den) == 2 && *num > 0 && *den > 0;
+}
+
+bool dar_equals(const int num, const int den, const int want_num, const int want_den) {
+  return den != 0 && want_den != 0 && num * want_den == den * want_num;
+}
+
+// Same rounding as Display::update_content_window_layout() for one frame aspect.
+ContentViewport viewport_for_aspect(const WindowSize& window, const float content_aspect) {
+  ContentViewport viewport;
+  const float window_aspect = static_cast<float>(window.w) / static_cast<float>(window.h);
+  if (window_aspect > content_aspect) {
+    viewport.h = window.h;
+    const int rounded = static_cast<int>(std::round(static_cast<float>(viewport.h) * content_aspect));
+    viewport.w = rounded < 1 ? 1 : rounded;
+    viewport.x = (window.w - viewport.w) / 2;
+  } else {
+    viewport.w = window.w;
+    const int rounded = static_cast<int>(std::round(static_cast<float>(viewport.w) / content_aspect));
+    viewport.h = rounded < 1 ? 1 : rounded;
+    viewport.y = (window.h - viewport.h) / 2;
+  }
+  return viewport;
 }
 
 std::string crop_token(const std::string& filters) {
@@ -793,6 +853,14 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     toggle_swap();
     interactive_crop(SDLK_l, SDL_SCANCODE_L, x0, y0, x1, y1);
     dump_display_filters();
+  } else if (scenario == Scenario::DynamicSwap) {
+    // 320x240 (4:3) left, 640x360 (16:9) right. Canvas/window stay 16:9;
+    // Dynamic pillarboxes to the original left. Swap must not retarget either.
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(400);
+    dump_display_filters();
+    toggle_swap();
+    dump_display_filters();
   }
 
   push_quit();
@@ -842,6 +910,11 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   if (scenario == Scenario::InteractiveCrop) {
     config.left.video_filters = "scale=160:90";
     config.right_videos[0].video_filters = "hflip";
+  }
+  if (scenario == Scenario::DynamicSwap) {
+    // Keep pre-canvas sizes at 320x240 and 640x360. Dynamic letterboxes from the left DAR.
+    config.disable_auto_filters = true;
+    config.aspect_view_mode = Display::AspectViewMode::Dynamic;
   }
   if (scenario == Scenario::BufferForwardOnly || scenario == Scenario::BufferPingPong) {
     // 3 slots: newest / middle / oldest. Smallest history that still has
@@ -1322,6 +1395,64 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
         std::printf("PASS interactive-crop post-scale Shift+L and atomic Shift+B\n");
       }
     }
+  } else if (scenario == Scenario::DynamicSwap) {
+    const std::vector<FilterDump> dumps = parse_display_filters(output);
+    auto fail_dynamic = [&](const char* message) {
+      std::fprintf(stderr, "FAIL dynamic-swap: %s\n", message);
+      for (size_t i = 0; i < dumps.size(); ++i) {
+        std::fprintf(stderr, "dump %zu: aspect=%s swapped=%s window=%s content=%s ref_dar=%s visual_left=%s visual_right=%s\n", i, dumps[i].aspect.c_str(), dumps[i].swapped.c_str(), dumps[i].window.c_str(),
+                     dumps[i].content.c_str(), dumps[i].ref_dar.c_str(), dumps[i].visual_left.c_str(), dumps[i].visual_right.c_str());
+      }
+      std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
+      exit_code = EXIT_FAILURE;
+    };
+
+    if (dumps.size() < 2) {
+      fail_dynamic("expected Shift+X dumps before and after Swap");
+    } else {
+      const FilterDump& before = dumps[0];
+      const FilterDump& after = dumps[1];
+      WindowSize window_before{};
+      WindowSize window_after{};
+      ContentViewport content_before{};
+      ContentViewport content_after{};
+      int dar_before_num = 0;
+      int dar_before_den = 0;
+      int dar_after_num = 0;
+      int dar_after_den = 0;
+      const bool window_ok = parse_window_size(before.window, &window_before) && parse_window_size(after.window, &window_after);
+      const bool content_ok = parse_content_viewport(before.content, &content_before) && parse_content_viewport(after.content, &content_after);
+      const bool dar_ok = parse_dar(before.ref_dar, &dar_before_num, &dar_before_den) && parse_dar(after.ref_dar, &dar_after_num, &dar_after_den);
+      const ContentViewport pillar_43 = window_ok ? viewport_for_aspect(window_before, 4.0F / 3.0F) : ContentViewport{};
+
+      if (before.aspect != "dynamic" || after.aspect != "dynamic") {
+        fail_dynamic("Shift+X did not report aspect=dynamic");
+      } else if (before.swapped != "false" || after.swapped != "true") {
+        fail_dynamic("Swap did not report swapped=false then swapped=true");
+      } else if (before.visual_left != "320x240" || before.visual_right != "640x360") {
+        fail_dynamic("pre-Swap visual sizes were not 4:3 left (320x240) and 16:9 right (640x360)");
+      } else if (after.visual_left != before.visual_right || after.visual_right != before.visual_left) {
+        fail_dynamic("Swap did not exchange visual_left/visual_right");
+      } else if (!dar_ok) {
+        fail_dynamic("Shift+X did not report ref_dar");
+      } else if (!dar_equals(dar_before_num, dar_before_den, 4, 3)) {
+        fail_dynamic("Dynamic reference was not the original left 4:3 input");
+      } else if (dar_equals(dar_after_num, dar_after_den, 16, 9)) {
+        fail_dynamic("Dynamic followed the visually-left 16:9 input after Swap");
+      } else if (!dar_equals(dar_after_num, dar_after_den, 4, 3)) {
+        fail_dynamic("Swap changed the Dynamic reference away from the original left 4:3 input");
+      } else if (!window_ok || window_before.w != window_after.w || window_before.h != window_after.h) {
+        fail_dynamic("Swap changed the OS window size");
+      } else if (!(window_before.w * 3 > window_before.h * 4)) {
+        fail_dynamic("window is not wider than 4:3, so letterboxing would not show a 16:9 policy change");
+      } else if (!content_ok || !same_viewport(content_before, content_after)) {
+        fail_dynamic("Swap changed the letterbox viewport");
+      } else if (!same_viewport(content_before, pillar_43)) {
+        fail_dynamic("letterbox viewport is not the 4:3 pillarbox of the original left input");
+      } else {
+        std::printf("PASS dynamic-swap kept ref_dar=%s and content=%s after Swap (window=%s)\n", before.ref_dar.c_str(), before.content.c_str(), before.window.c_str());
+      }
+    }
   }
 
   if (exit_code == EXIT_SUCCESS) {
@@ -1346,6 +1477,7 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "  %s seek-burst-mixed LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s crop-copy LEFT RIGHT0 RIGHT1 RIGHT2\n", argv0);
   std::fprintf(stderr, "  %s interactive-crop LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s dynamic-swap LEFT RIGHT\n", argv0);
 }
 
 }  // namespace
@@ -1453,6 +1585,13 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::InteractiveCrop, files);
+    }
+    if (name == "dynamic-swap") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::DynamicSwap, files);
     }
   } catch (const std::exception& exception) {
     std::fprintf(stderr, "FAIL %s\n", exception.what());
