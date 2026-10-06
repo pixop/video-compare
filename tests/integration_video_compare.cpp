@@ -153,38 +153,64 @@ void push_copy_timestamp() {
   push_keydown(SDLK_c, SDL_SCANCODE_C, 0, clipboard_mod());
 }
 
-void push_mouse_motion(const int x, const int y) {
-  SDL_Event event{};
-  event.type = SDL_MOUSEMOTION;
-  event.motion.type = SDL_MOUSEMOTION;
-  event.motion.timestamp = SDL_GetTicks();
-  // Keep synthetic coordinates in the test's logical window space. A non-zero
-  // windowID makes sdl2-compat convert them through the renderer again.
-  event.motion.windowID = 0;
-  event.motion.x = x;
-  event.motion.y = y;
-  if (SDL_PushEvent(&event) < 0) {
-    std::fprintf(stderr, "SDL_PushEvent(MOUSEMOTION) failed: %s\n", SDL_GetError());
-  } else {
-    events_pushed.fetch_add(1);
-  }
-}
+void push_crop_gesture(const SDL_Keycode side_key, const SDL_Scancode side_scancode, const int x0, const int y0, const int x1, const int y1) {
+  SDL_Event events[5]{};
+  const Uint32 timestamp = SDL_GetTicks();
 
-void push_mouse_button(const Uint32 type, const int x, const int y) {
-  SDL_Event event{};
-  event.type = type;
-  event.button.type = type;
-  event.button.timestamp = SDL_GetTicks();
-  event.button.windowID = 0;
-  event.button.button = SDL_BUTTON_LEFT;
-  event.button.state = (type == SDL_MOUSEBUTTONDOWN) ? SDL_PRESSED : SDL_RELEASED;
-  event.button.clicks = 1;
-  event.button.x = x;
-  event.button.y = y;
-  if (SDL_PushEvent(&event) < 0) {
-    std::fprintf(stderr, "SDL_PushEvent(MOUSEBUTTON) failed: %s\n", SDL_GetError());
-  } else {
-    events_pushed.fetch_add(1);
+  events[0].type = SDL_KEYDOWN;
+  events[0].key.type = SDL_KEYDOWN;
+  events[0].key.timestamp = timestamp;
+  events[0].key.windowID = 0;
+  events[0].key.state = SDL_PRESSED;
+  events[0].key.repeat = 0;
+  events[0].key.keysym.scancode = side_scancode;
+  events[0].key.keysym.sym = side_key;
+  events[0].key.keysym.mod = KMOD_SHIFT;
+
+  events[1].type = SDL_MOUSEMOTION;
+  events[1].motion.type = SDL_MOUSEMOTION;
+  events[1].motion.timestamp = timestamp;
+  events[1].motion.windowID = 0;
+  events[1].motion.x = x0;
+  events[1].motion.y = y0;
+
+  events[2].type = SDL_MOUSEBUTTONDOWN;
+  events[2].button.type = SDL_MOUSEBUTTONDOWN;
+  events[2].button.timestamp = timestamp;
+  events[2].button.windowID = 0;
+  events[2].button.button = SDL_BUTTON_LEFT;
+  events[2].button.state = SDL_PRESSED;
+  events[2].button.clicks = 1;
+  events[2].button.x = x0;
+  events[2].button.y = y0;
+
+  events[3].type = SDL_MOUSEMOTION;
+  events[3].motion.type = SDL_MOUSEMOTION;
+  events[3].motion.timestamp = timestamp;
+  events[3].motion.windowID = 0;
+  events[3].motion.x = x1;
+  events[3].motion.y = y1;
+
+  events[4].type = SDL_MOUSEBUTTONUP;
+  events[4].button.type = SDL_MOUSEBUTTONUP;
+  events[4].button.timestamp = timestamp;
+  events[4].button.windowID = 0;
+  events[4].button.button = SDL_BUTTON_LEFT;
+  events[4].button.state = SDL_RELEASED;
+  events[4].button.clicks = 1;
+  events[4].button.x = x1;
+  events[4].button.y = y1;
+
+  constexpr int kEventCount = sizeof(events) / sizeof(events[0]);
+  const int added = SDL_PeepEvents(events, kEventCount, SDL_ADDEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
+  if (added < 0) {
+    std::fprintf(stderr, "SDL_PeepEvents(crop gesture) failed: %s\n", SDL_GetError());
+    return;
+  }
+
+  events_pushed.fetch_add(added);
+  if (added != kEventCount) {
+    std::fprintf(stderr, "SDL_PeepEvents(crop gesture) added %d/%d events\n", added, kEventCount);
   }
 }
 
@@ -210,17 +236,10 @@ void toggle_swap() {
 }
 
 void interactive_crop(const SDL_Keycode side_key, const SDL_Scancode side_scancode, const int x0, const int y0, const int x1, const int y1) {
-  // Shift+L/R enters crop mode. Motion and button events carry the
-  // rectangle; mouse-up completes it from that event position.
-  push_keydown(side_key, side_scancode, 0, KMOD_SHIFT);
-  sleep_ms(150);
-  push_mouse_motion(x0, y0);
-  sleep_ms(50);
-  push_mouse_button(SDL_MOUSEBUTTONDOWN, x0, y0);
-  sleep_ms(50);
-  push_mouse_motion(x1, y1);
-  sleep_ms(50);
-  push_mouse_button(SDL_MOUSEBUTTONUP, x1, y1);
+  // Queue crop-mode entry and the complete drag as one transaction. This keeps
+  // the synthetic gesture contiguous even if the platform pumps native mouse
+  // events between main-loop iterations.
+  push_crop_gesture(side_key, side_scancode, x0, y0, x1, y1);
   wait_for_filter_refresh();
 }
 
