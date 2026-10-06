@@ -154,17 +154,11 @@ void push_copy_timestamp() {
 }
 
 void push_mouse_motion(const int x, const int y) {
-  const Uint32 window_id = first_sdl_window_id();
-  SDL_Window* window = SDL_GetWindowFromID(window_id);
-  if (window != nullptr) {
-    SDL_WarpMouseInWindow(window, x, y);
-  }
-
   SDL_Event event{};
   event.type = SDL_MOUSEMOTION;
   event.motion.type = SDL_MOUSEMOTION;
   event.motion.timestamp = SDL_GetTicks();
-  event.motion.windowID = 0;
+  event.motion.windowID = first_sdl_window_id();
   event.motion.x = x;
   event.motion.y = y;
   if (SDL_PushEvent(&event) < 0) {
@@ -179,7 +173,7 @@ void push_mouse_button(const Uint32 type, const int x, const int y) {
   event.type = type;
   event.button.type = type;
   event.button.timestamp = SDL_GetTicks();
-  event.button.windowID = 0;
+  event.button.windowID = first_sdl_window_id();
   event.button.button = SDL_BUTTON_LEFT;
   event.button.state = (type == SDL_MOUSEBUTTONDOWN) ? SDL_PRESSED : SDL_RELEASED;
   event.button.clicks = 1;
@@ -214,8 +208,8 @@ void toggle_swap() {
 }
 
 void interactive_crop(const SDL_Keycode side_key, const SDL_Scancode side_scancode, const int x0, const int y0, const int x1, const int y1) {
-  // Shift+L/R enters crop mode. Display reads mouse_x_/mouse_y_ from
-  // SDL_GetMouseState on motion, then mouse-up completes the rectangle.
+  // Shift+L/R enters crop mode. Motion and button events carry the
+  // rectangle; mouse-up completes it from that event position.
   push_keydown(side_key, side_scancode, 0, KMOD_SHIFT);
   sleep_ms(150);
   push_mouse_motion(x0, y0);

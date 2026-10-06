@@ -2210,7 +2210,6 @@ void Display::refresh_selection_end_from_mouse() {
     return;
   }
 
-  SDL_GetMouseState(&mouse_x_, &mouse_y_);
   selection_end_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
 
   if (selection_wrap_) {
@@ -2219,6 +2218,9 @@ void Display::refresh_selection_end_from_mouse() {
 }
 
 void Display::on_view_transform_changed() {
+  // Zoom, pan, and layout changes can move the selection endpoint without a
+  // new mouse event. Sample the live cursor, then recompute from the cache.
+  SDL_GetMouseState(&mouse_x_, &mouse_y_);
   refresh_selection_end_from_mouse();
 }
 
@@ -3277,7 +3279,8 @@ void Display::handle_event(const SDL_Event& event) {
       }
       break;
     case SDL_MOUSEMOTION:
-      SDL_GetMouseState(&mouse_x_, &mouse_y_);
+      mouse_x_ = event_.motion.x;
+      mouse_y_ = event_.motion.y;
 
       refresh_selection_end_from_mouse();
 
@@ -3296,6 +3299,8 @@ void Display::handle_event(const SDL_Event& event) {
       }
       break;
     case SDL_MOUSEBUTTONDOWN:
+      mouse_x_ = event_.button.x;
+      mouse_y_ = event_.button.y;
       if (event_.button.button == SDL_BUTTON_LEFT && (save_selected_area_ || crop_mode_) && selection_state_ == SelectionState::None) {
         selection_state_ = SelectionState::Started;
         selection_start_ = window_to_video_position(mouse_x_, mouse_y_, compute_zoom_rect());
@@ -3315,7 +3320,10 @@ void Display::handle_event(const SDL_Event& event) {
       update_cursor();
       break;
     case SDL_MOUSEBUTTONUP:
+      mouse_x_ = event_.button.x;
+      mouse_y_ = event_.button.y;
       if (event_.button.button == SDL_BUTTON_LEFT && selection_state_ == SelectionState::Started) {
+        refresh_selection_end_from_mouse();
         selection_state_ = SelectionState::Completed;
       }
       update_cursor();
