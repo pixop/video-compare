@@ -133,9 +133,13 @@ struct RecenteredPan {
 
 // Always return to 100% after the window has absorbed the previous zoom,
 // including when the target was scaled down to the usable display.
-inline float zoom_factor_after_fit() { return 1.0F; }
+inline float zoom_factor_after_fit() {
+  return 1.0F;
+}
 
-inline RecenteredPan pan_after_fit() { return {0.0F, 0.0F, 0.5F, 0.5F}; }
+inline RecenteredPan pan_after_fit() {
+  return {0.0F, 0.0F, 0.5F, 0.5F};
+}
 
 inline FitWindowResult compute_fit_window_size(const FitWindowInput& input) {
   const float zoom = std::max(input.zoom_factor, 1.0e-6F);
