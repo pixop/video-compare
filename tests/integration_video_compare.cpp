@@ -936,6 +936,9 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     // an interior frame plus both endpoints for wrap and bounce.
     config.frame_buffer_size = 3;
   }
+  if (scenario == Scenario::CropCopy || scenario == Scenario::InteractiveCrop) {
+    SDL_setenv("VIDEO_COMPARE_TRACE_CROP_SELECTION", "1", 1);
+  }
 
   std::ostringstream captured_out;
   std::streambuf* const old_out = std::cout.rdbuf(captured_out.rdbuf());
