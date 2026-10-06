@@ -2,8 +2,6 @@
 #include <libgen.h>
 #include <algorithm>
 #include <atomic>
-#include <cstdio>
-#include <cstdlib>
 #include <future>
 #include <iomanip>
 #include <iostream>
@@ -70,14 +68,6 @@ auto frame_deleter = [](AVFrame* frame) {
   av_frame_free(&frame);
 };
 using AVFramePtr = std::unique_ptr<AVFrame, decltype(frame_deleter)>;
-
-static bool crop_selection_trace_enabled() {
-  const char* value = std::getenv("VIDEO_COMPARE_TRACE_CROP_SELECTION");
-  if (value == nullptr) {
-    return false;
-  }
-  return value[0] == '1' || value[0] == 'y' || value[0] == 'Y' || value[0] == 't' || value[0] == 'T';
-}
 
 template <typename T>
 inline T check_sdl(T value, const std::string& message) {
@@ -2326,12 +2316,6 @@ void Display::possibly_apply_crop() {
 
   const SDL_Rect selection_rect = get_left_selection_rect();
 
-  if (crop_selection_trace_enabled()) {
-    std::fprintf(stderr, "[crop-trace] apply start=%.3f,%.3f end=%.3f,%.3f rect=%d,%d,%dx%d window=%dx%d content=%d,%d,%dx%d video=%dx%d video_to_window=%.6f,%.6f zoom_level=%.3f zoom_factor=%.6f center=%.3f,%.3f\n", selection_start_.x(), selection_start_.y(),
-                 selection_end_.x(), selection_end_.y(), selection_rect.x, selection_rect.y, selection_rect.w, selection_rect.h, window_width_, window_height_, content_window_.x, content_window_.y, content_window_.w, content_window_.h, video_width_, video_height_,
-                 video_to_window_width_factor_, video_to_window_height_factor_, global_zoom_level_, global_zoom_factor_, global_center_.x(), global_center_.y());
-  }
-
   pending_crop_request_ = PendingCropRequest{};
 
   if (selection_rect.w <= 0 || selection_rect.h <= 0) {
@@ -3056,7 +3040,7 @@ Vector2D Display::window_to_video_position(const int window_x_position, const in
     // -Ofast may evaluate an exact pixel boundary one ULP to either side
     // (for example 20.0 as 19.999998). Bias by one representable float
     // toward the requested integer direction before floor/ceil.
-    const float biased = std::nextafter(value, floor_result ? std::numeric_limits<float>::infinity() : -std::numeric_limits<float>::infinity());
+    const float biased = std::nextafter(value, floor_result ? std::numeric_limits<float>::max() : std::numeric_limits<float>::lowest());
     return floor_result ? std::floor(biased) : std::ceil(biased);
   };
 
@@ -3299,9 +3283,6 @@ void Display::handle_event(const SDL_Event& event) {
       mouse_y_ = event_.motion.y;
 
       refresh_selection_end_from_mouse();
-      if (selection_state_ == SelectionState::Started && crop_selection_trace_enabled()) {
-        std::fprintf(stderr, "[crop-trace] motion raw=%d,%d selection_end=%.3f,%.3f\n", mouse_x_, mouse_y_, selection_end_.x(), selection_end_.y());
-      }
 
       if (event_.motion.state & SDL_BUTTON_RMASK) {
         const auto pan_offset = Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_) / Vector2D(drawable_to_window_width_factor_, drawable_to_window_height_factor_);
@@ -3332,9 +3313,6 @@ void Display::handle_event(const SDL_Event& event) {
         }
 
         selection_end_ = selection_start_;
-        if (crop_selection_trace_enabled()) {
-          std::fprintf(stderr, "[crop-trace] button-down raw=%d,%d selection_start=%.3f,%.3f\n", mouse_x_, mouse_y_, selection_start_.x(), selection_start_.y());
-        }
       } else if (event_.button.button != SDL_BUTTON_RIGHT) {
         seek_relative_ = static_cast<float>(mouse_x_) / static_cast<float>(window_width_);
         seek_from_start_ = true;
@@ -3346,9 +3324,6 @@ void Display::handle_event(const SDL_Event& event) {
       mouse_y_ = event_.button.y;
       if (event_.button.button == SDL_BUTTON_LEFT && selection_state_ == SelectionState::Started) {
         refresh_selection_end_from_mouse();
-        if (crop_selection_trace_enabled()) {
-          std::fprintf(stderr, "[crop-trace] button-up raw=%d,%d selection_end=%.3f,%.3f\n", mouse_x_, mouse_y_, selection_end_.x(), selection_end_.y());
-        }
         selection_state_ = SelectionState::Completed;
       }
       update_cursor();
@@ -3378,23 +3353,6 @@ void Display::handle_event(const SDL_Event& event) {
         crop_mode_ = true;
         selection_state_ = SelectionState::None;
         update_cursor();
-        if (crop_selection_trace_enabled()) {
-          const char* target = "Undefined";
-          switch (side) {
-            case CropTargetSide::Left:
-              target = "Left";
-              break;
-            case CropTargetSide::Right:
-              target = "Right";
-              break;
-            case CropTargetSide::Both:
-              target = "Both";
-              break;
-            case CropTargetSide::Undefined:
-              break;
-          }
-          std::fprintf(stderr, "[crop-trace] crop-mode target=%s\n", target);
-        }
       };
       auto reset_crop_mode = [&]() {
         crop_mode_ = false;

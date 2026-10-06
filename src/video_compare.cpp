@@ -2,7 +2,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <cstdio>
 #include <cstdlib>
 #include <deque>
 #include <fstream>
@@ -43,18 +42,6 @@ static bool env_flag_enabled(const char* name) {
     return false;
   }
   return (v[0] == '1') || (v[0] == 'y') || (v[0] == 'Y') || (v[0] == 't') || (v[0] == 'T');
-}
-
-static void trace_polled_crop_mouse(const SDL_Event& event) {
-  if (event.type == SDL_MOUSEMOTION) {
-    std::fprintf(stderr, "[crop-trace] poll type=SDL_MOUSEMOTION x=%d y=%d windowID=%u state=%u\n", event.motion.x, event.motion.y, event.motion.windowID, event.motion.state);
-    return;
-  }
-  if (event.type != SDL_MOUSEBUTTONDOWN && event.type != SDL_MOUSEBUTTONUP) {
-    return;
-  }
-  std::fprintf(stderr, "[crop-trace] poll type=%s x=%d y=%d windowID=%u button=%u state=%u\n", event.type == SDL_MOUSEBUTTONDOWN ? "SDL_MOUSEBUTTONDOWN" : "SDL_MOUSEBUTTONUP", event.button.x, event.button.y, event.button.windowID,
-               static_cast<unsigned>(event.button.button), static_cast<unsigned>(event.button.state));
 }
 
 static auto avpacket_deleter = [](AVPacket* packet) {
@@ -1084,7 +1071,6 @@ void VideoCompare::compare() {
     double next_refresh_at = 0;
 
     const bool log_event_routing = env_flag_enabled("VIDEO_COMPARE_LOG_EVENT_ROUTING");
-    const bool trace_crop_selection = env_flag_enabled("VIDEO_COMPARE_TRACE_CROP_SELECTION");
 
     for (uint64_t frame_number = 0;; ++frame_number) {
       // Set FPS message if needed
@@ -1101,10 +1087,6 @@ void VideoCompare::compare() {
       display_->begin_input_frame();
       SDL_Event event;
       while (SDL_PollEvent(&event) != 0) {
-        if (trace_crop_selection) {
-          trace_polled_crop_mouse(event);
-        }
-
         display_->mark_input_received();
 
         const uint32_t wid = SDLEventInfo::window_id(event);
