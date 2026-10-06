@@ -158,7 +158,9 @@ void push_mouse_motion(const int x, const int y) {
   event.type = SDL_MOUSEMOTION;
   event.motion.type = SDL_MOUSEMOTION;
   event.motion.timestamp = SDL_GetTicks();
-  event.motion.windowID = first_sdl_window_id();
+  // Keep synthetic coordinates in the test's logical window space. A non-zero
+  // windowID makes sdl2-compat convert them through the renderer again.
+  event.motion.windowID = 0;
   event.motion.x = x;
   event.motion.y = y;
   if (SDL_PushEvent(&event) < 0) {
@@ -173,7 +175,7 @@ void push_mouse_button(const Uint32 type, const int x, const int y) {
   event.type = type;
   event.button.type = type;
   event.button.timestamp = SDL_GetTicks();
-  event.button.windowID = first_sdl_window_id();
+  event.button.windowID = 0;
   event.button.button = SDL_BUTTON_LEFT;
   event.button.state = (type == SDL_MOUSEBUTTONDOWN) ? SDL_PRESSED : SDL_RELEASED;
   event.button.clicks = 1;
