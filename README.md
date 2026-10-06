@@ -224,6 +224,7 @@ see all supported options.
 - `T`: Toggle nearest-neighbor/bilinear video texture filtering
 - `Y`: Cycle through subtraction modes
 - `U`: Toggle luminance-only subtraction mode
+- `W`: Fit and center window to current video view
 - `X`: Show the current video frame and UI update rates (FPS)
 - `F1`: Toggle Histogram window
 - `F2`: Toggle Vectorscope window

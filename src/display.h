@@ -372,6 +372,7 @@ class Display {
   std::array<int, 2> compute_mode_switch_target_window_size() const;
   void update_content_window_layout();
   void apply_window_size_and_relayout(int target_w, int target_h, bool force_layout_refresh);
+  void fit_window_to_current_video_view();
   void set_fullscreen(bool fullscreen);
   void resize_window_for_mode_switch();
   void handle_window_resize(bool reset_forced_size_guard = false, bool force_layout_refresh = false);

@@ -22,6 +22,7 @@
 #include "version.h"
 #include "video_compare_icon.h"
 #include "vmaf_calculator.h"
+#include "window_fit.h"
 #include "zoom_transform.h"
 extern "C" {
 #include <libavfilter/avfilter.h>
@@ -275,13 +276,9 @@ Display::Display(const int display_number,
   int window_width;
   int window_height;
 
-  // account for window frame and title bar
-  constexpr int border_width = 10;
-#ifdef __linux__
-  constexpr int border_height = 40;
-#else
-  constexpr int border_height = 34;
-#endif
+  // account for window frame and title bar (shared with the W fit-to-video shortcut)
+  constexpr int border_width = window_fit::kFrameBorderWidth;
+  constexpr int border_height = window_fit::kFrameBorderHeight;
 
   SDL_Rect bounds;
   check_sdl(SDL_GetDisplayUsableBounds(display_number, &bounds) == 0, "get display usable bounds");
@@ -325,11 +322,9 @@ Display::Display(const int display_number,
       window_height = static_cast<int>(window_width / aspect_ratio);
     }
 
-    window_x = bounds.x + (usable_width - window_width + border_width) / 2;
-    window_y = bounds.y + (usable_height - window_height + border_height) / 2 + border_width;
-#ifdef __linux__
-    window_y -= 2 * border_width + 4;
-#endif
+    const window_fit::WindowPosition origin = window_fit::centered_window_position({bounds.x, bounds.y, bounds.w, bounds.h}, window_width, window_height, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
+    window_x = origin.x;
+    window_y = origin.y;
   }
 
   if (window_width < MIN_WINDOW_WIDTH) {
@@ -490,6 +485,88 @@ void Display::recreate_video_textures_for_current_mode() {
 void Display::apply_window_size_and_relayout(const int target_w, const int target_h, const bool force_layout_refresh) {
   SDL_SetWindowSize(window_, target_w, target_h);
   handle_window_resize(true, force_layout_refresh);
+}
+
+void Display::fit_window_to_current_video_view() {
+  const Uint32 window_flags = SDL_GetWindowFlags(window_);
+  window_fit::FitSurfaceState surface_state;
+  surface_state.native_fullscreen = (window_flags & SDL_WINDOW_FULLSCREEN) != 0;
+  surface_state.borderless = (window_flags & SDL_WINDOW_BORDERLESS) != 0;
+  surface_state.maximized = (window_flags & SDL_WINDOW_MAXIMIZED) != 0;
+  surface_state.fullscreen_like = detect_fullscreen_like_state();
+  const window_fit::FitSurfaceAction surface = window_fit::fit_surface_action(surface_state);
+  if (surface == window_fit::FitSurfaceAction::Ignore) {
+    // Native fullscreen, or a borderless desktop-sized surface. Do not resize it
+    // and do not change zoom or pan.
+    notify_user("Cannot fit window to video view while fullscreen");
+    return;
+  }
+
+  // Choose the display once, before the resize. An oversized window can span
+  // monitors; recentering must stay on the display that contained it.
+  int display_index = SDL_GetWindowDisplayIndex(window_);
+  if (display_index < 0) {
+    display_index = display_number_;
+  }
+
+  bool have_bounds = false;
+  window_fit::DisplayBounds display_bounds{0, 0, 0, 0};
+  int max_w = 0;
+  int max_h = 0;
+  SDL_Rect bounds{};
+  if (SDL_GetDisplayUsableBounds(display_index, &bounds) == 0) {
+    have_bounds = true;
+    display_bounds = {bounds.x, bounds.y, bounds.w, bounds.h};
+    const auto limits = window_fit::usable_window_limits(bounds.w, bounds.h, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
+    max_w = limits.max_w;
+    max_h = limits.max_h;
+  }
+
+  // Capture content, zoom, and DPI before relayout. Resizing replaces content_window_
+  // and the scale factors; deriving the size again afterwards would apply zoom twice.
+  window_fit::FitWindowInput input{};
+  input.content_w = static_cast<float>(std::max(1, content_window_.w));
+  input.content_h = static_cast<float>(std::max(1, content_window_.h));
+  input.zoom_factor = global_zoom_factor_;
+  input.drawable_to_window_width_factor = drawable_to_window_width_factor_;
+  input.drawable_to_window_height_factor = drawable_to_window_height_factor_;
+  input.max_window_w = max_w;
+  input.max_window_h = max_h;
+  input.min_window_w = MIN_WINDOW_WIDTH;
+  input.min_window_h = MIN_WINDOW_HEIGHT;
+
+  const window_fit::FitWindowResult fit = window_fit::compute_fit_window_size(input);
+
+  // A maximized window ignores SDL_SetWindowSize until it is restored.
+  if (surface == window_fit::FitSurfaceAction::UnmaximizeThenFit) {
+    SDL_RestoreWindow(window_);
+  }
+  if (surface == window_fit::FitSurfaceAction::UnmaximizeThenFit || fit.width != window_width_ || fit.height != window_height_) {
+    apply_window_size_and_relayout(fit.width, fit.height, true);
+  }
+
+  // Aspect lock may have adjusted the request. Center that actual size on the
+  // display chosen above, not a display queried again after the resize.
+  int reported_w = fit.width;
+  int reported_h = fit.height;
+  SDL_GetWindowSize(window_, &reported_w, &reported_h);
+
+  bool centered = false;
+  if (have_bounds) {
+    const window_fit::WindowPosition origin = window_fit::centered_window_position(display_bounds, reported_w, reported_h, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
+    SDL_SetWindowPosition(window_, origin.x, origin.y);
+    centered = true;
+  }
+
+  const window_fit::RecenteredPan pan = window_fit::pan_after_fit();
+  update_move_offset(Vector2D(pan.move_x, pan.move_y));
+  update_zoom_factor(window_fit::zoom_factor_after_fit());
+
+  if (centered) {
+    notify_user(string_sprintf("Fitted and centered window to current video view (%dx%d)", reported_w, reported_h));
+  } else {
+    notify_user(string_sprintf("Fitted window to current video view (%dx%d)", reported_w, reported_h));
+  }
 }
 
 void Display::set_fullscreen(const bool fullscreen) {
@@ -3242,6 +3319,7 @@ void Display::handle_event(const SDL_Event& event) {
       const bool is_shift_down = (keymod & KMOD_SHIFT) != 0;
       const bool is_ctrl_down = (keymod & KMOD_CTRL) != 0;
       const bool is_alt_down = (keymod & KMOD_ALT) != 0;
+      const bool is_gui_down = (keymod & KMOD_GUI) != 0;
 
       const float relative_seek_scale = (is_shift_down || is_ctrl_down) ? 1.0F / RELATIVE_SEEK_SLOWDOWN_RATIO : 1.0F;
       const float playback_speed_scale = (is_shift_down || is_ctrl_down) ? 1.0F / PLAYBACK_SPEED_SLOWDOWN_RATIO : 1.0F;
@@ -3330,15 +3408,24 @@ void Display::handle_event(const SDL_Event& event) {
           }
           break;
         case SDLK_w: {
-          if (is_ctrl_down && is_shift_down) {
-            saved_window_size_ = {window_width_, window_height_};
-            std::cout << string_sprintf("Saved window size (%dx%d)", saved_window_size_[0], saved_window_size_[1]) << std::endl;
-          } else if (is_ctrl_down) {
-            restore_window_size(startup_window_size_);
-            std::cout << string_sprintf("Restored startup window size (%dx%d)", startup_window_size_[0], startup_window_size_[1]) << std::endl;
-          } else if (is_shift_down) {
-            restore_window_size(saved_window_size_);
-            std::cout << string_sprintf("Restored saved window size (%dx%d)", saved_window_size_[0], saved_window_size_[1]) << std::endl;
+          switch (window_fit::window_size_chord(is_ctrl_down, is_shift_down, is_alt_down, is_gui_down)) {
+            case window_fit::WindowSizeChord::SaveCurrent:
+              saved_window_size_ = {window_width_, window_height_};
+              std::cout << string_sprintf("Saved window size (%dx%d)", saved_window_size_[0], saved_window_size_[1]) << std::endl;
+              break;
+            case window_fit::WindowSizeChord::RestoreStartup:
+              restore_window_size(startup_window_size_);
+              std::cout << string_sprintf("Restored startup window size (%dx%d)", startup_window_size_[0], startup_window_size_[1]) << std::endl;
+              break;
+            case window_fit::WindowSizeChord::RestoreSaved:
+              restore_window_size(saved_window_size_);
+              std::cout << string_sprintf("Restored saved window size (%dx%d)", saved_window_size_[0], saved_window_size_[1]) << std::endl;
+              break;
+            case window_fit::WindowSizeChord::FitToVideoView:
+              fit_window_to_current_video_view();
+              break;
+            case window_fit::WindowSizeChord::None:
+              break;
           }
           break;
         }
