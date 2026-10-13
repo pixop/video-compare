@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include "scope_color.h"
 extern "C" {
 #include <libavfilter/avfilter.h>
 #include <libavfilter/buffersink.h>
@@ -27,7 +28,7 @@ class ScopeWindow {
   static Type type_for_index(size_t idx);
   static std::array<Type, kNumScopes> all_types();
 
-  ScopeWindow(Type type, const int pane_width, const int pane_height, const bool always_on_top, const int display_number, const bool use_10_bpc, const std::string& filter_options);
+  ScopeWindow(Type type, const int pane_width, const int pane_height, const bool always_on_top, const int display_number, const bool use_10_bpc, const ScopeColorMode color_mode, const std::string& filter_options);
   ~ScopeWindow();
 
   // Feed the current frames and update the scope window if an output is produced.
@@ -102,6 +103,7 @@ class ScopeWindow {
   bool always_on_top_;
   int display_number_;
   bool use_10_bpc_;
+  ScopeColorMode color_mode_;
   std::string filter_options_;
   std::string base_title_;
   std::string last_window_title_;

@@ -116,6 +116,9 @@ tests/test_font_selection$(EXE): TEST_LIBS = $(LDLIBS)
 
 tests/test_video_filterer$(EXE): TEST_LIBS = $(LDLIBS)
 
+tests/test_scope_color$(EXE): src/scope_color.o
+tests/test_scope_color$(EXE): TEST_LIBS = $(LDLIBS)
+
 $(integration_bin): $(integration_obj) $(integration_app_obj)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS)
 

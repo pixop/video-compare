@@ -622,6 +622,10 @@ int main(int argc, char** argv) {
          {"histogram-options", {"--histogram-options"}, "histogram FFmpeg filter options (e.g. 'display_mode=parade:colors_mode=coloronblack:level_height=256:levels_mode=logarithmic')", 1},
          {"vectorscope-options", {"--vectorscope-options"}, "vectorscope FFmpeg filter options (e.g. 'mode=color4:graticule=green:envelope=instant+peak:flags=name+white+black')", 1},
          {"waveform-options", {"--waveform-options"}, "waveform FFmpeg filter options (e.g. 'graticule=orange:display=stack:scale=ire:flags=numbers+dots:intensity=0.1:components=7:filter=lowpass')", 1},
+         {"scope-color-mode",
+          {"--scope-color-mode"},
+          "scope analysis of the displayed frame (not the source format) as [histogram][:vectorscope][:waveform], each 'rgb' or 'yuv' (default rgb:yuv:yuv; one value for all, empty keeps default, e.g. 'yuv', '::rgb')",
+          1},
          {"scope-size", {"--scope-size"}, "set initial scope window size as WxH (total width by height); scope windows are resizable; default 1024x256", 1},
          {"scope-notop", {"--scope-notop"}, "do not keep scope windows always on top", 0},
          {"find-protocols", {"--find-protocols"}, "find FFmpeg input protocols that match the provided search term (e.g. 'ipfs', 'srt', or 'rtmp'; use \"\" to list all)", 1},
@@ -883,6 +887,9 @@ int main(int argc, char** argv) {
       }
       if (args["waveform-options"]) {
         config.scopes.waveform_options = static_cast<const std::string&>(args["waveform-options"]);
+      }
+      if (args["scope-color-mode"]) {
+        config.scopes.color_modes = parse_scope_color_modes(static_cast<const std::string&>(args["scope-color-mode"]));
       }
       if (args["scope-size"]) {
         const std::string scope_size_arg = args["scope-size"];

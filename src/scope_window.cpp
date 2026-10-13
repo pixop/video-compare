@@ -132,8 +132,8 @@ static void ffmpeg_check(const int error_code, const char* what) {
   }
 }
 
-ScopeWindow::ScopeWindow(const Type type, const int pane_width, const int pane_height, const bool always_on_top, const int display_number, const bool use_10_bpc, const std::string& filter_options)
-    : type_(type), pane_width_(pane_width), pane_height_(pane_height), always_on_top_(always_on_top), display_number_(display_number), use_10_bpc_(use_10_bpc), filter_options_(filter_options) {
+ScopeWindow::ScopeWindow(const Type type, const int pane_width, const int pane_height, const bool always_on_top, const int display_number, const bool use_10_bpc, const ScopeColorMode color_mode, const std::string& filter_options)
+    : type_(type), pane_width_(pane_width), pane_height_(pane_height), always_on_top_(always_on_top), display_number_(display_number), use_10_bpc_(use_10_bpc), color_mode_(color_mode), filter_options_(filter_options) {
   const int window_width = pane_width_ * 2;
   const int window_height = pane_height_;
 
@@ -249,21 +249,16 @@ std::string ScopeWindow::build_filter_description(const int pane_width, const in
   const std::string crop_left = roi_enabled ? string_sprintf("crop=%d:%d:%d:%d,", roi.w, roi.h, roi.x, roi.y) : "";
   const std::string crop_right = crop_left;
 
-  const char* pre_format_filter;
-  if (type_ == Type::Histogram) {
-    pre_format_filter = use_10_bpc_ ? "format=gbrp10" : "format=gbrp";
-  } else {
-    pre_format_filter = use_10_bpc_ ? "format=yuv444p10le" : "format=yuv444p";
-  }
-
+  const std::string pre_format_filter = std::string("format=") + scope_analysis_pix_fmt(color_mode_, use_10_bpc_);
   const char* tool_name = get_scope_info(type_).filter_name;
-  const std::string tool_spec = filter_options_.empty() ? std::string(tool_name) : string_sprintf("%s=%s", tool_name, filter_options_.c_str());
+  const std::string tool_spec = scope_filter_spec(tool_name, color_mode_, filter_options_);
 
   std::string filter_description = string_sprintf(
       "[in_left]%s,%s%s,%s,%s,%s[left_scope];"
       "[in_right]%s,%s%s,%s,%s,%s[right_scope];"
       "[left_scope][right_scope]hstack=inputs=2,%s[out]",
-      setparams_left.c_str(), crop_left.c_str(), pre_format_filter, tool_spec.c_str(), left_scale.c_str(), left_pad.c_str(), setparams_right.c_str(), crop_right.c_str(), pre_format_filter, tool_spec.c_str(), right_scale.c_str(),
+      setparams_left.c_str(), crop_left.c_str(), pre_format_filter.c_str(), tool_spec.c_str(), left_scale.c_str(), left_pad.c_str(), setparams_right.c_str(), crop_right.c_str(), pre_format_filter.c_str(), tool_spec.c_str(),
+      right_scale.c_str(),
       right_pad.c_str(), "format=rgb24");
 
   return filter_description;

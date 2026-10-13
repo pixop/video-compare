@@ -17,8 +17,20 @@ static const std::string& get_scope_filter_options(const ScopesConfig& config, c
   return config.histogram_options;
 }
 
+static ScopeColorMode get_scope_color_mode(const ScopesConfig& config, const ScopeWindow::Type type) {
+  switch (type) {
+    case ScopeWindow::Type::Histogram:
+      return config.color_modes.histogram;
+    case ScopeWindow::Type::Vectorscope:
+      return config.color_modes.vectorscope;
+    case ScopeWindow::Type::Waveform:
+      return config.color_modes.waveform;
+  }
+  return config.color_modes.histogram;
+}
+
 static std::unique_ptr<ScopeWindow> make_scope_window(const ScopesConfig& config, bool use_10_bpc, int display_number, ScopeWindow::Type type) {
-  return std::make_unique<ScopeWindow>(type, config.width / 2, config.height, config.always_on_top, display_number, use_10_bpc, get_scope_filter_options(config, type));
+  return std::make_unique<ScopeWindow>(type, config.width / 2, config.height, config.always_on_top, display_number, use_10_bpc, get_scope_color_mode(config, type), get_scope_filter_options(config, type));
 }
 
 ScopeManager::ScopeManager(const ScopesConfig& config, const bool use_10_bpc, const int display_number) : use_10_bpc_(use_10_bpc), display_number_(display_number), config_(config) {
