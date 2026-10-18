@@ -1,6 +1,6 @@
 # <img src="https://github.com/user-attachments/assets/da615466-683e-4cc5-8380-32a98d743ba0" alt="Logo" width="32"/>&nbsp; video-compare
 
-[![GitHub release](https://img.shields.io/github/release/pixop/video-compare)](https://github.com/pixop/video-compare/releases)
+[![GitHub release](https://img.shields.io/github/release/pixop/video-compare?v=2)](https://github.com/pixop/video-compare/releases)
 
 Split-screen video comparison tool written in C++14, utilizing FFmpeg libraries and SDL2. It provides
 interactive navigation and playback controls, along with various analysis tools and customizable display options.
