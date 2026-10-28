@@ -49,7 +49,7 @@ Download and extract the .zip-archive on your system, then run `video-compare.ex
 
 [Build it yourself](#build).
 
-## Graphical User Interfaces
+## GUI Launchers
 
 ### Windows
 
