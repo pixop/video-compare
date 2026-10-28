@@ -53,7 +53,7 @@ Download and extract the .zip-archive on your system, then run `video-compare.ex
 
 ### macOS
 
-[Video Compare GUI](https://github.com/suomi35/VideoCompareGUI) by [Jason (suomi35)](https://github.com/suomi35) is a native SwiftUI frontend with drag-and-drop file selection, graphical configuration, and live command previews. It supports macOS 13+ on Intel and Apple Silicon and requires `video-compare` to be installed. [Download the latest DMG](https://github.com/suomi35/VideoCompareGUI/releases).
+[Video Compare GUI](https://github.com/suomi35/VideoCompareGUI) is a native frontend with drag-and-drop file selection, graphical configuration, and live command previews. It requires `video-compare` to be pre-installed.
 
 ### Windows
 
