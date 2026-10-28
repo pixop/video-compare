@@ -49,6 +49,16 @@ Download and extract the .zip-archive on your system, then run `video-compare.ex
 
 [Build it yourself](#build).
 
+## Graphical User Interfaces
+
+### macOS
+
+[Video Compare GUI](https://github.com/suomi35/VideoCompareGUI) by [Jason (suomi35)](https://github.com/suomi35) is a native SwiftUI frontend with drag-and-drop file selection, graphical configuration, and live command previews. It supports macOS 13+ on Intel and Apple Silicon and requires `video-compare` to be installed. [Download the latest DMG](https://github.com/suomi35/VideoCompareGUI/releases).
+
+### Windows
+
+[VideoCompareGUI](https://github.com/TetzkatLipHoka/VideoCompareGUI) provides a graphical launcher. Other community options include integration with **Beyond Compare** or **Total Commander**; see the [discussion](https://github.com/pixop/video-compare/issues/81).
+
 ## Screenshots
 
 Visual compare mode:
@@ -335,16 +345,6 @@ To make _video-compare_ appear in the **Send to** menu:
 3. Create a shortcut to `video-compare.exe` in this folder
 
 Thanks to [couleurm](https://github.com/couleurm) for sharing this tip and providing the screen recording.
-
-### More frontend options for Windows users
-
-For Windows users, the community has shared several frontend options to complement the command-line functionality:
-
-1. **Beyond Compare** integration: Launch `video-compare` directly from the interface.
-2. **Total Commander** integration: Add a toolbar button to open selected videos.
-3. **[VideoCompareGUI](https://github.com/TetzkatLipHoka/VideoCompareGUI)**: A standalone graphical utility that simplifies launching `video-compare`.
-
-For details, check out the [open GitHub issue thread](https://github.com/pixop/video-compare/issues/81).
 
 ## Contributing
 
