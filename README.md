@@ -51,13 +51,13 @@ Download and extract the .zip-archive on your system, then run `video-compare.ex
 
 ## Graphical User Interfaces
 
-### macOS
-
-[Video Compare GUI](https://github.com/suomi35/VideoCompareGUI) is a native frontend with drag-and-drop file selection, graphical configuration, and live command previews. It requires `video-compare` to be pre-installed.
-
 ### Windows
 
-[VideoCompareGUI](https://github.com/TetzkatLipHoka/VideoCompareGUI) provides a graphical launcher. Other community options include integration with **Beyond Compare** or **Total Commander**; see the [discussion](https://github.com/pixop/video-compare/issues/81).
+[Video-Compare GUI](https://github.com/TetzkatLipHoka/VideoCompareGUI) provides a graphical frontend with `video-compare` bundled, so no separate installation is required. Other community options include integration with **Beyond Compare** or **Total Commander**; see the [discussion](https://github.com/pixop/video-compare/issues/81).
+
+### macOS
+
+[Video-Compare GUI (macOS)](https://github.com/suomi35/VideoCompareGUI) is a native macOS frontend with drag-and-drop file selection, graphical configuration, and live command previews. It requires `video-compare` to be pre-installed.
 
 ## Screenshots
 
