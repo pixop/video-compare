@@ -14,8 +14,9 @@ static std::recursive_mutex log_mutex;
 
 thread_local Side log_side = NONE;
 
-static std::unordered_map<Side, std::unordered_set<std::string>> ignored_log_messages_per_side;
-static std::unordered_set<std::string> search_strings = {"No accelerated colorspace conversion found from", "Skipping NAL unit %d"};
+static std::unordered_map<Side, std::unordered_set<std::string>> logged_once_messages_per_side;
+static const std::unordered_set<std::string> log_once_patterns = {"No accelerated colorspace conversion found from", "Skipping NAL unit %d"};
+static const std::unordered_set<std::string> suppress_patterns = {"deprecated pixel format used, make sure you did set range correctly"};
 
 Side previously_logged_side = NONE;
 void* previously_logged_ptr = nullptr;
@@ -49,23 +50,24 @@ void sa_av_log_callback(void* ptr, int level, const char* fmt, va_list args) {
 
   const std::string message(fmt);
 
-  // Check if the message starts with any of the substrings that generate log clutter
-  bool is_noise = false;
+  for (const auto& pattern : suppress_patterns) {
+    if (message.find(pattern) != std::string::npos) {
+      return;
+    }
+  }
 
-  for (const auto& noise : search_strings) {
-    if (message.find(noise) != std::string::npos) {
-      is_noise = true;
+  bool log_once = false;
+  for (const auto& pattern : log_once_patterns) {
+    if (message.find(pattern) != std::string::npos) {
+      log_once = true;
       break;
     }
   }
 
   std::lock_guard<std::recursive_mutex> lock(log_mutex);
 
-  // If noise and already logged, return early
-  if (is_noise) {
-    if (!ignored_log_messages_per_side[log_side].insert(message).second) {
-      return;
-    }
+  if (log_once && !logged_once_messages_per_side[log_side].insert(message).second) {
+    return;
   }
 
   if (log_side.is_valid()) {
