@@ -70,7 +70,6 @@ Subtraction mode (plus time-shift, 200% zoom, and magnification):
 Vertically stacked mode:
 ![Stacked mode"](docs/images/screenshot_3.jpg?raw=true)
 
-
 ## Usage
 
 Launch using the operating system's DPI setting. Video pixels are doubled on devices like a Retina 5K display;
@@ -185,6 +184,20 @@ apply to all right videos by default, but can be overridden per-video:
 
 The above features can be combined in any order, of course. Launch `video-compare` without any arguments to
 see all supported options.
+
+## Configuration file
+
+To keep your preferred settings across launches, create a `video-compare.opt` file in the directory
+from which you run `video-compare`. The file is loaded automatically and can contain the same
+options you would normally pass on the command line. For example, to reverse the mouse wheel
+zoom direction, add:
+
+```text
+--wheel-sensitivity -1
+```
+
+You can specify multiple options in the file. For a configuration stored elsewhere, use
+`--options-file path/to/settings.opt`.
 
 ## Controls
 
