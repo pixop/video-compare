@@ -8,14 +8,10 @@
 
 using display_pixel_scale::PhysicalPixelScale;
 using display_pixel_scale::compute_physical_pixel_scale;
+using display_pixel_scale::physical_1to1_viewport_zoom_base;
+using display_pixel_scale::zoom_preset_viewport_factor;
 
 static int failures = 0;
-
-// Transcribes Display SDLK_4: min(video_to_window / drawable_to_window) per axis.
-static float key4_viewport_zoom(const float video_to_window_width_factor, const float drawable_to_window_width_factor, const float video_to_window_height_factor,
-                                const float drawable_to_window_height_factor) {
-  return std::min(video_to_window_width_factor / drawable_to_window_width_factor, video_to_window_height_factor / drawable_to_window_height_factor);
-}
 
 static void expect_true(const char* label, const bool got) {
   if (!got) {
@@ -57,10 +53,11 @@ static void test_uniform_1x_and_2x_dpi() {
   const PhysicalPixelScale two_x = compute_physical_pixel_scale(1.0F, 2.0F, 2.0F, 1.0F, 1.0F);
   expect_scale_pair("2x DPI at x1 zoom", two_x, 2.0F, 2.0F);
 
-  const float zoom_1to1 = key4_viewport_zoom(1.0F, 2.0F, 1.0F, 2.0F);
-  expect_near("key 4 zoom on 2x DPI", zoom_1to1, 0.5F);
-  const PhysicalPixelScale after_key4 = compute_physical_pixel_scale(zoom_1to1, 2.0F, 2.0F, 1.0F, 1.0F);
-  expect_scale_pair("2x DPI key 4 physical 1:1", after_key4, 1.0F, 1.0F);
+  const float zoom_shift6 = zoom_preset_viewport_factor(2, true, 1.0F, 2.0F, 1.0F, 2.0F);
+  expect_near("Shift+6 viewport on 2x DPI (base)", physical_1to1_viewport_zoom_base(1.0F, 2.0F, 1.0F, 2.0F), 0.5F);
+  expect_near("Shift+6 viewport on 2x DPI", zoom_shift6, 0.5F);
+  const PhysicalPixelScale after_shift6 = compute_physical_pixel_scale(zoom_shift6, 2.0F, 2.0F, 1.0F, 1.0F);
+  expect_scale_pair("2x DPI Shift+6 physical 100%", after_shift6, 1.0F, 1.0F);
 }
 
 static void test_letterboxed_aspect() {
@@ -72,15 +69,45 @@ static void test_letterboxed_aspect() {
   expect_near("letterbox scale_x", at_x1.x, 0.75F);
   expect_near("letterbox scale_y", at_x1.y, 1.0F);
 
-  const float zoom_1to1 = key4_viewport_zoom(video_x, 1.0F, video_y, 1.0F);
-  expect_near("letterbox key 4 zoom", zoom_1to1, 1.0F);
-  const PhysicalPixelScale after_key4 = compute_physical_pixel_scale(zoom_1to1, 1.0F, 1.0F, video_x, video_y);
-  expect_scale_pair("letterbox key 4 physical", after_key4, 0.75F, 1.0F);
+  const float zoom_shift6_letterbox = zoom_preset_viewport_factor(2, true, video_x, 1.0F, video_y, 1.0F);
+  expect_near("letterbox Shift+6 viewport", zoom_shift6_letterbox, 1.0F);
+  const PhysicalPixelScale after_shift6_letterbox = compute_physical_pixel_scale(zoom_shift6_letterbox, 1.0F, 1.0F, video_x, video_y);
+  expect_scale_pair("letterbox Shift+6 physical 100%", after_shift6_letterbox, 0.75F, 1.0F);
 }
 
 static void test_nonuniform_dpi() {
   const PhysicalPixelScale scale = compute_physical_pixel_scale(1.0F, 2.0F, 3.0F, 1.0F, 1.0F);
   expect_scale_pair("non-uniform DPI", scale, 2.0F, 3.0F);
+}
+
+static void test_viewport_zoom_presets() {
+  static const float k_expected[6] = {0.25F, 0.5F, 1.0F, 2.0F, 4.0F, 8.0F};
+  for (int i = 0; i < 6; ++i) {
+    expect_near(("plain key " + std::to_string(4 + i) + " viewport").c_str(), zoom_preset_viewport_factor(i, false, 1.0F, 1.0F, 1.0F, 1.0F), k_expected[i]);
+  }
+}
+
+static void test_shift_physical_zoom_presets() {
+  const float zoom_shift6_2x = zoom_preset_viewport_factor(2, true, 1.0F, 2.0F, 1.0F, 2.0F);
+  expect_near("Shift+6 viewport on 2x DPI", zoom_shift6_2x, 0.5F);
+  const PhysicalPixelScale shift6_phys = compute_physical_pixel_scale(zoom_shift6_2x, 2.0F, 2.0F, 1.0F, 1.0F);
+  expect_scale_pair("Shift+6 physical 100% on 2x DPI", shift6_phys, 1.0F, 1.0F);
+
+  const float video_x = 1920.0F / 1440.0F;
+  const float zoom_shift6_letterbox = zoom_preset_viewport_factor(2, true, video_x, 1.0F, 1.0F, 1.0F);
+  expect_near("Shift+6 letterbox viewport", zoom_shift6_letterbox, 1.0F);
+  const PhysicalPixelScale shift6_letterbox_phys = compute_physical_pixel_scale(zoom_shift6_letterbox, 1.0F, 1.0F, video_x, 1.0F);
+  expect_scale_pair("Shift+6 letterbox physical", shift6_letterbox_phys, 0.75F, 1.0F);
+
+  const float zoom_shift4_2x = zoom_preset_viewport_factor(0, true, 1.0F, 2.0F, 1.0F, 2.0F);
+  expect_near("Shift+4 viewport on 2x DPI", zoom_shift4_2x, 0.125F);
+  const PhysicalPixelScale shift4_phys = compute_physical_pixel_scale(zoom_shift4_2x, 2.0F, 2.0F, 1.0F, 1.0F);
+  expect_scale_pair("Shift+4 physical 25% on 2x DPI", shift4_phys, 0.25F, 0.25F);
+
+  const float zoom_shift8 = zoom_preset_viewport_factor(4, true, 1.0F, 2.0F, 1.0F, 3.0F);
+  expect_near("Shift+8 non-uniform DPI viewport", zoom_shift8, 4.0F / 3.0F);
+  const PhysicalPixelScale shift8_phys = compute_physical_pixel_scale(zoom_shift8, 2.0F, 3.0F, 1.0F, 1.0F);
+  expect_scale_pair("Shift+8 non-uniform DPI physical", shift8_phys, 8.0F / 3.0F, 4.0F);
 }
 
 static void test_append_formatting() {
@@ -104,6 +131,8 @@ int main() {
   test_uniform_1x_and_2x_dpi();
   test_letterboxed_aspect();
   test_nonuniform_dpi();
+  test_viewport_zoom_presets();
+  test_shift_physical_zoom_presets();
   test_append_formatting();
 
   if (failures != 0) {

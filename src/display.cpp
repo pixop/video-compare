@@ -3626,28 +3626,21 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_4:
         case SDLK_KP_4:
-          update_zoom_factor_and_move_offset(std::min(video_to_window_width_factor_ / drawable_to_window_width_factor_, video_to_window_height_factor_ / drawable_to_window_height_factor_));
-          break;
         case SDLK_5:
         case SDLK_KP_5:
-          update_zoom_factor_and_move_offset(0.5F);
-          break;
         case SDLK_6:
         case SDLK_KP_6:
-          update_zoom_factor_and_move_offset(1.0F);
-          break;
         case SDLK_7:
         case SDLK_KP_7:
-          update_zoom_factor_and_move_offset(2.0F);
-          break;
         case SDLK_8:
         case SDLK_KP_8:
-          update_zoom_factor_and_move_offset(4.0F);
-          break;
         case SDLK_9:
-        case SDLK_KP_9:
-          update_zoom_factor_and_move_offset(8.0F);
+        case SDLK_KP_9: {
+          const int preset_index = (keycode >= SDLK_KP_4 && keycode <= SDLK_KP_9) ? (keycode - SDLK_KP_4) : (keycode - SDLK_4);
+          update_zoom_factor_and_move_offset(display_pixel_scale::zoom_preset_viewport_factor(preset_index, is_shift_down, video_to_window_width_factor_, drawable_to_window_width_factor_,
+                                                                                                video_to_window_height_factor_, drawable_to_window_height_factor_));
           break;
+        }
         case SDLK_e: {
           SDL_GetMouseState(&mouse_x_, &mouse_y_);
 

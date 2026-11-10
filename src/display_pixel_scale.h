@@ -18,6 +18,25 @@ struct PhysicalPixelScale {
   float y;
 };
 
+inline float physical_1to1_viewport_zoom_base(const float video_to_window_width_factor, const float drawable_to_window_width_factor, const float video_to_window_height_factor,
+                                              const float drawable_to_window_height_factor) {
+  return std::min(video_to_window_width_factor / drawable_to_window_width_factor, video_to_window_height_factor / drawable_to_window_height_factor);
+}
+
+// Keys 4–9: plain = viewport factors; Shift = physical magnification presets.
+inline float zoom_preset_viewport_factor(const int preset_index, const bool shift_down, const float video_to_window_width_factor, const float drawable_to_window_width_factor,
+                                         const float video_to_window_height_factor, const float drawable_to_window_height_factor) {
+  static const float k_presets[6] = {0.25F, 0.5F, 1.0F, 2.0F, 4.0F, 8.0F};
+  if (preset_index < 0 || preset_index >= 6) {
+    return 1.0F;
+  }
+  if (shift_down) {
+    return physical_1to1_viewport_zoom_base(video_to_window_width_factor, drawable_to_window_width_factor, video_to_window_height_factor, drawable_to_window_height_factor) *
+           k_presets[preset_index];
+  }
+  return k_presets[preset_index];
+}
+
 inline float safe_positive(const float value) {
   return std::max(value, 1.0e-6F);
 }
