@@ -23,6 +23,7 @@
 #include "version.h"
 #include "video_compare_icon.h"
 #include "vmaf_calculator.h"
+#include "display_pixel_scale.h"
 #include "window_fit.h"
 #include "zoom_transform.h"
 extern "C" {
@@ -3727,6 +3728,8 @@ void Display::handle_event(const SDL_Event& event) {
             // sizes it from the original left input; visual Swap must not retarget it.
             std::string message = string_sprintf("Display state: window=%dx%d content=%d,%d,%dx%d aspect=%s", window_width_, window_height_, content_window_.x, content_window_.y, content_window_.w, content_window_.h,
                                                  aspect_view_mode_to_string(aspect_view_mode_).c_str());
+            display_pixel_scale::append_display_state_viewport_and_pixel_scale(message, global_zoom_factor_, drawable_to_window_width_factor_, drawable_to_window_height_factor_, video_to_window_width_factor_,
+                                                                             video_to_window_height_factor_);
             video_filter_state::append_display_state_mapping(message, swap_left_right_, active_right_index_);
             if (visual_left_pre_canvas_size_.first > 0 && visual_left_pre_canvas_size_.second > 0) {
               message += string_sprintf(" visual_left=%dx%d", visual_left_pre_canvas_size_.first, visual_left_pre_canvas_size_.second);
