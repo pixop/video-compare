@@ -119,14 +119,21 @@ tests/test_font_selection$(EXE): TEST_LIBS = $(LDLIBS)
 
 tests/test_video_filterer$(EXE): TEST_LIBS = $(LDLIBS)
 
+tests/test_tone_mapping$(EXE): src/tone_mapping.o
+tests/test_tone_mapping$(EXE): TEST_LIBS = $(LDLIBS)
+
 tests/test_scope_color$(EXE): src/scope_color.o
 tests/test_scope_color$(EXE): TEST_LIBS = $(LDLIBS)
 
 $(integration_bin): $(integration_obj) $(integration_app_obj)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS)
 
+.PHONY: cli-smoke
+cli-smoke: $(target)
+	tests/cli_smoke.sh ./$(target)
+
 .PHONY: check
-check: $(test_bin)
+check: $(test_bin) cli-smoke
 	@set -e; \
 	for test in $(test_bin); do \
 		echo "Running $$test"; \

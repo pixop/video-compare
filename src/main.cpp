@@ -13,6 +13,7 @@
 #include "side_aware_logger.h"
 #include "string_utils.h"
 #include "version.h"
+#include "tone_mapping.h"
 #include "video_compare.h"
 #include "vmaf_calculator.h"
 
@@ -557,6 +558,9 @@ void apply_right_video_spec(InputVideo& video, const RightVideoSpec& spec, const
   if (const std::string* val = get_param("tone-map-mode")) {
     video.tone_mapping_mode = parse_tone_mapping_mode(*val);
   }
+  if (const std::string* val = get_param("tone-map-algorithm")) {
+    video.tone_map_algorithm = parse_tone_map_algorithm(*val);
+  }
   if (const std::string* val = get_param("peak-nits")) {
     video.peak_luminance_nits = parse_peak_nits(*val);
   }
@@ -607,9 +611,16 @@ int main(int argc, char** argv) {
          {"color-primaries", {"-P", "--color-primaries"}, "set the color primaries, specified as [primaries] for the same on both sides, or [l-primaries?]:[r-primaries?] for different values (e.g. 'bt709' or 'bt2020:bt709')", 1},
          {"color-trc", {"-N", "--color-trc"}, "set the transfer characteristics (transfer curve), specified as [trc] for the same on both sides, or [l-trc?]:[r-trc?] for different values (e.g. 'bt709' or 'smpte2084:')", 1},
          {"tone-map-mode", {"-T", "--tone-map-mode"}, "adapt tones for sRGB display: 'auto' (default) for automatic HDR, 'off' for none, 'on' for full-range mapping, 'rel' for relative comparison (e.g. 'on', 'auto:off', ':rel')", 1},
+         {"tone-map-algorithm",
+          {"-M", "--tone-map-algorithm"},
+          "HDR tone-map algorithm when -T is not off: 'clip' (default), 'mobius', 'hable', or 'reinhard'; ignored with -T off; 'rel' requires clip (e.g. 'mobius', ':hable', 'reinhard:clip')",
+          1},
          {"left-peak-nits", {"-L", "--left-peak-nits"}, "left video peak luminance in nits (e.g. 850 or 1000), default is 100 for SDR and 500 for HDR", 1},
          {"right-peak-nits", {"-R", "--right-peak-nits"}, "right video peak luminance in nits; see --left-peak-nits", 1},
-         {"boost-tone", {"-B", "--boost-tone"}, "adjust tone-mapping strength factor, specified as [factor] for the same on both sides, or [l-factor?]:[r-factor?] for different values (e.g. '0.6', ':3' or '2:1.5')", 1},
+         {"boost-tone",
+          {"-B", "--boost-tone"},
+          "adjust tone-mapping strength factor, globally or per side (e.g. '0.6', ':3' or '2:1.5'); clip accepts any positive factor, nonlinear algorithms use exposure (gain 0.125–8)",
+          1},
          {"filters", {"-i", "--filters"}, "specify a comma-separated list of FFmpeg filters to be applied to both sides (e.g. scale=1920:-2,delogo=x=10:y=10:w=100:h=70)", 1},
          {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
          {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
@@ -874,6 +885,14 @@ int main(int argc, char** argv) {
         config.left.tone_mapping_mode = parse_tone_mapping_mode(left_tone_mapping_mode);
         right_template.tone_mapping_mode = (tone_mapping_mode_spec == left_tone_mapping_mode) ? config.left.tone_mapping_mode : parse_tone_mapping_mode(get_nth_token_or_empty(tone_mapping_mode_spec, ':', 1));
       }
+      if (args["tone-map-algorithm"]) {
+        auto tone_map_algorithm_spec = static_cast<const std::string&>(args["tone-map-algorithm"]);
+        auto left_tone_map_algorithm = get_nth_token_or_empty(tone_map_algorithm_spec, ':', 0);
+
+        config.left.tone_map_algorithm = parse_tone_map_algorithm(left_tone_map_algorithm);
+        right_template.tone_map_algorithm =
+            (tone_map_algorithm_spec == left_tone_map_algorithm) ? config.left.tone_map_algorithm : parse_tone_map_algorithm(get_nth_token_or_empty(tone_map_algorithm_spec, ':', 1));
+      }
 
       // scopes
       config.scopes.histogram = args["histogram-window"];
@@ -995,6 +1014,9 @@ int main(int argc, char** argv) {
         right_template.boost_tone = (boost_tone_spec == left_boost_tone) ? config.left.boost_tone : parse_boost_tone(get_nth_token_or_empty(boost_tone_spec, ':', 1));
       }
 
+      validate_tone_mapping_for_side(config.left.side_description, config.left.tone_mapping_mode, config.left.tone_map_algorithm);
+      validate_tone_mapping_for_side(right_template.side_description, right_template.tone_mapping_mode, right_template.tone_map_algorithm);
+
       config.left.file_name = args.pos[0];
 
       // Parse multiple right videos
@@ -1020,6 +1042,7 @@ int main(int argc, char** argv) {
         av_dict_copy(&right_video.hw_accel_options, right_template.hw_accel_options, 0);
 
         apply_right_video_spec(right_video, spec, right_template);
+        validate_tone_mapping_for_side(right_video.side_description, right_video.tone_mapping_mode, right_video.tone_map_algorithm);
 
         // Resolve placeholders for this right video
         std::string left_file = config.left.file_name;

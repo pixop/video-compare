@@ -7,6 +7,7 @@
 #include "demuxer.h"
 #include "side_aware.h"
 #include "video_decoder.h"
+#include "tone_mapping.h"
 #include "video_filter_context.h"
 #include "video_filter_state.h"
 extern "C" {
@@ -53,6 +54,7 @@ class VideoFilterer : public SideAware {
                 const Demuxer* demuxer,
                 const VideoDecoder* video_decoder,
                 const ToneMapping tone_mapping_mode,
+                const ToneMapAlgorithm tone_map_algorithm,
                 const float boost_tone,
                 const std::string& custom_video_filters,
                 const std::string& custom_color_space,
@@ -101,6 +103,8 @@ class VideoFilterer : public SideAware {
   const Demuxer* demuxer_;
   const VideoDecoder* video_decoder_;
   const ToneMapping tone_mapping_mode_;
+  const ToneMapAlgorithm tone_map_algorithm_;
+  const float boost_tone_{1.0F};
 
   std::string pre_filter_description_;
   std::string post_filter_description_;
@@ -122,6 +126,8 @@ class VideoFilterer : public SideAware {
 
   DynamicRange dynamic_range_;
   unsigned peak_luminance_nits_;
+  bool inject_auto_peak_nits_{false};
+  bool inject_auto_tonemap_peak_{false};
 
   CropState crop_{};
   CropState pending_crop_{};

@@ -9,6 +9,7 @@
 #include "string_utils.h"
 #include "video_filter_context.h"
 #include "video_filter_state.h"
+#include "tone_mapping.h"
 #include "video_filterer_classify.h"
 
 static constexpr char VIDEO_FILTER_GROUP_DELIMITER = '|';
@@ -29,6 +30,7 @@ VideoFilterer::VideoFilterer(const Side& side,
                              const Demuxer* demuxer,
                              const VideoDecoder* video_decoder,
                              const ToneMapping tone_mapping_mode,
+                             const ToneMapAlgorithm tone_map_algorithm,
                              const float boost_tone,
                              const std::string& custom_video_filters,
                              const std::string& custom_color_space,
@@ -41,6 +43,8 @@ VideoFilterer::VideoFilterer(const Side& side,
       demuxer_(demuxer),
       video_decoder_(video_decoder),
       tone_mapping_mode_(tone_mapping_mode),
+      tone_map_algorithm_(tone_map_algorithm),
+      boost_tone_(boost_tone),
       width_(video_decoder->width()),
       height_(video_decoder->height()),
       crop_space_width_(std::max(1, static_cast<int>(video_decoder->width()))),
@@ -180,44 +184,34 @@ VideoFilterer::VideoFilterer(const Side& side,
 
   // tone-mapping
   if (must_tonemap) {
-    const std::string display_primaries = "bt709";
-    const std::string display_trc = "iec61966-2-1";  // sRGB
-
     std::vector<std::string> warnings;
 
-    if (!avfilter_get_by_name("zscale")) {
+    const bool have_zscale = avfilter_get_by_name("zscale") != nullptr;
+    const bool have_tonemap = avfilter_get_by_name("tonemap") != nullptr;
+
+    if (!have_zscale) {
       warnings.push_back("zscale filter missing in libavfilter build");
+    }
+    if (tone_map_algorithm != ToneMapAlgorithm::Clip && !have_tonemap) {
+      warnings.push_back("tonemap filter missing in libavfilter build");
     }
 
     if (warnings.empty()) {
       const unsigned other_peak_luminance_nits = video_filter_context->get_max_peak_luminance_excluding(side);
+      const ToneMapFilterPlan plan = build_hdr_tone_map_filters(tone_mapping_mode, tone_map_algorithm, boost_tone, peak_luminance_nits_, other_peak_luminance_nits, have_zscale, have_tonemap);
 
-      float tone_adjustment = (tone_mapping_mode == ToneMapping::Relative && peak_luminance_nits_ < other_peak_luminance_nits) ? static_cast<float>(peak_luminance_nits_) / other_peak_luminance_nits : 1.0F;
-      tone_adjustment *= boost_tone;
-
-      if (std::fabs(tone_adjustment - 1.0F) > 1e-5) {
-        post_filters.push_back("format=gbrpf32");
-
-        if (tone_mapping_mode == ToneMapping::Auto) {
-          // peak luma gets injected from within init_filters() during auto-mode
-          post_filters.push_back("zscale=t=linear:npl=%d");
-        } else {
-          post_filters.push_back(string_sprintf("zscale=t=linear:npl=%d", peak_luminance_nits_));
-        }
-
-        post_filters.push_back(string_sprintf("tonemap=clip:param=%.5f", tone_adjustment));
-        post_filters.push_back(string_sprintf("zscale=p=%s:t=%s", display_primaries.c_str(), display_trc.c_str()));
+      if (plan.post_filters.empty() && tone_map_algorithm != ToneMapAlgorithm::Clip) {
+        warnings.push_back("tonemap filter missing in libavfilter build");
       } else {
-        post_filters.push_back("format=rgb48");
-
-        if (tone_mapping_mode == ToneMapping::Auto) {
-          // peak luma gets injected from within init_filters() during auto-mode
-          post_filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%%d", display_primaries.c_str(), display_trc.c_str()));
-        } else {
-          post_filters.push_back(string_sprintf("zscale=p=%s:t=%s:npl=%d", display_primaries.c_str(), display_trc.c_str(), peak_luminance_nits_));
+        inject_auto_peak_nits_ = plan.inject_peak_nits;
+        inject_auto_tonemap_peak_ = plan.inject_auto_tonemap_peak;
+        for (const std::string& filter : plan.post_filters) {
+          post_filters.push_back(filter);
         }
       }
-    } else {
+    }
+
+    if (!warnings.empty()) {
       log_warning(string_sprintf("Cannot add tone mapping filters: %s", string_join(warnings, ", ").c_str()));
     }
   }
@@ -410,8 +404,7 @@ std::string VideoFilterer::filter_description() const {
 }
 
 std::string VideoFilterer::resolved_filter_description() const {
-  const std::string base_filters = filter_description();
-  return (tone_mapping_mode_ == ToneMapping::Auto && dynamic_range_ != DynamicRange::Standard) ? string_sprintf(base_filters, peak_luminance_nits_) : base_filters;
+  return resolve_tone_map_filter_description(filter_description(), peak_luminance_nits_, boost_tone_, inject_auto_peak_nits_, inject_auto_tonemap_peak_);
 }
 
 size_t VideoFilterer::src_width() const {

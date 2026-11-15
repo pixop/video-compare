@@ -3,6 +3,7 @@
 #include <vector>
 #include "conversion_geometry.h"
 #include "core_types.h"
+#include "tone_mapping.h"
 #include "display.h"
 #include "scope_color.h"
 extern "C" {
@@ -57,6 +58,7 @@ struct InputVideo {
   AVDictionary* hw_accel_options{nullptr};  // mutated by VideoDecoder
 
   ToneMapping tone_mapping_mode{ToneMapping::Auto};
+  ToneMapAlgorithm tone_map_algorithm{ToneMapAlgorithm::Clip};
   unsigned peak_luminance_nits{UNSET_PEAK_LUMINANCE};  // [cd / m^2]
   float boost_tone{1};
 };
