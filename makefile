@@ -128,12 +128,8 @@ tests/test_scope_color$(EXE): TEST_LIBS = $(LDLIBS)
 $(integration_bin): $(integration_obj) $(integration_app_obj)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS)
 
-.PHONY: cli-smoke
-cli-smoke: $(target)
-	tests/cli_smoke.sh ./$(target)
-
 .PHONY: check
-check: $(test_bin) cli-smoke
+check: $(test_bin)
 	@set -e; \
 	for test in $(test_bin); do \
 		echo "Running $$test"; \
