@@ -190,6 +190,129 @@ static double measure_highlight_luma(const std::string& filter_suffix, const flo
   return highlight_max - shadow_max;
 }
 
+static double measure_saturated_red_chroma(const std::string& filter_suffix, const float highlight_linear) {
+  AVFilterGraph* graph = avfilter_graph_alloc();
+  AVFilterInOut* outputs = avfilter_inout_alloc();
+  AVFilterInOut* inputs = avfilter_inout_alloc();
+  if (graph == nullptr || outputs == nullptr || inputs == nullptr) {
+    throw std::runtime_error("filter alloc failed");
+  }
+
+  const int width = 64;
+  const int height = 64;
+  const std::string args = "video_size=" + std::to_string(width) + "x" + std::to_string(height) + ":pix_fmt=" + std::to_string(static_cast<int>(AV_PIX_FMT_GBRPF32LE)) + ":time_base=1/25:pixel_aspect=1/1";
+
+  AVFilterContext* src = nullptr;
+  AVFilterContext* sink = nullptr;
+  int ret = avfilter_graph_create_filter(&src, avfilter_get_by_name("buffer"), "in", args.c_str(), nullptr, graph);
+  if (ret >= 0) {
+    ret = avfilter_graph_create_filter(&sink, avfilter_get_by_name("buffersink"), "out", nullptr, nullptr, graph);
+  }
+  if (ret < 0) {
+    avfilter_inout_free(&inputs);
+    avfilter_inout_free(&outputs);
+    avfilter_graph_free(&graph);
+    throw std::runtime_error("filter create failed");
+  }
+
+  outputs->name = av_strdup("in");
+  outputs->filter_ctx = src;
+  outputs->pad_idx = 0;
+  outputs->next = nullptr;
+
+  inputs->name = av_strdup("out");
+  inputs->filter_ctx = sink;
+  inputs->pad_idx = 0;
+  inputs->next = nullptr;
+
+  ret = avfilter_graph_parse_ptr(graph, filter_suffix.c_str(), &inputs, &outputs, nullptr);
+  if (ret >= 0) {
+    ret = avfilter_graph_config(graph, nullptr);
+  }
+
+  avfilter_inout_free(&inputs);
+  avfilter_inout_free(&outputs);
+
+  if (ret < 0) {
+    avfilter_graph_free(&graph);
+    throw std::runtime_error("filter graph failed");
+  }
+
+  AVFrame* in_frame = av_frame_alloc();
+  in_frame->width = width;
+  in_frame->height = height;
+  in_frame->format = AV_PIX_FMT_GBRPF32LE;
+  in_frame->color_primaries = AVCOL_PRI_BT709;
+  in_frame->color_trc = AVCOL_TRC_LINEAR;
+  in_frame->colorspace = AVCOL_SPC_RGB;
+  in_frame->color_range = AVCOL_RANGE_JPEG;
+  av_frame_get_buffer(in_frame, 32);
+
+  const float shadow = 0.05F;
+  const float chroma_floor = shadow * 0.4F;
+  for (int y = 0; y < height; ++y) {
+    for (int x = 0; x < width; ++x) {
+      const bool highlight = x >= width / 2;
+      auto* g_plane = reinterpret_cast<float*>(in_frame->data[0] + y * in_frame->linesize[0]);
+      auto* b_plane = reinterpret_cast<float*>(in_frame->data[1] + y * in_frame->linesize[1]);
+      auto* r_plane = reinterpret_cast<float*>(in_frame->data[2] + y * in_frame->linesize[2]);
+      if (highlight) {
+        g_plane[x] = chroma_floor;
+        b_plane[x] = chroma_floor;
+        r_plane[x] = highlight_linear;
+      } else {
+        g_plane[x] = shadow;
+        b_plane[x] = shadow;
+        r_plane[x] = shadow;
+      }
+    }
+  }
+
+  ret = av_buffersrc_add_frame_flags(src, in_frame, AV_BUFFERSRC_FLAG_KEEP_REF);
+  av_frame_free(&in_frame);
+  if (ret < 0) {
+    avfilter_graph_free(&graph);
+    throw std::runtime_error("buffersrc failed");
+  }
+
+  AVFrame* out_frame = av_frame_alloc();
+  ret = av_buffersink_get_frame_flags(sink, out_frame, 0);
+  avfilter_graph_free(&graph);
+
+  if (ret < 0) {
+    av_frame_free(&out_frame);
+    throw std::runtime_error("buffersink failed");
+  }
+
+  double highlight_r = 0.0;
+  double highlight_g = 0.0;
+  const int out_width = out_frame->width;
+  const int out_height = out_frame->height;
+
+  if (out_frame->format == AV_PIX_FMT_RGB48LE) {
+    for (int y = 0; y < out_height; ++y) {
+      const uint16_t* row = reinterpret_cast<const uint16_t*>(out_frame->data[0] + y * out_frame->linesize[0]);
+      for (int x = out_width / 2; x < out_width; ++x) {
+        highlight_r = std::max(highlight_r, static_cast<double>(row[x * 3]) / 65535.0);
+        highlight_g = std::max(highlight_g, static_cast<double>(row[x * 3 + 1]) / 65535.0);
+      }
+    }
+  } else if (out_frame->format == AV_PIX_FMT_GBRPF32LE) {
+    for (int y = 0; y < out_height; ++y) {
+      for (int x = out_width / 2; x < out_width; ++x) {
+        const float* g_row = reinterpret_cast<const float*>(out_frame->data[0] + y * out_frame->linesize[0]);
+        const float* b_row = reinterpret_cast<const float*>(out_frame->data[1] + y * out_frame->linesize[1]);
+        const float* r_row = reinterpret_cast<const float*>(out_frame->data[2] + y * out_frame->linesize[2]);
+        highlight_r = std::max(highlight_r, static_cast<double>(r_row[x]));
+        highlight_g = std::max(highlight_g, static_cast<double>(std::max(g_row[x], b_row[x])));
+      }
+    }
+  }
+
+  av_frame_free(&out_frame);
+  return highlight_r - highlight_g;
+}
+
 static double max_rgb_sample(const AVFrame* frame) {
   double highlight_max = 0.0;
   if (frame->format == AV_PIX_FMT_RGB48LE) {
@@ -438,12 +561,24 @@ int main() {
 
   const ToneMapFilterPlan mobius = build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Mobius, 1.0F, 1000, 500, true, true);
   expect_eq_str("mobius base graph", join_filters(mobius.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=mobius:peak=10.000000,zscale=p=bt709:t=iec61966-2-1");
+                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=mobius:peak=10.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
 
   const ToneMapFilterPlan mobius_boost = build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Mobius, 2.0F, 1000, 500, true, true);
   expect_eq_str("mobius boost uses exposure and scaled peak",
                 join_filters(mobius_boost.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=100,exposure=1.000000,tonemap=mobius:peak=20.000000,zscale=p=bt709:t=iec61966-2-1");
+                "format=gbrpf32,zscale=t=linear:npl=100,exposure=1.000000,tonemap=mobius:peak=20.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
+
+  const ToneMapFilterPlan hable = build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Hable, 1.0F, 1000, 500, true, true);
+  expect_eq_str("hable base graph", join_filters(hable.post_filters),
+                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=hable:peak=10.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
+
+  const ToneMapFilterPlan hable_boost = build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Hable, 2.0F, 1000, 500, true, true);
+  expect_eq_str("hable boost graph", join_filters(hable_boost.post_filters),
+                "format=gbrpf32,zscale=t=linear:npl=100,exposure=1.000000,tonemap=hable:peak=20.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
+
+  const ToneMapFilterPlan reinhard = build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Reinhard, 1.0F, 1000, 500, true, true);
+  expect_eq_str("reinhard base graph", join_filters(reinhard.post_filters),
+                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=10.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
 
   expect_throws("nonlinear boost above exposure range", [] {
     build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Hable, 9.0F, 1000, 500, true, true);
@@ -455,14 +590,22 @@ int main() {
 
   const ToneMapFilterPlan auto_mobius = build_hdr_tone_map_filters(ToneMapping::Auto, ToneMapAlgorithm::Reinhard, 1.0F, 500, 500, true, true);
   expect_eq_str("auto reinhard uses token placeholder", join_filters(auto_mobius.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=@@TONEMAP_NORM_PEAK@@,zscale=p=bt709:t=iec61966-2-1");
+                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=@@TONEMAP_NORM_PEAK@@:desat=0,zscale=p=bt709:t=iec61966-2-1");
+
+  const ToneMapFilterPlan auto_hable = build_hdr_tone_map_filters(ToneMapping::Auto, ToneMapAlgorithm::Hable, 1.0F, 500, 500, true, true);
+  expect_eq_str("auto hable uses token placeholder", join_filters(auto_hable.post_filters),
+                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=hable:peak=@@TONEMAP_NORM_PEAK@@:desat=0,zscale=p=bt709:t=iec61966-2-1");
+
+  const ToneMapFilterPlan auto_mobius_algo = build_hdr_tone_map_filters(ToneMapping::Auto, ToneMapAlgorithm::Mobius, 1.0F, 500, 500, true, true);
+  expect_eq_str("auto mobius uses token placeholder", join_filters(auto_mobius_algo.post_filters),
+                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=mobius:peak=@@TONEMAP_NORM_PEAK@@:desat=0,zscale=p=bt709:t=iec61966-2-1");
   expect_true("auto nonlinear tonemap token only", !auto_mobius.inject_peak_nits && auto_mobius.inject_auto_tonemap_peak);
 
   const std::string auto_template = join_filters(auto_mobius.post_filters);
   expect_eq_str("resolve MaxCLL 500", resolve_tone_map_filter_description(auto_template, 500, 1.0F, false, true),
-                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=5.000000,zscale=p=bt709:t=iec61966-2-1");
+                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=5.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
   expect_eq_str("resolve MaxCLL 1230", resolve_tone_map_filter_description(auto_template, 1230, 1.0F, false, true),
-                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=12.300000,zscale=p=bt709:t=iec61966-2-1");
+                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=12.300000:desat=0,zscale=p=bt709:t=iec61966-2-1");
   expect_eq_str("resolve auto clip nits only", resolve_tone_map_filter_description(join_filters(auto_clip.post_filters), 1230, 1.0F, true, false),
                 "format=rgb48,zscale=p=bt709:t=iec61966-2-1:npl=1230");
 
@@ -477,9 +620,9 @@ int main() {
       expect_gt("correct tonemap keeps highlight separation", correct_sep, 0.03);
 
       const std::string pq_correct = "format=yuv420p,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,"
-                                    "zscale=t=linear:npl=100,format=gbrpf32,tonemap=mobius:peak=10,zscale=p=bt709:t=iec61966-2-1";
+                                    "zscale=t=linear:npl=100,format=gbrpf32,tonemap=mobius:peak=10:desat=0,zscale=p=bt709:t=iec61966-2-1";
       const std::string pq_wrong = "format=yuv420p,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,"
-                                   "zscale=t=linear:npl=1000,format=gbrpf32,tonemap=mobius:peak=1000,zscale=p=bt709:t=iec61966-2-1";
+                                   "zscale=t=linear:npl=1000,format=gbrpf32,tonemap=mobius:peak=1000:desat=0,zscale=p=bt709:t=iec61966-2-1";
       const double pq_correct_h = measure_pq_white_highlight(pq_correct);
       const double pq_wrong_h = measure_pq_white_highlight(pq_wrong);
       expect_gt("PQ path normalized peak brighter than nits peak bug", pq_correct_h, pq_wrong_h);
@@ -493,6 +636,16 @@ int main() {
       const ToneMapFilterPlan boosted = build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Mobius, 2.0F, 1000, 500, true, true);
       const std::string boosted_graph = join_filters(boosted.post_filters);
       expect_true("boost graph contains exposure and scaled peak", boosted_graph.find("exposure=") != std::string::npos && boosted_graph.find("peak=20.000000") != std::string::npos);
+      expect_true("boost graph pins tonemap desat=0", boosted_graph.find(":desat=0") != std::string::npos);
+
+      const std::string hable_graph = join_filters(hable.post_filters);
+      const std::string hable_desat0 = "format=gbrpf32,zscale=t=linear:npl=100,tonemap=hable:peak=10.000000:desat=0,zscale=p=bt709:t=iec61966-2-1";
+      const std::string hable_default_desat = "format=gbrpf32,zscale=t=linear:npl=100,tonemap=hable:peak=10.000000,zscale=p=bt709:t=iec61966-2-1";
+      expect_eq_str("hable graph matches explicit desat=0 chain", hable_graph, hable_desat0);
+      const double chroma_preserved = measure_saturated_red_chroma(hable_desat0, 8.0F);
+      const double chroma_washed = measure_saturated_red_chroma(hable_default_desat, 8.0F);
+      expect_gt("hable desat=0 preserves saturated highlight chroma", chroma_preserved, chroma_washed);
+      expect_gt("hable desat=0 red highlight separation", chroma_preserved, 0.02);
     } catch (const std::exception& e) {
       std::fprintf(stderr, "FAIL boost pixel tests: %s\n", e.what());
       failures++;

@@ -130,10 +130,10 @@ ToneMapFilterPlan build_hdr_tone_map_filters(const ToneMapping tone_mapping_mode
 
   const char* algorithm = tone_map_algorithm_name(tone_map_algorithm);
   if (auto_peak) {
-    plan.post_filters.push_back(string_sprintf("tonemap=%s:peak=%s", algorithm, TONEMAP_NORM_PEAK_TOKEN));
+    plan.post_filters.push_back(string_sprintf("tonemap=%s:peak=%s:desat=0", algorithm, TONEMAP_NORM_PEAK_TOKEN));
     plan.inject_auto_tonemap_peak = true;
   } else {
-    plan.post_filters.push_back(string_sprintf("tonemap=%s:peak=%s", algorithm, format_normalized_tonemap_peak(peak_luminance_nits, boost_tone).c_str()));
+    plan.post_filters.push_back(string_sprintf("tonemap=%s:peak=%s:desat=0", algorithm, format_normalized_tonemap_peak(peak_luminance_nits, boost_tone).c_str()));
   }
   plan.post_filters.push_back(string_sprintf("zscale=p=%s:t=%s", display_primaries.c_str(), display_trc.c_str()));
   return plan;
