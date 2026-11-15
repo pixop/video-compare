@@ -18,21 +18,23 @@ struct PhysicalPixelScale {
   float y;
 };
 
-inline float physical_1to1_viewport_zoom_base(const float video_to_window_width_factor, const float drawable_to_window_width_factor, const float video_to_window_height_factor,
-                                              const float drawable_to_window_height_factor) {
+inline float physical_1to1_viewport_zoom_base(const float video_to_window_width_factor, const float drawable_to_window_width_factor, const float video_to_window_height_factor, const float drawable_to_window_height_factor) {
   return std::min(video_to_window_width_factor / drawable_to_window_width_factor, video_to_window_height_factor / drawable_to_window_height_factor);
 }
 
 // Keys 4–9: plain = viewport factors; Shift = physical magnification presets.
-inline float zoom_preset_viewport_factor(const int preset_index, const bool shift_down, const float video_to_window_width_factor, const float drawable_to_window_width_factor,
-                                         const float video_to_window_height_factor, const float drawable_to_window_height_factor) {
+inline float zoom_preset_viewport_factor(const int preset_index,
+                                         const bool shift_down,
+                                         const float video_to_window_width_factor,
+                                         const float drawable_to_window_width_factor,
+                                         const float video_to_window_height_factor,
+                                         const float drawable_to_window_height_factor) {
   static const float k_presets[6] = {0.25F, 0.5F, 1.0F, 2.0F, 4.0F, 8.0F};
   if (preset_index < 0 || preset_index >= 6) {
     return 1.0F;
   }
   if (shift_down) {
-    return physical_1to1_viewport_zoom_base(video_to_window_width_factor, drawable_to_window_width_factor, video_to_window_height_factor, drawable_to_window_height_factor) *
-           k_presets[preset_index];
+    return physical_1to1_viewport_zoom_base(video_to_window_width_factor, drawable_to_window_width_factor, video_to_window_height_factor, drawable_to_window_height_factor) * k_presets[preset_index];
   }
   return k_presets[preset_index];
 }
@@ -41,8 +43,11 @@ inline float safe_positive(const float value) {
   return std::max(value, 1.0e-6F);
 }
 
-inline PhysicalPixelScale compute_physical_pixel_scale(const float viewport_zoom, const float drawable_to_window_width_factor, const float drawable_to_window_height_factor,
-                                                       const float video_to_window_width_factor, const float video_to_window_height_factor) {
+inline PhysicalPixelScale compute_physical_pixel_scale(const float viewport_zoom,
+                                                       const float drawable_to_window_width_factor,
+                                                       const float drawable_to_window_height_factor,
+                                                       const float video_to_window_width_factor,
+                                                       const float video_to_window_height_factor) {
   const float zoom = std::max(viewport_zoom, 0.0F);
   const float drawable_x = safe_positive(drawable_to_window_width_factor);
   const float drawable_y = safe_positive(drawable_to_window_height_factor);
@@ -93,12 +98,15 @@ inline std::string format_pixel_scale_percent(const float scale) {
   return buf;
 }
 
-inline void append_display_state_viewport_and_pixel_scale(std::string& message, const float global_zoom_factor, const float drawable_to_window_width_factor, const float drawable_to_window_height_factor,
-                                                          const float video_to_window_width_factor, const float video_to_window_height_factor) {
+inline void append_display_state_viewport_and_pixel_scale(std::string& message,
+                                                          const float global_zoom_factor,
+                                                          const float drawable_to_window_width_factor,
+                                                          const float drawable_to_window_height_factor,
+                                                          const float video_to_window_width_factor,
+                                                          const float video_to_window_height_factor) {
   message += " zoom=" + format_viewport_zoom_factor(global_zoom_factor);
 
-  const PhysicalPixelScale scale = compute_physical_pixel_scale(global_zoom_factor, drawable_to_window_width_factor, drawable_to_window_height_factor, video_to_window_width_factor,
-                                                               video_to_window_height_factor);
+  const PhysicalPixelScale scale = compute_physical_pixel_scale(global_zoom_factor, drawable_to_window_width_factor, drawable_to_window_height_factor, video_to_window_width_factor, video_to_window_height_factor);
   if (scales_nearly_equal(scale.x, scale.y)) {
     message += " pixel_scale=" + format_pixel_scale_percent(scale.x);
   } else {

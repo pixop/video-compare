@@ -258,8 +258,7 @@ std::string ScopeWindow::build_filter_description(const int pane_width, const in
       "[in_right]%s,%s%s,%s,%s,%s[right_scope];"
       "[left_scope][right_scope]hstack=inputs=2,%s[out]",
       setparams_left.c_str(), crop_left.c_str(), pre_format_filter.c_str(), tool_spec.c_str(), left_scale.c_str(), left_pad.c_str(), setparams_right.c_str(), crop_right.c_str(), pre_format_filter.c_str(), tool_spec.c_str(),
-      right_scale.c_str(),
-      right_pad.c_str(), "format=rgb24");
+      right_scale.c_str(), right_pad.c_str(), "format=rgb24");
 
   return filter_description;
 }

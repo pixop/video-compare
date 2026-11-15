@@ -7,9 +7,9 @@
 #include "ffmpeg.h"
 #include "frame_metadata.h"
 #include "string_utils.h"
+#include "tone_mapping.h"
 #include "video_filter_context.h"
 #include "video_filter_state.h"
-#include "tone_mapping.h"
 #include "video_filterer_classify.h"
 
 static constexpr char VIDEO_FILTER_GROUP_DELIMITER = '|';

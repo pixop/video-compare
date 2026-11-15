@@ -6,8 +6,8 @@
 #include "core_types.h"
 #include "demuxer.h"
 #include "side_aware.h"
-#include "video_decoder.h"
 #include "tone_mapping.h"
+#include "video_decoder.h"
 #include "video_filter_context.h"
 #include "video_filter_state.h"
 extern "C" {

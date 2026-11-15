@@ -54,11 +54,7 @@ static void replace_first_token(std::string& text, const std::string& token, con
   }
 }
 
-std::string resolve_tone_map_filter_description(const std::string& description,
-                                                  const unsigned peak_luminance_nits,
-                                                  const float boost_tone,
-                                                  const bool inject_peak_nits,
-                                                  const bool inject_auto_tonemap_peak) {
+std::string resolve_tone_map_filter_description(const std::string& description, const unsigned peak_luminance_nits, const float boost_tone, const bool inject_peak_nits, const bool inject_auto_tonemap_peak) {
   std::string result = description;
   if (inject_peak_nits) {
     replace_first_token(result, TONE_MAP_PEAK_NITS_TOKEN, std::to_string(peak_luminance_nits));

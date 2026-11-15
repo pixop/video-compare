@@ -12,8 +12,8 @@
 #include "runtime_notes.h"
 #include "side_aware_logger.h"
 #include "string_utils.h"
-#include "version.h"
 #include "tone_mapping.h"
+#include "version.h"
 #include "video_compare.h"
 #include "vmaf_calculator.h"
 
@@ -617,10 +617,7 @@ int main(int argc, char** argv) {
           1},
          {"left-peak-nits", {"-L", "--left-peak-nits"}, "left video peak luminance in nits (e.g. 850 or 1000), default is 100 for SDR and 500 for HDR", 1},
          {"right-peak-nits", {"-R", "--right-peak-nits"}, "right video peak luminance in nits; see --left-peak-nits", 1},
-         {"boost-tone",
-          {"-B", "--boost-tone"},
-          "adjust tone-mapping strength factor, globally or per side (e.g. '0.6', ':3' or '2:1.5'); clip accepts any positive factor, nonlinear algorithms use exposure (gain 0.125–8)",
-          1},
+         {"boost-tone", {"-B", "--boost-tone"}, "adjust tone-mapping strength factor, globally or per side (e.g. '0.6', ':3' or '2:1.5'); clip accepts any positive factor, nonlinear algorithms use exposure (gain 0.125–8)", 1},
          {"filters", {"-i", "--filters"}, "specify a comma-separated list of FFmpeg filters to be applied to both sides (e.g. scale=1920:-2,delogo=x=10:y=10:w=100:h=70)", 1},
          {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
          {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
@@ -890,8 +887,7 @@ int main(int argc, char** argv) {
         auto left_tone_map_algorithm = get_nth_token_or_empty(tone_map_algorithm_spec, ':', 0);
 
         config.left.tone_map_algorithm = parse_tone_map_algorithm(left_tone_map_algorithm);
-        right_template.tone_map_algorithm =
-            (tone_map_algorithm_spec == left_tone_map_algorithm) ? config.left.tone_map_algorithm : parse_tone_map_algorithm(get_nth_token_or_empty(tone_map_algorithm_spec, ':', 1));
+        right_template.tone_map_algorithm = (tone_map_algorithm_spec == left_tone_map_algorithm) ? config.left.tone_map_algorithm : parse_tone_map_algorithm(get_nth_token_or_empty(tone_map_algorithm_spec, ':', 1));
       }
 
       // scopes

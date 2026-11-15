@@ -3,9 +3,9 @@
 #include <vector>
 #include "conversion_geometry.h"
 #include "core_types.h"
-#include "tone_mapping.h"
 #include "display.h"
 #include "scope_color.h"
+#include "tone_mapping.h"
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/rational.h>

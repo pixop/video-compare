@@ -35,8 +35,4 @@ ToneMapFilterPlan build_hdr_tone_map_filters(const ToneMapping tone_mapping_mode
                                              const bool have_zscale,
                                              const bool have_tonemap);
 
-std::string resolve_tone_map_filter_description(const std::string& description,
-                                                  const unsigned peak_luminance_nits,
-                                                  const float boost_tone,
-                                                  const bool inject_peak_nits,
-                                                  const bool inject_auto_tonemap_peak);
+std::string resolve_tone_map_filter_description(const std::string& description, const unsigned peak_luminance_nits, const float boost_tone, const bool inject_peak_nits, const bool inject_auto_tonemap_peak);

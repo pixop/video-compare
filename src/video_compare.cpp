@@ -213,17 +213,18 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
 
   // Initialize filterers using VideoFilterContext for consistent auto-filter determination
   install_processor(video_filterers_, ReadyToSeek::ProcessorThread::Filterer, LEFT,
-                    std::make_unique<VideoFilterer>(LEFT, demuxers_[LEFT].get(), video_decoders_[LEFT].get(), config.left.tone_mapping_mode, config.left.tone_map_algorithm, config.left.boost_tone, config.left.video_filters, config.left.color_space,
-                                                    config.left.color_range, config.left.color_primaries, config.left.color_trc, &video_filter_context, config.disable_auto_filters));
+                    std::make_unique<VideoFilterer>(LEFT, demuxers_[LEFT].get(), video_decoders_[LEFT].get(), config.left.tone_mapping_mode, config.left.tone_map_algorithm, config.left.boost_tone, config.left.video_filters,
+                                                    config.left.color_space, config.left.color_range, config.left.color_primaries, config.left.color_trc, &video_filter_context, config.disable_auto_filters));
 
   // For each right video, use VideoFilterContext for auto-filter determination
   for (size_t i = 0; i < config.right_videos.size(); ++i) {
     const auto& right_config = config.right_videos[i];
     Side right_side = Side::Right(i);
 
-    install_processor(video_filterers_, ReadyToSeek::ProcessorThread::Filterer, right_side,
-                      std::make_unique<VideoFilterer>(right_side, demuxers_[right_side].get(), video_decoders_[right_side].get(), right_config.tone_mapping_mode, right_config.tone_map_algorithm, right_config.boost_tone, right_config.video_filters, right_config.color_space,
-                                                      right_config.color_range, right_config.color_primaries, right_config.color_trc, &video_filter_context, config.disable_auto_filters));
+    install_processor(
+        video_filterers_, ReadyToSeek::ProcessorThread::Filterer, right_side,
+        std::make_unique<VideoFilterer>(right_side, demuxers_[right_side].get(), video_decoders_[right_side].get(), right_config.tone_mapping_mode, right_config.tone_map_algorithm, right_config.boost_tone, right_config.video_filters,
+                                        right_config.color_space, right_config.color_range, right_config.color_primaries, right_config.color_trc, &video_filter_context, config.disable_auto_filters));
   }
 
   // Calculate canvas dimensions from conversion-size policy
