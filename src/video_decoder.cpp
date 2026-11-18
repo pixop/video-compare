@@ -330,6 +330,7 @@ void VideoDecoder::flush() {
   avcodec_flush_buffers(codec_context_);
   duration_deriver_.reset();
   previous_pts_ = AV_NOPTS_VALUE;
+  next_pts_ = AV_NOPTS_VALUE;
 }
 
 unsigned VideoDecoder::width() const {

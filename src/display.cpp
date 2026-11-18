@@ -2,6 +2,7 @@
 #include <libgen.h>
 #include <algorithm>
 #include <atomic>
+#include <cstring>
 #include <future>
 #include <iomanip>
 #include <iostream>
@@ -1673,15 +1674,43 @@ const Display::CachedTextTexture& Display::get_hud_text_texture(CachedTextTextur
     return cache;
   }
 
-  cache.reset();
   SDL_Surface* surface = TTF_RenderText_Blended(font, text.c_str(), color);
   if (surface == nullptr) {
     surface = render_text_with_fallback(text);
   }
 
-  cache.texture = SDL_CreateTextureFromSurface(renderer_, surface);
-  cache.width = surface->w;
-  cache.height = surface->h;
+  auto upload_surface_via_lock = [](SDL_Texture* tex, SDL_Surface* surf) {
+    void* dst_pixels = nullptr;
+    int dst_pitch = 0;
+    if (SDL_LockTexture(tex, nullptr, &dst_pixels, &dst_pitch) == 0) {
+      const uint8_t* src_row = static_cast<const uint8_t*>(surf->pixels);
+      uint8_t* dst_row = static_cast<uint8_t*>(dst_pixels);
+      const size_t row_bytes = static_cast<size_t>(surf->w) * 4;
+      for (int y = 0; y < surf->h; ++y) {
+        std::memcpy(dst_row + static_cast<size_t>(y) * static_cast<size_t>(dst_pitch), src_row + static_cast<size_t>(y) * static_cast<size_t>(surf->pitch), row_bytes);
+      }
+      SDL_UnlockTexture(tex);
+      return true;
+    }
+    return false;
+  };
+
+  if (cache.texture != nullptr && cache.width == surface->w && cache.height == surface->h && surface->format->format == SDL_PIXELFORMAT_ARGB8888) {
+    upload_surface_via_lock(cache.texture, surface);
+  } else {
+    cache.reset();
+    cache.texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, surface->w, surface->h);
+    if (cache.texture != nullptr && surface->format->format == SDL_PIXELFORMAT_ARGB8888 && upload_surface_via_lock(cache.texture, surface)) {
+      SDL_SetTextureBlendMode(cache.texture, SDL_BLENDMODE_BLEND);
+    } else {
+      if (cache.texture != nullptr) {
+        SDL_DestroyTexture(cache.texture);
+      }
+      cache.texture = SDL_CreateTextureFromSurface(renderer_, surface);
+    }
+    cache.width = surface->w;
+    cache.height = surface->h;
+  }
   cache.text = text;
   cache.font = font;
   cache.color_rgba = rgba;
@@ -2970,13 +2999,40 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     if (message_texture_ == nullptr || active_message_text_ != pending_message_ || active_message_font_ != big_font_) {
       text_surface = TTF_RenderText_Blended(big_font_, pending_message_.c_str(), TEXT_COLOR);
 
-      if (message_texture_ != nullptr) {
-        SDL_DestroyTexture(message_texture_);
-      }
-      message_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
+      auto upload_msg_via_lock = [](SDL_Texture* tex, SDL_Surface* surf) {
+        void* dst_pixels = nullptr;
+        int dst_pitch = 0;
+        if (SDL_LockTexture(tex, nullptr, &dst_pixels, &dst_pitch) == 0) {
+          const uint8_t* src_row = static_cast<const uint8_t*>(surf->pixels);
+          uint8_t* dst_row = static_cast<uint8_t*>(dst_pixels);
+          const size_t row_bytes = static_cast<size_t>(surf->w) * 4;
+          for (int y = 0; y < surf->h; ++y) {
+            std::memcpy(dst_row + static_cast<size_t>(y) * static_cast<size_t>(dst_pitch), src_row + static_cast<size_t>(y) * static_cast<size_t>(surf->pitch), row_bytes);
+          }
+          SDL_UnlockTexture(tex);
+          return true;
+        }
+        return false;
+      };
 
-      message_width_ = text_surface->w;
-      message_height_ = text_surface->h;
+      if (message_texture_ != nullptr && message_width_ == text_surface->w && message_height_ == text_surface->h && text_surface->format->format == SDL_PIXELFORMAT_ARGB8888) {
+        upload_msg_via_lock(message_texture_, text_surface);
+      } else {
+        if (message_texture_ != nullptr) {
+          SDL_DestroyTexture(message_texture_);
+        }
+        message_texture_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, text_surface->w, text_surface->h);
+        if (message_texture_ != nullptr && text_surface->format->format == SDL_PIXELFORMAT_ARGB8888 && upload_msg_via_lock(message_texture_, text_surface)) {
+          SDL_SetTextureBlendMode(message_texture_, SDL_BLENDMODE_BLEND);
+        } else {
+          if (message_texture_ != nullptr) {
+            SDL_DestroyTexture(message_texture_);
+          }
+          message_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
+        }
+        message_width_ = text_surface->w;
+        message_height_ = text_surface->h;
+      }
       active_message_text_ = pending_message_;
       active_message_font_ = big_font_;
       SDL_FreeSurface(text_surface);

@@ -609,20 +609,6 @@ void VideoCompare::decode_video(const Side& side) {
 }
 
 bool VideoCompare::process_packet(const Side& side, AVPacket* packet) {
-  const int64_t skip_target_us = skip_until_pts_us_[side].load(std::memory_order_relaxed);
-  AVCodecContext* codec_ctx = video_decoders_[side]->codec_context();
-  if (skip_target_us != std::numeric_limits<int64_t>::min() && !single_decoder_mode_) {
-    const int64_t next_pts = video_decoders_[side]->next_pts();
-    if (next_pts != AV_NOPTS_VALUE) {
-      const int64_t est_pts_us = av_rescale_q(next_pts, demuxers_[side]->time_base(), AV_R_MICROSECONDS) - demuxers_[side]->video_start_time();
-      codec_ctx->skip_frame = (est_pts_us + 300000 < skip_target_us) ? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
-    } else {
-      codec_ctx->skip_frame = AVDISCARD_DEFAULT;
-    }
-  } else {
-    codec_ctx->skip_frame = AVDISCARD_DEFAULT;
-  }
-
   bool sent = video_decoders_[side]->send(packet);
 
   while (true) {
@@ -636,14 +622,13 @@ bool VideoCompare::process_packet(const Side& side, AVPacket* packet) {
     const int64_t current_skip_target_us = skip_until_pts_us_[side].load(std::memory_order_relaxed);
     if (current_skip_target_us != std::numeric_limits<int64_t>::min() && !single_decoder_mode_) {
       const int64_t frame_pts_us = av_rescale_q(frame_decoded->pts, demuxers_[side]->time_base(), AV_R_MICROSECONDS) - demuxers_[side]->video_start_time();
-      codec_ctx->skip_frame = (frame_pts_us + 300000 < current_skip_target_us) ? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
       if (frame_pts_us < current_skip_target_us) {
         note_decoded_frame(side, frame_decoded->pts);
         last_skipped_frames_[side] = frame_decoded;
         continue;
       }
+      skip_until_pts_us_[side].store(std::numeric_limits<int64_t>::min(), std::memory_order_relaxed);
     }
-    codec_ctx->skip_frame = AVDISCARD_DEFAULT;
 
     last_skipped_frames_[side].reset();
     pushed_since_seek_[side] = true;
@@ -1513,8 +1498,8 @@ void VideoCompare::compare() {
         // Set pre-target skip threshold so decoders fast-forward from their keyframe directly to the seek target
         if (seek_request.all_sides_multi_frame && !seek_failed && !single_decoder_mode_) {
           auto compute_seek_skip_target = [&](const Side& side, const float target_pos_sec, const float start_time_sec, const int64_t delta_pts) -> int64_t {
-            const int64_t step = std::max<int64_t>(delta_pts, 40000);
-            int64_t target_us = static_cast<int64_t>(std::llround(static_cast<double>(target_pos_sec - start_time_sec) * 1000000.0)) - (step / 2);
+            const int64_t step = (delta_pts > 0) ? delta_pts : 33333;
+            int64_t target_us = static_cast<int64_t>(std::llround(static_cast<double>(target_pos_sec - start_time_sec) * 1000000.0)) - (step / 4);
             const int64_t dur_us = demuxers_[side]->duration();
             if (dur_us > step * 2) {
               target_us = std::min(target_us, dur_us - step * 2);
@@ -1590,6 +1575,42 @@ void VideoCompare::compare() {
           pair.second.store(std::numeric_limits<int64_t>::min(), std::memory_order_relaxed);
         }
 
+        const int64_t post_seek_min_delta = playback_timing::compute_min_delta(left.delta_pts_, right_ptr->delta_pts_);
+        for (int align_step = 0; align_step < 16; ++align_step) {
+          bool aligned_all = true;
+          for (auto& pair : side_states) {
+            if (!pair.first.is_right()) {
+              continue;
+            }
+            SideState& right_state = pair.second;
+            if (left.frame_ != nullptr && right_state.frame_ != nullptr) {
+              if (playback_timing::is_behind(left.pts_, right_state.pts_, post_seek_min_delta)) {
+                pop_and_reset(left);
+                aligned_all = false;
+              } else if (playback_timing::is_behind(right_state.pts_, left.pts_, post_seek_min_delta)) {
+                right_state.effective_time_shift_ = static_right_time_shift;
+                pop_and_reset(right_state, &right_state.effective_time_shift_);
+                aligned_all = false;
+              }
+            }
+          }
+          if (aligned_all) {
+            break;
+          }
+        }
+
+        timer_->reset();
+        if (display_->get_play()) {
+          const int64_t post_seek_delay = playback_timing::compute_frame_delay(left.delta_pts_, right_ptr->delta_pts_);
+          if (post_seek_delay > 0) {
+            timer_->shift_target(static_cast<int64_t>(post_seek_delay / display_->get_playback_speed_factor()));
+          }
+        }
+        full_cycle_time_deque.clear();
+        unique_frame_combo_tags_processed = -1;
+        previous_frame_combo_tag.clear();
+        full_cycle_timer.update();
+
         if (log_perf) {
           last_seek_drain_ms = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - seek_perf_start).count();
           awaiting_post_seek_sync_log = true;
@@ -1605,7 +1626,8 @@ void VideoCompare::compare() {
 
       // keep showing currently displayed frame for another iteration?
       const bool paused_forward_step = !display_->get_play() && forward_navigate_frames > 0;
-      skip_update = skip_update || ((timer_->us_until_target() - refresh_time_deque.average()) > 0 && !paused_forward_step);
+      const int64_t lookahead_us = std::min<int64_t>(refresh_time_deque.average(), 4000);
+      skip_update = skip_update || ((timer_->us_until_target() - lookahead_us) > 0 && !paused_forward_step);
       const bool fetch_next_frame = display_->get_play() || (forward_navigate_frames > 0);
 
       // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
@@ -1631,20 +1653,11 @@ void VideoCompare::compare() {
 
         return result;
       };
-      auto sync_frame_queue = [&](SideState& side_state, const SideState& other_side, const int64_t time_shift) {
+      auto sync_frame_queue = [&](SideState& side_state, const SideState& other_side) {
         if (playback_timing::is_behind(side_state.pts_, other_side.pts_, min_delta)) {
           adjusting = true;
 
-          const int64_t step_delta = std::max<int64_t>(std::max(left.delta_pts_, right_ptr->delta_pts_), 40000);
-          const int64_t lag = other_side.pts_ - side_state.pts_;
-          if (lag > step_delta * 3 && !single_decoder_mode_) {
-            const int64_t target_unshifted_pts = other_side.pts_ + time_shift - step_delta * 2;
-            skip_until_pts_us_[side_state.side_].store(target_unshifted_pts, std::memory_order_relaxed);
-          }
-
           pop_frame(side_state);
-        } else {
-          skip_until_pts_us_[side_state.side_].store(std::numeric_limits<int64_t>::min(), std::memory_order_relaxed);
         }
       };
 
@@ -1654,8 +1667,8 @@ void VideoCompare::compare() {
       for (auto& pair : side_states) {
         if (pair.first.is_right()) {
           SideState& right_state = pair.second;
-          sync_frame_queue(left, right_state, 0);
-          sync_frame_queue(right_state, left, right_state.effective_time_shift_);
+          sync_frame_queue(left, right_state);
+          sync_frame_queue(right_state, left);
         }
       }
 
@@ -1691,7 +1704,11 @@ void VideoCompare::compare() {
               const int64_t play_frame_delay = playback_timing::compute_frame_delay(left.frame_->pts - left.pts_, right_ptr->frame_->pts - right_ptr->pts_ - right_ptr->effective_time_shift_);
 
               const float pace_divisor = display_->get_play() ? display_->get_playback_speed_factor() : 1.0f;
-              timer_->shift_target(static_cast<int64_t>(play_frame_delay / pace_divisor));
+              const int64_t step_us = static_cast<int64_t>(play_frame_delay / pace_divisor);
+              timer_->shift_target(step_us);
+              if (timer_->us_until_target() < -step_us) {
+                timer_->update();
+              }
             } else {
               timer_->update();
             }
@@ -1896,12 +1913,13 @@ void VideoCompare::compare() {
               }
 
               refresh_time_deque.push_back(-display_refresh_timer.us_until_target());
-              ui_refresh_performed = true;
             } else {
               const int64_t rem_us = timer_->us_until_target();
               const uint32_t wait_ms = (rem_us > 4000) ? 4 : 1;
               sleep_for_ms(wait_ms);
             }
+
+            ui_refresh_performed = true;
 
             // calculate next refresh time dynamically based on target playback speed and current refresh timing
             const double target_time_us = std::max(1000.0, static_cast<double>(std::max(ffmpeg::frame_duration(left_display_frame), ffmpeg::frame_duration(right_display_frame))) / display_->get_playback_speed_factor());
