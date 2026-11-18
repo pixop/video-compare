@@ -1,4 +1,5 @@
 #include "demuxer.h"
+#include <cmath>
 #include <iostream>
 #include "ffmpeg.h"
 #include "string_utils.h"
@@ -143,7 +144,20 @@ bool Demuxer::operator()(AVPacket& packet) {
 bool Demuxer::seek(const float position, const bool backward) {
   ScopedLogSide scoped_log_side(get_side());
 
-  int64_t seek_target = static_cast<int64_t>(position * AV_TIME_BASE);
+  const int64_t dur_us = duration();
+  const int64_t start_us = video_start_time();
+  const int64_t seek_target = static_cast<int64_t>(std::llround(static_cast<double>(position) * AV_TIME_BASE));
+
+  if (!backward && dur_us > 0 && seek_target > (start_us + dur_us)) {
+    return false;
+  }
+
+  // Always prefer seeking to the keyframe at or before the target position (+1ms tolerance for float rounding)
+  // so long-GOP videos never jump seconds ahead of the requested target position.
+  const int64_t backward_target = backward ? seek_target : (seek_target + 1000);
+  if (av_seek_frame(format_context_, -1, backward_target, AVSEEK_FLAG_BACKWARD) >= 0) {
+    return true;
+  }
 
   return av_seek_frame(format_context_, -1, seek_target, backward ? AVSEEK_FLAG_BACKWARD : 0) >= 0;
 }

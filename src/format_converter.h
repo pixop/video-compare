@@ -1,7 +1,11 @@
 #pragma once
 #include <atomic>
+#include <memory>
+#include <vector>
 #include "conversion_geometry.h"
 #include "side_aware.h"
+
+class RowWorkers;
 extern "C" {
 #include "libavformat/avformat.h"
 #include "libswscale/swscale.h"
@@ -58,6 +62,10 @@ class FormatConverter : public SideAware {
   std::atomic<int> pending_flags_;
 
   SwsContext* conversion_context_{};
+  std::vector<SwsContext*> slice_contexts_;
+  std::unique_ptr<RowWorkers> slice_workers_;
+  int src_chroma_v_shift_{0};
+  int src_plane_count_{0};
   uint8_t* native_scratch_{};
   int native_scratch_linesize_{};
   size_t native_scratch_bytes_{};
