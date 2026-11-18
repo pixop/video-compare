@@ -221,8 +221,30 @@ static std::string format_libav_version(unsigned version) {
 }
 
 SDL::SDL() {
+#ifdef _WIN32
+  if (SDL_getenv("SDL_WINDOWS_DPI_AWARENESS") == nullptr) {
+    SDL_SetHint("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2");
+  }
+#endif
   check_sdl(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) == 0, "SDL init");
   check_sdl(TTF_Init() == 0, "TTF init");
+}
+
+static float query_display_dpi_scale(SDL_Window* window, const int fallback_display) {
+#ifdef _WIN32
+  int idx = (window != nullptr) ? SDL_GetWindowDisplayIndex(window) : fallback_display;
+  if (idx < 0) {
+    idx = fallback_display;
+  }
+  float ddpi = 0.0F;
+  if (SDL_GetDisplayDPI(idx, &ddpi, nullptr, nullptr) == 0 && ddpi > 0.0F) {
+    return std::max(1.0F, ddpi / 96.0F);
+  }
+#else
+  (void)window;
+  (void)fallback_display;
+#endif
+  return 1.0F;
 }
 
 SDL::~SDL() {
@@ -305,9 +327,24 @@ Display::Display(const int display_number,
     window_x = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number);
     window_y = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number);
 
+#ifndef _WIN32
     if (high_dpi_allowed_) {
       window_width /= 2;
       window_height /= 2;
+    }
+#endif
+
+    const int usable_width = std::max(bounds.w - border_width, MIN_WINDOW_WIDTH);
+    const int usable_height = std::max(bounds.h - border_height, MIN_WINDOW_HEIGHT);
+    if (window_width > usable_width || window_height > usable_height) {
+      const float fit_scale = std::min(static_cast<float>(usable_width) / static_cast<float>(std::max(1, window_width)),
+                                       static_cast<float>(usable_height) / static_cast<float>(std::max(1, window_height)));
+      window_width = std::max(MIN_WINDOW_WIDTH, static_cast<int>(std::round(static_cast<float>(window_width) * fit_scale)));
+      window_height = std::max(MIN_WINDOW_HEIGHT, static_cast<int>(std::round(static_cast<float>(window_height) * fit_scale)));
+
+      const window_fit::WindowPosition origin = window_fit::centered_window_position({bounds.x, bounds.y, bounds.w, bounds.h}, window_width, window_height, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
+      window_x = origin.x;
+      window_y = origin.y;
     }
   } else {
     const int usable_width = std::max(bounds.w - border_width, MIN_WINDOW_WIDTH);
@@ -360,7 +397,9 @@ Display::Display(const int display_number,
   SDL_RenderClear(renderer_);
   SDL_RenderPresent(renderer_);
 
-  SDL_GL_GetDrawableSize(window_, &drawable_width_, &drawable_height_);
+  if (SDL_GetRendererOutputSize(renderer_, &drawable_width_, &drawable_height_) != 0) {
+    SDL_GL_GetDrawableSize(window_, &drawable_width_, &drawable_height_);
+  }
   SDL_GetWindowSize(window_, &window_width_, &window_height_);
   window_aspect_ratio_ = static_cast<float>(window_width_) / static_cast<float>(std::max(1, window_height_));
   startup_window_size_ = {window_width_, window_height_};
@@ -383,7 +422,8 @@ Display::Display(const int display_number,
   video_to_window_width_factor_ = 1.0F;
   video_to_window_height_factor_ = 1.0F;
 
-  font_scale_ = (drawable_to_window_width_factor_ + drawable_to_window_height_factor_) / 2.0F;
+  const float base_drawable_scale = (drawable_to_window_width_factor_ + drawable_to_window_height_factor_) / 2.0F;
+  font_scale_ = (std::abs(base_drawable_scale - 1.0F) < 0.05F) ? query_display_dpi_scale(window_, display_number) : base_drawable_scale;
 
   border_extension_ = 3 * font_scale_;
   double_border_extension_ = border_extension_ * 2;
@@ -416,6 +456,24 @@ Display::Display(const int display_number,
   if (aspect_view_mode_ != AspectViewMode::Stretch) {
     const auto target_size = compute_mode_switch_target_window_size();
     apply_window_size_and_relayout(target_size[0], target_size[1], true);
+    startup_window_size_ = {window_width_, window_height_};
+    saved_window_size_ = startup_window_size_;
+  }
+
+  // Ensure the initial window never extends outside the usable display bounds (keeping edge HUD/tooltips visible).
+  {
+    int cur_x = 0;
+    int cur_y = 0;
+    SDL_GetWindowPosition(window_, &cur_x, &cur_y);
+    const int min_x = bounds.x + border_width / 2;
+    const int min_y = bounds.y + border_height - border_width / 2;
+    const int max_x = std::max(min_x, bounds.x + bounds.w - window_width_ - border_width / 2);
+    const int max_y = std::max(min_y, bounds.y + bounds.h - window_height_ - border_width / 2);
+    const int clamped_x = clamp_range(cur_x, min_x, max_x);
+    const int clamped_y = clamp_range(cur_y, min_y, max_y);
+    if (clamped_x != cur_x || clamped_y != cur_y) {
+      SDL_SetWindowPosition(window_, clamped_x, clamped_y);
+    }
   }
 
   rebuild_side_ui_textures();
@@ -655,8 +713,8 @@ std::array<int, 2> Display::compute_mode_switch_target_window_size() const {
 
   SDL_Rect bounds;
   if (SDL_GetDisplayUsableBounds(display_index, &bounds) == 0) {
-    const int max_w = std::max(1, bounds.w);
-    const int max_h = std::max(1, bounds.h);
+    const int max_w = std::max(1, bounds.w - window_fit::kFrameBorderWidth);
+    const int max_h = std::max(1, bounds.h - window_fit::kFrameBorderHeight);
 
     if (target_w > max_w || target_h > max_h) {
       const float scale = std::min(static_cast<float>(max_w) / static_cast<float>(std::max(1, target_w)), static_cast<float>(max_h) / static_cast<float>(std::max(1, target_h)));
@@ -1039,7 +1097,9 @@ void Display::handle_window_resize(const bool reset_forced_size_guard, const boo
   int new_window_h = 0;
 
   // Query both logical window size and drawable size since they can diverge (e.g. high-DPI).
-  SDL_GL_GetDrawableSize(window_, &new_drawable_w, &new_drawable_h);
+  if (renderer_ == nullptr || SDL_GetRendererOutputSize(renderer_, &new_drawable_w, &new_drawable_h) != 0) {
+    SDL_GL_GetDrawableSize(window_, &new_drawable_w, &new_drawable_h);
+  }
   SDL_GetWindowSize(window_, &new_window_w, &new_window_h);
 
   bool was_fullscreen = is_fullscreen_;
@@ -1107,7 +1167,8 @@ void Display::handle_window_resize(const bool reset_forced_size_guard, const boo
   drawable_to_window_height_factor_ = static_cast<float>(drawable_height_) / static_cast<float>(window_height_);
   update_content_window_layout();
 
-  font_scale_ = (drawable_to_window_width_factor_ + drawable_to_window_height_factor_) / 2.0F;
+  const float base_drawable_scale = (drawable_to_window_width_factor_ + drawable_to_window_height_factor_) / 2.0F;
+  font_scale_ = (std::abs(base_drawable_scale - 1.0F) < 0.05F) ? query_display_dpi_scale(window_, display_number_) : base_drawable_scale;
 
   border_extension_ = 3 * font_scale_;
   double_border_extension_ = border_extension_ * 2;
