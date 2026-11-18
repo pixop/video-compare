@@ -1,10 +1,13 @@
 #include "format_converter.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include "ffmpeg.h"
 #include "frame_metadata.h"
+#include "row_workers.h"
 extern "C" {
 #include "libavutil/imgutils.h"
 #include "libavutil/mem.h"
@@ -132,26 +135,72 @@ void FormatConverter::init() {
   const int sws_dest_w = (conversion_fit_ == ConversionFit::Native) ? static_cast<int>(src_width_) : static_cast<int>(dest_width_);
   const int sws_dest_h = (conversion_fit_ == ConversionFit::Native) ? static_cast<int>(src_height_) : static_cast<int>(dest_height_);
 
-  conversion_context_ = sws_getContext(
-      // Source
-      static_cast<int>(src_width()), static_cast<int>(src_height()), src_pixel_format(),
-      // Destination
-      sws_dest_w, sws_dest_h, dest_pixel_format(),
-      // Filters
-      active_flags_, nullptr, nullptr, nullptr);
-
-  if (conversion_context_ == nullptr) {
-    throw ffmpeg::Error{"Could not initialize format conversion context"};
-  }
-
   const int sws_color_space = get_sws_colorspace(src_color_space_);
   const int sws_color_range = get_sws_range(src_color_range_);
   const int* yuv2rgb_coeffs = sws_getCoefficients(sws_color_space);
 
-  sws_setColorspaceDetails(conversion_context_, yuv2rgb_coeffs, sws_color_range, yuv2rgb_coeffs, sws_color_range, 0, FIXED_1_0, FIXED_1_0);
+  auto create_ctx = [&](const int s_h, const int d_h) -> SwsContext* {
+    SwsContext* ctx = sws_getContext(static_cast<int>(src_width()), s_h, src_pixel_format(), sws_dest_w, d_h, dest_pixel_format(), active_flags_, nullptr, nullptr, nullptr);
+    if (ctx != nullptr) {
+      sws_setColorspaceDetails(ctx, yuv2rgb_coeffs, sws_color_range, yuv2rgb_coeffs, sws_color_range, 0, FIXED_1_0, FIXED_1_0);
+    }
+    return ctx;
+  };
+
+  conversion_context_ = create_ctx(static_cast<int>(src_height()), sws_dest_h);
+  if (conversion_context_ == nullptr) {
+    throw ffmpeg::Error{"Could not initialize format conversion context"};
+  }
+
+  src_chroma_v_shift_ = 0;
+  src_plane_count_ = 0;
+  const AVPixFmtDescriptor* src_desc = av_pix_fmt_desc_get(src_pixel_format_);
+  const AVPixFmtDescriptor* dst_desc = av_pix_fmt_desc_get(dest_pixel_format_);
+  if (src_desc != nullptr && dst_desc != nullptr) {
+    src_chroma_v_shift_ = src_desc->log2_chroma_h;
+    src_plane_count_ = av_pix_fmt_count_planes(src_pixel_format_);
+    const bool dst_packed_rgb = ((dst_desc->flags & AV_PIX_FMT_FLAG_RGB) != 0) && ((dst_desc->flags & AV_PIX_FMT_FLAG_PLANAR) == 0) && (av_pix_fmt_count_planes(dest_pixel_format_) == 1);
+    const bool src_planar_or_semi = (src_plane_count_ >= 1 && src_plane_count_ <= 4) && ((src_desc->flags & AV_PIX_FMT_FLAG_BITSTREAM) == 0);
+
+    if (conversion_fit_ == ConversionFit::Stretch && dst_packed_rgb && src_planar_or_semi && (sws_dest_w * sws_dest_h >= 640 * 360)) {
+      const int hc = static_cast<int>(std::thread::hardware_concurrency());
+      const int max_workers = std::min(12, std::max(2, hc));
+      const int candidates[] = {12, 8, 6, 4, 3, 2};
+      int chosen_slices = 1;
+      for (const int k : candidates) {
+        if (k <= max_workers && (static_cast<int>(src_height_) % (k * 2)) == 0 && (sws_dest_h % (k * 2)) == 0) {
+          chosen_slices = k;
+          break;
+        }
+      }
+      if (chosen_slices > 1) {
+        const int slice_src_h = static_cast<int>(src_height_) / chosen_slices;
+        const int slice_dst_h = sws_dest_h / chosen_slices;
+        slice_contexts_.reserve(chosen_slices);
+        for (int i = 0; i < chosen_slices; ++i) {
+          SwsContext* s_ctx = create_ctx(slice_src_h, slice_dst_h);
+          if (s_ctx == nullptr) {
+            for (SwsContext* c : slice_contexts_) {
+              sws_freeContext(c);
+            }
+            slice_contexts_.clear();
+            break;
+          }
+          slice_contexts_.push_back(s_ctx);
+        }
+        if (!slice_contexts_.empty() && (!slice_workers_ || slice_workers_->size() != chosen_slices)) {
+          slice_workers_ = std::make_unique<RowWorkers>(chosen_slices);
+        }
+      }
+    }
+  }
 }
 
 void FormatConverter::free() {
+  for (SwsContext* c : slice_contexts_) {
+    sws_freeContext(c);
+  }
+  slice_contexts_.clear();
   sws_freeContext(conversion_context_);
   conversion_context_ = nullptr;
 }
@@ -273,11 +322,35 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
   }
 
   if (!used_scratch) {
-    sws_scale(conversion_context_,
-              // Source
-              src->data, src->linesize, 0, static_cast<int>(src_height_),
-              // Destination
-              dst_planes, dst_linesizes);
+    if (!slice_contexts_.empty() && slice_workers_ && conversion_fit_ == ConversionFit::Stretch) {
+      const int k = static_cast<int>(slice_contexts_.size());
+      const int slice_src_h = static_cast<int>(src_height_) / k;
+      const int slice_dst_h = static_cast<int>(dest_height_) / k;
+      const int chroma_v_shift = src_chroma_v_shift_;
+      const int plane_count = src_plane_count_;
+
+      slice_workers_->run_static(k, [&](const int start_slice, const int end_slice) {
+        for (int s = start_slice; s < end_slice; ++s) {
+          const int src_y = s * slice_src_h;
+          const int dst_y = s * slice_dst_h;
+          const uint8_t* slice_src[4] = {nullptr, nullptr, nullptr, nullptr};
+          for (int p = 0; p < plane_count; ++p) {
+            if (src->data[p] != nullptr) {
+              const int v_shift = (p == 1 || p == 2) ? chroma_v_shift : 0;
+              slice_src[p] = src->data[p] + static_cast<ptrdiff_t>(src_y >> v_shift) * src->linesize[p];
+            }
+          }
+          uint8_t* slice_dst[4] = {dst->data[0] + static_cast<ptrdiff_t>(dst_y) * dst->linesize[0], nullptr, nullptr, nullptr};
+          sws_scale(slice_contexts_[s], slice_src, src->linesize, 0, slice_src_h, slice_dst, dst_linesizes);
+        }
+      });
+    } else {
+      sws_scale(conversion_context_,
+                // Source
+                src->data, src->linesize, 0, static_cast<int>(src_height_),
+                // Destination
+                dst_planes, dst_linesizes);
+    }
   }
 
   dst->format = dest_pixel_format();

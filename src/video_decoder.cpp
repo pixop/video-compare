@@ -1,8 +1,51 @@
 #include "video_decoder.h"
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <string>
+#include <vector>
 #include "ffmpeg.h"
 #include "string_utils.h"
+
+namespace {
+bool is_suitable_for_auto_hwaccel(const AVCodecParameters* params) {
+  if (params == nullptr || params->width < 640 || params->height < 360) {
+    return false;
+  }
+  const char* sdl_video_driver = std::getenv("SDL_VIDEODRIVER");
+  if (sdl_video_driver != nullptr && std::strcmp(sdl_video_driver, "dummy") == 0) {
+    return false;
+  }
+  const char* no_auto_hw = std::getenv("VIDEO_COMPARE_NO_AUTO_HWACCEL");
+  if (no_auto_hw != nullptr && (no_auto_hw[0] == '1' || no_auto_hw[0] == 't' || no_auto_hw[0] == 'T' || no_auto_hw[0] == 'y' || no_auto_hw[0] == 'Y')) {
+    return false;
+  }
+  switch (params->codec_id) {
+    case AV_CODEC_ID_H264:
+    case AV_CODEC_ID_HEVC:
+    case AV_CODEC_ID_VP9:
+    case AV_CODEC_ID_AV1:
+#ifdef AV_CODEC_ID_VVC
+    case AV_CODEC_ID_VVC:
+#endif
+    case AV_CODEC_ID_MPEG2VIDEO:
+    case AV_CODEC_ID_VC1:
+      return true;
+    default:
+      return false;
+  }
+}
+
+std::vector<const char*> preferred_auto_hw_devices() {
+#if defined(_WIN32)
+  return {"d3d11va", "cuda", "dxva2", "qsv"};
+#elif defined(__APPLE__)
+  return {"videotoolbox"};
+#else
+  return {"vaapi", "cuda", "vdpau", "vulkan"};
+#endif
+}
+}  // namespace
 
 constexpr unsigned DEFAULT_SDR_NITS = 100;
 constexpr unsigned DEFAULT_HDR_NITS = 500;
@@ -78,8 +121,17 @@ VideoDecoder::VideoDecoder(const Side& side,
   }
   ffmpeg::check(avcodec_parameters_to_context(codec_context_, codec_parameters));
 
+  // Enable multi-threaded decoding by default unless overridden via decoder_options
+  if (av_dict_get(decoder_options, "threads", nullptr, 0) == nullptr) {
+    codec_context_->thread_count = 0;
+    codec_context_->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+  }
+
+  const bool explicit_disable_hw = (hw_accel_spec == "none" || hw_accel_spec == "off");
+  const bool auto_hw = (hw_accel_spec == "auto");
+
   // optionally set up hardware acceleration
-  if (!hw_accel_spec.empty()) {
+  if (!explicit_disable_hw && !hw_accel_spec.empty() && hw_accel_spec != "auto") {
     const char* device = nullptr;
 
     const size_t colon_pos = hw_accel_spec.find(":");
@@ -114,7 +166,7 @@ VideoDecoder::VideoDecoder(const Side& side,
       }
     }
 
-    AVBufferRef* hw_device_ctx;
+    AVBufferRef* hw_device_ctx = nullptr;
 
     if (av_hwdevice_ctx_create(&hw_device_ctx, hw_accel_type, device, hwaccel_options, 0) < 0) {
       throw ffmpeg::Error{"Failed to create a HW device context for " + hw_accel_name_};
@@ -123,6 +175,36 @@ VideoDecoder::VideoDecoder(const Side& side,
     ffmpeg::check_dict_is_empty(hwaccel_options, string_sprintf("HW acceleration %s", hw_accel_name_.c_str()));
 
     codec_context_->hw_device_ctx = hw_device_ctx;
+    codec_context_->extra_hw_frames = 8;
+  } else if (auto_hw) {
+    for (const char* candidate : preferred_auto_hw_devices()) {
+      const AVHWDeviceType hw_type = av_hwdevice_find_type_by_name(candidate);
+      if (hw_type == AV_HWDEVICE_TYPE_NONE) {
+        continue;
+      }
+      AVPixelFormat candidate_pix_fmt = AV_PIX_FMT_NONE;
+      for (int i = 0;; i++) {
+        const AVCodecHWConfig* config = avcodec_get_hw_config(codec_, i);
+        if (!config) {
+          break;
+        }
+        if ((config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX) && config->device_type == hw_type) {
+          candidate_pix_fmt = config->pix_fmt;
+          break;
+        }
+      }
+      if (candidate_pix_fmt == AV_PIX_FMT_NONE) {
+        continue;
+      }
+      AVBufferRef* hw_device_ctx = nullptr;
+      if (av_hwdevice_ctx_create(&hw_device_ctx, hw_type, nullptr, nullptr, 0) >= 0 && hw_device_ctx != nullptr) {
+        hw_accel_name_ = candidate;
+        hw_pixel_format_ = candidate_pix_fmt;
+        codec_context_->hw_device_ctx = hw_device_ctx;
+        codec_context_->extra_hw_frames = 8;
+        break;
+      }
+    }
   }
 
   // parse and remove any video-compare specific decoder options

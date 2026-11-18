@@ -115,6 +115,7 @@ void Queue<T>::stop() {
 
   stopped_ = true;
   empty_.notify_all();
+  full_.notify_all();
 }
 
 template <class T>
