@@ -23,14 +23,113 @@
 #include "video_filter_context.h"
 #include "video_filter_state.h"
 extern "C" {
+#include <libavutil/buffer.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/mem.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
 }
 
-static constexpr size_t QUEUE_SIZE = 5;
+static constexpr size_t QUEUE_SIZE = 8;
 
-static constexpr uint32_t SLEEP_PERIOD_MS = 10;
+static constexpr uint32_t SLEEP_PERIOD_MS = 1;
+
+class ConvertedFrameBufferPool {
+ public:
+  explicit ConvertedFrameBufferPool(const size_t max_pooled) : max_pooled_(max_pooled) {}
+
+  ~ConvertedFrameBufferPool() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& entry : free_buffers_) {
+      av_free(entry.data);
+    }
+  }
+
+  void allocate_frame_buffer(AVFrame* frame, const int width, const int height, const AVPixelFormat pix_fmt) {
+    if (av_image_fill_linesizes(frame->linesize, pix_fmt, width) < 0) {
+      throw std::runtime_error("Formatting converted picture linesizes");
+    }
+    for (int i = 0; i < 4; ++i) {
+      frame->linesize[i] = (frame->linesize[i] + 63) & ~63;
+    }
+    const ptrdiff_t linesizes_ptrdiff[4] = {frame->linesize[0], frame->linesize[1], frame->linesize[2], frame->linesize[3]};
+    size_t plane_sizes[4] = {0, 0, 0, 0};
+    if (av_image_fill_plane_sizes(plane_sizes, pix_fmt, height, linesizes_ptrdiff) < 0) {
+      throw std::runtime_error("Computing converted picture plane sizes");
+    }
+    size_t total_bytes = 64;
+    for (int i = 0; i < 4; ++i) {
+      total_bytes += plane_sizes[i];
+    }
+
+    uint8_t* raw = acquire(total_bytes);
+    if (raw == nullptr) {
+      throw std::runtime_error("Allocating converted picture");
+    }
+
+    auto* token = new ReleaseToken{this, raw, total_bytes};
+    frame->buf[0] = av_buffer_create(raw, static_cast<int>(total_bytes), &ConvertedFrameBufferPool::buffer_free_cb, token, 0);
+    if (frame->buf[0] == nullptr) {
+      release(raw, total_bytes);
+      delete token;
+      throw std::runtime_error("Creating converted picture AVBufferRef");
+    }
+
+    if (av_image_fill_pointers(frame->data, pix_fmt, height, raw, frame->linesize) < 0) {
+      av_buffer_unref(&frame->buf[0]);
+      throw std::runtime_error("Filling converted picture pointers");
+    }
+  }
+
+ private:
+  struct BufferEntry {
+    uint8_t* data;
+    size_t size;
+  };
+  struct ReleaseToken {
+    ConvertedFrameBufferPool* pool;
+    uint8_t* data;
+    size_t size;
+  };
+
+  static void buffer_free_cb(void* opaque, uint8_t* /*data*/) {
+    auto* token = static_cast<ReleaseToken*>(opaque);
+    token->pool->release(token->data, token->size);
+    delete token;
+  }
+
+  uint8_t* acquire(const size_t required_bytes) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto it = free_buffers_.begin(); it != free_buffers_.end(); ++it) {
+      if (it->size == required_bytes) {
+        uint8_t* ptr = it->data;
+        free_buffers_.erase(it);
+        return ptr;
+      }
+    }
+    while (!free_buffers_.empty() && free_buffers_.size() >= max_pooled_) {
+      av_free(free_buffers_.front().data);
+      free_buffers_.erase(free_buffers_.begin());
+    }
+    return static_cast<uint8_t*>(av_malloc(required_bytes));
+  }
+
+  void release(uint8_t* data, const size_t size) {
+    if (data == nullptr) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (free_buffers_.size() < max_pooled_) {
+      free_buffers_.push_back({data, size});
+    } else {
+      av_free(data);
+    }
+  }
+
+  size_t max_pooled_;
+  std::mutex mutex_;
+  std::vector<BufferEntry> free_buffers_;
+};
 
 static constexpr uint32_t ONE_SECOND_US = 1000 * 1000;
 static constexpr uint32_t RESYNC_UPDATE_RATE_US = ONE_SECOND_US / 10;
@@ -124,7 +223,7 @@ static inline AVPixelFormat determine_pixel_format(const VideoCompareConfig& con
 }
 
 static inline int determine_sws_flags(const bool fast) {
-  return fast ? SWS_FAST_BILINEAR : (SWS_BICUBIC | SWS_FULL_CHR_H_INT | SWS_ACCURATE_RND);
+  return fast ? SWS_FAST_BILINEAR : SWS_BICUBIC;
 }
 
 static inline bool use_fast_input_alignment(const VideoCompareConfig& config) {
@@ -246,10 +345,12 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config)
   // Initialize queues for all videos
   for (const auto& pair : demuxers_) {
     const Side& side = pair.first;
+    converted_buffer_pools_[side] = std::make_unique<ConvertedFrameBufferPool>(frame_buffer_size_ + QUEUE_SIZE * 2 + 6);
     packet_queues_[side] = std::make_unique<PacketQueue>(QUEUE_SIZE);
     decoded_frame_queues_[side] = std::make_shared<DecodedFrameQueue>(QUEUE_SIZE);
     filtered_frame_queues_[side] = std::make_unique<FrameQueue>(QUEUE_SIZE);
     converted_frame_queues_[side] = std::make_unique<FrameQueue>(QUEUE_SIZE);
+    skip_until_pts_us_[side].store(std::numeric_limits<int64_t>::min(), std::memory_order_relaxed);
 
     // Initialize media frame detection state
     auto& detection_state = media_frame_detection_states_[side];
@@ -404,8 +505,8 @@ void VideoCompare::demultiplex(const Side& side) {
 
   try {
     while (keep_running()) {
-      // Wait for decoder to drain
-      if (seeking_ && ready_to_seek_.get(ReadyToSeek::ProcessorThread::Decoder, side)) {
+      // Wait for decoder to drain or stop immediately on seek
+      if (seeking_ && (packet_queues_[side]->is_stopped() || ready_to_seek_.get(ReadyToSeek::ProcessorThread::Decoder, side))) {
         ready_to_seek_.set(ReadyToSeek::ProcessorThread::Demultiplexer, side);
 
         sleep_for_ms(SLEEP_PERIOD_MS);
@@ -450,6 +551,8 @@ void VideoCompare::decode_video(const Side& side) {
         if (seeking_) {
           // Flush the decoder
           video_decoders_[side]->flush();
+          last_skipped_frames_[side].reset();
+          pushed_since_seek_[side] = false;
 
           // Seeks are now OK
           ready_to_seek_.set(ReadyToSeek::ProcessorThread::Decoder, side);
@@ -463,9 +566,23 @@ void VideoCompare::decode_video(const Side& side) {
 
       // Read packet from queue
       if (!packet_queues_[side]->pop(packet)) {
-        // Flush remaining frames cached in the decoder
-        while (process_packet(side, packet.get())) {
-          ;
+        // Flush remaining frames cached in the decoder only at EOF, not during seek abort
+        if (!seeking_) {
+          while (process_packet(side, packet.get())) {
+            ;
+          }
+          if (!pushed_since_seek_[side] && last_skipped_frames_[side] != nullptr) {
+            skip_until_pts_us_[side].store(std::numeric_limits<int64_t>::min(), std::memory_order_relaxed);
+            AVFrameSharedPtr fallback = std::move(last_skipped_frames_[side]);
+            if (fallback->format == video_decoders_[side]->hw_pixel_format()) {
+              AVFrameSharedPtr sw_frame{av_frame_alloc(), avframe_deleter};
+              if (av_hwframe_transfer_data(sw_frame.get(), fallback.get(), 0) >= 0 && av_frame_copy_props(sw_frame.get(), fallback.get()) >= 0) {
+                fallback = sw_frame;
+              }
+            }
+            decoded_frame_queues_[side]->push(fallback);
+            pushed_since_seek_[side] = true;
+          }
         }
 
         // Enter wait state
@@ -501,6 +618,20 @@ bool VideoCompare::process_packet(const Side& side, AVPacket* packet) {
     if (!video_decoders_[side]->receive(frame_decoded.get(), demuxers_[side].get())) {
       break;
     }
+
+    const int64_t current_skip_target_us = skip_until_pts_us_[side].load(std::memory_order_relaxed);
+    if (current_skip_target_us != std::numeric_limits<int64_t>::min() && !single_decoder_mode_) {
+      const int64_t frame_pts_us = av_rescale_q(frame_decoded->pts, demuxers_[side]->time_base(), AV_R_MICROSECONDS) - demuxers_[side]->video_start_time();
+      if (frame_pts_us < current_skip_target_us) {
+        note_decoded_frame(side, frame_decoded->pts);
+        last_skipped_frames_[side] = frame_decoded;
+        continue;
+      }
+      skip_until_pts_us_[side].store(std::numeric_limits<int64_t>::min(), std::memory_order_relaxed);
+    }
+
+    last_skipped_frames_[side].reset();
+    pushed_since_seek_[side] = true;
 
     AVFrameSharedPtr frame_for_filtering;
 
@@ -578,13 +709,22 @@ void VideoCompare::filter_video(const Side& side) {
       AVFrameSharedPtr frame_to_filter;
 
       if (decoded_frame_queues_[side]->pop(frame_to_filter)) {
+        const int64_t skip_target_us = skip_until_pts_us_[side].load(std::memory_order_relaxed);
+        if (skip_target_us != std::numeric_limits<int64_t>::min() && !single_decoder_mode_) {
+          const int64_t frame_pts_us = av_rescale_q(frame_to_filter->pts, demuxers_[side]->time_base(), AV_R_MICROSECONDS) - demuxers_[side]->video_start_time();
+          if (frame_pts_us < skip_target_us) {
+            continue;
+          }
+        }
         filter_decoded_frame(side, frame_to_filter);
       } else if (decoded_frame_queues_[side]->is_stopped() || seeking_) {
         // Close the filter source
         video_filterers_[side]->close_src();
 
-        // Flush the filter graph
-        filter_decoded_frame(side, nullptr);
+        // Flush the filter graph only at EOF, not during seek abort
+        if (!seeking_) {
+          filter_decoded_frame(side, nullptr);
+        }
 
         // Stop filtering
         filtered_frame_queues_[side]->stop();
@@ -613,15 +753,18 @@ void VideoCompare::format_convert_video(const Side& side) {
       AVFrameUniquePtr frame_filtered{av_frame_alloc(), avframe_deleter};
 
       if (filtered_frame_queues_[side]->pop(frame_filtered)) {
+        const int64_t skip_target_us = skip_until_pts_us_[side].load(std::memory_order_relaxed);
+        if (skip_target_us != std::numeric_limits<int64_t>::min() && frame_filtered->pts < skip_target_us) {
+          continue;
+        }
         // scale and convert pixel format before pushing to frame queue for displaying
-        AVFrameUniquePtr frame_converted{av_frame_alloc(), avframe_and_data_deleter};
+        AVFrameUniquePtr frame_converted{av_frame_alloc(), avframe_deleter};
 
         if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
           throw std::runtime_error("Copying filtered frame properties");
         }
-        if (av_image_alloc(frame_converted->data, frame_converted->linesize, format_converters_[side]->dest_width(), format_converters_[side]->dest_height(), format_converters_[side]->dest_pixel_format(), 64) < 0) {
-          throw std::runtime_error("Allocating converted picture");
-        }
+        converted_buffer_pools_[side]->allocate_frame_buffer(frame_converted.get(), static_cast<int>(format_converters_[side]->dest_width()), static_cast<int>(format_converters_[side]->dest_height()),
+                                                             format_converters_[side]->dest_pixel_format());
         (*format_converters_[side])(frame_filtered.get(), frame_converted.get());
 
         converted_frame_queues_[side]->push(std::move(frame_converted));
@@ -1063,7 +1206,7 @@ void VideoCompare::compare() {
 
     // for the full cycle
     Timer full_cycle_timer;
-    sorted_flat_deque<uint32_t> full_cycle_time_deque(NOMINAL_FPS_UPDATE_RATE_US / 1000);
+    sorted_flat_deque<uint32_t> full_cycle_time_deque(NOMINAL_FPS_UPDATE_RATE_US / 100);
 
     std::string previous_frame_combo_tag;
     int32_t unique_frame_combo_tags_processed = 0;
@@ -1072,6 +1215,10 @@ void VideoCompare::compare() {
     double next_refresh_at = 0;
 
     const bool log_event_routing = env_flag_enabled("VIDEO_COMPARE_LOG_EVENT_ROUTING");
+    const bool log_perf = env_flag_enabled("VIDEO_COMPARE_LOG_PERF");
+    auto seek_perf_start = std::chrono::high_resolution_clock::now();
+    double last_seek_drain_ms = 0.0;
+    bool awaiting_post_seek_sync_log = false;
 
     for (uint64_t frame_number = 0;; ++frame_number) {
       // Set FPS message if needed
@@ -1186,6 +1333,9 @@ void VideoCompare::compare() {
 
       // if seeking is required, drain packet and frame queues
       if ((seek_relative != 0.0F) || (shift_right_frames != 0) || force_seek_current_position) {
+        if (log_perf) {
+          seek_perf_start = std::chrono::high_resolution_clock::now();
+        }
         // update total right time shifted
         if (shift_right_frames != 0) {
           total_right_time_shifted += shift_right_frames;
@@ -1195,10 +1345,25 @@ void VideoCompare::compare() {
         static_right_time_shift = time_shift_offset_av_time_ + total_right_time_shifted * right_delta;
 
         ready_to_seek_.reset_all();
+        for (auto& pair : skip_until_pts_us_) {
+          pair.second.store(std::numeric_limits<int64_t>::min(), std::memory_order_relaxed);
+        }
         seeking_ = true;
 
-        // drain packet and frame queues
+        // Stop and drain all packet and frame queues immediately so all worker stages unblock in parallel
         for (auto& pair : packet_queues_) {
+          pair.second->stop();
+          pair.second->empty();
+        }
+        for (auto& pair : decoded_frame_queues_) {
+          pair.second->stop();
+          pair.second->empty();
+        }
+        for (auto& pair : filtered_frame_queues_) {
+          pair.second->stop();
+          pair.second->empty();
+        }
+        for (auto& pair : converted_frame_queues_) {
           pair.second->stop();
           pair.second->empty();
         }
@@ -1330,6 +1495,28 @@ void VideoCompare::compare() {
           }
         }
 
+        // Set pre-target skip threshold so decoders fast-forward from their keyframe directly to the seek target
+        if (seek_request.all_sides_multi_frame && !seek_failed && !single_decoder_mode_) {
+          auto compute_seek_skip_target = [&](const Side& side, const float target_pos_sec, const float start_time_sec, const int64_t delta_pts) -> int64_t {
+            const int64_t step = (delta_pts > 0) ? delta_pts : 33333;
+            int64_t target_us = static_cast<int64_t>(std::llround(static_cast<double>(target_pos_sec - start_time_sec) * 1000000.0)) - (step / 4);
+            const int64_t dur_us = demuxers_[side]->duration();
+            if (dur_us > step * 2) {
+              target_us = std::min(target_us, dur_us - step * 2);
+            }
+            return target_us > 0 ? target_us : std::numeric_limits<int64_t>::min();
+          };
+
+          skip_until_pts_us_[LEFT].store(compute_seek_skip_target(LEFT, seek_plan.left_target_position, left.start_time_, left.delta_pts_), std::memory_order_relaxed);
+          size_t r_idx = 0;
+          for (const auto& pair : side_states) {
+            if (pair.first.is_right()) {
+              const float target_pos = seek_plan.rights[r_idx++].target_position;
+              skip_until_pts_us_[pair.first].store(compute_seek_skip_target(pair.first, target_pos, pair.second.start_time_, pair.second.delta_pts_), std::memory_order_relaxed);
+            }
+          }
+        }
+
         seeking_ = false;
 
         // allow packet and frame queues to receive data again
@@ -1384,6 +1571,51 @@ void VideoCompare::compare() {
           }
         }
 
+        for (auto& pair : skip_until_pts_us_) {
+          pair.second.store(std::numeric_limits<int64_t>::min(), std::memory_order_relaxed);
+        }
+
+        const int64_t post_seek_min_delta = playback_timing::compute_min_delta(left.delta_pts_, right_ptr->delta_pts_);
+        for (int align_step = 0; align_step < 16; ++align_step) {
+          bool aligned_all = true;
+          for (auto& pair : side_states) {
+            if (!pair.first.is_right()) {
+              continue;
+            }
+            SideState& right_state = pair.second;
+            if (left.frame_ != nullptr && right_state.frame_ != nullptr) {
+              if (playback_timing::is_behind(left.pts_, right_state.pts_, post_seek_min_delta)) {
+                pop_and_reset(left);
+                aligned_all = false;
+              } else if (playback_timing::is_behind(right_state.pts_, left.pts_, post_seek_min_delta)) {
+                right_state.effective_time_shift_ = static_right_time_shift;
+                pop_and_reset(right_state, &right_state.effective_time_shift_);
+                aligned_all = false;
+              }
+            }
+          }
+          if (aligned_all) {
+            break;
+          }
+        }
+
+        timer_->reset();
+        if (display_->get_play()) {
+          const int64_t post_seek_delay = playback_timing::compute_frame_delay(left.delta_pts_, right_ptr->delta_pts_);
+          if (post_seek_delay > 0) {
+            timer_->shift_target(static_cast<int64_t>(post_seek_delay / display_->get_playback_speed_factor()));
+          }
+        }
+        full_cycle_time_deque.clear();
+        unique_frame_combo_tags_processed = -1;
+        previous_frame_combo_tag.clear();
+        full_cycle_timer.update();
+
+        if (log_perf) {
+          last_seek_drain_ms = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - seek_perf_start).count();
+          awaiting_post_seek_sync_log = true;
+        }
+
         // After seek, skip fetch/store so a failed next-frame pop cannot null the
         // post-seek frame before it is put back into the display buffer.
         skip_update = true;
@@ -1394,7 +1626,8 @@ void VideoCompare::compare() {
 
       // keep showing currently displayed frame for another iteration?
       const bool paused_forward_step = !display_->get_play() && forward_navigate_frames > 0;
-      skip_update = skip_update || ((timer_->us_until_target() - refresh_time_deque.average()) > 0 && !paused_forward_step);
+      const int64_t lookahead_us = std::min<int64_t>(refresh_time_deque.average(), 4000);
+      skip_update = skip_update || ((timer_->us_until_target() - lookahead_us) > 0 && !paused_forward_step);
       const bool fetch_next_frame = display_->get_play() || (forward_navigate_frames > 0);
 
       // use the delta between current and previous PTS as the tolerance which determines whether we have to adjust
@@ -1471,7 +1704,11 @@ void VideoCompare::compare() {
               const int64_t play_frame_delay = playback_timing::compute_frame_delay(left.frame_->pts - left.pts_, right_ptr->frame_->pts - right_ptr->pts_ - right_ptr->effective_time_shift_);
 
               const float pace_divisor = display_->get_play() ? display_->get_playback_speed_factor() : 1.0f;
-              timer_->shift_target(static_cast<int64_t>(play_frame_delay / pace_divisor));
+              const int64_t step_us = static_cast<int64_t>(play_frame_delay / pace_divisor);
+              timer_->shift_target(step_us);
+              if (timer_->us_until_target() < -step_us) {
+                timer_->update();
+              }
             } else {
               timer_->update();
             }
@@ -1627,6 +1864,12 @@ void VideoCompare::compare() {
 
           // count the number of unique in-sync video frame combinations processed
           if (is_playback_in_sync) {
+            if (log_perf && awaiting_post_seek_sync_log) {
+              const double sync_total_ms = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - seek_perf_start).count();
+              std::cout << string_sprintf("[perf] seek+sync completed: seek_ms=%.2f total_sync_ms=%.2f left_pts=%.3f right_pts=%.3f", last_seek_drain_ms, sync_total_ms, left.pts_ * AV_TIME_TO_SEC, right_ptr->pts_ * AV_TIME_TO_SEC)
+                        << std::endl;
+              awaiting_post_seek_sync_log = false;
+            }
             const std::string frame_combo_tag = FrameMetadata::require_key(left_display_frame) + "|" + FrameMetadata::require_key(right_display_frame);
 
             if (frame_combo_tag != previous_frame_combo_tag) {
@@ -1671,7 +1914,9 @@ void VideoCompare::compare() {
 
               refresh_time_deque.push_back(-display_refresh_timer.us_until_target());
             } else {
-              sleep_for_ms(refresh_time_deque.average() / 1000);
+              const int64_t rem_us = timer_->us_until_target();
+              const uint32_t wait_ms = (rem_us > 4000) ? 4 : 1;
+              sleep_for_ms(wait_ms);
             }
 
             ui_refresh_performed = true;
@@ -1679,8 +1924,9 @@ void VideoCompare::compare() {
             // calculate next refresh time dynamically based on target playback speed and current refresh timing
             const double target_time_us = std::max(1000.0, static_cast<double>(std::max(ffmpeg::frame_duration(left_display_frame), ffmpeg::frame_duration(right_display_frame))) / display_->get_playback_speed_factor());
             const double refresh_time_us = static_cast<double>(refresh_time_deque.average());
+            const bool falling_behind = display_->get_play() && (timer_->us_until_target() < -static_cast<int64_t>(target_time_us));
 
-            next_refresh_at += std::max(1.0 + (frame_number - next_refresh_frame_number), refresh_time_us / target_time_us);
+            next_refresh_at += falling_behind ? std::max(1.0 + (frame_number - next_refresh_frame_number), refresh_time_us / target_time_us) : (1.0 + (frame_number - next_refresh_frame_number));
           }
 
           // check if sleeping is the best option for accurate playback by taking the average refresh time into account
@@ -1733,6 +1979,9 @@ void VideoCompare::compare() {
           const float ui_fps = calculate_fps(ONE_SECOND_US, full_cycle_time_deque.average());
 
           fps_message = string_sprintf("Video/UI FPS: %.1f/%.1f", video_fps, ui_fps);
+          if (log_perf) {
+            std::cout << string_sprintf("[perf] %s (unique_frames=%d, avg_refresh_ms=%.2f)", fps_message.c_str(), unique_frame_combo_tags_processed, refresh_time_deque.average() / 1000.0) << std::endl;
+          }
 
           full_cycle_time_deque.clear();
           unique_frame_combo_tags_processed = 0;

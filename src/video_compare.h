@@ -24,6 +24,7 @@ extern "C" {
 }
 
 class ScopeWindow;
+class ConvertedFrameBufferPool;
 
 using AVPacketUniquePtr = std::unique_ptr<AVPacket, std::function<void(AVPacket*)>>;
 using AVFrameSharedPtr = std::shared_ptr<AVFrame>;
@@ -219,10 +220,14 @@ class VideoCompare {
   std::map<Side, std::unique_ptr<VideoFilterer>> video_filterers_;
   std::map<Side, std::unique_ptr<FormatConverter>> format_converters_;
 
+  std::map<Side, std::unique_ptr<ConvertedFrameBufferPool>> converted_buffer_pools_;
   std::map<Side, std::unique_ptr<PacketQueue>> packet_queues_;
   std::map<Side, std::shared_ptr<DecodedFrameQueue>> decoded_frame_queues_;
   std::map<Side, std::unique_ptr<FrameQueue>> filtered_frame_queues_;
   std::map<Side, std::unique_ptr<FrameQueue>> converted_frame_queues_;
+  std::map<Side, std::atomic<int64_t>> skip_until_pts_us_;
+  std::map<Side, AVFrameSharedPtr> last_skipped_frames_;
+  std::map<Side, bool> pushed_since_seek_;
 
   std::map<Side, std::vector<CropState>> crop_history_;
   std::vector<std::vector<Side>> crop_operations_;

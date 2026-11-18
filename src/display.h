@@ -316,6 +316,8 @@ class Display {
   int max_text_width_;
 
   std::string pending_message_;
+  std::string active_message_text_;
+  TTF_Font* active_message_font_{nullptr};
   std::chrono::milliseconds message_shown_at_;
   SDL_Texture* message_texture_{nullptr};
   int message_width_;
@@ -323,8 +325,48 @@ class Display {
 
   SDL_Window* window_;
   SDL_Renderer* renderer_;
-  SDL_Texture* video_texture_linear_{nullptr};
-  SDL_Texture* video_texture_nn_{nullptr};
+  SDL_Texture* left_video_texture_{nullptr};
+  SDL_Texture* right_video_texture_{nullptr};
+
+  std::string uploaded_left_frame_key_;
+  int uploaded_left_valid_w_{0};
+  std::string uploaded_right_frame_key_;
+  int uploaded_right_valid_x_{0};
+  std::string uploaded_diff_left_frame_key_;
+  bool uploaded_subtraction_mode_{false};
+  DiffMode uploaded_diff_mode_{DiffMode::AbsLinear};
+  bool uploaded_diff_luma_only_{false};
+
+  struct CachedTextTexture {
+    std::string text;
+    TTF_Font* font{nullptr};
+    uint32_t color_rgba{0};
+    SDL_Texture* texture{nullptr};
+    int width{0};
+    int height{0};
+
+    void reset() {
+      if (texture != nullptr) {
+        SDL_DestroyTexture(texture);
+        texture = nullptr;
+      }
+      text.clear();
+      font = nullptr;
+      color_rgba = 0;
+      width = 0;
+      height = 0;
+    }
+  };
+
+  CachedTextTexture hud_left_pos_cache_;
+  CachedTextTexture hud_right_pos_cache_;
+  CachedTextTexture hud_target_pos_cache_;
+  CachedTextTexture hud_zoom_cache_;
+  CachedTextTexture hud_speed_cache_;
+  CachedTextTexture hud_buffer_cache_;
+
+  std::vector<SDL_Rect> progress_bright_rects_;
+  std::vector<SDL_Rect> progress_dark_rects_;
 
   SDL_Event event_;
   int mouse_x_;
@@ -413,9 +455,10 @@ class Display {
   void render_progress_dots(const float position, const float progress, const bool is_top);
 
   SDL_Surface* render_text_with_fallback(const std::string& text);
+  void reset_hud_text_caches();
+  const CachedTextTexture& get_hud_text_texture(CachedTextTexture& cache, TTF_Font* font, const std::string& text, SDL_Color color);
 
-  SDL_Texture* get_video_texture() const;
-  void update_texture(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& message);
+  void update_video_texture_scale_mode();
 
   int round_and_clamp(const float value);
 

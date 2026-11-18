@@ -2,6 +2,7 @@
 #include <libgen.h>
 #include <algorithm>
 #include <atomic>
+#include <cstring>
 #include <future>
 #include <iomanip>
 #include <iostream>
@@ -354,7 +355,12 @@ Display::Display(const int display_number,
 
   SDL_FreeSurface(icon_surface);
 
-  renderer_ = check_sdl(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "renderer");
+#ifdef _WIN32
+  if (SDL_getenv("SDL_RENDER_DRIVER") == nullptr && SDL_getenv("SDL_VIDEODRIVER") == nullptr) {
+    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "direct3d11");
+  }
+#endif
+  renderer_ = check_sdl(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED), "renderer");
 
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
   SDL_RenderClear(renderer_);
@@ -430,8 +436,13 @@ Display::Display(const int display_number,
 }
 
 Display::~Display() {
-  SDL_DestroyTexture(video_texture_linear_);
-  SDL_DestroyTexture(video_texture_nn_);
+  if (left_video_texture_ != nullptr) {
+    SDL_DestroyTexture(left_video_texture_);
+  }
+  if (right_video_texture_ != nullptr) {
+    SDL_DestroyTexture(right_video_texture_);
+  }
+  reset_hud_text_caches();
   SDL_DestroyTexture(side_ui_[LEFT.as_simple_index()].text_texture);
   SDL_DestroyTexture(side_ui_[RIGHT.as_simple_index()].text_texture);
 
@@ -441,6 +452,9 @@ Display::~Display() {
 
   for (auto help_texture : help_textures_) {
     SDL_DestroyTexture(help_texture);
+  }
+  for (auto metadata_texture : metadata_textures_) {
+    SDL_DestroyTexture(metadata_texture);
   }
 
   TTF_CloseFont(small_font_);
@@ -463,25 +477,37 @@ Display::~Display() {
   SDL_DestroyWindow(window_);
 }
 
+void Display::update_video_texture_scale_mode() {
+  const SDL_ScaleMode scale_mode = bilinear_texture_filtering_ ? SDL_ScaleModeLinear : SDL_ScaleModeNearest;
+  if (left_video_texture_ != nullptr) {
+    SDL_SetTextureScaleMode(left_video_texture_, scale_mode);
+  }
+  if (right_video_texture_ != nullptr) {
+    SDL_SetTextureScaleMode(right_video_texture_, scale_mode);
+  }
+}
+
 void Display::recreate_video_textures_for_current_mode() {
-  if (video_texture_linear_ != nullptr) {
-    SDL_DestroyTexture(video_texture_linear_);
-    video_texture_linear_ = nullptr;
+  if (left_video_texture_ != nullptr) {
+    SDL_DestroyTexture(left_video_texture_);
+    left_video_texture_ = nullptr;
   }
-  if (video_texture_nn_ != nullptr) {
-    SDL_DestroyTexture(video_texture_nn_);
-    video_texture_nn_ = nullptr;
+  if (right_video_texture_ != nullptr) {
+    SDL_DestroyTexture(right_video_texture_);
+    right_video_texture_ = nullptr;
   }
 
-  auto create_video_texture = [&](const std::string& scale_quality) {
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, scale_quality.c_str());
-    return check_sdl(SDL_CreateTexture(renderer_, use_10_bpc_ ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, mode_ == Mode::HStack ? video_width_ * 2 : video_width_,
-                                       mode_ == Mode::VStack ? video_height_ * 2 : video_height_),
-                     "video texture " + scale_quality);
-  };
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, bilinear_texture_filtering_ ? "linear" : "nearest");
+  const Uint32 fmt = use_10_bpc_ ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24;
+  left_video_texture_ = check_sdl(SDL_CreateTexture(renderer_, fmt, SDL_TEXTUREACCESS_STREAMING, video_width_, video_height_), "left video texture");
+  right_video_texture_ = check_sdl(SDL_CreateTexture(renderer_, fmt, SDL_TEXTUREACCESS_STREAMING, video_width_, video_height_), "right video texture");
+  update_video_texture_scale_mode();
 
-  video_texture_linear_ = create_video_texture("linear");
-  video_texture_nn_ = create_video_texture("nearest");
+  uploaded_left_frame_key_.clear();
+  uploaded_left_valid_w_ = 0;
+  uploaded_right_frame_key_.clear();
+  uploaded_right_valid_x_ = video_width_;
+  uploaded_diff_left_frame_key_.clear();
 }
 
 void Display::apply_window_size_and_relayout(const int target_w, const int target_h, const bool force_layout_refresh) {
@@ -786,7 +812,7 @@ void Display::print_verbose_info() {
   std::cout << "SDL window px format:  " << stringify_format_and_bpp(window_pixel_format) << std::endl;
 
   Uint32 video_pixel_format;
-  SDL_QueryTexture(video_texture_linear_, &video_pixel_format, nullptr, nullptr, nullptr);
+  SDL_QueryTexture(left_video_texture_, &video_pixel_format, nullptr, nullptr, nullptr);
   std::cout << "SDL video px format:   " << stringify_format_and_bpp(video_pixel_format) << std::endl;
 
   std::cout << "FFmpeg version:        " << av_version_info() << std::endl;
@@ -821,6 +847,7 @@ void Display::rebuild_fonts() {
 
   small_font_ = new_small.release();
   big_font_ = new_large.release();
+  reset_hud_text_caches();
 }
 
 bool Display::resolve_embedded_font_for_current_labels() {
@@ -1588,22 +1615,40 @@ void Display::render_progress_dots(const float position, const float progress, c
   if (duration_ > 0) {
     const float dot_size = 2.f;
 
-    const int dot_width = std::round(drawable_to_window_width_factor_ * dot_size);
-    const int dot_height = std::round(drawable_to_window_height_factor_ * dot_size);
+    const int dot_width = std::max(1, static_cast<int>(std::round(drawable_to_window_width_factor_ * dot_size)));
+    const int dot_height = std::max(1, static_cast<int>(std::round(drawable_to_window_height_factor_ * dot_size)));
 
     const int y_offset = is_top ? 1 : drawable_height_ - 1 - dot_height;
 
-    const int x_position = std::round(position * drawable_width_ / duration_);
-    const int x_progress = std::round(progress * drawable_width_ / duration_);
+    const int x_position = clamp_range(static_cast<int>(std::round(position * drawable_width_ / duration_)), 0, drawable_width_);
+    const int x_progress = clamp_range(static_cast<int>(std::round(progress * drawable_width_ / duration_)), 0, drawable_width_);
 
-    for (int x = 0; x < x_position; x++) {
-      if (x % (2 * dot_width) < dot_width) {
-        SDL_SetRenderDrawColor(renderer_, POSITION_COLOR.r, POSITION_COLOR.g, POSITION_COLOR.b, BACKGROUND_ALPHA * 3 / 2);
-      } else {
-        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
+    if (x_position > 0) {
+      const int step = 2 * dot_width;
+      const size_t approx_dots = static_cast<size_t>((x_position + step - 1) / step);
+      progress_bright_rects_.clear();
+      progress_dark_rects_.clear();
+      progress_bright_rects_.reserve(approx_dots);
+      progress_dark_rects_.reserve(approx_dots);
+
+      for (int x = 0; x < x_position; x += step) {
+        const int bw = std::min(dot_width, x_position - x);
+        progress_bright_rects_.push_back(SDL_Rect{x, y_offset, bw, dot_height});
+        const int dx = x + dot_width;
+        if (dx < x_position) {
+          const int dw = std::min(dot_width, x_position - dx);
+          progress_dark_rects_.push_back(SDL_Rect{dx, y_offset, dw, dot_height});
+        }
       }
 
-      SDL_RenderDrawLine(renderer_, x, y_offset, x, y_offset + dot_height - 1);
+      if (!progress_bright_rects_.empty()) {
+        SDL_SetRenderDrawColor(renderer_, POSITION_COLOR.r, POSITION_COLOR.g, POSITION_COLOR.b, BACKGROUND_ALPHA * 3 / 2);
+        SDL_RenderFillRects(renderer_, progress_bright_rects_.data(), static_cast<int>(progress_bright_rects_.size()));
+      }
+      if (!progress_dark_rects_.empty()) {
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
+        SDL_RenderFillRects(renderer_, progress_dark_rects_.data(), static_cast<int>(progress_dark_rects_.size()));
+      }
     }
 
     // draw current frame
@@ -1614,12 +1659,63 @@ void Display::render_progress_dots(const float position, const float progress, c
   }
 }
 
-SDL_Texture* Display::get_video_texture() const {
-  return bilinear_texture_filtering_ ? video_texture_linear_ : video_texture_nn_;
+void Display::reset_hud_text_caches() {
+  hud_left_pos_cache_.reset();
+  hud_right_pos_cache_.reset();
+  hud_target_pos_cache_.reset();
+  hud_zoom_cache_.reset();
+  hud_speed_cache_.reset();
+  hud_buffer_cache_.reset();
 }
 
-void Display::update_texture(const SDL_Rect* rect, const void* pixels, int pitch, const std::string& message) {
-  check_sdl(SDL_UpdateTexture(get_video_texture(), rect, pixels, pitch) == 0, "video texture - " + message);
+const Display::CachedTextTexture& Display::get_hud_text_texture(CachedTextTexture& cache, TTF_Font* font, const std::string& text, const SDL_Color color) {
+  const uint32_t rgba = (static_cast<uint32_t>(color.r) << 24) | (static_cast<uint32_t>(color.g) << 16) | (static_cast<uint32_t>(color.b) << 8) | static_cast<uint32_t>(color.a);
+  if (cache.texture != nullptr && cache.font == font && cache.color_rgba == rgba && cache.text == text) {
+    return cache;
+  }
+
+  SDL_Surface* surface = TTF_RenderText_Blended(font, text.c_str(), color);
+  if (surface == nullptr) {
+    surface = render_text_with_fallback(text);
+  }
+
+  auto upload_surface_via_lock = [](SDL_Texture* tex, SDL_Surface* surf) {
+    void* dst_pixels = nullptr;
+    int dst_pitch = 0;
+    if (SDL_LockTexture(tex, nullptr, &dst_pixels, &dst_pitch) == 0) {
+      const uint8_t* src_row = static_cast<const uint8_t*>(surf->pixels);
+      uint8_t* dst_row = static_cast<uint8_t*>(dst_pixels);
+      const size_t row_bytes = static_cast<size_t>(surf->w) * 4;
+      for (int y = 0; y < surf->h; ++y) {
+        std::memcpy(dst_row + static_cast<size_t>(y) * static_cast<size_t>(dst_pitch), src_row + static_cast<size_t>(y) * static_cast<size_t>(surf->pitch), row_bytes);
+      }
+      SDL_UnlockTexture(tex);
+      return true;
+    }
+    return false;
+  };
+
+  if (cache.texture != nullptr && cache.width == surface->w && cache.height == surface->h && surface->format->format == SDL_PIXELFORMAT_ARGB8888) {
+    upload_surface_via_lock(cache.texture, surface);
+  } else {
+    cache.reset();
+    cache.texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, surface->w, surface->h);
+    if (cache.texture != nullptr && surface->format->format == SDL_PIXELFORMAT_ARGB8888 && upload_surface_via_lock(cache.texture, surface)) {
+      SDL_SetTextureBlendMode(cache.texture, SDL_BLENDMODE_BLEND);
+    } else {
+      if (cache.texture != nullptr) {
+        SDL_DestroyTexture(cache.texture);
+      }
+      cache.texture = SDL_CreateTextureFromSurface(renderer_, surface);
+    }
+    cache.width = surface->w;
+    cache.height = surface->h;
+  }
+  cache.text = text;
+  cache.font = font;
+  cache.color_rgba = rgba;
+  SDL_FreeSurface(surface);
+  return cache;
 }
 
 int Display::round_and_clamp(const float value) {
@@ -1753,30 +1849,35 @@ AVFrame* crop_rgb_frame(const AVFrame* src, const SDL_Rect& roi, SDL_Rect* out_e
 
 float* Display::rgb_to_grayscale(const uint8_t* plane, const size_t pitch, const int width, const int height) {
   float* grayscale_image = new float[width * height];
-  float* p_out = grayscale_image;
 
   auto to_grayscale = [](const float r, const float g, const float b, const float normalization_factor) -> float { return (r * 0.299f + g * 0.587f + b * 0.114f) * normalization_factor; };
 
   if (use_10_bpc_) {
-    for (int y = 0; y < height; y++) {
-      const uint16_t* row = reinterpret_cast<const uint16_t*>(plane + y * pitch);
-      for (int x = 0; x < (width * 3); x += 3) {
-        const float r = row[x] >> 6;
-        const float g = row[x + 1] >> 6;
-        const float b = row[x + 2] >> 6;
-        *(p_out++) = to_grayscale(r, g, b, 1.f / 1023.f);
+    row_workers_.run_static(height, [=](const int start_row, const int end_row) {
+      for (int y = start_row; y < end_row; y++) {
+        const uint16_t* row = reinterpret_cast<const uint16_t*>(plane + y * pitch);
+        float* p_out = grayscale_image + static_cast<size_t>(y) * width;
+        for (int x = 0; x < (width * 3); x += 3) {
+          const float r = row[x] >> 6;
+          const float g = row[x + 1] >> 6;
+          const float b = row[x + 2] >> 6;
+          *(p_out++) = to_grayscale(r, g, b, 1.f / 1023.f);
+        }
       }
-    }
+    });
   } else {
-    for (int y = 0; y < height; y++) {
-      const uint8_t* row = plane + y * pitch;
-      for (int x = 0; x < (width * 3); x += 3) {
-        const float r = row[x];
-        const float g = row[x + 1];
-        const float b = row[x + 2];
-        *(p_out++) = to_grayscale(r, g, b, 1.f / 255.f);
+    row_workers_.run_static(height, [=](const int start_row, const int end_row) {
+      for (int y = start_row; y < end_row; y++) {
+        const uint8_t* row = plane + y * pitch;
+        float* p_out = grayscale_image + static_cast<size_t>(y) * width;
+        for (int x = 0; x < (width * 3); x += 3) {
+          const float r = row[x];
+          const float g = row[x + 1];
+          const float b = row[x + 2];
+          *(p_out++) = to_grayscale(r, g, b, 1.f / 255.f);
+        }
       }
-    }
+    });
   }
 
   return grayscale_image;
@@ -2615,17 +2716,25 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       const SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
       const SDL_FRect screen_render_quad_left = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_left, zoom_rect));
 
-      if (input_received_ || has_updated_left_frame) {
-        if (use_10_bpc_) {
-          convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
+      const bool left_frame_changed = (uploaded_left_frame_key_ != left_frame_key);
+      const bool left_need_more_width = (split_x > uploaded_left_valid_w_);
 
-          update_texture(&tex_render_quad_left, left_planes_[0], pitches_left[0], "left update (10 bpc, video mode)");
+      if (left_frame_changed || left_need_more_width) {
+        const int upload_w = (!left_frame_changed || !play_ || mode_ != Mode::Split) ? video_width_ : split_x;
+        const SDL_Rect upload_rect_left = {0, 0, upload_w, video_height_};
+
+        if (use_10_bpc_) {
+          convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, upload_rect_left);
+
+          check_sdl(SDL_UpdateTexture(left_video_texture_, &upload_rect_left, left_planes_[0], pitches_left[0]) == 0, "left update (10 bpc, video mode)");
         } else {
-          update_texture(&tex_render_quad_left, planes_left[0], pitches_left[0], "left update (video mode)");
+          check_sdl(SDL_UpdateTexture(left_video_texture_, &upload_rect_left, planes_left[0], pitches_left[0]) == 0, "left update (video mode)");
         }
+        uploaded_left_frame_key_ = left_frame_key;
+        uploaded_left_valid_w_ = upload_w;
       }
 
-      check_sdl(SDL_RenderCopyF(renderer_, get_video_texture(), &tex_render_quad_left, &screen_render_quad_left) == 0, "left video texture render copy");
+      check_sdl(SDL_RenderCopyF(renderer_, left_video_texture_, &tex_render_quad_left, &screen_render_quad_left) == 0, "left video texture render copy");
     }
     if (show_right_ && ((split_x < video_width_) || mode_ != Mode::Split)) {
       const int start_right = (mode_ == Mode::Split) ? std::max(split_x, 0) : 0;
@@ -2636,29 +2745,42 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       const SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
       const SDL_FRect screen_render_quad_right = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_right, zoom_rect));
 
-      if (input_received_ || has_updated_right_frame) {
+      const bool right_state_changed = (uploaded_right_frame_key_ != right_frame_key) || (uploaded_subtraction_mode_ != subtraction_mode_) ||
+                                       (subtraction_mode_ && ((uploaded_diff_left_frame_key_ != left_frame_key) || (uploaded_diff_mode_ != diff_mode_) || (uploaded_diff_luma_only_ != diff_luma_only_)));
+      const bool right_need_more_width = (start_right < uploaded_right_valid_x_);
+
+      if (right_state_changed || right_need_more_width) {
+        const int upload_start = (!right_state_changed || !play_ || mode_ != Mode::Split) ? 0 : start_right;
+        const SDL_Rect upload_roi = {upload_start, 0, video_width_ - upload_start, video_height_};
+
         if (subtraction_mode_) {
-          update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
+          update_difference(planes_left, pitches_left, planes_right, pitches_right, upload_start);
 
           if (use_10_bpc_) {
-            convert_to_packed_10_bpc(diff_planes_, diff_pitches_, right_planes_, pitches_right, roi);
+            convert_to_packed_10_bpc(diff_planes_, diff_pitches_, right_planes_, pitches_right, upload_roi);
 
-            update_texture(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, subtraction mode)");
+            check_sdl(SDL_UpdateTexture(right_video_texture_, &upload_roi, right_planes_[0] + upload_start, pitches_right[0]) == 0, "right update (10 bpc, subtraction mode)");
           } else {
-            update_texture(&tex_render_quad_right, diff_planes_[0] + start_right * 3, diff_pitches_[0], "right update (subtraction mode)");
+            check_sdl(SDL_UpdateTexture(right_video_texture_, &upload_roi, diff_planes_[0] + upload_start * 3, diff_pitches_[0]) == 0, "right update (subtraction mode)");
           }
+          uploaded_diff_left_frame_key_ = left_frame_key;
+          uploaded_diff_mode_ = diff_mode_;
+          uploaded_diff_luma_only_ = diff_luma_only_;
         } else {
           if (use_10_bpc_) {
-            convert_to_packed_10_bpc(planes_right, pitches_right, right_planes_, pitches_right, roi);
+            convert_to_packed_10_bpc(planes_right, pitches_right, right_planes_, pitches_right, upload_roi);
 
-            update_texture(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, video mode)");
+            check_sdl(SDL_UpdateTexture(right_video_texture_, &upload_roi, right_planes_[0] + upload_start, pitches_right[0]) == 0, "right update (10 bpc, video mode)");
           } else {
-            update_texture(&tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0], "right update (video mode)");
+            check_sdl(SDL_UpdateTexture(right_video_texture_, &upload_roi, planes_right[0] + upload_start * 3, pitches_right[0]) == 0, "right update (video mode)");
           }
         }
+        uploaded_right_frame_key_ = right_frame_key;
+        uploaded_subtraction_mode_ = subtraction_mode_;
+        uploaded_right_valid_x_ = upload_start;
       }
 
-      check_sdl(SDL_RenderCopyF(renderer_, get_video_texture(), &tex_render_quad_right, &screen_render_quad_right) == 0, "right video texture render copy");
+      check_sdl(SDL_RenderCopyF(renderer_, right_video_texture_, &roi, &screen_render_quad_right) == 0, "right video texture render copy");
     }
   }
 
@@ -2715,35 +2837,25 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       // file name and current position of left video
       const std::string left_picture_type(1, av_get_picture_type_char(left_frame->pict_type));
       const std::string left_pos_str = format_position(left_position, true) + " " + left_picture_type + format_position_difference(left_position, right_position);
-      text_surface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), POSITION_COLOR);
-      SDL_Texture* left_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-      const int left_position_text_width = text_surface->w;
-      const int left_position_text_height = text_surface->h;
-      SDL_FreeSurface(text_surface);
+      const auto& left_pos_tex = get_hud_text_texture(hud_left_pos_cache_, small_font_, left_pos_str, POSITION_COLOR);
 
       if (mode_ == Mode::VStack) {
-        render_text(line1_y_, line1_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
-        const int left_file_row_y = line1_y_ + left_position_text_height + double_border_extension_ + HUD_SCANLINE_GAP;
+        render_text(line1_y_, line1_y_, left_pos_tex.texture, left_pos_tex.width, left_pos_tex.height, border_extension_, true);
+        const int left_file_row_y = line1_y_ + left_pos_tex.height + double_border_extension_ + HUD_SCANLINE_GAP;
         render_text(line1_y_, left_file_row_y, side_ui_[displayed_left_side_.as_simple_index()].text_texture, side_ui_[displayed_left_side_.as_simple_index()].text_width, side_ui_[displayed_left_side_.as_simple_index()].text_height,
                     border_extension_, true);
       } else {
         render_text(line1_y_, line1_y_, side_ui_[displayed_left_side_.as_simple_index()].text_texture, side_ui_[displayed_left_side_.as_simple_index()].text_width, side_ui_[displayed_left_side_.as_simple_index()].text_height,
                     border_extension_, true);
         const int left_position_row_y = line1_y_ + side_ui_[displayed_left_side_.as_simple_index()].text_height + double_border_extension_ + HUD_SCANLINE_GAP;
-        render_text(line1_y_, left_position_row_y, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
+        render_text(line1_y_, left_position_row_y, left_pos_tex.texture, left_pos_tex.width, left_pos_tex.height, border_extension_, true);
       }
-
-      SDL_DestroyTexture(left_position_text_texture);
     }
     if (show_right_) {
       // file name and current position of right video
       const std::string right_picture_type(1, av_get_picture_type_char(right_frame->pict_type));
       const std::string right_pos_str = format_position(right_position, true) + " " + right_picture_type + format_position_difference(right_position, left_position);
-      text_surface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), POSITION_COLOR);
-      SDL_Texture* right_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-      int right_position_text_width = text_surface->w;
-      int right_position_text_height = text_surface->h;
-      SDL_FreeSurface(text_surface);
+      const auto& right_pos_tex = get_hud_text_texture(hud_right_pos_cache_, small_font_, right_pos_str, POSITION_COLOR);
 
       int text1_x;
       int text1_y;
@@ -2758,32 +2870,24 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       } else {
         text1_x = drawable_width_ - line1_y_ - side_ui_[displayed_right_side_.as_simple_index()].text_width;
         text1_y = line1_y_;
-        text2_x = drawable_width_ - line1_y_ - right_position_text_width;
+        text2_x = drawable_width_ - line1_y_ - right_pos_tex.width;
         text2_y = line1_y_ + side_ui_[displayed_right_side_.as_simple_index()].text_height + double_border_extension_ + HUD_SCANLINE_GAP;
       }
 
       render_text(text1_x, text1_y, side_ui_[displayed_right_side_.as_simple_index()].text_texture, side_ui_[displayed_right_side_.as_simple_index()].text_width, side_ui_[displayed_right_side_.as_simple_index()].text_height,
                   border_extension_, false);
-      render_text(text2_x, text2_y, right_position_text_texture, right_position_text_width, right_position_text_height, border_extension_, false);
-
-      SDL_DestroyTexture(right_position_text_texture);
+      render_text(text2_x, text2_y, right_pos_tex.texture, right_pos_tex.width, right_pos_tex.height, border_extension_, false);
     }
     if (mouse_is_inside_window_ && duration_ > 0) {
       // target seek position
       float target_position = static_cast<float>(mouse_x_) / static_cast<float>(window_width_) * duration_;
 
       const std::string target_pos_str = format_position(target_position, true);
-      text_surface = TTF_RenderText_Blended(small_font_, target_pos_str.c_str(), TARGET_COLOR);
-      SDL_Texture* target_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-      const int target_position_text_width = text_surface->w;
-      const int target_position_text_height = text_surface->h;
-      SDL_FreeSurface(text_surface);
+      const auto& target_pos_tex = get_hud_text_texture(hud_target_pos_cache_, small_font_, target_pos_str, TARGET_COLOR);
 
       SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 2);
-      render_text(drawable_width_ - line1_y_ - target_position_text_width, drawable_height_ - line1_y_ - target_position_text_height, target_position_text_texture, target_position_text_width, target_position_text_height, border_extension_,
+      render_text(drawable_width_ - line1_y_ - target_pos_tex.width, drawable_height_ - line1_y_ - target_pos_tex.height, target_pos_tex.texture, target_pos_tex.width, target_pos_tex.height, border_extension_,
                   false);
-
-      SDL_DestroyTexture(target_position_text_texture);
     }
 
     // zoom factor
@@ -2803,19 +2907,14 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       zoom_factor_str = string_sprintf("x%1.0f", global_zoom_factor_);
     }
 
-    text_surface = TTF_RenderText_Blended(small_font_, zoom_factor_str.c_str(), ZOOM_COLOR);
-    SDL_Texture* zoom_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-    const int zoom_position_text_width = text_surface->w;
-    const int zoom_position_text_height = text_surface->h;
-    SDL_FreeSurface(text_surface);
+    const auto& zoom_tex = get_hud_text_texture(hud_zoom_cache_, small_font_, zoom_factor_str, ZOOM_COLOR);
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 2);
 
-    int text_x = (mode_ == Mode::VStack) ? drawable_width_ - line1_y_ - zoom_position_text_width : line1_y_;
-    int text_y = (mode_ == Mode::VStack) ? line1_y_ : drawable_height_ - line1_y_ - zoom_position_text_height;
+    int text_x = (mode_ == Mode::VStack) ? drawable_width_ - line1_y_ - zoom_tex.width : line1_y_;
+    int text_y = (mode_ == Mode::VStack) ? line1_y_ : drawable_height_ - line1_y_ - zoom_tex.height;
 
-    render_text(text_x, text_y, zoom_position_text_texture, zoom_position_text_width, zoom_position_text_height, border_extension_, false);
-    SDL_DestroyTexture(zoom_position_text_texture);
+    render_text(text_x, text_y, zoom_tex.texture, zoom_tex.width, zoom_tex.height, border_extension_, false);
 
     // playback speed
     std::string playback_speed_str;
@@ -2847,30 +2946,21 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     }
 
     const std::string united_playback_speed_str = string_sprintf("@%s%s", playback_speed_str.c_str(), playback_speed_factor_str.c_str());
-    text_surface = TTF_RenderText_Blended(small_font_, united_playback_speed_str.c_str(), PLAYBACK_SPEED_COLOR);
-    SDL_Texture* playack_speed_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-    const int playack_speed_text_width = text_surface->w;
-    const int playack_speed_text_height = text_surface->h;
-    SDL_FreeSurface(text_surface);
+    const auto& speed_tex = get_hud_text_texture(hud_speed_cache_, small_font_, united_playback_speed_str, PLAYBACK_SPEED_COLOR);
 
-    text_x = drawable_width_ / 2 - playack_speed_text_width / 2 - border_extension_;
-    text_y = drawable_height_ - line1_y_ - zoom_position_text_height;
+    text_x = drawable_width_ / 2 - speed_tex.width / 2 - border_extension_;
+    text_y = drawable_height_ - line1_y_ - zoom_tex.height;
 
-    render_text(text_x, text_y, playack_speed_text_texture, playack_speed_text_width, playack_speed_text_height, border_extension_, false);
-    SDL_DestroyTexture(playack_speed_text_texture);
+    render_text(text_x, text_y, speed_tex.texture, speed_tex.width, speed_tex.height, border_extension_, false);
 
     // current frame / number of frames in history buffer
-    text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), BUFFER_COLOR);
-    SDL_Texture* current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-    const int current_total_browsable_text_width = text_surface->w;
-    const int current_total_browsable_text_height = text_surface->h;
-    SDL_FreeSurface(text_surface);
+    const auto& buffer_tex = get_hud_text_texture(hud_buffer_cache_, small_font_, current_total_browsable, BUFFER_COLOR);
 
     text_y = (mode_ == Mode::VStack) ? line1_y_ : line2_y_;
 
     // blink label in loop mode
-    fill_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2 - border_extension_, text_y - border_extension_, current_total_browsable_text_width + double_border_extension_,
-                 current_total_browsable_text_height + double_border_extension_};
+    fill_rect = {drawable_width_ / 2 - buffer_tex.width / 2 - border_extension_, text_y - border_extension_, buffer_tex.width + double_border_extension_,
+                 buffer_tex.height + double_border_extension_};
 
     SDL_Color label_color = LOOP_OFF_LABEL_COLOR;
     int label_alpha = BACKGROUND_ALPHA;
@@ -2895,9 +2985,8 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     SDL_SetRenderDrawColor(renderer_, label_color.r, label_color.g, label_color.b, label_alpha);
     SDL_RenderFillRect(renderer_, &fill_rect);
 
-    text_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, text_y, current_total_browsable_text_width, current_total_browsable_text_height};
-    SDL_RenderCopy(renderer_, current_total_browsable_text_texture, nullptr, &text_rect);
-    SDL_DestroyTexture(current_total_browsable_text_texture);
+    text_rect = {drawable_width_ / 2 - buffer_tex.width / 2, text_y, buffer_tex.width, buffer_tex.height};
+    SDL_RenderCopy(renderer_, buffer_tex.texture, nullptr, &text_rect);
 
     // display progress as dot lines
     render_progress_dots(left_position, left_progress, true);
@@ -2907,16 +2996,47 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   // render (optional) message
   if (!pending_message_.empty()) {
     message_shown_at_ = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-    text_surface = TTF_RenderText_Blended(big_font_, pending_message_.c_str(), TEXT_COLOR);
+    if (message_texture_ == nullptr || active_message_text_ != pending_message_ || active_message_font_ != big_font_) {
+      text_surface = TTF_RenderText_Blended(big_font_, pending_message_.c_str(), TEXT_COLOR);
 
-    if (message_texture_ != nullptr) {
-      SDL_DestroyTexture(message_texture_);
+      auto upload_msg_via_lock = [](SDL_Texture* tex, SDL_Surface* surf) {
+        void* dst_pixels = nullptr;
+        int dst_pitch = 0;
+        if (SDL_LockTexture(tex, nullptr, &dst_pixels, &dst_pitch) == 0) {
+          const uint8_t* src_row = static_cast<const uint8_t*>(surf->pixels);
+          uint8_t* dst_row = static_cast<uint8_t*>(dst_pixels);
+          const size_t row_bytes = static_cast<size_t>(surf->w) * 4;
+          for (int y = 0; y < surf->h; ++y) {
+            std::memcpy(dst_row + static_cast<size_t>(y) * static_cast<size_t>(dst_pitch), src_row + static_cast<size_t>(y) * static_cast<size_t>(surf->pitch), row_bytes);
+          }
+          SDL_UnlockTexture(tex);
+          return true;
+        }
+        return false;
+      };
+
+      if (message_texture_ != nullptr && message_width_ == text_surface->w && message_height_ == text_surface->h && text_surface->format->format == SDL_PIXELFORMAT_ARGB8888) {
+        upload_msg_via_lock(message_texture_, text_surface);
+      } else {
+        if (message_texture_ != nullptr) {
+          SDL_DestroyTexture(message_texture_);
+        }
+        message_texture_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, text_surface->w, text_surface->h);
+        if (message_texture_ != nullptr && text_surface->format->format == SDL_PIXELFORMAT_ARGB8888 && upload_msg_via_lock(message_texture_, text_surface)) {
+          SDL_SetTextureBlendMode(message_texture_, SDL_BLENDMODE_BLEND);
+        } else {
+          if (message_texture_ != nullptr) {
+            SDL_DestroyTexture(message_texture_);
+          }
+          message_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
+        }
+        message_width_ = text_surface->w;
+        message_height_ = text_surface->h;
+      }
+      active_message_text_ = pending_message_;
+      active_message_font_ = big_font_;
+      SDL_FreeSurface(text_surface);
     }
-    message_texture_ = SDL_CreateTextureFromSurface(renderer_, text_surface);
-
-    message_width_ = text_surface->w;
-    message_height_ = text_surface->h;
-    SDL_FreeSurface(text_surface);
 
     pending_message_.clear();
   }
@@ -3562,6 +3682,7 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         case SDLK_t:
           bilinear_texture_filtering_ = !bilinear_texture_filtering_;
+          update_video_texture_scale_mode();
           notify_user(string_sprintf("Video texture filter set to '%s'", bilinear_texture_filtering_ ? "BILINEAR" : "NEAREST NEIGHBOR"));
           break;
         case SDLK_s: {
