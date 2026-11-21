@@ -1476,6 +1476,9 @@ void VideoCompare::compare() {
             if (const char* nav_message = playback_keyframe::keyframe_navigation_message(landing_status)) {
               display_->set_pending_message(nav_message);
             }
+            if (env_flag_enabled("VC_INTEGRATION_KEYFRAME_NAV") && landing_status == playback_keyframe::KeyframeNavigationStatus::None) {
+              std::cout << string_sprintf("Integration union position: %s", format_position(keyframe_resolve.comparison_timeline_position, false).c_str()) << std::endl;
+            }
           }
 
           // After seek, skip fetch/store so a failed next-frame pop cannot null the
