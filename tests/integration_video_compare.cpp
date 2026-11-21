@@ -745,6 +745,7 @@ constexpr double kUnion48SparseKeyframe = 5.208333;
 constexpr double kUnionLatticeMatchTol = 0.022;
 constexpr double kUnionStepCursorTol = 0.002;
 constexpr double kUnionLatticeDedupS = 0.002;
+constexpr double kUnionTol = 0.022;
 constexpr double kUnionMinForwardStepS = 0.005;
 constexpr double kUnionMaxForwardStepS = 1.12;
 
@@ -825,28 +826,22 @@ std::vector<double> copied_positions(const std::string& output) {
   return parse_timestamp_prefixes(output, "Copied to clipboard: ");
 }
 
-bool integration_keyframe_nav_observability() {
-  const char* value = std::getenv("VC_INTEGRATION_KEYFRAME_NAV");
-  if (value == nullptr || value[0] == '\0' || value[0] == '0') {
-    return false;
+// The decoder's landing verification already checks the owner demuxer PTS.
+// Check the observed comparison timeline independently, not the requested target.
+bool append_verified_union_landings(std::vector<double>& times, const std::vector<playback_keyframe::KeyframeNavigationLandingObservation>& landings) {
+  for (size_t i = 0; i < landings.size(); ++i) {
+    const auto& landing = landings[i];
+    if (landing.verification_status != playback_keyframe::KeyframeNavigationStatus::None || !landing.actual_owner_demuxer_valid || !landing.actual_comparison_timeline_valid ||
+        std::fabs(landing.actual_comparison_timeline_seconds - landing.requested_comparison_timeline_seconds) > kUnionTol) {
+      std::fprintf(stderr, "FAIL union-time-shift landing %zu owner=%s right=%zu status=%d owner_demuxer=%.3f expected=%.3f comparison=%.3f expected=%.3f valid=%d/%d\n", i,
+                   landing.candidate_owner == SideType::Left ? "left" : "right", landing.active_right_index, static_cast<int>(landing.verification_status), landing.actual_owner_demuxer_seconds,
+                   landing.requested_owner_demuxer_seconds, landing.actual_comparison_timeline_seconds, landing.requested_comparison_timeline_seconds,
+                   landing.actual_owner_demuxer_valid, landing.actual_comparison_timeline_valid);
+      return false;
+    }
+    times.push_back(landing.actual_comparison_timeline_seconds);
   }
-  return (value[0] == '1') || (value[0] == 'y') || (value[0] == 'Y') || (value[0] == 't') || (value[0] == 'T');
-}
-
-std::vector<double> union_time_shift_observed_positions(const std::string& output) {
-  if (!integration_keyframe_nav_observability()) {
-    return copied_positions(output);
-  }
-
-  std::vector<double> times;
-  const std::vector<double> clipboard = copied_positions(output);
-  if (!clipboard.empty()) {
-    // Paused baseline is displayed left PTS; each landed step reports the committed union comparison timeline.
-    times.push_back(clipboard[0]);
-  }
-  const std::vector<double> union_landings = parse_timestamp_prefixes(output, "Integration union position: ");
-  times.insert(times.end(), union_landings.begin(), union_landings.end());
-  return times;
+  return true;
 }
 
 void push_relative_seek(const int direction) {
@@ -1382,9 +1377,14 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   std::atomic<bool> finished{false};
   std::thread helper;
   int exit_code = EXIT_SUCCESS;
+  std::vector<playback_keyframe::KeyframeNavigationLandingObservation> keyframe_landing_observations;
+  playback_keyframe::KeyframeNavigationLandingObserver keyframe_landing_observer;
+  if (scenario == Scenario::KeyframeNavigationUnionTimeShift) {
+    keyframe_landing_observer = [&keyframe_landing_observations](const playback_keyframe::KeyframeNavigationLandingObservation& observation) { keyframe_landing_observations.push_back(observation); };
+  }
 
   try {
-    VideoCompare video_compare(config);
+    VideoCompare video_compare(config, keyframe_landing_observer);
     helper = std::thread(run_event_script, scenario, std::ref(finished));
     video_compare();
   } catch (const std::exception& exception) {
@@ -1770,12 +1770,23 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       }
     }
   } else if (scenario == Scenario::KeyframeNavigationUnionTimeShift) {
-    constexpr double kUnionTol = 0.022;
     const auto near = [&](const double a, const double b) { return std::fabs(a - b) <= kUnionTol; };
 
-    const std::vector<double> times = union_time_shift_observed_positions(output);
-    if (times.empty()) {
-      std::fprintf(stderr, "FAIL union-time-shift expected observed union timestamps, got none\n");
+    const char* steps_env = std::getenv("KEYFRAME_NAV_STEPS");
+    const int step_count = (steps_env != nullptr && steps_env[0] != '\0') ? std::max(1, std::atoi(steps_env)) : 3;
+    const std::vector<double> clipboard = copied_positions(output);
+    std::vector<double> times;
+    if (!clipboard.empty()) {
+      // Only the paused baseline is read from the displayed left PTS.
+      times.push_back(clipboard[0]);
+    }
+    if (clipboard.empty()) {
+      std::fprintf(stderr, "FAIL union-time-shift missing baseline clipboard timestamp\n");
+      exit_code = EXIT_FAILURE;
+    } else if (keyframe_landing_observations.size() != static_cast<size_t>(step_count)) {
+      std::fprintf(stderr, "FAIL union-time-shift expected %d landing observations, got %zu\n", step_count, keyframe_landing_observations.size());
+      exit_code = EXIT_FAILURE;
+    } else if (!append_verified_union_landings(times, keyframe_landing_observations)) {
       exit_code = EXIT_FAILURE;
     } else if (output.find("Keyframe navigation unavailable") != std::string::npos || output.find("LandingFailed") != std::string::npos || output.find("Landing failed") != std::string::npos) {
       std::fprintf(stderr, "FAIL union-time-shift reported keyframe navigation failure\n");

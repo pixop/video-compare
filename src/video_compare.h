@@ -124,7 +124,7 @@ struct MediaFrameDetectionState {
 
 class VideoCompare {
  public:
-  VideoCompare(const VideoCompareConfig& config);
+  VideoCompare(const VideoCompareConfig& config, playback_keyframe::KeyframeNavigationLandingObserver keyframe_landing_observer = {});
   ~VideoCompare();
   void operator()();
 
@@ -237,6 +237,7 @@ class VideoCompare {
 
   size_t active_right_index_{0};
   playback_keyframe::KeyframeNavigation keyframe_navigation_;
+  playback_keyframe::KeyframeNavigationLandingObserver keyframe_landing_observer_;
   std::map<Side, RightVideoInfo> right_video_info_;
   VideoMetadata left_video_metadata_;
 

@@ -192,11 +192,11 @@ integration: $(integration_bin) tests/test_playback_keyframe$(EXE)
 	fi; \
 	if [ -f "$$media/kf_union_left_48.mp4" ] && [ -f "$$media/kf_union_right_sparse_48.mp4" ]; then \
 		echo "Running $(integration_bin) keyframe-navigation-union-time-shift (synthetic dense-left)"; \
-		VC_INTEGRATION_KEYFRAME_NAV=1 KEYFRAME_NAV_SHIFT_MS=40 KEYFRAME_NAV_WARMUP_D=0 KEYFRAME_NAV_STEPS=3 \
+		KEYFRAME_NAV_SHIFT_MS=40 KEYFRAME_NAV_WARMUP_D=0 KEYFRAME_NAV_STEPS=3 \
 			$$wrap ./$(integration_bin) keyframe-navigation-union-time-shift \
 			"$$media/kf_union_left_48.mp4" "$$media/kf_union_right_sparse_48.mp4"; \
 		echo "Running $(integration_bin) keyframe-navigation-union-time-shift (synthetic sparse-left reversed)"; \
-		VC_INTEGRATION_KEYFRAME_NAV=1 KEYFRAME_NAV_SHIFT_MS=40 KEYFRAME_NAV_WARMUP_D=0 KEYFRAME_NAV_STEPS=3 \
+		KEYFRAME_NAV_SHIFT_MS=40 KEYFRAME_NAV_WARMUP_D=0 KEYFRAME_NAV_STEPS=3 \
 			$$wrap ./$(integration_bin) keyframe-navigation-union-time-shift \
 			"$$media/kf_union_right_sparse_48.mp4" "$$media/kf_union_left_48.mp4"; \
 	else \

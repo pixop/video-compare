@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <deque>
+#include <functional>
 extern "C" {
 #include <libavutil/frame.h>
 }
@@ -37,6 +38,26 @@ struct KeyframeNavigationResolve {
   float comparison_timeline_position{0.0F};
   SideType candidate_owner{SideType::Left};
 };
+
+// Read-only landing diagnostic emitted after a keyframe seek lands (compare thread).
+struct KeyframeNavigationLandingObservation {
+  SideType candidate_owner{SideType::Left};
+  size_t active_right_index{0};
+  // Requested union step (seconds, demuxer time on the stepping side).
+  float requested_owner_demuxer_seconds{0.0F};
+  // Requested union comparison timeline (left-aligned seconds).
+  float requested_comparison_timeline_seconds{0.0F};
+  // Actual owner demuxer time from the post-seek AVFrame PTS (before display refresh).
+  float actual_owner_demuxer_seconds{0.0F};
+  bool actual_owner_demuxer_valid{false};
+  // Actual comparison timeline derived from the landed frame (not the request).
+  float actual_comparison_timeline_seconds{0.0F};
+  bool actual_comparison_timeline_valid{false};
+  // None after successful verify_landing; LandingFailed when the land check failed.
+  KeyframeNavigationStatus verification_status{KeyframeNavigationStatus::None};
+};
+
+using KeyframeNavigationLandingObserver = std::function<void(const KeyframeNavigationLandingObservation&)>;
 
 struct DisplayedDemuxerAnchors {
   float left_demuxer_seconds{0.0F};

@@ -165,13 +165,14 @@ static void maybe_show_first_launch_help_hint(Display& display) {
 
 VideoCompare::~VideoCompare() = default;
 
-VideoCompare::VideoCompare(const VideoCompareConfig& config)
+VideoCompare::VideoCompare(const VideoCompareConfig& config, playback_keyframe::KeyframeNavigationLandingObserver keyframe_landing_observer)
     : config_(config),
       same_decoded_video_both_sides_(produces_same_decoded_video(config)),
       auto_loop_mode_(config.auto_loop_mode),
       frame_buffer_size_(config.frame_buffer_size),
       time_shift_(config.time_shift),
-      time_shift_offset_av_time_(playback_timing::time_ms_to_av_time(static_cast<double>(config.time_shift.offset_ms))) {
+      time_shift_offset_av_time_(playback_timing::time_ms_to_av_time(static_cast<double>(config.time_shift.offset_ms))),
+      keyframe_landing_observer_(std::move(keyframe_landing_observer)) {
   auto install_processor = [&](auto& processor_map, const ReadyToSeek::ProcessorThread thread, const Side& side, auto processor) {
     processor_map[side] = std::move(processor);
     ready_to_seek_.init(thread, side);
@@ -1227,6 +1228,7 @@ void VideoCompare::compare() {
       }
 
       playback_keyframe::KeyframeNavigationResolve keyframe_resolve;
+      playback_seek::SeekRequest keyframe_request;
       const bool keyframe_only_input = frame_navigation_delta == 0 && display_seek_relative == 0.0F && !seek_from_start && shift_right_frames == 0 && !force_seek_current_position;
       Demuxer& left_demuxer = *demuxers_[LEFT];
       Demuxer& active_demuxer = *demuxers_.at(active_right);
@@ -1243,7 +1245,7 @@ void VideoCompare::compare() {
 
       if (keyframe_step_direction != 0) {
         const int64_t keyframe_static_shift = time_shift_offset_av_time_ + static_cast<int64_t>(total_right_time_shifted) * right_delta;
-        const playback_seek::SeekRequest keyframe_request = make_seek_request(0.0F, false, false, 0, keyframe_static_shift);
+        keyframe_request = make_seek_request(0.0F, false, false, 0, keyframe_static_shift);
 
         const playback_keyframe::DisplayedDemuxerAnchors displayed_anchors = playback_keyframe::displayed_demuxer_anchors(playback_keyframe::displayed_frame_at_offset(left.frames_, frame_offset), left_demuxer,
                                                                                                                           playback_keyframe::displayed_frame_at_offset(right_ptr->frames_, frame_offset), active_demuxer);
@@ -1472,8 +1474,34 @@ void VideoCompare::compare() {
             if (const char* nav_message = playback_keyframe::keyframe_navigation_message(landing_status)) {
               display_->set_pending_message(nav_message);
             }
-            if (env_flag_enabled("VC_INTEGRATION_KEYFRAME_NAV") && landing_status == playback_keyframe::KeyframeNavigationStatus::None) {
-              std::cout << string_sprintf("Integration union position: %s", format_position(keyframe_resolve.comparison_timeline_position, false).c_str()) << std::endl;
+            if (keyframe_landing_observer_) {
+              playback_keyframe::KeyframeNavigationLandingObservation observation;
+              observation.candidate_owner = keyframe_resolve.candidate_owner;
+              observation.active_right_index = active_right_index_;
+              observation.requested_owner_demuxer_seconds = keyframe_resolve.target_demuxer_position;
+              observation.requested_comparison_timeline_seconds = keyframe_resolve.comparison_timeline_position;
+              observation.verification_status = landing_status;
+
+              const bool landed_on_left = keyframe_resolve.candidate_owner == SideType::Left;
+              if (landed_on_left) {
+                if (left.frame_ != nullptr && left.frame_->pts != AV_NOPTS_VALUE) {
+                  observation.actual_owner_demuxer_seconds = playback_keyframe::avframe_pts_to_demuxer_seconds(left.frame_->pts, left_demuxer.video_start_time_seconds());
+                  observation.actual_owner_demuxer_valid = true;
+                  observation.actual_comparison_timeline_seconds = observation.actual_owner_demuxer_seconds;
+                  observation.actual_comparison_timeline_valid = true;
+                }
+              } else if (right_ptr->frame_ != nullptr && right_ptr->frame_->pts != AV_NOPTS_VALUE) {
+                observation.actual_owner_demuxer_seconds = playback_keyframe::avframe_pts_to_demuxer_seconds(right_ptr->frame_->pts, active_demuxer.video_start_time_seconds());
+                observation.actual_owner_demuxer_valid = true;
+                const playback_keyframe::MappedPosition mapped =
+                    playback_keyframe::comparison_timeline_for_right_demuxer_position(keyframe_request, active_right_index_, observation.actual_owner_demuxer_seconds, static_cast<float>(shortest_duration_));
+                if (mapped.ok) {
+                  observation.actual_comparison_timeline_seconds = mapped.seconds;
+                  observation.actual_comparison_timeline_valid = true;
+                }
+              }
+
+              keyframe_landing_observer_(observation);
             }
           }
 
