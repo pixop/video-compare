@@ -1,9 +1,9 @@
 # Authoritative Windows dependency versions for CI, local MinGW builds,
 # and FFmpeg source manifest generation. Update version and SHA-256 values
 # together when bumping bundled Windows libraries.
-GYAN_FFMPEG_VERSION := 9.0.2
+GYAN_FFMPEG_VERSION := 9.1
 GYAN_FFMPEG_VARIANT := full_build-shared
-GYAN_FFMPEG_ARCHIVE_SHA256 := 4d2060a8b34a940aa47d785142055bb92a63053781e55f2ace4546edd519a8f5
+GYAN_FFMPEG_ARCHIVE_SHA256 := 6bc6f09cd4379ed914489728044c1e0115861a9d47f7a1c07d71b8bec02708d7
 
 SDL2_VERSION := 2.32.10
 SDL2_WIN32_X64_ZIP_SHA256 := 6cf9706eefd0a4a06dc764007934d428afaf029fabdd408a9e646048c91e18fb
