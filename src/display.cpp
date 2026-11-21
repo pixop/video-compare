@@ -3192,6 +3192,7 @@ void Display::begin_input_frame() {
   seek_from_start_ = false;
   frame_buffer_offset_delta_ = 0;
   frame_navigation_delta_ = 0;
+  keyframe_navigation_delta_ = 0;
   shift_right_frames_ = 0;
   tick_playback_ = false;
   possibly_tick_playback_ = false;
@@ -3543,14 +3544,18 @@ void Display::handle_event(const SDL_Event& event) {
           break;
         }
         case SDLK_a:
-          if (is_shift_down) {
+          if (is_ctrl_down && is_shift_down) {
+            --keyframe_navigation_delta_;
+          } else if (is_shift_down) {
             --frame_navigation_delta_;
           } else {
             frame_buffer_offset_delta_++;
           }
           break;
         case SDLK_d:
-          if (is_shift_down) {
+          if (is_ctrl_down && is_shift_down) {
+            ++keyframe_navigation_delta_;
+          } else if (is_shift_down) {
             frame_navigation_delta_++;
           } else {
             frame_buffer_offset_delta_--;
@@ -3879,6 +3884,10 @@ int Display::get_frame_buffer_offset_delta() const {
 
 int Display::get_frame_navigation_delta() const {
   return frame_navigation_delta_;
+}
+
+int Display::get_keyframe_navigation_delta() const {
+  return keyframe_navigation_delta_;
 }
 
 int Display::get_shift_right_frames() const {

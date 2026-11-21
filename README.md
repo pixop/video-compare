@@ -258,6 +258,8 @@ You can specify multiple options in the file. For a configuration stored elsewhe
 - `Backspace`: Undo last crop operation
 - `Shift+D`: Decode and advance one frame
 - `Shift+A`: Seek to the previous frame (best with intra-frame formats)
+- `Ctrl+Shift+D`: Seek to the next keyframe
+- `Ctrl+Shift+A`: Seek to the previous keyframe
 - `Shift+M`: Cycle display mode
 - `Shift+S`: Cycle aspect view mode
 - `Shift+F`: Select a region and save cutouts as PNGs
