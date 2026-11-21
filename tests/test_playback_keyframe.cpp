@@ -565,6 +565,33 @@ static void test_union_right_adjacent_reference_skips_current_key() {
   }
 }
 
+// In the sparse-left / dense-right case, later right-owned keyframe steps must
+// use the navigation cursor, not the potentially lagging displayed left PTS.
+static void test_union_sparse_left_successive_right_owned_steps() {
+  playback_seek::SeekRequest request = sample_seek_request();
+  request.unadjusted_static_right_time_shift = 40000;
+  request.time_shift_multiplier = AVRational{1, 1};
+
+  playback_keyframe::KeyframeNavigationCursor cursor;
+  for (const float right_key : {3.125F, 4.166667F}) {
+    const float prior_cursor = right_key - 1.041667F - 0.04F;
+    // After a right-owned seek, the sparse left display can lag behind the cursor.
+    const float displayed_left = cursor.valid ? 2.604F : prior_cursor;
+    request.left_pts = static_cast<int64_t>(displayed_left / AV_TIME_TO_SEC);
+    const float reference = playback_keyframe::keyframe_navigation_reference_comparison_timeline(
+        cursor, 0, request, displayed_left, true, 0.0F, false, request.shortest_duration);
+    expect_near("sparse left cursor independent of lagging left frame", reference, prior_cursor);
+    const playback_keyframe::UnionKeyframeSelection next = playback_keyframe::select_union_keyframe_candidate(
+        +1, reference, synthetic_adjacent_ok(5.208333F), synthetic_adjacent_ok(right_key), true, true, request, 0, request.shortest_duration);
+    expect_bool("sparse left successive right step found", next.found, true);
+    if (next.found) {
+      expect_bool("sparse left successive right owner", next.candidate.owner == SideType::Right, true);
+      expect_near("sparse left successive right comparison", next.candidate.comparison_timeline_position, right_key - 0.04F);
+      playback_keyframe::commit_keyframe_navigation_cursor(cursor, 0, next.candidate.comparison_timeline_position);
+    }
+  }
+}
+
 static void test_union_forward_from_common_5104_with_40ms_shift() {
   playback_seek::SeekRequest request = sample_seek_request();
   request.time_shift_multiplier = AVRational{1, 1};
@@ -1097,6 +1124,7 @@ int main(int argc, char** argv) {
   test_union_keyframe_respects_left_start_offset();
   test_union_keyframe_no_next_at_boundary();
   test_union_right_adjacent_reference_skips_current_key();
+  test_union_sparse_left_successive_right_owned_steps();
   test_union_forward_from_common_5104_with_40ms_shift();
   test_shifted_raw_coincident_keyframes_are_distinct();
   test_shift_forward_solve_from_4167();
