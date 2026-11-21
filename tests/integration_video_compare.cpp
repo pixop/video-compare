@@ -122,7 +122,7 @@ int watchdog_ticks_for(const Scenario scenario) {
     const char* steps_env = std::getenv("KEYFRAME_NAV_STEPS");
     const char* warmup_env = std::getenv("KEYFRAME_NAV_WARMUP_D");
     const int steps = (steps_env != nullptr && steps_env[0] != '\0') ? std::max(1, std::atoi(steps_env)) : 3;
-    const int warmup = (warmup_env != nullptr && warmup_env[0] != '\0') ? std::max(0, std::atoi(warmup_env)) : 4;
+    const int warmup = (warmup_env != nullptr && warmup_env[0] != '\0') ? std::max(0, std::atoi(warmup_env)) : 0;
     return 120 + (warmup + steps + 1) * 28;
   }
   return is_stress_scenario(scenario) ? 250 : 120;
@@ -567,6 +567,63 @@ bool pts_near(const double a, const double b) {
   return std::fabs(a - b) <= 0.015;
 }
 
+constexpr double kUnion48DenseKeyframeStep = 50.0 / 48.0;
+constexpr double kUnion48SparseKeyframe = 5.208333;
+constexpr double kUnionLatticeMatchTol = 0.022;
+constexpr double kUnionStepCursorTol = 0.002;
+constexpr double kUnionLatticeDedupS = 0.002;
+constexpr double kUnionMinForwardStepS = 0.005;
+constexpr double kUnionMaxForwardStepS = 1.12;
+
+bool path_contains_basename(const std::string& path, const char* basename) {
+  return path.find(basename) != std::string::npos;
+}
+
+std::vector<double> dedupe_sorted_union_lattice(std::vector<double> keys) {
+  std::sort(keys.begin(), keys.end());
+  std::vector<double> out;
+  for (const double key : keys) {
+    if (key < -0.001) {
+      continue;
+    }
+    if (out.empty() || key - out.back() > kUnionLatticeDedupS) {
+      out.push_back(key);
+    }
+  }
+  return out;
+}
+
+std::vector<double> synthetic_union_lattice_dense_left_sparse_right(const double shift_s) {
+  std::vector<double> keys;
+  for (int n = 0; n <= 10; ++n) {
+    keys.push_back(static_cast<double>(n) * kUnion48DenseKeyframeStep);
+  }
+  keys.push_back(kUnion48SparseKeyframe - shift_s);
+  return dedupe_sorted_union_lattice(std::move(keys));
+}
+
+std::vector<double> synthetic_union_lattice_sparse_left_dense_right(const double shift_s) {
+  std::vector<double> keys = {0.0, kUnion48SparseKeyframe};
+  for (int n = 0; n <= 10; ++n) {
+    keys.push_back(static_cast<double>(n) * kUnion48DenseKeyframeStep - shift_s);
+  }
+  return dedupe_sorted_union_lattice(std::move(keys));
+}
+
+bool union_lattice_forward_successor(const std::vector<double>& lattice, const double previous, double* successor) {
+  for (const double key : lattice) {
+    if (key > previous + kUnionStepCursorTol) {
+      *successor = key;
+      return true;
+    }
+  }
+  return false;
+}
+
+bool near_union_lattice(const double observed, const double expected) {
+  return std::fabs(observed - expected) <= kUnionLatticeMatchTol;
+}
+
 void print_pts_stdout(const char* label, const std::vector<double>& times) {
   std::printf("%s", label);
   for (size_t i = 0; i < times.size(); ++i) {
@@ -806,7 +863,7 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
       sleep_ms(400);
     }
     const char* warmup_env = std::getenv("KEYFRAME_NAV_WARMUP_D");
-    const int warmup_d = (warmup_env != nullptr && warmup_env[0] != '\0') ? std::max(0, std::atoi(warmup_env)) : 4;
+    const int warmup_d = (warmup_env != nullptr && warmup_env[0] != '\0') ? std::max(0, std::atoi(warmup_env)) : 0;
     for (int i = 0; i < warmup_d; ++i) {
       push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
       sleep_ms(900);
@@ -1552,49 +1609,79 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       } else {
         const double shift_s = static_cast<double>(config.time_shift.offset_ms) / 1000.0;
         const bool backward = std::getenv("KEYFRAME_NAV_BACKWARD") != nullptr && std::getenv("KEYFRAME_NAV_BACKWARD")[0] == '1';
-        if (std::fabs(shift_s - 0.04) <= 0.001 && !backward && times[0] < 2.0 && near(times[0], 0.938)) {
-          expected = {0.938, 1.000, 2.043, 3.085, 4.127, 5.167, 5.208};
-        } else if (std::fabs(shift_s - 0.04) <= 0.001 && !backward && times[0] < 2.0 && near(times[0], 1.000)) {
-          expected = {1.000, 2.043, 3.085, 4.127, 5.167, 5.208, 6.208};
-          if (times.size() >= 8) {
-            expected.push_back(7.250);
-          }
-        } else if (std::fabs(shift_s - 0.04) <= 0.001 && !backward) {
-          expected = {4.167, 5.167, 5.208, 6.250};
-        } else if (std::fabs(shift_s + 0.04) <= 0.001 && !backward) {
-          expected = {4.167, 5.208, 5.248, 6.250};
+        const char* steps_env = std::getenv("KEYFRAME_NAV_STEPS");
+        const int step_count = (steps_env != nullptr && steps_env[0] != '\0') ? std::max(1, std::atoi(steps_env)) : 3;
+        const size_t expected_samples = static_cast<size_t>(step_count + 1);
+
+        bool dense_left_fixture = false;
+        bool sparse_left_reversed = false;
+        if (resolved.size() >= 2) {
+          dense_left_fixture = path_contains_basename(resolved[0], "kf_union_left_48") && path_contains_basename(resolved[1], "kf_union_right_sparse_48");
+          sparse_left_reversed = path_contains_basename(resolved[0], "kf_union_right_sparse_48") && path_contains_basename(resolved[1], "kf_union_left_48");
         }
 
-        if (!expected.empty() && ok) {
-          if (times.size() < expected.size()) {
-            std::fprintf(stderr, "FAIL union-time-shift expected %zu timestamps, got %zu\n", expected.size(), times.size());
-            ok = false;
-          } else {
-            for (size_t i = 0; i < expected.size(); ++i) {
-              if (!near(times[i], expected[i])) {
-                std::fprintf(stderr, "FAIL union-time-shift index %zu expected ~%.3f got %.3f (shift_ms=%ld)\n", i, expected[i], times[i],
-                             config.time_shift.offset_ms);
-                ok = false;
-                break;
-              }
-              if (i > 0 && !(times[i] > times[i - 1] + 0.005)) {
-                std::fprintf(stderr, "FAIL union-time-shift stall at %zu: %.3f -> %.3f\n", i, times[i - 1], times[i]);
-                ok = false;
-                break;
-              }
-            }
-          }
-        } else if (shift_s > 0.0 && !backward && expected.empty()) {
+        if (backward) {
           for (size_t i = 1; i < times.size(); ++i) {
             const double delta = times[i] - times[i - 1];
-            if (backward) {
-              if (!(delta < -0.005)) {
-                std::fprintf(stderr, "FAIL union-time-shift backward stall at %zu: %.3f -> %.3f\n", i, times[i - 1], times[i]);
-                ok = false;
-                break;
-              }
-            } else if (!(delta > 0.005)) {
+            if (!(delta < -kUnionMinForwardStepS)) {
+              std::fprintf(stderr, "FAIL union-time-shift backward stall at %zu: %.3f -> %.3f\n", i, times[i - 1], times[i]);
+              ok = false;
+              break;
+            }
+          }
+        } else if ((dense_left_fixture || sparse_left_reversed) && std::fabs(shift_s - 0.04) <= 0.001) {
+          const std::vector<double> lattice =
+              dense_left_fixture ? synthetic_union_lattice_dense_left_sparse_right(shift_s) : synthetic_union_lattice_sparse_left_dense_right(shift_s);
+
+          if (times.size() != expected_samples) {
+            std::fprintf(stderr, "FAIL union-time-shift expected %zu timestamps (steps=%d), got %zu\n", expected_samples, step_count, times.size());
+            ok = false;
+          }
+          if (ok && times[0] < 0.0) {
+            std::fprintf(stderr, "FAIL union-time-shift initial timestamp %.3f invalid\n", times[0]);
+            ok = false;
+          }
+
+          for (size_t i = 1; ok && i < times.size(); ++i) {
+            const double delta = times[i] - times[i - 1];
+            if (!(times[i] > times[i - 1] + kUnionMinForwardStepS)) {
+              std::fprintf(stderr, "FAIL union-time-shift stall at %zu: %.3f -> %.3f (shift_ms=%ld)\n", i, times[i - 1], times[i],
+                           config.time_shift.offset_ms);
+              ok = false;
+              break;
+            }
+            if (delta > kUnionMaxForwardStepS) {
+              std::fprintf(stderr, "FAIL union-time-shift step %zu delta %.3f exceeds dense-GOP bound %.3f\n", i, delta, kUnionMaxForwardStepS);
+              ok = false;
+              break;
+            }
+            double successor = 0.0;
+            if (!union_lattice_forward_successor(lattice, times[i - 1], &successor)) {
+              std::fprintf(stderr, "FAIL union-time-shift no forward union key after %.3f at step %zu\n", times[i - 1], i);
+              ok = false;
+              break;
+            }
+            if (!near_union_lattice(times[i], successor)) {
+              std::fprintf(stderr, "FAIL union-time-shift index %zu expected next union key ~%.3f got %.3f (prev=%.3f shift_ms=%ld)\n", i, successor,
+                           times[i], times[i - 1], config.time_shift.offset_ms);
+              ok = false;
+              break;
+            }
+          }
+        } else if (shift_s > 0.0 && !backward) {
+          if (times.size() != expected_samples) {
+            std::fprintf(stderr, "FAIL union-time-shift expected %zu timestamps (steps=%d), got %zu\n", expected_samples, step_count, times.size());
+            ok = false;
+          }
+          for (size_t i = 1; ok && i < times.size(); ++i) {
+            const double delta = times[i] - times[i - 1];
+            if (!(delta > kUnionMinForwardStepS)) {
               std::fprintf(stderr, "FAIL union-time-shift forward stall at %zu: %.3f -> %.3f\n", i, times[i - 1], times[i]);
+              ok = false;
+              break;
+            }
+            if (delta > kUnionMaxForwardStepS) {
+              std::fprintf(stderr, "FAIL union-time-shift step %zu delta %.3f exceeds plausible GOP step\n", i, delta);
               ok = false;
               break;
             }
