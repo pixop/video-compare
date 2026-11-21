@@ -10,6 +10,7 @@ extern "C" {
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cinttypes>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -1594,12 +1595,13 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
         } else {
           for (size_t i = 0; i < expected.size(); ++i) {
             if (!near(times[i], expected[i])) {
-              std::fprintf(stderr, "FAIL union-time-shift index %zu expected ~%.3f got %.3f (shift_ms=%ld)\n", i, expected[i], times[i], config.time_shift.offset_ms);
+              std::fprintf(stderr, "FAIL union-time-shift index %zu expected ~%.3f got %.3f (shift_ms=%" PRId64 ")\n", i, expected[i], times[i],
+                           config.time_shift.offset_ms);
               ok = false;
               break;
             }
             if (i > 0 && !(times[i] > times[i - 1] + 0.005)) {
-              std::fprintf(stderr, "FAIL union-time-shift stall at %zu: %.3f -> %.3f (shift_ms=%ld)\n", i, times[i - 1], times[i],
+              std::fprintf(stderr, "FAIL union-time-shift stall at %zu: %.3f -> %.3f (shift_ms=%" PRId64 ")\n", i, times[i - 1], times[i],
                            config.time_shift.offset_ms);
               ok = false;
               break;
@@ -1645,7 +1647,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
           for (size_t i = 1; ok && i < times.size(); ++i) {
             const double delta = times[i] - times[i - 1];
             if (!(times[i] > times[i - 1] + kUnionMinForwardStepS)) {
-              std::fprintf(stderr, "FAIL union-time-shift stall at %zu: %.3f -> %.3f (shift_ms=%ld)\n", i, times[i - 1], times[i],
+              std::fprintf(stderr, "FAIL union-time-shift stall at %zu: %.3f -> %.3f (shift_ms=%" PRId64 ")\n", i, times[i - 1], times[i],
                            config.time_shift.offset_ms);
               ok = false;
               break;
@@ -1662,8 +1664,8 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
               break;
             }
             if (!near_union_lattice(times[i], successor)) {
-              std::fprintf(stderr, "FAIL union-time-shift index %zu expected next union key ~%.3f got %.3f (prev=%.3f shift_ms=%ld)\n", i, successor,
-                           times[i], times[i - 1], config.time_shift.offset_ms);
+              std::fprintf(stderr, "FAIL union-time-shift index %zu expected next union key ~%.3f got %.3f (prev=%.3f shift_ms=%" PRId64 ")\n", i,
+                           successor, times[i], times[i - 1], config.time_shift.offset_ms);
               ok = false;
               break;
             }
@@ -1690,7 +1692,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       }
 
       if (ok) {
-        std::printf("PASS union keyframe navigation with right time shift offset_ms=%ld\n", config.time_shift.offset_ms);
+        std::printf("PASS union keyframe navigation with right time shift offset_ms=%" PRId64 "\n", config.time_shift.offset_ms);
       } else {
         exit_code = EXIT_FAILURE;
       }
