@@ -18,6 +18,7 @@ extern "C" {
 #include <iostream>
 #include <limits.h>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #ifdef _WIN32
@@ -53,6 +54,61 @@ enum class Scenario {
 
 std::atomic<int> events_pushed{0};
 std::atomic<bool> watchdog_fired{false};
+
+struct IntegrationStdoutCapture {
+  mutable std::mutex mutex;
+  std::string data;
+
+  class StreamBuf final : public std::streambuf {
+   public:
+    explicit StreamBuf(IntegrationStdoutCapture* owner) : owner_(owner) {}
+
+   protected:
+    int overflow(int character) override {
+      if (character == EOF) {
+        return EOF;
+      }
+      append_character(static_cast<char>(character));
+      return character;
+    }
+
+    std::streamsize xsputn(const char* characters, std::streamsize count) override {
+      if (count > 0) {
+        std::lock_guard<std::mutex> lock(owner_->mutex);
+        owner_->data.append(characters, static_cast<size_t>(count));
+      }
+      return count;
+    }
+
+   private:
+    IntegrationStdoutCapture* owner_{nullptr};
+
+    void append_character(const char character) {
+      std::lock_guard<std::mutex> lock(owner_->mutex);
+      owner_->data.push_back(character);
+    }
+  };
+
+  StreamBuf stream_buf;
+
+  IntegrationStdoutCapture() : stream_buf(this) {}
+
+  std::string snapshot() const {
+    std::lock_guard<std::mutex> lock(mutex);
+    return data;
+  }
+};
+
+IntegrationStdoutCapture* g_integration_stdout_capture = nullptr;
+std::vector<size_t>* g_official_display_dump_indices = nullptr;
+
+struct CropCopyCheckpointFailure {
+  std::atomic<bool> failed{false};
+  std::mutex message_mutex;
+  std::string message;
+};
+
+CropCopyCheckpointFailure g_crop_copy_checkpoint;
 
 void reset_helper_counters() {
   events_pushed.store(0);
@@ -262,9 +318,58 @@ void wait_for_filter_refresh() {
   sleep_ms(700);
 }
 
-void dump_display_filters() {
+size_t count_display_state_messages(const std::string& output) {
+  size_t count = 0;
+  size_t pos = 0;
+  const std::string needle = "Display state:";
+  while ((pos = output.find(needle, pos)) != std::string::npos) {
+    ++count;
+    pos += needle.size();
+  }
+  return count;
+}
+
+constexpr size_t kInvalidDisplayDumpIndex = static_cast<size_t>(-1);
+
+size_t display_state_count_locked() {
+  if (g_integration_stdout_capture == nullptr) {
+    return 0;
+  }
+  std::lock_guard<std::mutex> lock(g_integration_stdout_capture->mutex);
+  return count_display_state_messages(g_integration_stdout_capture->data);
+}
+
+// Emit Shift+X and return the 0-based index of a newly appended Display state line.
+bool emit_shift_x_and_wait_for_new_display_state(size_t* new_line_index, const int response_wait_ms) {
+  const size_t before_count = display_state_count_locked();
   push_keydown(SDLK_x, SDL_SCANCODE_X, 0, KMOD_SHIFT);
-  sleep_ms(200);
+
+  constexpr int kPollStepMs = 25;
+  for (int waited = 0; waited < response_wait_ms; waited += kPollStepMs) {
+    sleep_ms(kPollStepMs);
+    const size_t after_count = display_state_count_locked();
+    if (after_count > before_count) {
+      *new_line_index = before_count;
+      return true;
+    }
+  }
+  return false;
+}
+
+void dump_display_filters() {
+  if (g_official_display_dump_indices == nullptr) {
+    push_keydown(SDLK_x, SDL_SCANCODE_X, 0, KMOD_SHIFT);
+    sleep_ms(200);
+    return;
+  }
+
+  size_t new_line_index = 0;
+  constexpr int kOfficialDumpResponseWaitMs = 2500;
+  if (emit_shift_x_and_wait_for_new_display_state(&new_line_index, kOfficialDumpResponseWaitMs)) {
+    g_official_display_dump_indices->push_back(new_line_index);
+  } else {
+    g_official_display_dump_indices->push_back(kInvalidDisplayDumpIndex);
+  }
 }
 
 void select_right_video(const int index) {
@@ -468,6 +573,75 @@ void print_filter_dumps(const std::vector<FilterDump>& dumps) {
                 dumps[i].right_id.c_str(), dumps[i].visual_left.c_str(), dumps[i].visual_right.c_str(), dumps[i].left.c_str(), dumps[i].right.c_str(), crop_token(dumps[i].left).c_str(),
                 crop_token(dumps[i].right).empty() ? "(none)" : crop_token(dumps[i].right).c_str());
   }
+}
+
+bool crop_copy_checkpoint_display_state(const FilterDump& dump, const std::string& crop_a_token) {
+  return dump.swapped == "false" && dump.right_id == "2" && crop_token(dump.left) == crop_a_token && crop_token(dump.right).empty();
+}
+
+bool wait_for_crop_copy_post_ctrl_r_clear_state() {
+  if (g_integration_stdout_capture == nullptr || g_official_display_dump_indices == nullptr || g_official_display_dump_indices->empty()) {
+    g_crop_copy_checkpoint.failed.store(true);
+    std::lock_guard<std::mutex> lock(g_crop_copy_checkpoint.message_mutex);
+    g_crop_copy_checkpoint.message = "undo+Ctrl+R checkpoint missing stdout capture or crop A reference dump";
+    return false;
+  }
+
+  const std::string output = g_integration_stdout_capture->snapshot();
+  const std::vector<FilterDump> all_dumps = parse_display_filters(output);
+  const size_t crop_a_dump_index = g_official_display_dump_indices->front();
+  if (crop_a_dump_index >= all_dumps.size()) {
+    g_crop_copy_checkpoint.failed.store(true);
+    std::lock_guard<std::mutex> lock(g_crop_copy_checkpoint.message_mutex);
+    g_crop_copy_checkpoint.message = "undo+Ctrl+R checkpoint could not read crop A from official dump 0";
+    return false;
+  }
+  const std::string crop_a_token = crop_token(all_dumps[crop_a_dump_index].left);
+  if (crop_a_token.empty()) {
+    g_crop_copy_checkpoint.failed.store(true);
+    std::lock_guard<std::mutex> lock(g_crop_copy_checkpoint.message_mutex);
+    g_crop_copy_checkpoint.message = "undo+Ctrl+R checkpoint crop A token missing from official dump 0";
+    return false;
+  }
+
+  constexpr int kMaxProbes = 40;
+  constexpr int kProbeResponseWaitMs = 400;
+
+  FilterDump last_new_line_dump;
+  bool saw_new_line = false;
+
+  for (int probe = 0; probe < kMaxProbes; ++probe) {
+    size_t new_line_index = 0;
+    if (!emit_shift_x_and_wait_for_new_display_state(&new_line_index, kProbeResponseWaitMs)) {
+      continue;
+    }
+
+    const std::vector<FilterDump> dumps = parse_display_filters(g_integration_stdout_capture->snapshot());
+    if (new_line_index >= dumps.size()) {
+      continue;
+    }
+
+    const FilterDump& probe_dump = dumps[new_line_index];
+    last_new_line_dump = probe_dump;
+    saw_new_line = true;
+    if (crop_copy_checkpoint_display_state(probe_dump, crop_a_token)) {
+      return true;
+    }
+  }
+
+  std::ostringstream message;
+  message << "timed out waiting for observable Shift+X state after undo+Ctrl+R (expected swapped=false right=2 left=" << crop_a_token << " right cleared)";
+  if (saw_new_line) {
+    message << "; last probe left crop=" << (crop_token(last_new_line_dump.left).empty() ? "(none)" : crop_token(last_new_line_dump.left))
+            << " right crop=" << (crop_token(last_new_line_dump.right).empty() ? "(none)" : crop_token(last_new_line_dump.right)) << " swapped=" << last_new_line_dump.swapped
+            << " right=" << last_new_line_dump.right_id;
+  } else {
+    message << "; Shift+X probes did not produce any new Display state lines";
+  }
+  g_crop_copy_checkpoint.failed.store(true);
+  std::lock_guard<std::mutex> lock(g_crop_copy_checkpoint.message_mutex);
+  g_crop_copy_checkpoint.message = message.str();
+  return false;
 }
 
 bool parse_hhmmss(const std::string& text, double* seconds) {
@@ -1077,6 +1251,12 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     dump_display_filters();
     undo_last_crop();
     clear_visual_right_crop();
+    if (!wait_for_crop_copy_post_ctrl_r_clear_state()) {
+      push_quit();
+      finished.store(true);
+      watchdog.join();
+      return;
+    }
     dump_display_filters();
     select_right_video(0);
     dump_display_filters();
@@ -1190,8 +1370,18 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     config.frame_buffer_size = 3;
   }
 
-  std::ostringstream captured_out;
-  std::streambuf* const old_out = std::cout.rdbuf(captured_out.rdbuf());
+  IntegrationStdoutCapture integration_stdout;
+  std::vector<size_t> official_display_dump_indices;
+  g_crop_copy_checkpoint.failed.store(false);
+  {
+    std::lock_guard<std::mutex> lock(g_crop_copy_checkpoint.message_mutex);
+    g_crop_copy_checkpoint.message.clear();
+  }
+  if (scenario == Scenario::CropCopy) {
+    g_integration_stdout_capture = &integration_stdout;
+    g_official_display_dump_indices = &official_display_dump_indices;
+  }
+  std::streambuf* const old_out = std::cout.rdbuf(&integration_stdout.stream_buf);
 
   std::atomic<bool> finished{false};
   std::thread helper;
@@ -1205,6 +1395,8 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     finished.store(true);
     push_quit();
     std::cout.rdbuf(old_out);
+    g_integration_stdout_capture = nullptr;
+    g_official_display_dump_indices = nullptr;
     if (helper.joinable()) {
       helper.join();
     }
@@ -1213,11 +1405,13 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   }
 
   std::cout.rdbuf(old_out);
+  g_integration_stdout_capture = nullptr;
+  g_official_display_dump_indices = nullptr;
   if (helper.joinable()) {
     helper.join();
   }
 
-  const std::string output = captured_out.str();
+  const std::string output = integration_stdout.snapshot();
   std::cout << output;
 
   if (scenario == Scenario::EventInjection) {
@@ -1837,14 +2031,51 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       }
     }
   } else if (scenario == Scenario::CropCopy) {
-    const std::vector<FilterDump> dumps = parse_display_filters(output);
-    print_filter_dumps(dumps);
-
     auto fail_crop = [&](const char* message) {
       std::fprintf(stderr, "FAIL crop-copy: %s\n", message);
       std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
       exit_code = EXIT_FAILURE;
     };
+
+    std::vector<FilterDump> dumps;
+    constexpr size_t kExpectedDumps = 33;
+    if (g_crop_copy_checkpoint.failed.load()) {
+      std::string checkpoint_message;
+      {
+        std::lock_guard<std::mutex> lock(g_crop_copy_checkpoint.message_mutex);
+        checkpoint_message = g_crop_copy_checkpoint.message;
+      }
+      fail_crop(checkpoint_message.empty() ? "undo+Ctrl+R checkpoint failed" : checkpoint_message.c_str());
+    } else {
+      const std::vector<FilterDump> all_dumps = parse_display_filters(output);
+      if (official_display_dump_indices.size() != kExpectedDumps) {
+        fail_crop("expected 33 official Shift+X dump markers");
+      } else {
+        dumps.reserve(kExpectedDumps);
+        for (size_t i = 0; i < official_display_dump_indices.size(); ++i) {
+          const size_t index = official_display_dump_indices[i];
+          if (index == kInvalidDisplayDumpIndex) {
+            std::fprintf(stderr, "FAIL crop-copy: official dump %zu did not receive a new Display state line after Shift+X\n", i);
+            fail_crop("official Shift+X dump missing delayed response");
+            break;
+          }
+          if (index >= all_dumps.size()) {
+            std::fprintf(stderr, "FAIL crop-copy: official dump %zu index %zu out of range (%zu Display state lines)\n", i, index, all_dumps.size());
+            fail_crop("official Shift+X dump index out of range");
+            break;
+          }
+          if (i > 0 && official_display_dump_indices[i - 1] != kInvalidDisplayDumpIndex && index <= official_display_dump_indices[i - 1]) {
+            std::fprintf(stderr, "FAIL crop-copy: official dump %zu index %zu is not after dump %zu index %zu\n", i, index, i - 1, official_display_dump_indices[i - 1]);
+            fail_crop("official Shift+X dump indices are not strictly increasing");
+            break;
+          }
+          dumps.push_back(all_dumps[index]);
+        }
+      }
+    }
+    if (!dumps.empty()) {
+      print_filter_dumps(dumps);
+    }
 
     // dump  0 left crop A (R0 selected, uncropped)
     // dump  1 after Swap only (same selection, logical filters unchanged)
@@ -1879,7 +2110,6 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     // dump 30 swapped Ctrl+L, R0 unchanged
     // dump 31 swapped Ctrl+R, left cleared; R1 unchanged
     // dump 32 undo swapped Ctrl+R, left restored
-    constexpr size_t kExpectedDumps = 33;
     if (dumps.size() < kExpectedDumps) {
       fail_crop("expected 33 Shift+X filter dumps");
     } else if (output.find("Copied left crop to all right videos") == std::string::npos) {
