@@ -959,17 +959,26 @@ static void test_fixture_index_navigation(const std::string& path) {
     const playback_keyframe::AdjacentKeyframe prev_back = playback_keyframe::find_adjacent_keyframe(snapshot, -1, next_mid.demuxer_position_seconds);
     expect_status("fixture prev after forward", prev_back.status, playback_keyframe::AdjacentKeyframeStatus::Ok);
 
-    float first_keyframe_position = std::numeric_limits<float>::infinity();
+    float first_keyframe_position = 0.0F;
+    bool found_first_keyframe = false;
     for (const playback_keyframe::IndexEntry& entry : snapshot.entries) {
       if ((entry.flags & AVINDEX_KEYFRAME) == 0) {
         continue;
       }
       const int64_t presentation_timestamp = playback_keyframe::index_entry_presentation_timestamp(snapshot, entry);
       const float position = playback_keyframe::stream_timestamp_to_demuxer_seconds(presentation_timestamp, snapshot.time_base, snapshot.video_start_time_seconds);
-      first_keyframe_position = std::min(first_keyframe_position, position);
+      if (!found_first_keyframe || position < first_keyframe_position) {
+        first_keyframe_position = position;
+        found_first_keyframe = true;
+      }
     }
-    const playback_keyframe::AdjacentKeyframe prev_start = playback_keyframe::find_adjacent_keyframe(snapshot, -1, first_keyframe_position);
-    expect_status("fixture prev at first keyframe boundary", prev_start.status, playback_keyframe::AdjacentKeyframeStatus::AtBoundary);
+    if (!found_first_keyframe) {
+      std::fprintf(stderr, "FAIL fixture keyframe index contains no keyframes\n");
+      failures++;
+    } else {
+      const playback_keyframe::AdjacentKeyframe prev_start = playback_keyframe::find_adjacent_keyframe(snapshot, -1, first_keyframe_position);
+      expect_status("fixture prev at first keyframe boundary", prev_start.status, playback_keyframe::AdjacentKeyframeStatus::AtBoundary);
+    }
   }
 
   // Exercise the actual on-demand probe from positions between keyframes,
