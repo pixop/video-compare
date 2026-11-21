@@ -110,6 +110,14 @@ tests/test_playback_seek$(EXE): TEST_LIBS = $(LDLIBS)
 
 tests/test_playback_navigation$(EXE): TEST_LIBS = $(LDLIBS)
 
+tests/test_playback_keyframe$(EXE): src/keyframe_index_probe.o
+tests/test_playback_keyframe$(EXE): TEST_LIBS = $(LDLIBS)
+
+tests/test_demuxer_keyframe_seekable$(EXE): src/demuxer.o src/keyframe_index_probe.o src/keyframe_navigation.o \
+	src/ffmpeg.o src/side_aware_logger.o src/core_types.o src/string_utils.o src/video_decoder.o src/duration_deriver.o
+tests/test_demuxer_keyframe_seekable$(EXE): TEST_LIBS = $(LDLIBS)
+
+
 tests/test_format_converter$(EXE): \
 	src/format_converter.o src/frame_metadata.o src/ffmpeg.o src/side_aware_logger.o src/core_types.o
 tests/test_format_converter$(EXE): TEST_LIBS = $(LDLIBS)
@@ -134,7 +142,7 @@ check: $(test_bin)
 	done
 
 .PHONY: integration
-integration: $(integration_bin)
+integration: $(integration_bin) tests/test_playback_keyframe$(EXE)
 	@set -e; \
 	if command -v timeout >/dev/null 2>&1 && timeout --version >/dev/null 2>&1; then \
 		wrap="timeout $(integration_timeout_s)s"; \
@@ -145,6 +153,10 @@ integration: $(integration_bin)
 	trap 'rm -rf "$$media"' EXIT; \
 	echo "Generating integration fixtures in $$media"; \
 	tests/generate_integration_media.sh "$$media"; \
+	echo "Running tests/test_playback_keyframe with indexed GOP fixture"; \
+	./tests/test_playback_keyframe "$$media/seek_right_gop25.mp4"; \
+	echo "Running tests/test_demuxer_keyframe_seekable (pipe nonseekable gate)"; \
+	./tests/test_demuxer_keyframe_seekable "$$media/seek_right_gop25.mp4"; \
 	echo "Running $(integration_bin) baseline"; \
 	$$wrap ./$(integration_bin) baseline "$$media/left_25.mp4" "$$media/right0_25.mp4"; \
 	echo "Running $(integration_bin) event-injection"; \
@@ -159,6 +171,34 @@ integration: $(integration_bin)
 	$$wrap ./$(integration_bin) multi-right-sync "$$media/multi_sync_left_30.mp4" "$$media/multi_sync_right0_25.mp4" "$$media/multi_sync_right1_25.mp4"; \
 	echo "Running $(integration_bin) frame-navigation"; \
 	$$wrap ./$(integration_bin) frame-navigation "$$media/seek_left_25.mp4" "$$media/seek_right_25.mp4"; \
+	if [ -f "$$media/kf_left_gop50.mp4" ] && [ -f "$$media/kf_right_gop50.mp4" ]; then \
+		echo "Running $(integration_bin) keyframe-navigation"; \
+		$$wrap ./$(integration_bin) keyframe-navigation "$$media/kf_left_gop50.mp4" "$$media/kf_right_gop50.mp4"; \
+	else \
+		echo "SKIP keyframe-navigation (libx264 GOP fixtures unavailable)"; \
+	fi; \
+	echo "Running $(integration_bin) keyframe-navigation-gop25"; \
+	$$wrap ./$(integration_bin) keyframe-navigation-gop25 "$$media/seek_left_gop25.mp4" "$$media/seek_right_gop25.mp4"; \
+	if [ -f "$$media/kf_asym_left_gop25.mp4" ] && [ -f "$$media/kf_asym_right_gop50.mp4" ]; then \
+		echo "Running $(integration_bin) keyframe-navigation-asymmetric (left GOP25)"; \
+		$$wrap ./$(integration_bin) keyframe-navigation-asymmetric "$$media/kf_asym_left_gop25.mp4" "$$media/kf_asym_right_gop50.mp4"; \
+		echo "Running $(integration_bin) keyframe-navigation-asymmetric (reversed)"; \
+		$$wrap ./$(integration_bin) keyframe-navigation-asymmetric "$$media/kf_asym_right_gop50.mp4" "$$media/kf_asym_left_gop25.mp4"; \
+	else \
+		echo "SKIP keyframe-navigation-asymmetric (libx264 GOP fixtures unavailable)"; \
+	fi; \
+	if [ -f "$$media/kf_union_left_48.mp4" ] && [ -f "$$media/kf_union_right_sparse_48.mp4" ]; then \
+		echo "Running $(integration_bin) keyframe-navigation-union-time-shift (synthetic dense-left)"; \
+		KEYFRAME_NAV_SHIFT_MS=40 KEYFRAME_NAV_WARMUP_D=4 KEYFRAME_NAV_STEPS=3 \
+			$$wrap ./$(integration_bin) keyframe-navigation-union-time-shift \
+			"$$media/kf_union_left_48.mp4" "$$media/kf_union_right_sparse_48.mp4"; \
+		echo "Running $(integration_bin) keyframe-navigation-union-time-shift (synthetic sparse-left reversed)"; \
+		KEYFRAME_NAV_SHIFT_MS=40 KEYFRAME_NAV_WARMUP_D=0 KEYFRAME_NAV_STEPS=7 \
+			$$wrap ./$(integration_bin) keyframe-navigation-union-time-shift \
+			"$$media/kf_union_right_sparse_48.mp4" "$$media/kf_union_left_48.mp4"; \
+	else \
+		echo "SKIP keyframe-navigation-union-time-shift (union GOP fixtures unavailable)"; \
+	fi; \
 	echo "Running $(integration_bin) buffer-forward-only"; \
 	$$wrap ./$(integration_bin) buffer-forward-only "$$media/seek_left_25.mp4" "$$media/seek_right_25.mp4"; \
 	echo "Running $(integration_bin) buffer-pingpong"; \

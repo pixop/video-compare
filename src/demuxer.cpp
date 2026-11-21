@@ -1,10 +1,17 @@
 #include "demuxer.h"
 #include <iostream>
 #include "ffmpeg.h"
+#include "keyframe_index_probe.h"
+#include "playback_keyframe.h"
 #include "string_utils.h"
 
-Demuxer::Demuxer(const Side& side, const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options) : SideAware(side) {
+Demuxer::Demuxer(const Side& side, const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options)
+    : SideAware(side), demuxer_name_(demuxer_name), file_name_(file_name) {
   ScopedLogSide scoped_log_side(side);
+
+  if (demuxer_options != nullptr) {
+    av_dict_copy(&demuxer_options_copy_, demuxer_options, 0);
+  }
 
   const AVInputFormat* input_format = nullptr;
 
@@ -59,10 +66,19 @@ Demuxer::Demuxer(const Side& side, const std::string& demuxer_name, const std::s
   }
 
   av_freep(&opts_for_streams);
+
+  keyframe_navigation_seekable_ = format_context_ != nullptr && format_context_->pb != nullptr &&
+                                  (format_context_->pb->seekable & AVIO_SEEKABLE_NORMAL) != 0;
 }
 
 Demuxer::~Demuxer() {
+  close_probe_format_context();
   avformat_close_input(&format_context_);
+  av_dict_free(&demuxer_options_copy_);
+}
+
+float Demuxer::video_start_time_seconds() const {
+  return static_cast<float>(video_start_time()) * AV_TIME_TO_SEC;
 }
 
 AVCodecParameters* Demuxer::video_codec_parameters() {
@@ -146,6 +162,185 @@ bool Demuxer::seek(const float position, const bool backward) {
   int64_t seek_target = static_cast<int64_t>(position * AV_TIME_BASE);
 
   return av_seek_frame(format_context_, -1, seek_target, backward ? AVSEEK_FLAG_BACKWARD : 0) >= 0;
+}
+
+bool Demuxer::seek_keyframe_owner(const float key_demuxer_seconds) {
+  constexpr float kOwnerSeekBias = 1e-3F;
+  return seek(key_demuxer_seconds + kOwnerSeekBias, true);
+}
+
+bool Demuxer::seek_keyframe_preroll(const float target_presentation_seconds) {
+  if (!index_navigation_supported()) {
+    return false;
+  }
+
+  constexpr float kReferenceEpsilon = 1e-4F;
+  const playback_keyframe::AdjacentKeyframe prior = adjacent_keyframe(-1, target_presentation_seconds + kReferenceEpsilon);
+  if (prior.status != playback_keyframe::AdjacentKeyframeStatus::Ok) {
+    return false;
+  }
+
+  constexpr float kPrerollBias = 1e-3F;
+  return seek(prior.demuxer_position_seconds + kPrerollBias, true);
+}
+
+float Demuxer::probe_video_start_time_seconds() const {
+  if (probe_format_context_ == nullptr || probe_video_stream_index_ < 0) {
+    return 0.0F;
+  }
+
+  const AVStream* video_stream = probe_format_context_->streams[probe_video_stream_index_];
+  if (video_stream != nullptr && video_stream->start_time != AV_NOPTS_VALUE) {
+    return static_cast<float>(av_rescale_q(video_stream->start_time, video_stream->time_base, AV_R_MICROSECONDS)) * AV_TIME_TO_SEC;
+  }
+
+  const int64_t container_start = probe_format_context_->start_time != AV_NOPTS_VALUE ? probe_format_context_->start_time : 0;
+  return static_cast<float>(container_start) * AV_TIME_TO_SEC;
+}
+
+bool Demuxer::ensure_keyframe_index_initialized() {
+#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(59, 0, 0)
+  if (keyframe_index_init_attempted_) {
+    return playback_keyframe::libavformat_index_api_available() && playback_keyframe::raw_index_has_keyframes(keyframe_index_snapshot_);
+  }
+
+  if (!playback_keyframe::libavformat_index_api_available()) {
+    keyframe_index_init_attempted_ = true;
+    keyframe_index_snapshot_ = {};
+    return false;
+  }
+
+  if (!keyframe_navigation_seekable()) {
+    keyframe_index_init_attempted_ = true;
+    keyframe_index_snapshot_ = {};
+    return false;
+  }
+
+  if (!ensure_probe_format_context()) {
+    return false;
+  }
+
+  keyframe_index_init_attempted_ = true;
+  keyframe_index_snapshot_ =
+      playback_keyframe::capture_keyframe_index_snapshot(probe_format_context_, probe_video_stream_index_, probe_video_start_time_seconds());
+  return playback_keyframe::raw_index_has_keyframes(keyframe_index_snapshot_);
+#else
+  keyframe_index_init_attempted_ = true;
+  keyframe_index_snapshot_ = {};
+  return false;
+#endif
+}
+
+bool Demuxer::index_navigation_supported() {
+  return ensure_keyframe_index_initialized();
+}
+
+bool Demuxer::probe_context_matches_live() const {
+  if (probe_format_context_ == nullptr || format_context_ == nullptr || probe_video_stream_index_ < 0) {
+    return false;
+  }
+
+  const AVStream* live = format_context_->streams[video_stream_index_];
+  const AVStream* probe = probe_format_context_->streams[probe_video_stream_index_];
+  if (live == nullptr || probe == nullptr || live->codecpar == nullptr || probe->codecpar == nullptr) {
+    return false;
+  }
+
+  if (live->codecpar->codec_id != probe->codecpar->codec_id) {
+    return false;
+  }
+
+  if (live->time_base.num != probe->time_base.num || live->time_base.den != probe->time_base.den) {
+    return false;
+  }
+
+  const int64_t live_duration = live->duration;
+  const int64_t probe_duration = probe->duration;
+  if (live_duration != AV_NOPTS_VALUE && probe_duration != AV_NOPTS_VALUE && live_duration != probe_duration) {
+    return false;
+  }
+
+  const int64_t live_start = live->start_time;
+  const int64_t probe_start = probe->start_time;
+  if (live_start != AV_NOPTS_VALUE && probe_start != AV_NOPTS_VALUE && live_start != probe_start) {
+    return false;
+  }
+
+  return true;
+}
+
+bool Demuxer::ensure_probe_format_context() {
+  if (probe_context_open_ && probe_format_context_ != nullptr && probe_context_matches_live()) {
+    return true;
+  }
+
+  close_probe_format_context();
+
+  const AVInputFormat* input_format = nullptr;
+  if (!demuxer_name_.empty()) {
+    input_format = av_find_input_format(demuxer_name_.c_str());
+  }
+
+  AVDictionary* probe_options = nullptr;
+  if (demuxer_options_copy_ != nullptr) {
+    av_dict_copy(&probe_options, demuxer_options_copy_, 0);
+  }
+
+  if (avformat_open_input(&probe_format_context_, file_name_.c_str(), const_cast<AVInputFormat*>(input_format), &probe_options) < 0) {
+    av_dict_free(&probe_options);
+    return false;
+  }
+  av_dict_free(&probe_options);
+
+  if (avformat_find_stream_info(probe_format_context_, nullptr) < 0) {
+    close_probe_format_context();
+    return false;
+  }
+
+  if (static_cast<unsigned int>(video_stream_index_) >= probe_format_context_->nb_streams) {
+    close_probe_format_context();
+    return false;
+  }
+  probe_video_stream_index_ = video_stream_index_;
+
+  probe_context_open_ = probe_context_matches_live();
+  if (!probe_context_open_) {
+    close_probe_format_context();
+  }
+
+  return probe_context_open_;
+}
+
+void Demuxer::close_probe_format_context() {
+  if (probe_format_context_ != nullptr) {
+    avformat_close_input(&probe_format_context_);
+  }
+  probe_video_stream_index_ = -1;
+  probe_context_open_ = false;
+}
+
+playback_keyframe::AdjacentKeyframe Demuxer::adjacent_keyframe(const int direction, const float reference_demuxer_seconds) {
+  playback_keyframe::AdjacentKeyframe result;
+
+#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(59, 0, 0)
+  if (!index_navigation_supported() || direction == 0) {
+    return result;
+  }
+
+  if (!ensure_probe_format_context()) {
+    return result;
+  }
+
+  if (!playback_keyframe::prepare_adjacent_keyframe_probe(probe_format_context_, probe_video_stream_index_, keyframe_index_snapshot_, direction, reference_demuxer_seconds)) {
+    return result;
+  }
+
+  return playback_keyframe::find_adjacent_keyframe(keyframe_index_snapshot_, direction, reference_demuxer_seconds);
+#else
+  (void)direction;
+  (void)reference_demuxer_seconds;
+  return result;
+#endif
 }
 
 std::string Demuxer::format_name() {
