@@ -1,11 +1,11 @@
 #define SDL_MAIN_HANDLED
-#include "video_filterer.h"
 #include <cstdio>
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include "video_filter_state.h"
+#include "video_filterer.h"
 #include "video_filterer_classify.h"
 extern "C" {
 #include <libavutil/error.h>
@@ -33,8 +33,8 @@ static void expect_bool(const char* label, const bool got, const bool expected) 
 
 static void expect_crop(const char* label, const CropState& got, const CropState& expected) {
   if (!video_filter_state::crop_states_equal(got, expected)) {
-    std::fprintf(stderr, "FAIL %s: expected enabled=%d %dx%d+%d+%d, got enabled=%d %dx%d+%d+%d\n", label, static_cast<int>(expected.enabled), expected.rect.w, expected.rect.h, expected.rect.x, expected.rect.y,
-                 static_cast<int>(got.enabled), got.rect.w, got.rect.h, got.rect.x, got.rect.y);
+    std::fprintf(stderr, "FAIL %s: expected enabled=%d %dx%d+%d+%d, got enabled=%d %dx%d+%d+%d\n", label, static_cast<int>(expected.enabled), expected.rect.w, expected.rect.h, expected.rect.x, expected.rect.y, static_cast<int>(got.enabled),
+                 got.rect.w, got.rect.h, got.rect.x, got.rect.y);
     failures++;
     return;
   }

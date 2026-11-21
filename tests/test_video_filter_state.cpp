@@ -1,9 +1,9 @@
-#include "video_filter_state.h"
 #include <cstdio>
 #include <cstdlib>
 #include <initializer_list>
 #include <string>
 #include <vector>
+#include "video_filter_state.h"
 
 static int failures = 0;
 
@@ -46,8 +46,8 @@ static void expect_operation(const char* label, const video_filter_state::CropOp
 
 static void expect_crop(const char* label, const CropState& got, const CropState& expected) {
   if (!video_filter_state::crop_states_equal(got, expected)) {
-    std::fprintf(stderr, "FAIL %s: expected enabled=%d %dx%d+%d+%d, got enabled=%d %dx%d+%d+%d\n", label, static_cast<int>(expected.enabled), expected.rect.w, expected.rect.h, expected.rect.x, expected.rect.y,
-                 static_cast<int>(got.enabled), got.rect.w, got.rect.h, got.rect.x, got.rect.y);
+    std::fprintf(stderr, "FAIL %s: expected enabled=%d %dx%d+%d+%d, got enabled=%d %dx%d+%d+%d\n", label, static_cast<int>(expected.enabled), expected.rect.w, expected.rect.h, expected.rect.x, expected.rect.y, static_cast<int>(got.enabled),
+                 got.rect.w, got.rect.h, got.rect.x, got.rect.y);
     failures++;
     return;
   }
@@ -175,7 +175,7 @@ int main() {
   const int round_y1 = video_filter_state::map_crop_edge(11, 720, 1080);
   expect_crop("display map rounds edges with llround", video_filter_state::map_display_rect_to_crop_space({1, 1, 10, 10}, 1280, 720, no_crop, 1920, 1080), CropState{{round_x0, round_y0, round_x1 - round_x0, round_y1 - round_y0}, true});
   expect_crop("display map anisotropic dest", video_filter_state::map_display_rect_to_crop_space({100, 50, 1600, 700}, 1920, 800, no_crop, 1920, 1080),
-             CropState{{100, video_filter_state::map_crop_edge(50, 800, 1080), 1600, video_filter_state::map_crop_edge(750, 800, 1080) - video_filter_state::map_crop_edge(50, 800, 1080)}, true});
+              CropState{{100, video_filter_state::map_crop_edge(50, 800, 1080), 1600, video_filter_state::map_crop_edge(750, 800, 1080) - video_filter_state::map_crop_edge(50, 800, 1080)}, true});
   const CropState tiny = video_filter_state::map_display_rect_to_crop_space({0, 0, 1, 1}, 1280, 720, no_crop, 1920, 1080);
   expect_bool("display map keeps min 2x2", tiny.rect.w >= 2 && tiny.rect.h >= 2, true);
   const CropState overflow = video_filter_state::map_display_rect_to_crop_space({0, 0, 1280, 720}, 1280, 720, {{1800, 1000, 200, 100}, true}, 1920, 1080);
@@ -283,14 +283,12 @@ int main() {
   std::string unswapped = "Display state: window=800x450 aspect=stretch";
   video_filter_state::append_display_state_mapping(unswapped, false, 1);
   video_filter_state::append_display_state_filters(unswapped, "crop=443:327:190:185", "crop=175:152:299:263");
-  expect_str("display state unswapped keeps logical filters", unswapped,
-             "Display state: window=800x450 aspect=stretch swapped=false right=2 filters_left=\"crop=443:327:190:185\" filters_right=\"crop=175:152:299:263\"");
+  expect_str("display state unswapped keeps logical filters", unswapped, "Display state: window=800x450 aspect=stretch swapped=false right=2 filters_left=\"crop=443:327:190:185\" filters_right=\"crop=175:152:299:263\"");
 
   std::string swapped = "Display state: window=800x450 aspect=stretch";
   video_filter_state::append_display_state_mapping(swapped, true, 1);
   video_filter_state::append_display_state_filters(swapped, "crop=443:327:190:185", "crop=175:152:299:263");
-  expect_str("display state swapped does not exchange logical filters", swapped,
-             "Display state: window=800x450 aspect=stretch swapped=true right=2 filters_left=\"crop=443:327:190:185\" filters_right=\"crop=175:152:299:263\"");
+  expect_str("display state swapped does not exchange logical filters", swapped, "Display state: window=800x450 aspect=stretch swapped=true right=2 filters_left=\"crop=443:327:190:185\" filters_right=\"crop=175:152:299:263\"");
 
   std::string selected = "Display state: window=800x450 aspect=stretch";
   video_filter_state::append_display_state_mapping(selected, false, 2);

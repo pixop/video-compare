@@ -171,8 +171,7 @@ bool probe_index_entry_presentation(AVFormatContext* format_context, const int v
   return true;
 }
 
-bool prepare_adjacent_keyframe_probe(AVFormatContext* format_context, const int video_stream_index, KeyframeIndexSnapshot& snapshot, const int direction,
-                                     const float reference_demuxer_seconds) {
+bool prepare_adjacent_keyframe_probe(AVFormatContext* format_context, const int video_stream_index, KeyframeIndexSnapshot& snapshot, const int direction, const float reference_demuxer_seconds) {
   if (format_context == nullptr || format_context->pb == nullptr || !snapshot.seekable || snapshot.entries.empty()) {
     snapshot.seekable = false;
     return false;

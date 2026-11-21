@@ -62,15 +62,24 @@ class KeyframeNavigation {
 
   KeyframeNavigationBegin begin_frame(const int keyframe_navigation_delta, const bool in_sync_when_pending);
 
-  KeyframeNavigationResolve resolve_step(const int step_direction, Demuxer& left_demuxer, Demuxer& right_demuxer, const playback_seek::SeekRequest& seek_request,
-                                         const size_t active_right_index, const float displayed_left_demuxer_seconds, const bool displayed_left_valid,
-                                         const float displayed_right_demuxer_seconds, const bool displayed_right_valid);
+  KeyframeNavigationResolve resolve_step(const int step_direction,
+                                         Demuxer& left_demuxer,
+                                         Demuxer& right_demuxer,
+                                         const playback_seek::SeekRequest& seek_request,
+                                         const size_t active_right_index,
+                                         const float displayed_left_demuxer_seconds,
+                                         const bool displayed_left_valid,
+                                         const float displayed_right_demuxer_seconds,
+                                         const bool displayed_right_valid);
 
-  KeyframeNavigationStatus verify_landing(const size_t active_right_index, const float landed_demuxer_seconds, const bool landed_valid,
-                                          const float target_demuxer_position, const float comparison_timeline_position);
+  KeyframeNavigationStatus verify_landing(const size_t active_right_index, const float landed_demuxer_seconds, const bool landed_valid, const float target_demuxer_position, const float comparison_timeline_position);
 
-  KeyframeNavigationStatus verify_landing_from_frames(const KeyframeNavigationResolve& resolve, const size_t active_right_index, const AVFrame* left_frame,
-                                                      const Demuxer& left_demuxer, const AVFrame* right_frame, const Demuxer& right_demuxer);
+  KeyframeNavigationStatus verify_landing_from_frames(const KeyframeNavigationResolve& resolve,
+                                                      const size_t active_right_index,
+                                                      const AVFrame* left_frame,
+                                                      const Demuxer& left_demuxer,
+                                                      const AVFrame* right_frame,
+                                                      const Demuxer& right_demuxer);
 
   const KeyframeNavigationCursor& cursor() const { return cursor_; }
   bool has_pending_steps() const { return !pending_steps_.empty(); }

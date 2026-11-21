@@ -190,8 +190,7 @@ struct SeekRelativeSolveResult {
   float seek_relative{0.0F};
 };
 
-inline SeekRelativeSolveResult seek_relative_for_right_demuxer_position_bisection(const playback_seek::SeekRequest& request, const size_t active_right_index, const float desired_right_demuxer_position,
-                                                                                   const float search_span_seconds) {
+inline SeekRelativeSolveResult seek_relative_for_right_demuxer_position_bisection(const playback_seek::SeekRequest& request, const size_t active_right_index, const float desired_right_demuxer_position, const float search_span_seconds) {
   SeekRelativeSolveResult solved;
 
   const float current = right_target_position_for_seek_relative(request, active_right_index, 0.0F);
@@ -236,8 +235,7 @@ inline SeekRelativeSolveResult seek_relative_for_right_demuxer_position_bisectio
   return solved;
 }
 
-inline SeekRelativeSolveResult seek_relative_for_right_demuxer_position(const playback_seek::SeekRequest& request, const size_t active_right_index, const float desired_right_demuxer_position,
-                                                                         const float search_span_seconds = 0.0F) {
+inline SeekRelativeSolveResult seek_relative_for_right_demuxer_position(const playback_seek::SeekRequest& request, const size_t active_right_index, const float desired_right_demuxer_position, const float search_span_seconds = 0.0F) {
   SeekRelativeSolveResult solved;
 
   if (active_right_index >= request.rights.size()) {
@@ -295,8 +293,7 @@ inline bool keyframe_navigation_seek_plan_supported(const playback_seek::SeekReq
   return true;
 }
 
-inline SeekRelativeSolveResult seek_relative_for_left_demuxer_position(const playback_seek::SeekRequest& request, const float desired_left_demuxer_position,
-                                                                       const float search_span_seconds = 0.0F) {
+inline SeekRelativeSolveResult seek_relative_for_left_demuxer_position(const playback_seek::SeekRequest& request, const float desired_left_demuxer_position, const float search_span_seconds = 0.0F) {
   SeekRelativeSolveResult solved;
   (void)search_span_seconds;
 
@@ -305,8 +302,7 @@ inline SeekRelativeSolveResult seek_relative_for_left_demuxer_position(const pla
   }
 
   const float restore = request.left_pts * AV_TIME_TO_SEC + request.left.start_time;
-  const float min_left_position =
-      (request.left.first_pts > INT64_MIN) ? (request.left.first_pts * AV_TIME_TO_SEC + request.left.start_time) : request.left.start_time;
+  const float min_left_position = (request.left.first_pts > INT64_MIN) ? (request.left.first_pts * AV_TIME_TO_SEC + request.left.start_time) : request.left.start_time;
 
   const float current = left_target_position_for_seek_relative(request, 0.0F);
   if (demuxer_positions_near(current, desired_left_demuxer_position)) {
@@ -330,8 +326,7 @@ struct MappedPosition {
   float seconds{0.0F};
 };
 
-inline MappedPosition comparison_timeline_for_right_demuxer_position(const playback_seek::SeekRequest& request, const size_t active_right_index, const float right_demuxer_position,
-                                                                     const float search_span_seconds) {
+inline MappedPosition comparison_timeline_for_right_demuxer_position(const playback_seek::SeekRequest& request, const size_t active_right_index, const float right_demuxer_position, const float search_span_seconds) {
   MappedPosition mapped;
   if (active_right_index >= request.rights.size()) {
     return mapped;
@@ -345,8 +340,7 @@ inline MappedPosition comparison_timeline_for_right_demuxer_position(const playb
   return mapped;
 }
 
-inline MappedPosition right_demuxer_for_comparison_timeline(const playback_seek::SeekRequest& request, const size_t active_right_index, const float comparison_timeline_position,
-                                                            const float search_span_seconds) {
+inline MappedPosition right_demuxer_for_comparison_timeline(const playback_seek::SeekRequest& request, const size_t active_right_index, const float comparison_timeline_position, const float search_span_seconds) {
   MappedPosition mapped;
   if (active_right_index >= request.rights.size()) {
     return mapped;
@@ -366,7 +360,9 @@ struct KeyframeNavigationCursor {
   float comparison_timeline_seconds{0.0F};
 };
 
-inline void reset_keyframe_navigation_cursor(KeyframeNavigationCursor& cursor) { cursor.valid = false; }
+inline void reset_keyframe_navigation_cursor(KeyframeNavigationCursor& cursor) {
+  cursor.valid = false;
+}
 
 inline void commit_keyframe_navigation_cursor(KeyframeNavigationCursor& cursor, const size_t right_index, const float comparison_timeline_seconds) {
   cursor.valid = true;
@@ -383,9 +379,14 @@ inline float avframe_pts_to_demuxer_seconds(const int64_t frame_pts, const float
   return static_cast<float>(frame_pts) * AV_TIME_TO_SEC + video_start_time_seconds;
 }
 
-inline float keyframe_navigation_reference_comparison_timeline(const KeyframeNavigationCursor& cursor, const size_t active_right_index, const playback_seek::SeekRequest& request,
-                                                                 const float displayed_left_demuxer_seconds, const bool displayed_left_valid, const float displayed_right_demuxer_seconds,
-                                                                 const bool displayed_right_valid, const float search_span_seconds) {
+inline float keyframe_navigation_reference_comparison_timeline(const KeyframeNavigationCursor& cursor,
+                                                               const size_t active_right_index,
+                                                               const playback_seek::SeekRequest& request,
+                                                               const float displayed_left_demuxer_seconds,
+                                                               const bool displayed_left_valid,
+                                                               const float displayed_right_demuxer_seconds,
+                                                               const bool displayed_right_valid,
+                                                               const float search_span_seconds) {
   if (keyframe_navigation_cursor_applies(cursor, active_right_index)) {
     return cursor.comparison_timeline_seconds;
   }
@@ -411,8 +412,11 @@ struct UnionRightReference {
 
 // Comparison timeline is not always a left demuxer second (e.g. sparse-left / dense-right). Use the
 // displayed left playhead or seek-plan inverse for index neighbor queries.
-inline float union_left_adjacent_reference_demuxer_seconds(const playback_seek::SeekRequest& request, const float reference_comparison_timeline,
-                                                           const float displayed_left_demuxer_seconds, const bool displayed_left_valid, const float search_span_seconds) {
+inline float union_left_adjacent_reference_demuxer_seconds(const playback_seek::SeekRequest& request,
+                                                           const float reference_comparison_timeline,
+                                                           const float displayed_left_demuxer_seconds,
+                                                           const bool displayed_left_valid,
+                                                           const float search_span_seconds) {
   if (displayed_left_valid) {
     return displayed_left_demuxer_seconds;
   }
@@ -427,9 +431,12 @@ inline float union_left_adjacent_reference_demuxer_seconds(const playback_seek::
 
 // After landing on a right-owned union vertex, a forward adjacent query at the mapped right
 // demuxer can repeat the same key; nudge just beyond the 2 ms equality tolerance.
-inline float union_right_adjacent_reference_demuxer_seconds(const playback_seek::SeekRequest& request, const size_t active_right_index,
-                                                            const float reference_comparison_timeline, const int step_direction,
-                                                            const float mapped_right_demuxer_seconds, const float search_span_seconds) {
+inline float union_right_adjacent_reference_demuxer_seconds(const playback_seek::SeekRequest& request,
+                                                            const size_t active_right_index,
+                                                            const float reference_comparison_timeline,
+                                                            const int step_direction,
+                                                            const float mapped_right_demuxer_seconds,
+                                                            const float search_span_seconds) {
   if (step_direction == 0) {
     return mapped_right_demuxer_seconds;
   }
@@ -448,9 +455,14 @@ inline float union_right_adjacent_reference_demuxer_seconds(const playback_seek:
   return std::min(mapped_right_demuxer_seconds, shifted.seconds);
 }
 
-inline UnionRightReference right_reference_for_union_navigation(const KeyframeNavigationCursor& cursor, const size_t active_right_index, const playback_seek::SeekRequest& request,
-                                                                const float reference_comparison_timeline, const bool right_indexed, const bool displayed_right_valid,
-                                                                const float displayed_right_demuxer_seconds, const float search_span_seconds) {
+inline UnionRightReference right_reference_for_union_navigation(const KeyframeNavigationCursor& cursor,
+                                                                const size_t active_right_index,
+                                                                const playback_seek::SeekRequest& request,
+                                                                const float reference_comparison_timeline,
+                                                                const bool right_indexed,
+                                                                const bool displayed_right_valid,
+                                                                const float displayed_right_demuxer_seconds,
+                                                                const float search_span_seconds) {
   UnionRightReference reference;
   if (!right_indexed) {
     return reference;
@@ -488,9 +500,15 @@ inline bool union_candidates_share_timeline(const UnionKeyframeCandidate& a, con
   return demuxer_positions_near(a.comparison_timeline_position, b.comparison_timeline_position);
 }
 
-inline UnionKeyframeSelection select_union_keyframe_candidate(const int direction, const float reference_comparison_timeline, const AdjacentKeyframe& left_adjacent,
-                                                              const AdjacentKeyframe& right_adjacent, const bool left_indexed, const bool right_indexed,
-                                                              const playback_seek::SeekRequest& request, const size_t active_right_index, const float search_span_seconds) {
+inline UnionKeyframeSelection select_union_keyframe_candidate(const int direction,
+                                                              const float reference_comparison_timeline,
+                                                              const AdjacentKeyframe& left_adjacent,
+                                                              const AdjacentKeyframe& right_adjacent,
+                                                              const bool left_indexed,
+                                                              const bool right_indexed,
+                                                              const playback_seek::SeekRequest& request,
+                                                              const size_t active_right_index,
+                                                              const float search_span_seconds) {
   UnionKeyframeSelection result;
 
   if (direction == 0) {
@@ -515,10 +533,8 @@ inline UnionKeyframeSelection select_union_keyframe_candidate(const int directio
       candidate.comparison_timeline_position = adjacent.demuxer_position_seconds;
       if (direction < 0 && active_right_index < request.rights.size()) {
         const playback_seek::SeekSideInput& right = request.rights[active_right_index];
-        const float min_right_position =
-            (right.first_pts > INT64_MIN) ? (right.first_pts * AV_TIME_TO_SEC + right.start_time) : right.start_time;
-        const MappedPosition mapped_right =
-            right_demuxer_for_comparison_timeline(request, active_right_index, adjacent.demuxer_position_seconds, search_span_seconds);
+        const float min_right_position = (right.first_pts > INT64_MIN) ? (right.first_pts * AV_TIME_TO_SEC + right.start_time) : right.start_time;
+        const MappedPosition mapped_right = right_demuxer_for_comparison_timeline(request, active_right_index, adjacent.demuxer_position_seconds, search_span_seconds);
         if (mapped_right.ok && mapped_right.seconds < min_right_position - 2e-3F) {
           left_before_right_reachable_start = true;
           return;
@@ -529,8 +545,7 @@ inline UnionKeyframeSelection select_union_keyframe_candidate(const int directio
       if (!mapped.ok) {
         bool before_reachable_start = false;
         if (direction < 0 && active_right_index < request.rights.size() && left_adjacent.status == AdjacentKeyframeStatus::AtBoundary) {
-          const float min_left_position = (request.left.first_pts > INT64_MIN) ? (request.left.first_pts * AV_TIME_TO_SEC + request.left.start_time)
-                                                                                : request.left.start_time;
+          const float min_left_position = (request.left.first_pts > INT64_MIN) ? (request.left.first_pts * AV_TIME_TO_SEC + request.left.start_time) : request.left.start_time;
           const SeekRelativeSolveResult solved = seek_relative_for_left_demuxer_position(request, min_left_position, search_span_seconds);
           if (solved.ok) {
             const float earliest_right = right_target_position_for_seek_relative(request, active_right_index, solved.seek_relative);
@@ -577,10 +592,8 @@ inline UnionKeyframeSelection select_union_keyframe_candidate(const int directio
       return result;
     }
 
-    const bool left_at_union_boundary = !left_indexed || left_adjacent.status == AdjacentKeyframeStatus::AtBoundary ||
-                                        (direction < 0 && left_before_right_reachable_start);
-    const bool right_at_union_boundary = !right_indexed || right_adjacent.status == AdjacentKeyframeStatus::AtBoundary ||
-                                         (direction < 0 && right_before_reachable_timeline_start);
+    const bool left_at_union_boundary = !left_indexed || left_adjacent.status == AdjacentKeyframeStatus::AtBoundary || (direction < 0 && left_before_right_reachable_start);
+    const bool right_at_union_boundary = !right_indexed || right_adjacent.status == AdjacentKeyframeStatus::AtBoundary || (direction < 0 && right_before_reachable_timeline_start);
     const bool all_indexed_at_boundary = left_at_union_boundary && right_at_union_boundary;
     if ((left_indexed || right_indexed) && all_indexed_at_boundary) {
       result.at_boundary = true;
@@ -605,8 +618,7 @@ inline UnionKeyframeSelection select_union_keyframe_candidate(const int directio
     }
 
     const float distance = std::fabs(delta);
-    if (best == nullptr || distance < best_distance - 1e-6F ||
-        (std::fabs(distance - best_distance) <= 1e-6F && candidate.owner == SideType::Left && best->owner != SideType::Left)) {
+    if (best == nullptr || distance < best_distance - 1e-6F || (std::fabs(distance - best_distance) <= 1e-6F && candidate.owner == SideType::Left && best->owner != SideType::Left)) {
       best = &candidate;
       best_distance = distance;
     }

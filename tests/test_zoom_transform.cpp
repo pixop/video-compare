@@ -1,9 +1,9 @@
-#include "zoom_transform.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include "zoom_transform.h"
 
 using zoom_transform::ZoomRectState;
 using zoom_transform::ZoomVec2;
@@ -13,10 +13,7 @@ static int failures = 0;
 enum class Mode { Split, HStack, VStack };
 
 // --pre-fix only. Not part of the production API.
-enum class OriginPolicy {
-  FrameCenter,
-  LayoutCenter
-};
+enum class OriginPolicy { FrameCenter, LayoutCenter };
 
 struct ContentWindow {
   float x;
@@ -385,8 +382,8 @@ static void test_repeated_zoom(const OriginPolicy policy) {
 }
 
 // Complete window -> content_window -> layout zoom_point -> offset -> zoom_rect chain.
-static void expect_window_chain(const char* label, const Mode mode, const ContentWindow& content, const ZoomVec2 source, const ZoomVec2 move_offset, const float current_zoom, const float new_zoom, const Frame& frame,
-                                const OriginPolicy policy) {
+static void
+expect_window_chain(const char* label, const Mode mode, const ContentWindow& content, const ZoomVec2 source, const ZoomVec2 move_offset, const float current_zoom, const float new_zoom, const Frame& frame, const OriginPolicy policy) {
   const ZoomVec2 layout = layout_size(mode, frame);
   const ZoomRectState rect_before = zoom_rect_from_move_offset(move_offset, current_zoom, frame);
   const ZoomVec2 mapped_before = zoom_transform::video_point_to_zoom_space(source, rect_before);

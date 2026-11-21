@@ -6,9 +6,9 @@
 #include <cstdlib>
 #include <string>
 
-using display_pixel_scale::PhysicalPixelScale;
 using display_pixel_scale::compute_physical_pixel_scale;
 using display_pixel_scale::physical_1to1_viewport_zoom_base;
+using display_pixel_scale::PhysicalPixelScale;
 using display_pixel_scale::zoom_preset_viewport_factor;
 
 static int failures = 0;

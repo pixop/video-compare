@@ -15,14 +15,14 @@ int main() {
 #include "keyframe_navigation.h"
 #include "playback_seek.h"
 
+#include <signal.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
-#include <signal.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
 
 static int failures = 0;
 
@@ -35,8 +35,7 @@ static void expect_bool(const char* label, const bool got, const bool expected) 
   std::printf("PASS %s -> %s\n", label, got ? "true" : "false");
 }
 
-static void expect_status(const char* label, const playback_keyframe::KeyframeNavigationStatus got,
-                          const playback_keyframe::KeyframeNavigationStatus expected) {
+static void expect_status(const char* label, const playback_keyframe::KeyframeNavigationStatus got, const playback_keyframe::KeyframeNavigationStatus expected) {
   if (got != expected) {
     std::fprintf(stderr, "FAIL %s: unexpected status %d\n", label, static_cast<int>(got));
     failures++;
@@ -159,8 +158,7 @@ static void test_resolve_step_mixed_file_and_pipe(const std::string& file_path, 
     navigation.begin_frame(+1, true);
     const playback_seek::SeekRequest request = sample_seek_request();
     const auto start = std::chrono::steady_clock::now();
-    const playback_keyframe::KeyframeNavigationResolve resolved =
-        navigation.resolve_step(+1, left, right, request, 0, 0.0F, true, 0.0F, true);
+    const playback_keyframe::KeyframeNavigationResolve resolved = navigation.resolve_step(+1, left, right, request, 0, 0.0F, true, 0.0F, true);
     const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
 
     expect_status("mixed resolve_step unavailable", resolved.status, playback_keyframe::KeyframeNavigationStatus::Unavailable);

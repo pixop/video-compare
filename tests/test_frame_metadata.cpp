@@ -1,6 +1,6 @@
-#include "frame_metadata.h"
 #include <cstdio>
 #include <cstdlib>
+#include "frame_metadata.h"
 
 static int failures = 0;
 

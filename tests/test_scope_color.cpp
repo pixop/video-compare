@@ -1,11 +1,11 @@
 #define SDL_MAIN_HANDLED
-#include "scope_color.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "scope_color.h"
 extern "C" {
 #include <libavfilter/avfilter.h>
 #include <libavfilter/buffersink.h>

@@ -7,6 +7,7 @@ extern "C" {
 #include <libavformat/avformat.h>
 }
 #include <SDL2/SDL.h>
+#include <limits.h>
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -16,7 +17,6 @@ extern "C" {
 #include <cstdlib>
 #include <exception>
 #include <iostream>
-#include <limits.h>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -25,8 +25,8 @@ extern "C" {
 #include <stdlib.h>
 #endif
 #include <sys/stat.h>
-#include <thread>
 #include <unistd.h>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -569,9 +569,8 @@ std::string crop_token(const std::string& filters) {
 
 void print_filter_dumps(const std::vector<FilterDump>& dumps) {
   for (size_t i = 0; i < dumps.size(); ++i) {
-    std::printf("crop-copy dump %zu: swapped=%s right=%s visual_left=%s visual_right=%s left=\"%s\" right_filters=\"%s\" crop_left=%s crop_right=%s\n", i, dumps[i].swapped.c_str(),
-                dumps[i].right_id.c_str(), dumps[i].visual_left.c_str(), dumps[i].visual_right.c_str(), dumps[i].left.c_str(), dumps[i].right.c_str(), crop_token(dumps[i].left).c_str(),
-                crop_token(dumps[i].right).empty() ? "(none)" : crop_token(dumps[i].right).c_str());
+    std::printf("crop-copy dump %zu: swapped=%s right=%s visual_left=%s visual_right=%s left=\"%s\" right_filters=\"%s\" crop_left=%s crop_right=%s\n", i, dumps[i].swapped.c_str(), dumps[i].right_id.c_str(), dumps[i].visual_left.c_str(),
+                dumps[i].visual_right.c_str(), dumps[i].left.c_str(), dumps[i].right.c_str(), crop_token(dumps[i].left).c_str(), crop_token(dumps[i].right).empty() ? "(none)" : crop_token(dumps[i].right).c_str());
   }
 }
 
@@ -633,8 +632,7 @@ bool wait_for_crop_copy_post_ctrl_r_clear_state() {
   message << "timed out waiting for observable Shift+X state after undo+Ctrl+R (expected swapped=false right=2 left=" << crop_a_token << " right cleared)";
   if (saw_new_line) {
     message << "; last probe left crop=" << (crop_token(last_new_line_dump.left).empty() ? "(none)" : crop_token(last_new_line_dump.left))
-            << " right crop=" << (crop_token(last_new_line_dump.right).empty() ? "(none)" : crop_token(last_new_line_dump.right)) << " swapped=" << last_new_line_dump.swapped
-            << " right=" << last_new_line_dump.right_id;
+            << " right crop=" << (crop_token(last_new_line_dump.right).empty() ? "(none)" : crop_token(last_new_line_dump.right)) << " swapped=" << last_new_line_dump.swapped << " right=" << last_new_line_dump.right_id;
   } else {
     message << "; Shift+X probes did not produce any new Display state lines";
   }
@@ -860,8 +858,7 @@ void push_relative_seek(const int direction) {
 }
 
 void print_stress_failure(const Scenario scenario, const char* message, const std::vector<double>& times, const double expected_storm) {
-  std::fprintf(stderr, "FAIL %s iteration=%s events_pushed=%d watchdog=%s", scenario_name(scenario), stress_iteration_label(), events_pushed.load(),
-               watchdog_fired.load() ? "fired" : "idle");
+  std::fprintf(stderr, "FAIL %s iteration=%s events_pushed=%d watchdog=%s", scenario_name(scenario), stress_iteration_label(), events_pushed.load(), watchdog_fired.load() ? "fired" : "idle");
   if (times.size() > 0) {
     std::fprintf(stderr, " T0=%.3f", times[0]);
   }
@@ -885,8 +882,7 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     }
     if (!finished.load()) {
       watchdog_fired.store(true);
-      std::fprintf(stderr, "watchdog: pushing SDL_QUIT after %ds deadline (%s iteration=%s)\n", watchdog_ticks / 10, scenario_name(scenario),
-                   stress_iteration_label());
+      std::fprintf(stderr, "watchdog: pushing SDL_QUIT after %ds deadline (%s iteration=%s)\n", watchdog_ticks / 10, scenario_name(scenario), stress_iteration_label());
       push_quit();
     }
   });
@@ -1643,9 +1639,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       }
 
       constexpr double kTol = 0.08;
-      const auto step_near = [&](const double got, const double expect) {
-        return std::fabs(got - expect) <= kTol;
-      };
+      const auto step_near = [&](const double got, const double expect) { return std::fabs(got - expect) <= kTol; };
       const double exp_d1 = expect_forward_steps.size() > 0 ? expect_forward_steps[0] : 1.0;
       const double exp_d2 = expect_forward_steps.size() > 1 ? expect_forward_steps[1] : exp_d1;
       const double exp_back = expect_backward_steps.size() > 0 ? expect_backward_steps[0] : -exp_d2;
@@ -1783,9 +1777,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     if (times.empty()) {
       std::fprintf(stderr, "FAIL union-time-shift expected observed union timestamps, got none\n");
       exit_code = EXIT_FAILURE;
-    } else if (output.find("Keyframe navigation unavailable") != std::string::npos ||
-               output.find("LandingFailed") != std::string::npos ||
-               output.find("Landing failed") != std::string::npos) {
+    } else if (output.find("Keyframe navigation unavailable") != std::string::npos || output.find("LandingFailed") != std::string::npos || output.find("Landing failed") != std::string::npos) {
       std::fprintf(stderr, "FAIL union-time-shift reported keyframe navigation failure\n");
       exit_code = EXIT_FAILURE;
     } else {
@@ -1817,14 +1809,12 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
         } else {
           for (size_t i = 0; i < expected.size(); ++i) {
             if (!near(times[i], expected[i])) {
-              std::fprintf(stderr, "FAIL union-time-shift index %zu expected ~%.3f got %.3f (shift_ms=%" PRId64 ")\n", i, expected[i], times[i],
-                           config.time_shift.offset_ms);
+              std::fprintf(stderr, "FAIL union-time-shift index %zu expected ~%.3f got %.3f (shift_ms=%" PRId64 ")\n", i, expected[i], times[i], config.time_shift.offset_ms);
               ok = false;
               break;
             }
             if (i > 0 && !(times[i] > times[i - 1] + 0.005)) {
-              std::fprintf(stderr, "FAIL union-time-shift stall at %zu: %.3f -> %.3f (shift_ms=%" PRId64 ")\n", i, times[i - 1], times[i],
-                           config.time_shift.offset_ms);
+              std::fprintf(stderr, "FAIL union-time-shift stall at %zu: %.3f -> %.3f (shift_ms=%" PRId64 ")\n", i, times[i - 1], times[i], config.time_shift.offset_ms);
               ok = false;
               break;
             }
@@ -1854,8 +1844,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
             }
           }
         } else if ((dense_left_fixture || sparse_left_reversed) && std::fabs(shift_s - 0.04) <= 0.001) {
-          const std::vector<double> lattice =
-              dense_left_fixture ? synthetic_union_lattice_dense_left_sparse_right(shift_s) : synthetic_union_lattice_sparse_left_dense_right(shift_s);
+          const std::vector<double> lattice = dense_left_fixture ? synthetic_union_lattice_dense_left_sparse_right(shift_s) : synthetic_union_lattice_sparse_left_dense_right(shift_s);
 
           if (times.size() != expected_samples) {
             std::fprintf(stderr, "FAIL union-time-shift expected %zu timestamps (steps=%d), got %zu\n", expected_samples, step_count, times.size());
@@ -1869,8 +1858,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
           for (size_t i = 1; ok && i < times.size(); ++i) {
             const double delta = times[i] - times[i - 1];
             if (!(times[i] > times[i - 1] + kUnionMinForwardStepS)) {
-              std::fprintf(stderr, "FAIL union-time-shift stall at %zu: %.3f -> %.3f (shift_ms=%" PRId64 ")\n", i, times[i - 1], times[i],
-                           config.time_shift.offset_ms);
+              std::fprintf(stderr, "FAIL union-time-shift stall at %zu: %.3f -> %.3f (shift_ms=%" PRId64 ")\n", i, times[i - 1], times[i], config.time_shift.offset_ms);
               ok = false;
               break;
             }
@@ -1886,8 +1874,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
               break;
             }
             if (!near_union_lattice(times[i], successor)) {
-              std::fprintf(stderr, "FAIL union-time-shift index %zu expected next union key ~%.3f got %.3f (prev=%.3f shift_ms=%" PRId64 ")\n", i,
-                           successor, times[i], times[i - 1], config.time_shift.offset_ms);
+              std::fprintf(stderr, "FAIL union-time-shift index %zu expected next union key ~%.3f got %.3f (prev=%.3f shift_ms=%" PRId64 ")\n", i, successor, times[i], times[i - 1], config.time_shift.offset_ms);
               ok = false;
               break;
             }
@@ -2279,8 +2266,8 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     auto fail_dynamic = [&](const char* message) {
       std::fprintf(stderr, "FAIL dynamic-swap: %s\n", message);
       for (size_t i = 0; i < dumps.size(); ++i) {
-        std::fprintf(stderr, "dump %zu: aspect=%s swapped=%s window=%s content=%s ref_dar=%s visual_left=%s visual_right=%s\n", i, dumps[i].aspect.c_str(), dumps[i].swapped.c_str(), dumps[i].window.c_str(),
-                     dumps[i].content.c_str(), dumps[i].ref_dar.c_str(), dumps[i].visual_left.c_str(), dumps[i].visual_right.c_str());
+        std::fprintf(stderr, "dump %zu: aspect=%s swapped=%s window=%s content=%s ref_dar=%s visual_left=%s visual_right=%s\n", i, dumps[i].aspect.c_str(), dumps[i].swapped.c_str(), dumps[i].window.c_str(), dumps[i].content.c_str(),
+                     dumps[i].ref_dar.c_str(), dumps[i].visual_left.c_str(), dumps[i].visual_right.c_str());
       }
       std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
       exit_code = EXIT_FAILURE;

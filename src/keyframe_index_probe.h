@@ -15,8 +15,7 @@ bool probe_index_entry_presentation(AVFormatContext* format_context, const int v
 // (reference keyframe, candidate neighbor, and one offset sample when unverified).
 // Restores demuxer read position to restore_demuxer_seconds on success; marks snapshot
 // unavailable on failure.
-bool prepare_adjacent_keyframe_probe(AVFormatContext* format_context, const int video_stream_index, KeyframeIndexSnapshot& snapshot, const int direction,
-                                     const float reference_demuxer_seconds);
+bool prepare_adjacent_keyframe_probe(AVFormatContext* format_context, const int video_stream_index, KeyframeIndexSnapshot& snapshot, const int direction, const float reference_demuxer_seconds);
 
 KeyframeIndexSnapshot capture_verified_keyframe_index_snapshot(AVFormatContext* format_context, const int video_stream_index, const float video_start_time_seconds);
 

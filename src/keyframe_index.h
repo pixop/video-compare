@@ -6,8 +6,8 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavformat/avio.h>
 #include <libavformat/version.h>
-#include <libavutil/rational.h>
 #include <libavutil/avutil.h>
+#include <libavutil/rational.h>
 }
 
 namespace playback_keyframe {

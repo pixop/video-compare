@@ -80,9 +80,15 @@ KeyframeNavigationBegin KeyframeNavigation::begin_frame(const int keyframe_navig
   return result;
 }
 
-KeyframeNavigationResolve KeyframeNavigation::resolve_step(const int step_direction, Demuxer& left_demuxer, Demuxer& right_demuxer, const playback_seek::SeekRequest& seek_request,
-                                                            const size_t active_right_index, const float displayed_left_demuxer_seconds, const bool displayed_left_valid,
-                                                            const float displayed_right_demuxer_seconds, const bool displayed_right_valid) {
+KeyframeNavigationResolve KeyframeNavigation::resolve_step(const int step_direction,
+                                                           Demuxer& left_demuxer,
+                                                           Demuxer& right_demuxer,
+                                                           const playback_seek::SeekRequest& seek_request,
+                                                           const size_t active_right_index,
+                                                           const float displayed_left_demuxer_seconds,
+                                                           const bool displayed_left_valid,
+                                                           const float displayed_right_demuxer_seconds,
+                                                           const bool displayed_right_valid) {
   KeyframeNavigationResolve resolved;
 
   if (step_direction == 0) {
@@ -95,8 +101,8 @@ KeyframeNavigationResolve KeyframeNavigation::resolve_step(const int step_direct
     return resolved;
   }
 
-  const float reference_comparison_timeline = keyframe_navigation_reference_comparison_timeline(cursor_, active_right_index, seek_request, displayed_left_demuxer_seconds,
-                                                                                                  displayed_left_valid, displayed_right_demuxer_seconds, displayed_right_valid, seek_request.shortest_duration);
+  const float reference_comparison_timeline = keyframe_navigation_reference_comparison_timeline(cursor_, active_right_index, seek_request, displayed_left_demuxer_seconds, displayed_left_valid, displayed_right_demuxer_seconds,
+                                                                                                displayed_right_valid, seek_request.shortest_duration);
 
   const bool left_indexed = left_demuxer.index_navigation_supported();
   const bool right_indexed = right_demuxer.index_navigation_supported();
@@ -113,26 +119,22 @@ KeyframeNavigationResolve KeyframeNavigation::resolve_step(const int step_direct
     return resolved;
   }
 
-  const float left_adjacent_reference = union_left_adjacent_reference_demuxer_seconds(seek_request, reference_comparison_timeline, displayed_left_demuxer_seconds,
-                                                                                      displayed_left_valid, seek_request.shortest_duration);
+  const float left_adjacent_reference = union_left_adjacent_reference_demuxer_seconds(seek_request, reference_comparison_timeline, displayed_left_demuxer_seconds, displayed_left_valid, seek_request.shortest_duration);
 
   const UnionRightReference right_reference =
-      right_reference_for_union_navigation(cursor_, active_right_index, seek_request, reference_comparison_timeline, right_indexed, displayed_right_valid,
-                                           displayed_right_demuxer_seconds, seek_request.shortest_duration);
+      right_reference_for_union_navigation(cursor_, active_right_index, seek_request, reference_comparison_timeline, right_indexed, displayed_right_valid, displayed_right_demuxer_seconds, seek_request.shortest_duration);
 
-  const AdjacentKeyframe left_adjacent =
-      left_indexed ? left_demuxer.adjacent_keyframe(step_direction, left_adjacent_reference) : AdjacentKeyframe{};
+  const AdjacentKeyframe left_adjacent = left_indexed ? left_demuxer.adjacent_keyframe(step_direction, left_adjacent_reference) : AdjacentKeyframe{};
   AdjacentKeyframe right_adjacent;
   if (right_indexed && right_reference.query_adjacent) {
-    const float right_adjacent_reference = union_right_adjacent_reference_demuxer_seconds(
-        seek_request, active_right_index, reference_comparison_timeline, step_direction, right_reference.demuxer_seconds, seek_request.shortest_duration);
+    const float right_adjacent_reference = union_right_adjacent_reference_demuxer_seconds(seek_request, active_right_index, reference_comparison_timeline, step_direction, right_reference.demuxer_seconds, seek_request.shortest_duration);
     right_adjacent = right_demuxer.adjacent_keyframe(step_direction, right_adjacent_reference);
   } else if (right_indexed) {
     right_adjacent.status = AdjacentKeyframeStatus::Unavailable;
   }
 
-  const UnionKeyframeSelection selection = select_union_keyframe_candidate(step_direction, reference_comparison_timeline, left_adjacent, right_adjacent, left_indexed, right_indexed,
-                                                                            seek_request, active_right_index, seek_request.shortest_duration);
+  const UnionKeyframeSelection selection =
+      select_union_keyframe_candidate(step_direction, reference_comparison_timeline, left_adjacent, right_adjacent, left_indexed, right_indexed, seek_request, active_right_index, seek_request.shortest_duration);
 
   if (!selection.found) {
     pending_steps_.clear();
@@ -155,8 +157,12 @@ KeyframeNavigationResolve KeyframeNavigation::resolve_step(const int step_direct
   return resolved;
 }
 
-KeyframeNavigationStatus KeyframeNavigation::verify_landing_from_frames(const KeyframeNavigationResolve& resolve, const size_t active_right_index, const AVFrame* left_frame,
-                                                                        const Demuxer& left_demuxer, const AVFrame* right_frame, const Demuxer& right_demuxer) {
+KeyframeNavigationStatus KeyframeNavigation::verify_landing_from_frames(const KeyframeNavigationResolve& resolve,
+                                                                        const size_t active_right_index,
+                                                                        const AVFrame* left_frame,
+                                                                        const Demuxer& left_demuxer,
+                                                                        const AVFrame* right_frame,
+                                                                        const Demuxer& right_demuxer) {
   const bool owner_left = resolve.candidate_owner == SideType::Left;
   float landed_demuxer = 0.0F;
   bool landed_valid = false;
@@ -174,8 +180,7 @@ KeyframeNavigationStatus KeyframeNavigation::verify_landing_from_frames(const Ke
   return verify_landing(active_right_index, landed_demuxer, landed_valid, resolve.target_demuxer_position, resolve.comparison_timeline_position);
 }
 
-KeyframeNavigationStatus KeyframeNavigation::verify_landing(const size_t active_right_index, const float landed_demuxer_seconds, const bool landed_valid,
-                                                            const float target_demuxer_position, const float comparison_timeline_position) {
+KeyframeNavigationStatus KeyframeNavigation::verify_landing(const size_t active_right_index, const float landed_demuxer_seconds, const bool landed_valid, const float target_demuxer_position, const float comparison_timeline_position) {
   (void)active_right_index;
   constexpr float kKeyframeLandingTol = 0.002F;
   const bool keyframe_landing_ok = landed_valid && std::fabs(landed_demuxer_seconds - target_demuxer_position) <= kKeyframeLandingTol;

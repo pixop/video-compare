@@ -1,12 +1,12 @@
 #define SDL_MAIN_HANDLED
-#include "font_selection.h"
-#include "source_code_pro_regular_ttf.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "font_selection.h"
+#include "source_code_pro_regular_ttf.h"
 extern "C" {
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
@@ -203,8 +203,7 @@ static void test_forced_modes() {
 
 static void test_format_custom_font_open_error() {
   const std::string path = "/tmp/My Font.ttf";
-  expect(format_custom_font_open_error(path, 16, "small text", "Couldn't open /tmp/My Font.ttf: No such file or directory") ==
-             "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): No such file or directory",
+  expect(format_custom_font_open_error(path, 16, "small text", "Couldn't open /tmp/My Font.ttf: No such file or directory") == "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): No such file or directory",
          "strip duplicated path from common SDL_ttf error");
 
   expect(format_custom_font_open_error(path, 16, "small text", "Couldn't open /tmp/My Font.ttf") == "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): unknown error",
@@ -220,28 +219,20 @@ static void test_format_custom_font_open_error() {
   expect(format_custom_font_open_error(path, 16, "small text", "") == "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): unknown error", "empty ttf error");
 
   const std::string spaced_path = "/path/with spaces/font";
-  expect(format_custom_font_open_error(spaced_path, 16, "small text", "Couldn't open /path/with spaces/font: permission denied") ==
-             "failed to open custom UI font '/path/with spaces/font' for small text (16 pt): permission denied",
+  expect(format_custom_font_open_error(spaced_path, 16, "small text", "Couldn't open /path/with spaces/font: permission denied") == "failed to open custom UI font '/path/with spaces/font' for small text (16 pt): permission denied",
          "strip duplicated path when path contains spaces");
 
-  expect(format_custom_font_open_error(spaced_path, 16, "small text", "Couldn't open /path/with spaces/font") ==
-             "failed to open custom UI font '/path/with spaces/font' for small text (16 pt): unknown error",
+  expect(format_custom_font_open_error(spaced_path, 16, "small text", "Couldn't open /path/with spaces/font") == "failed to open custom UI font '/path/with spaces/font' for small text (16 pt): unknown error",
          "strip path-only SDL_ttf error when path contains spaces");
 
-  expect(format_custom_font_open_error(path, 16, "small text", "Couldn't open /tmp/My Font.ttf.bak: ignored") ==
-             "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): Couldn't open /tmp/My Font.ttf.bak: ignored",
+  expect(format_custom_font_open_error(path, 16, "small text", "Couldn't open /tmp/My Font.ttf.bak: ignored") == "failed to open custom UI font '/tmp/My Font.ttf' for small text (16 pt): Couldn't open /tmp/My Font.ttf.bak: ignored",
          "do not strip when path is only a filename prefix");
 
   const std::string boundary_path = "/tmp/font.ttf";
-  expect(format_custom_font_open_error(boundary_path, 16, "small text", "Couldn't open /tmp/font.ttf: No such file") ==
-             "failed to open custom UI font '/tmp/font.ttf' for small text (16 pt): No such file",
+  expect(format_custom_font_open_error(boundary_path, 16, "small text", "Couldn't open /tmp/font.ttf: No such file") == "failed to open custom UI font '/tmp/font.ttf' for small text (16 pt): No such file",
          "strip strerror form at exact path boundary");
-  expect(format_custom_font_open_error(boundary_path, 16, "small text", "Couldn't open /tmp/font.ttf") ==
-             "failed to open custom UI font '/tmp/font.ttf' for small text (16 pt): unknown error",
-         "strip path-only form at exact path boundary");
-  expect(format_custom_font_open_error(boundary_path, 16, "small text", "Couldn't open /tmp/font.ttf\r\n") ==
-             "failed to open custom UI font '/tmp/font.ttf' for small text (16 pt): unknown error",
-         "strip path-only form with trailing CRLF");
+  expect(format_custom_font_open_error(boundary_path, 16, "small text", "Couldn't open /tmp/font.ttf") == "failed to open custom UI font '/tmp/font.ttf' for small text (16 pt): unknown error", "strip path-only form at exact path boundary");
+  expect(format_custom_font_open_error(boundary_path, 16, "small text", "Couldn't open /tmp/font.ttf\r\n") == "failed to open custom UI font '/tmp/font.ttf' for small text (16 pt): unknown error", "strip path-only form with trailing CRLF");
   expect(format_custom_font_open_error(boundary_path, 16, "small text", "Couldn't open /tmp/font.ttf.backup: No such file") ==
              "failed to open custom UI font '/tmp/font.ttf' for small text (16 pt): Couldn't open /tmp/font.ttf.backup: No such file",
          "do not strip longer path sharing the same prefix");

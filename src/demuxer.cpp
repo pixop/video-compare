@@ -5,8 +5,7 @@
 #include "playback_keyframe.h"
 #include "string_utils.h"
 
-Demuxer::Demuxer(const Side& side, const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options)
-    : SideAware(side), demuxer_name_(demuxer_name), file_name_(file_name) {
+Demuxer::Demuxer(const Side& side, const std::string& demuxer_name, const std::string& file_name, AVDictionary* demuxer_options, const AVDictionary* decoder_options) : SideAware(side), demuxer_name_(demuxer_name), file_name_(file_name) {
   ScopedLogSide scoped_log_side(side);
 
   if (demuxer_options != nullptr) {
@@ -67,8 +66,7 @@ Demuxer::Demuxer(const Side& side, const std::string& demuxer_name, const std::s
 
   av_freep(&opts_for_streams);
 
-  keyframe_navigation_seekable_ = format_context_ != nullptr && format_context_->pb != nullptr &&
-                                  (format_context_->pb->seekable & AVIO_SEEKABLE_NORMAL) != 0;
+  keyframe_navigation_seekable_ = format_context_ != nullptr && format_context_->pb != nullptr && (format_context_->pb->seekable & AVIO_SEEKABLE_NORMAL) != 0;
 }
 
 Demuxer::~Demuxer() {
@@ -221,8 +219,7 @@ bool Demuxer::ensure_keyframe_index_initialized() {
   }
 
   keyframe_index_init_attempted_ = true;
-  keyframe_index_snapshot_ =
-      playback_keyframe::capture_keyframe_index_snapshot(probe_format_context_, probe_video_stream_index_, probe_video_start_time_seconds());
+  keyframe_index_snapshot_ = playback_keyframe::capture_keyframe_index_snapshot(probe_format_context_, probe_video_stream_index_, probe_video_start_time_seconds());
   return playback_keyframe::raw_index_has_keyframes(keyframe_index_snapshot_);
 #else
   keyframe_index_init_attempted_ = true;

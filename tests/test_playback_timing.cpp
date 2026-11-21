@@ -1,7 +1,7 @@
-#include "playback_timing.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include "playback_timing.h"
 
 static int failures = 0;
 

@@ -1,14 +1,14 @@
-#include "core_types.h"
-#include "keyframe_index.h"
-#include "keyframe_index_probe.h"
-#include "playback_keyframe.h"
-#include "playback_seek.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
 #include <string>
 #include <vector>
+#include "core_types.h"
+#include "keyframe_index.h"
+#include "keyframe_index_probe.h"
+#include "playback_keyframe.h"
+#include "playback_seek.h"
 extern "C" {
 #include <libavformat/avformat.h>
 }
@@ -113,12 +113,7 @@ static void test_synthetic_reference_index_ignores_non_keyframes() {
   snapshot.presentation_mapping_verified = true;
   snapshot.time_base = AVRational{1, 25};
   snapshot.entries = {
-      {-2, AVINDEX_KEYFRAME},
-      {5, 0},
-      {8, 0},
-      {10, AVINDEX_KEYFRAME},
-      {16, 0},
-      {22, AVINDEX_KEYFRAME},
+      {-2, AVINDEX_KEYFRAME}, {5, 0}, {8, 0}, {10, AVINDEX_KEYFRAME}, {16, 0}, {22, AVINDEX_KEYFRAME},
   };
 
   constexpr int64_t kPresentationOffset = 2;
@@ -150,8 +145,7 @@ static void test_keyframe_navigation_cursor_and_reference() {
   unity_request.time_shift_multiplier = AVRational{1, 1};
   const float displayed_right = 1.041667F;
   const float from_display_right = playback_keyframe::keyframe_navigation_reference_comparison_timeline(cursor, 0, unity_request, 0.0F, false, displayed_right, true, unity_request.shortest_duration);
-  const playback_keyframe::MappedPosition expected_mapped =
-      playback_keyframe::comparison_timeline_for_right_demuxer_position(unity_request, 0, displayed_right, unity_request.shortest_duration);
+  const playback_keyframe::MappedPosition expected_mapped = playback_keyframe::comparison_timeline_for_right_demuxer_position(unity_request, 0, displayed_right, unity_request.shortest_duration);
   expect_bool("mapped right for reference ok", expected_mapped.ok, true);
   if (expected_mapped.ok) {
     expect_near("reference uses mapped right when left not shown", from_display_right, expected_mapped.seconds);
@@ -209,19 +203,7 @@ static void test_synthetic_pts_dts_mapping_navigation() {
   snapshot.time_base = AVRational{1, 25};
   snapshot.video_start_time_seconds = 0.0F;
   snapshot.entries = {
-      {-2, AVINDEX_KEYFRAME},
-      {4, 0},
-      {7, 0},
-      {10, AVINDEX_KEYFRAME},
-      {16, 0},
-      {19, 0},
-      {22, AVINDEX_KEYFRAME},
-      {28, 0},
-      {34, AVINDEX_KEYFRAME},
-      {40, 0},
-      {46, AVINDEX_KEYFRAME},
-      {52, 0},
-      {58, AVINDEX_KEYFRAME},
+      {-2, AVINDEX_KEYFRAME}, {4, 0}, {7, 0}, {10, AVINDEX_KEYFRAME}, {16, 0}, {19, 0}, {22, AVINDEX_KEYFRAME}, {28, 0}, {34, AVINDEX_KEYFRAME}, {40, 0}, {46, AVINDEX_KEYFRAME}, {52, 0}, {58, AVINDEX_KEYFRAME},
   };
 
   constexpr int64_t kPresentationOffset = 2;
@@ -333,8 +315,7 @@ static void test_union_empty_right_unmapped_left_boundary_is_unavailable() {
   request.left_pts = 0;
   request.rights.clear();
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 1.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_ok(2.0F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(+1, 1.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_ok(2.0F), true, true, request, 0, request.shortest_duration);
   expect_bool("unmapped right with left boundary not at boundary", selection.at_boundary, false);
   expect_bool("unmapped right with left boundary unavailable", selection.found, false);
 }
@@ -345,11 +326,8 @@ static void test_union_backward_shifted_right_before_start_is_boundary(const int
   request.unadjusted_static_right_time_shift = static_shift_avtime;
   request.time_shift_multiplier = AVRational{1, 1};
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      -1, 0.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_ok(0.0F), true, true, request, 0, request.shortest_duration);
-  const char* label = static_shift_avtime == 40000   ? "+40ms backward at origin is boundary"
-                      : static_shift_avtime == 0       ? "zero shift backward at origin is boundary"
-                      : "-40ms backward at origin is boundary";
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(-1, 0.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_ok(0.0F), true, true, request, 0, request.shortest_duration);
+  const char* label = static_shift_avtime == 40000 ? "+40ms backward at origin is boundary" : static_shift_avtime == 0 ? "zero shift backward at origin is boundary" : "-40ms backward at origin is boundary";
   expect_bool(label, selection.at_boundary, true);
   expect_bool("shifted backward at origin not found", selection.found, false);
 }
@@ -365,8 +343,7 @@ static void test_union_forward_right_unmapped_stays_unavailable() {
   request.left_pts = 0;
   request.rights.clear();
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 0.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_ok(1.0F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(+1, 0.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_ok(1.0F), true, true, request, 0, request.shortest_duration);
   expect_bool("forward right unmapped not at boundary", selection.at_boundary, false);
   expect_bool("forward right unmapped unavailable", selection.found, false);
 }
@@ -376,8 +353,7 @@ static void test_union_backward_right_unmapped_no_rights_stays_unavailable() {
   request.left_pts = 0;
   request.rights.clear();
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      -1, 0.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_ok(-0.04F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(-1, 0.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_ok(-0.04F), true, true, request, 0, request.shortest_duration);
   expect_bool("backward right unmapped no rights not at boundary", selection.at_boundary, false);
   expect_bool("backward right unmapped no rights unavailable", selection.found, false);
 }
@@ -388,8 +364,7 @@ static void test_union_backward_reachable_right_key_still_selected() {
   request.unadjusted_static_right_time_shift = 40000;
   request.time_shift_multiplier = AVRational{1, 1};
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      -1, 1.041667F, synthetic_adjacent_ok(0.0F), synthetic_adjacent_ok(0.0F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(-1, 1.041667F, synthetic_adjacent_ok(0.0F), synthetic_adjacent_ok(0.0F), true, true, request, 0, request.shortest_duration);
   expect_bool("backward with reachable union key finds candidate", selection.found, true);
   if (selection.found) {
     expect_near("backward union lands on first key", selection.candidate.comparison_timeline_position, 0.0F);
@@ -402,8 +377,7 @@ static void test_union_backward_left_maps_before_negative_shifted_right_start() 
   request.unadjusted_static_right_time_shift = -80000;
   request.time_shift_multiplier = AVRational{1, 1};
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      -1, 0.083F, synthetic_adjacent_ok(0.04F), synthetic_adjacent_at_boundary(), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(-1, 0.083F, synthetic_adjacent_ok(0.04F), synthetic_adjacent_at_boundary(), true, true, request, 0, request.shortest_duration);
   expect_bool("negative shift left 0.04 maps right before start", selection.at_boundary, true);
   expect_bool("negative shift left 0.04 not selected", selection.found, false);
 }
@@ -414,8 +388,8 @@ static void test_union_backward_negative_shift_reachable_left_still_selected() {
   request.unadjusted_static_right_time_shift = -80000;
   request.time_shift_multiplier = AVRational{1, 1};
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      -1, 1.041667F, synthetic_adjacent_ok(0.083333F), synthetic_adjacent_at_boundary(), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection =
+      playback_keyframe::select_union_keyframe_candidate(-1, 1.041667F, synthetic_adjacent_ok(0.083333F), synthetic_adjacent_at_boundary(), true, true, request, 0, request.shortest_duration);
   expect_bool("negative shift backward reachable left found", selection.found, true);
   if (selection.found) {
     expect_near("negative shift backward reachable left lands", selection.candidate.comparison_timeline_position, 0.083333F);
@@ -426,8 +400,8 @@ static void test_union_empty_right_unavailable_left_boundary_is_unavailable() {
   playback_seek::SeekRequest request = sample_seek_request();
   request.left_pts = 0;
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 1.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_unavailable(), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection =
+      playback_keyframe::select_union_keyframe_candidate(+1, 1.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_unavailable(), true, true, request, 0, request.shortest_duration);
   expect_bool("right unavailable left boundary not union boundary", selection.at_boundary, false);
   expect_bool("right unavailable left boundary not found", selection.found, false);
 }
@@ -436,8 +410,8 @@ static void test_union_empty_both_at_boundary() {
   playback_seek::SeekRequest request = sample_seek_request();
   request.left_pts = 0;
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 2.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_at_boundary(), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection =
+      playback_keyframe::select_union_keyframe_candidate(+1, 2.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_at_boundary(), true, true, request, 0, request.shortest_duration);
   expect_bool("both indexed at boundary", selection.at_boundary, true);
   expect_bool("both indexed at boundary not found", selection.found, false);
 }
@@ -446,8 +420,7 @@ static void test_union_left_candidate_right_unavailable_query() {
   playback_seek::SeekRequest request = sample_seek_request();
   request.left_pts = 0;
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 0.0F, synthetic_adjacent_ok(1.0F), synthetic_adjacent_unavailable(), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(+1, 0.0F, synthetic_adjacent_ok(1.0F), synthetic_adjacent_unavailable(), true, true, request, 0, request.shortest_duration);
   expect_bool("left works when right query unavailable", selection.found, true);
   if (selection.found) {
     expect_bool("left owner when right unavailable", selection.candidate.owner == SideType::Left, true);
@@ -494,8 +467,7 @@ static void test_union_keyframe_prefers_nearest_forward() {
   request.time_shift_multiplier = AVRational{1, 1};
 
   const float reference = 0.5F;
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, reference, synthetic_adjacent_ok(1.0F), synthetic_adjacent_ok(2.0F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(+1, reference, synthetic_adjacent_ok(1.0F), synthetic_adjacent_ok(2.0F), true, true, request, 0, request.shortest_duration);
   expect_bool("union forward found", selection.found, true);
   if (selection.found) {
     expect_near("union forward nearest on comparison timeline", selection.candidate.comparison_timeline_position, 1.0F);
@@ -510,8 +482,7 @@ static void test_union_keyframe_coincident_dedupes() {
   request.time_shift_multiplier = AVRational{1, 1};
 
   const float reference = 0.0F;
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, reference, synthetic_adjacent_ok(1.0F), synthetic_adjacent_ok(1.0F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(+1, reference, synthetic_adjacent_ok(1.0F), synthetic_adjacent_ok(1.0F), true, true, request, 0, request.shortest_duration);
   expect_bool("union coincident forward found", selection.found, true);
   if (selection.found) {
     expect_near("union coincident lands once", selection.candidate.comparison_timeline_position, 1.0F);
@@ -527,8 +498,8 @@ static void test_union_keyframe_respects_left_start_offset() {
   request.time_shift_multiplier = AVRational{1, 1};
 
   const float reference = 0.5F;
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, reference, synthetic_adjacent_ok(1.5F), synthetic_adjacent_at_boundary(), true, false, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection =
+      playback_keyframe::select_union_keyframe_candidate(+1, reference, synthetic_adjacent_ok(1.5F), synthetic_adjacent_at_boundary(), true, false, request, 0, request.shortest_duration);
   expect_bool("union left start offset forward", selection.found, true);
   if (selection.found) {
     expect_near("union left start offset lands", selection.candidate.comparison_timeline_position, 1.5F);
@@ -539,8 +510,8 @@ static void test_union_keyframe_no_next_at_boundary() {
   playback_seek::SeekRequest request = sample_seek_request();
   request.left_pts = 0;
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 2.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_at_boundary(), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection =
+      playback_keyframe::select_union_keyframe_candidate(+1, 2.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_at_boundary(), true, true, request, 0, request.shortest_duration);
   expect_bool("union no next at boundary", selection.at_boundary, true);
   expect_bool("union no next not found", selection.found, false);
 }
@@ -556,8 +527,7 @@ static void test_union_right_adjacent_reference_skips_current_key() {
   expect_bool("right adjacent ref after landed vertex advances", biased > mapped + 1e-3F, true);
   expect_bool("right adjacent ref does not skip a 48fps frame", biased < mapped + 1.0F / 48.0F, true);
 
-  const playback_keyframe::UnionKeyframeSelection next = playback_keyframe::select_union_keyframe_candidate(
-      +1, 1.002F, synthetic_adjacent_ok(5.208333F), synthetic_adjacent_ok(2.083333F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection next = playback_keyframe::select_union_keyframe_candidate(+1, 1.002F, synthetic_adjacent_ok(5.208333F), synthetic_adjacent_ok(2.083333F), true, true, request, 0, request.shortest_duration);
   expect_bool("dense right union step after shifted vertex", next.found, true);
   if (next.found) {
     expect_bool("next dense right owner", next.candidate.owner == SideType::Right, true);
@@ -578,11 +548,10 @@ static void test_union_sparse_left_successive_right_owned_steps() {
     // After a right-owned seek, the sparse left display can lag behind the cursor.
     const float displayed_left = cursor.valid ? 2.604F : prior_cursor;
     request.left_pts = static_cast<int64_t>(displayed_left / AV_TIME_TO_SEC);
-    const float reference = playback_keyframe::keyframe_navigation_reference_comparison_timeline(
-        cursor, 0, request, displayed_left, true, 0.0F, false, request.shortest_duration);
+    const float reference = playback_keyframe::keyframe_navigation_reference_comparison_timeline(cursor, 0, request, displayed_left, true, 0.0F, false, request.shortest_duration);
     expect_near("sparse left cursor independent of lagging left frame", reference, prior_cursor);
-    const playback_keyframe::UnionKeyframeSelection next = playback_keyframe::select_union_keyframe_candidate(
-        +1, reference, synthetic_adjacent_ok(5.208333F), synthetic_adjacent_ok(right_key), true, true, request, 0, request.shortest_duration);
+    const playback_keyframe::UnionKeyframeSelection next =
+        playback_keyframe::select_union_keyframe_candidate(+1, reference, synthetic_adjacent_ok(5.208333F), synthetic_adjacent_ok(right_key), true, true, request, 0, request.shortest_duration);
     expect_bool("sparse left successive right step found", next.found, true);
     if (next.found) {
       expect_bool("sparse left successive right owner", next.candidate.owner == SideType::Right, true);
@@ -598,8 +567,8 @@ static void test_union_forward_from_common_5104_with_40ms_shift() {
   request.unadjusted_static_right_time_shift = 40000;
   request.left_pts = static_cast<int64_t>(5.104 / AV_TIME_TO_SEC);
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 5.104F, synthetic_adjacent_ok(5.208333F), synthetic_adjacent_ok(5.208333F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection =
+      playback_keyframe::select_union_keyframe_candidate(+1, 5.104F, synthetic_adjacent_ok(5.208333F), synthetic_adjacent_ok(5.208333F), true, true, request, 0, request.shortest_duration);
   expect_bool("forward from 5.104 finds candidate", selection.found, true);
   if (selection.found) {
     expect_bool("forward from 5.104 is right-owned", selection.candidate.owner == SideType::Right, true);
@@ -607,8 +576,8 @@ static void test_union_forward_from_common_5104_with_40ms_shift() {
   }
 
   request.unadjusted_static_right_time_shift = 42000;
-  const playback_keyframe::UnionKeyframeSelection bumped = playback_keyframe::select_union_keyframe_candidate(
-      +1, 5.104F, synthetic_adjacent_ok(5.208333F), synthetic_adjacent_ok(5.208333F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection bumped =
+      playback_keyframe::select_union_keyframe_candidate(+1, 5.104F, synthetic_adjacent_ok(5.208333F), synthetic_adjacent_ok(5.208333F), true, true, request, 0, request.shortest_duration);
   expect_bool("bumped +42ms still finds candidate", bumped.found, true);
   if (bumped.found) {
     expect_near("bumped +42ms maps earlier than canonical +40ms", bumped.candidate.comparison_timeline_position, 5.166333F);
@@ -621,8 +590,8 @@ static void test_shifted_raw_coincident_keyframes_are_distinct() {
   request.unadjusted_static_right_time_shift = 80000;
   request.left_pts = static_cast<int64_t>(4.167 / AV_TIME_TO_SEC);
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 4.167F, synthetic_adjacent_ok(5.208333F), synthetic_adjacent_ok(5.208333F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection =
+      playback_keyframe::select_union_keyframe_candidate(+1, 4.167F, synthetic_adjacent_ok(5.208333F), synthetic_adjacent_ok(5.208333F), true, true, request, 0, request.shortest_duration);
   expect_bool("coincident keys forward found", selection.found, true);
   if (selection.found) {
     expect_near("shifted raw-coincident right key maps earlier", selection.candidate.comparison_timeline_position, 5.128333F);
@@ -647,8 +616,8 @@ static void test_union_backward_keeps_distinct_shifted_right_key() {
   request.unadjusted_static_right_time_shift = 40000;
   request.time_shift_multiplier = AVRational{1, 1};
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      -1, 5.208F, synthetic_adjacent_ok(4.166667F), synthetic_adjacent_ok(5.208F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection =
+      playback_keyframe::select_union_keyframe_candidate(-1, 5.208F, synthetic_adjacent_ok(4.166667F), synthetic_adjacent_ok(5.208F), true, true, request, 0, request.shortest_duration);
   expect_bool("union backward with shift finds nearest right key", selection.found, true);
   if (selection.found) {
     expect_bool("union backward right owner", selection.candidate.owner == SideType::Right, true);
@@ -662,8 +631,7 @@ static void test_union_keyframe_backward_prefers_left() {
   request.unadjusted_static_right_time_shift = 0;
   request.time_shift_multiplier = AVRational{1, 1};
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      -1, 2.0F, synthetic_adjacent_ok(1.0F), synthetic_adjacent_ok(1.5F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(-1, 2.0F, synthetic_adjacent_ok(1.0F), synthetic_adjacent_ok(1.5F), true, true, request, 0, request.shortest_duration);
   expect_bool("union backward found", selection.found, true);
   if (selection.found) {
     expect_near("union backward nearest", selection.candidate.comparison_timeline_position, 1.5F);
@@ -686,12 +654,11 @@ static void test_union_static_right_shift_maps_right_candidate() {
   request.time_shift_multiplier = AVRational{1, 1};
 
   const float right_key = playback_keyframe::current_right_demuxer_position(request, 0) + 1.0F;
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 0.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_ok(right_key), false, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection =
+      playback_keyframe::select_union_keyframe_candidate(+1, 0.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_ok(right_key), false, true, request, 0, request.shortest_duration);
   expect_bool("union static shift finds right-only candidate", selection.found, true);
   if (selection.found) {
-    const playback_keyframe::MappedPosition mapped =
-        playback_keyframe::comparison_timeline_for_right_demuxer_position(request, 0, right_key, request.shortest_duration);
+    const playback_keyframe::MappedPosition mapped = playback_keyframe::comparison_timeline_for_right_demuxer_position(request, 0, right_key, request.shortest_duration);
     expect_bool("union static shift mapping ok", mapped.ok, true);
     if (mapped.ok) {
       expect_near("union static shift comparison position", selection.candidate.comparison_timeline_position, mapped.seconds);
@@ -705,12 +672,11 @@ static void test_union_nonunity_multiplier_maps_right_candidate() {
   request.unadjusted_static_right_time_shift = 0;
 
   const float right_key = playback_keyframe::current_right_demuxer_position(request, 0) + 0.5F;
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 0.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_ok(right_key), false, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection =
+      playback_keyframe::select_union_keyframe_candidate(+1, 0.0F, synthetic_adjacent_at_boundary(), synthetic_adjacent_ok(right_key), false, true, request, 0, request.shortest_duration);
   expect_bool("union non-unity finds right candidate", selection.found, true);
   if (selection.found) {
-    const playback_keyframe::MappedPosition mapped =
-        playback_keyframe::comparison_timeline_for_right_demuxer_position(request, 0, right_key, request.shortest_duration);
+    const playback_keyframe::MappedPosition mapped = playback_keyframe::comparison_timeline_for_right_demuxer_position(request, 0, right_key, request.shortest_duration);
     expect_bool("union non-unity mapping ok", mapped.ok, true);
     if (mapped.ok) {
       expect_near("union non-unity comparison position", selection.candidate.comparison_timeline_position, mapped.seconds);
@@ -722,8 +688,7 @@ static void test_union_mapping_failure_skips_right_candidate() {
   playback_seek::SeekRequest request = sample_seek_request();
   request.rights.clear();
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 0.0F, synthetic_adjacent_ok(1.0F), synthetic_adjacent_ok(2.0F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(+1, 0.0F, synthetic_adjacent_ok(1.0F), synthetic_adjacent_ok(2.0F), true, true, request, 0, request.shortest_duration);
   expect_bool("union mapping failure still finds left", selection.found, true);
   if (selection.found) {
     expect_bool("union mapping failure left owner", selection.candidate.owner == SideType::Left, true);
@@ -764,8 +729,7 @@ static void test_union_selection_cursor_ahead_of_lagging_right_display() {
   const playback_keyframe::UnionRightReference right_ref = playback_keyframe::right_reference_for_union_navigation(cursor, 0, request, 2.0F, true, true, 0.0F, request.shortest_duration);
   expect_bool("union selection right ref ok", right_ref.query_adjacent, true);
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 2.0F, synthetic_adjacent_ok(3.0F), synthetic_adjacent_ok(2.5F), true, true, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(+1, 2.0F, synthetic_adjacent_ok(3.0F), synthetic_adjacent_ok(2.5F), true, true, request, 0, request.shortest_duration);
   expect_bool("union selection found nearer right key", selection.found, true);
   if (selection.found) {
     expect_near("union selection lands nearer right future key", selection.candidate.comparison_timeline_position, 2.5F);
@@ -802,8 +766,7 @@ static void test_union_unindexed_right_fallback_left_only() {
   request.unadjusted_static_right_time_shift = 0;
   request.time_shift_multiplier = AVRational{1, 1};
 
-  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(
-      +1, 0.0F, synthetic_adjacent_ok(1.0F), synthetic_adjacent_ok(5.0F), true, false, request, 0, request.shortest_duration);
+  const playback_keyframe::UnionKeyframeSelection selection = playback_keyframe::select_union_keyframe_candidate(+1, 0.0F, synthetic_adjacent_ok(1.0F), synthetic_adjacent_ok(5.0F), true, false, request, 0, request.shortest_duration);
   expect_bool("union left-only indexed forward", selection.found, true);
   if (selection.found) {
     expect_near("union left-only landing", selection.candidate.comparison_timeline_position, 1.0F);
@@ -984,8 +947,7 @@ static void test_fixture_index_navigation(const std::string& path) {
   // Exercise the actual on-demand probe from positions between keyframes,
   // comparing against a fully probed index. This catches DTS-vs-PTS errors
   // that synthetic index-only tests cannot expose.
-  playback_keyframe::KeyframeIndexSnapshot lazy =
-      playback_keyframe::capture_keyframe_index_snapshot(format_context, video_stream, 0.0F);
+  playback_keyframe::KeyframeIndexSnapshot lazy = playback_keyframe::capture_keyframe_index_snapshot(format_context, video_stream, 0.0F);
   const std::vector<float> positions = keyframe_demuxer_positions_from_snapshot(snapshot);
   for (size_t i = 1; i < positions.size() && i < 4; ++i) {
     const float reference = 0.5F * (positions[i - 1] + positions[i]);
@@ -1203,8 +1165,7 @@ int main(int argc, char** argv) {
       AVFormatContext* format_context = nullptr;
       if (avformat_open_input(&format_context, hevc, nullptr, nullptr) >= 0 && avformat_find_stream_info(format_context, nullptr) >= 0) {
         const int video_stream = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-        const playback_keyframe::KeyframeIndexSnapshot hevc_snapshot =
-            playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream, 0.0F);
+        const playback_keyframe::KeyframeIndexSnapshot hevc_snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream, 0.0F);
         avformat_close_input(&format_context);
         expect_bool("real-hevc mapping verified", hevc_snapshot.presentation_mapping_verified, true);
         int64_t first_key_offset = 0;
@@ -1228,8 +1189,7 @@ int main(int argc, char** argv) {
         }
       }
 
-      const std::vector<float> hevc_keys = {0.0F,        1.041667F,   2.083333F,   3.125000F,   4.166667F,
-                                          5.208333F,   6.250000F,   7.291667F,   8.333333F,   9.375000F};
+      const std::vector<float> hevc_keys = {0.0F, 1.041667F, 2.083333F, 3.125000F, 4.166667F, 5.208333F, 6.250000F, 7.291667F, 8.333333F, 9.375000F};
       test_real_variable_gop_keyframes(hevc, "real-hevc", hevc_keys);
       test_real_hevc_forward_seek_overshoots(hevc);
       test_real_media_demuxer_keyframe_seek(hevc, "real-hevc-demuxer", {1.041667F, 2.083333F, 5.208333F}, {1.041667F, 2.083333F, 5.208333F});

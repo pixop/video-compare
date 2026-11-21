@@ -1189,8 +1189,7 @@ void VideoCompare::compare() {
 
       const int shift_right_frames = display_->get_shift_right_frames();
 
-      const auto make_seek_request = [&](float request_seek_relative, bool request_seek_from_start, bool request_force_seek_current_position, int request_shift_right_frames,
-                                         int64_t request_unadjusted_static_right_time_shift) {
+      const auto make_seek_request = [&](float request_seek_relative, bool request_seek_from_start, bool request_force_seek_current_position, int request_shift_right_frames, int64_t request_unadjusted_static_right_time_shift) {
         playback_seek::SeekRequest request;
         request.seek_relative = request_seek_relative;
         request.seek_from_start = request_seek_from_start;
@@ -1246,13 +1245,11 @@ void VideoCompare::compare() {
         const int64_t keyframe_static_shift = time_shift_offset_av_time_ + static_cast<int64_t>(total_right_time_shifted) * right_delta;
         const playback_seek::SeekRequest keyframe_request = make_seek_request(0.0F, false, false, 0, keyframe_static_shift);
 
-        const playback_keyframe::DisplayedDemuxerAnchors displayed_anchors = playback_keyframe::displayed_demuxer_anchors(
-            playback_keyframe::displayed_frame_at_offset(left.frames_, frame_offset), left_demuxer,
-            playback_keyframe::displayed_frame_at_offset(right_ptr->frames_, frame_offset), active_demuxer);
+        const playback_keyframe::DisplayedDemuxerAnchors displayed_anchors = playback_keyframe::displayed_demuxer_anchors(playback_keyframe::displayed_frame_at_offset(left.frames_, frame_offset), left_demuxer,
+                                                                                                                          playback_keyframe::displayed_frame_at_offset(right_ptr->frames_, frame_offset), active_demuxer);
 
-        keyframe_resolve = keyframe_navigation_.resolve_step(keyframe_step_direction, left_demuxer, active_demuxer, keyframe_request, active_right_index_,
-                                                             displayed_anchors.left_demuxer_seconds, displayed_anchors.left_valid, displayed_anchors.right_demuxer_seconds,
-                                                             displayed_anchors.right_valid);
+        keyframe_resolve = keyframe_navigation_.resolve_step(keyframe_step_direction, left_demuxer, active_demuxer, keyframe_request, active_right_index_, displayed_anchors.left_demuxer_seconds, displayed_anchors.left_valid,
+                                                             displayed_anchors.right_demuxer_seconds, displayed_anchors.right_valid);
         if (const char* nav_message = playback_keyframe::keyframe_navigation_message(keyframe_resolve.status)) {
           display_->set_pending_message(nav_message);
         }
@@ -1471,8 +1468,7 @@ void VideoCompare::compare() {
           }
 
           if (keyframe_seek) {
-            const playback_keyframe::KeyframeNavigationStatus landing_status = keyframe_navigation_.verify_landing_from_frames(
-                keyframe_resolve, active_right_index_, left.frame_.get(), left_demuxer, right_ptr->frame_.get(), active_demuxer);
+            const playback_keyframe::KeyframeNavigationStatus landing_status = keyframe_navigation_.verify_landing_from_frames(keyframe_resolve, active_right_index_, left.frame_.get(), left_demuxer, right_ptr->frame_.get(), active_demuxer);
             if (const char* nav_message = playback_keyframe::keyframe_navigation_message(landing_status)) {
               display_->set_pending_message(nav_message);
             }

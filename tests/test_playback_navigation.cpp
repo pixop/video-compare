@@ -1,7 +1,7 @@
-#include "playback_navigation.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include "playback_navigation.h"
 
 static int failures = 0;
 

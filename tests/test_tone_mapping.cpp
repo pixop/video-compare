@@ -1,12 +1,12 @@
-#include "tone_mapping.h"
 #include <algorithm>
-#include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "tone_mapping.h"
 extern "C" {
 #include <libavfilter/avfilter.h>
 #include <libavfilter/buffersink.h>
@@ -552,62 +552,46 @@ int main() {
   expect_true("clip boost=1 no peak inject", !clip_default.inject_peak_nits && !clip_default.inject_auto_tonemap_peak);
 
   const ToneMapFilterPlan clip_boost = build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Clip, 1.5F, 500, 500, true, true);
-  expect_eq_str("clip boost graph", join_filters(clip_boost.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=500,tonemap=clip:param=1.50000,zscale=p=bt709:t=iec61966-2-1");
+  expect_eq_str("clip boost graph", join_filters(clip_boost.post_filters), "format=gbrpf32,zscale=t=linear:npl=500,tonemap=clip:param=1.50000,zscale=p=bt709:t=iec61966-2-1");
 
   const ToneMapFilterPlan clip_rel = build_hdr_tone_map_filters(ToneMapping::Relative, ToneMapAlgorithm::Clip, 1.0F, 400, 800, true, true);
-  expect_eq_str("clip rel ratio", join_filters(clip_rel.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=400,tonemap=clip:param=0.50000,zscale=p=bt709:t=iec61966-2-1");
+  expect_eq_str("clip rel ratio", join_filters(clip_rel.post_filters), "format=gbrpf32,zscale=t=linear:npl=400,tonemap=clip:param=0.50000,zscale=p=bt709:t=iec61966-2-1");
 
   const ToneMapFilterPlan mobius = build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Mobius, 1.0F, 1000, 500, true, true);
-  expect_eq_str("mobius base graph", join_filters(mobius.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=mobius:peak=10.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
+  expect_eq_str("mobius base graph", join_filters(mobius.post_filters), "format=gbrpf32,zscale=t=linear:npl=100,tonemap=mobius:peak=10.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
 
   const ToneMapFilterPlan mobius_boost = build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Mobius, 2.0F, 1000, 500, true, true);
-  expect_eq_str("mobius boost uses exposure and scaled peak",
-                join_filters(mobius_boost.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=100,exposure=1.000000,tonemap=mobius:peak=20.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
+  expect_eq_str("mobius boost uses exposure and scaled peak", join_filters(mobius_boost.post_filters), "format=gbrpf32,zscale=t=linear:npl=100,exposure=1.000000,tonemap=mobius:peak=20.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
 
   const ToneMapFilterPlan hable = build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Hable, 1.0F, 1000, 500, true, true);
-  expect_eq_str("hable base graph", join_filters(hable.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=hable:peak=10.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
+  expect_eq_str("hable base graph", join_filters(hable.post_filters), "format=gbrpf32,zscale=t=linear:npl=100,tonemap=hable:peak=10.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
 
   const ToneMapFilterPlan hable_boost = build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Hable, 2.0F, 1000, 500, true, true);
-  expect_eq_str("hable boost graph", join_filters(hable_boost.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=100,exposure=1.000000,tonemap=hable:peak=20.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
+  expect_eq_str("hable boost graph", join_filters(hable_boost.post_filters), "format=gbrpf32,zscale=t=linear:npl=100,exposure=1.000000,tonemap=hable:peak=20.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
 
   const ToneMapFilterPlan reinhard = build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Reinhard, 1.0F, 1000, 500, true, true);
-  expect_eq_str("reinhard base graph", join_filters(reinhard.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=10.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
+  expect_eq_str("reinhard base graph", join_filters(reinhard.post_filters), "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=10.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
 
-  expect_throws("nonlinear boost above exposure range", [] {
-    build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Hable, 9.0F, 1000, 500, true, true);
-  });
+  expect_throws("nonlinear boost above exposure range", [] { build_hdr_tone_map_filters(ToneMapping::FullRange, ToneMapAlgorithm::Hable, 9.0F, 1000, 500, true, true); });
 
   const ToneMapFilterPlan auto_clip = build_hdr_tone_map_filters(ToneMapping::Auto, ToneMapAlgorithm::Clip, 1.0F, 500, 500, true, true);
   expect_eq_str("auto clip inject", join_filters(auto_clip.post_filters), "format=rgb48,zscale=p=bt709:t=iec61966-2-1:npl=%d");
   expect_true("auto clip peak placeholder only", auto_clip.inject_peak_nits && !auto_clip.inject_auto_tonemap_peak);
 
   const ToneMapFilterPlan auto_mobius = build_hdr_tone_map_filters(ToneMapping::Auto, ToneMapAlgorithm::Reinhard, 1.0F, 500, 500, true, true);
-  expect_eq_str("auto reinhard uses token placeholder", join_filters(auto_mobius.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=@@TONEMAP_NORM_PEAK@@:desat=0,zscale=p=bt709:t=iec61966-2-1");
+  expect_eq_str("auto reinhard uses token placeholder", join_filters(auto_mobius.post_filters), "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=@@TONEMAP_NORM_PEAK@@:desat=0,zscale=p=bt709:t=iec61966-2-1");
 
   const ToneMapFilterPlan auto_hable = build_hdr_tone_map_filters(ToneMapping::Auto, ToneMapAlgorithm::Hable, 1.0F, 500, 500, true, true);
-  expect_eq_str("auto hable uses token placeholder", join_filters(auto_hable.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=hable:peak=@@TONEMAP_NORM_PEAK@@:desat=0,zscale=p=bt709:t=iec61966-2-1");
+  expect_eq_str("auto hable uses token placeholder", join_filters(auto_hable.post_filters), "format=gbrpf32,zscale=t=linear:npl=100,tonemap=hable:peak=@@TONEMAP_NORM_PEAK@@:desat=0,zscale=p=bt709:t=iec61966-2-1");
 
   const ToneMapFilterPlan auto_mobius_algo = build_hdr_tone_map_filters(ToneMapping::Auto, ToneMapAlgorithm::Mobius, 1.0F, 500, 500, true, true);
-  expect_eq_str("auto mobius uses token placeholder", join_filters(auto_mobius_algo.post_filters),
-                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=mobius:peak=@@TONEMAP_NORM_PEAK@@:desat=0,zscale=p=bt709:t=iec61966-2-1");
+  expect_eq_str("auto mobius uses token placeholder", join_filters(auto_mobius_algo.post_filters), "format=gbrpf32,zscale=t=linear:npl=100,tonemap=mobius:peak=@@TONEMAP_NORM_PEAK@@:desat=0,zscale=p=bt709:t=iec61966-2-1");
   expect_true("auto nonlinear tonemap token only", !auto_mobius.inject_peak_nits && auto_mobius.inject_auto_tonemap_peak);
 
   const std::string auto_template = join_filters(auto_mobius.post_filters);
-  expect_eq_str("resolve MaxCLL 500", resolve_tone_map_filter_description(auto_template, 500, 1.0F, false, true),
-                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=5.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
-  expect_eq_str("resolve MaxCLL 1230", resolve_tone_map_filter_description(auto_template, 1230, 1.0F, false, true),
-                "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=12.300000:desat=0,zscale=p=bt709:t=iec61966-2-1");
-  expect_eq_str("resolve auto clip nits only", resolve_tone_map_filter_description(join_filters(auto_clip.post_filters), 1230, 1.0F, true, false),
-                "format=rgb48,zscale=p=bt709:t=iec61966-2-1:npl=1230");
+  expect_eq_str("resolve MaxCLL 500", resolve_tone_map_filter_description(auto_template, 500, 1.0F, false, true), "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=5.000000:desat=0,zscale=p=bt709:t=iec61966-2-1");
+  expect_eq_str("resolve MaxCLL 1230", resolve_tone_map_filter_description(auto_template, 1230, 1.0F, false, true), "format=gbrpf32,zscale=t=linear:npl=100,tonemap=reinhard:peak=12.300000:desat=0,zscale=p=bt709:t=iec61966-2-1");
+  expect_eq_str("resolve auto clip nits only", resolve_tone_map_filter_description(join_filters(auto_clip.post_filters), 1230, 1.0F, true, false), "format=rgb48,zscale=p=bt709:t=iec61966-2-1:npl=1230");
 
   const bool have_zscale = avfilter_get_by_name("zscale") != nullptr;
   const bool have_tonemap = avfilter_get_by_name("tonemap") != nullptr;
@@ -619,10 +603,12 @@ int main() {
       const double correct_sep = measure_highlight_luma(correct, 5.0F);
       expect_gt("correct tonemap keeps highlight separation", correct_sep, 0.03);
 
-      const std::string pq_correct = "format=yuv420p,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,"
-                                    "zscale=t=linear:npl=100,format=gbrpf32,tonemap=mobius:peak=10:desat=0,zscale=p=bt709:t=iec61966-2-1";
-      const std::string pq_wrong = "format=yuv420p,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,"
-                                   "zscale=t=linear:npl=1000,format=gbrpf32,tonemap=mobius:peak=1000:desat=0,zscale=p=bt709:t=iec61966-2-1";
+      const std::string pq_correct =
+          "format=yuv420p,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,"
+          "zscale=t=linear:npl=100,format=gbrpf32,tonemap=mobius:peak=10:desat=0,zscale=p=bt709:t=iec61966-2-1";
+      const std::string pq_wrong =
+          "format=yuv420p,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,"
+          "zscale=t=linear:npl=1000,format=gbrpf32,tonemap=mobius:peak=1000:desat=0,zscale=p=bt709:t=iec61966-2-1";
       const double pq_correct_h = measure_pq_white_highlight(pq_correct);
       const double pq_wrong_h = measure_pq_white_highlight(pq_wrong);
       expect_gt("PQ path normalized peak brighter than nits peak bug", pq_correct_h, pq_wrong_h);
