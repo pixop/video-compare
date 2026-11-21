@@ -141,6 +141,9 @@ check: $(test_bin)
 		./$$test; \
 	done
 
+# Reversed sparse-left smoke checks a single UI jump: the clipboard copies the
+# non-owner LEFT PTS, which may lag later RIGHT-owned keyframe landings.
+# The keyframe unit tests check the successive RIGHT-owned union positions.
 .PHONY: integration
 integration: $(integration_bin) tests/test_playback_keyframe$(EXE)
 	@set -e; \
@@ -193,7 +196,7 @@ integration: $(integration_bin) tests/test_playback_keyframe$(EXE)
 			$$wrap ./$(integration_bin) keyframe-navigation-union-time-shift \
 			"$$media/kf_union_left_48.mp4" "$$media/kf_union_right_sparse_48.mp4"; \
 		echo "Running $(integration_bin) keyframe-navigation-union-time-shift (synthetic sparse-left reversed)"; \
-		KEYFRAME_NAV_SHIFT_MS=40 KEYFRAME_NAV_WARMUP_D=0 KEYFRAME_NAV_STEPS=3 \
+		KEYFRAME_NAV_SHIFT_MS=40 KEYFRAME_NAV_WARMUP_D=0 KEYFRAME_NAV_STEPS=1 \
 			$$wrap ./$(integration_bin) keyframe-navigation-union-time-shift \
 			"$$media/kf_union_right_sparse_48.mp4" "$$media/kf_union_left_48.mp4"; \
 	else \
