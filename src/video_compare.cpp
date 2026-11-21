@@ -11,6 +11,7 @@
 #include "conversion_geometry.h"
 #include "ffmpeg.h"
 #include "frame_metadata.h"
+#include "keyframe_navigation.h"
 #include "playback_navigation.h"
 #include "playback_seek.h"
 #include "playback_timing.h"
@@ -1144,6 +1145,8 @@ void VideoCompare::compare() {
         active_right = Side::Right(active_right_index_);
         right_ptr = &side_states.at(active_right);
 
+        keyframe_navigation_.reset_session();
+
         display_->update_right_video(right_video_info_[active_right].file_name, right_video_info_[active_right].metadata);
         scope_update_state_.reset();
       }
@@ -1158,6 +1161,7 @@ void VideoCompare::compare() {
       }
 
       const int frame_navigation_delta = display_->get_frame_navigation_delta();
+      const int keyframe_navigation_delta = display_->get_keyframe_navigation_delta();
 
       // Normalize delta values to a sane fallback so we can reuse them for seeks/time shifts.
       const int64_t right_delta = playback_timing::normalized_delta(right_ptr->delta_pts_);
@@ -1168,7 +1172,8 @@ void VideoCompare::compare() {
         forward_navigate_frames += frame_navigation_delta;
       }
 
-      float seek_relative = display_->get_seek_relative();
+      const float display_seek_relative = display_->get_seek_relative();
+      float seek_relative = display_seek_relative;
       bool seek_from_start = display_->get_seek_from_start();
 
       // Negative delta means "seek backward by N frames" (shift+A) using average frame duration.
@@ -1184,10 +1189,86 @@ void VideoCompare::compare() {
 
       const int shift_right_frames = display_->get_shift_right_frames();
 
-      // if seeking is required, drain packet and frame queues
-      if ((seek_relative != 0.0F) || (shift_right_frames != 0) || force_seek_current_position) {
+      const auto make_seek_request = [&](float request_seek_relative, bool request_seek_from_start, bool request_force_seek_current_position, int request_shift_right_frames,
+                                         int64_t request_unadjusted_static_right_time_shift) {
+        playback_seek::SeekRequest request;
+        request.seek_relative = request_seek_relative;
+        request.seek_from_start = request_seek_from_start;
+        request.force_seek_current_position = request_force_seek_current_position;
+        request.all_sides_multi_frame =
+            std::all_of(media_frame_detection_states_.cbegin(), media_frame_detection_states_.cend(), [](const auto& kv) { return kv.second.cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::MultiFrame; });
+        request.shift_right_frames = request_shift_right_frames;
+        request.shortest_duration = shortest_duration_;
+        request.left_pts = left.pts_;
+        request.unadjusted_static_right_time_shift = request_unadjusted_static_right_time_shift;
+        request.time_shift_multiplier = time_shift_.multiplier;
+        request.left.start_time = left.start_time_;
+        request.left.first_pts = left.first_pts_;
+        request.left.delta_pts = left.delta_pts_;
+        request.left.single_frame = media_frame_detection_states_.at(LEFT).cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::SingleFrame;
+
+        for (const auto& pair : side_states) {
+          if (!pair.first.is_right()) {
+            continue;
+          }
+
+          playback_seek::SeekSideInput right_input;
+          right_input.start_time = pair.second.start_time_;
+          right_input.first_pts = pair.second.first_pts_;
+          right_input.delta_pts = pair.second.delta_pts_;
+          right_input.single_frame = media_frame_detection_states_.at(pair.first).cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::SingleFrame;
+          request.rights.push_back(right_input);
+        }
+
+        return request;
+      };
+
+      if (display_seek_relative != 0.0F || frame_navigation_delta != 0 || force_seek_current_position || display_->get_play()) {
+        keyframe_navigation_.reset_session();
+      }
+
+      playback_keyframe::KeyframeNavigationResolve keyframe_resolve;
+      const bool keyframe_only_input = frame_navigation_delta == 0 && display_seek_relative == 0.0F && !seek_from_start && shift_right_frames == 0 && !force_seek_current_position;
+      Demuxer& left_demuxer = *demuxers_[LEFT];
+      Demuxer& active_demuxer = *demuxers_.at(active_right);
+
+      int keyframe_step_direction = 0;
+      if (keyframe_only_input && (keyframe_navigation_delta != 0 || keyframe_navigation_.has_pending_steps())) {
+        const bool keyframe_gate_in_sync = playback_timing::is_in_sync(left.pts_, right_ptr->pts_, left.delta_pts_, right_ptr->delta_pts_);
+        const playback_keyframe::KeyframeNavigationBegin nav_begin = keyframe_navigation_.begin_frame(keyframe_navigation_delta, keyframe_gate_in_sync);
+        keyframe_step_direction = nav_begin.direction;
+        if (nav_begin.queue_overflow > 0) {
+          display_->set_pending_message("Keyframe navigation queue full (32 pending steps)");
+        }
+      }
+
+      if (keyframe_step_direction != 0) {
+        const int64_t keyframe_static_shift = time_shift_offset_av_time_ + static_cast<int64_t>(total_right_time_shifted) * right_delta;
+        const playback_seek::SeekRequest keyframe_request = make_seek_request(0.0F, false, false, 0, keyframe_static_shift);
+
+        const playback_keyframe::DisplayedDemuxerAnchors displayed_anchors = playback_keyframe::displayed_demuxer_anchors(
+            playback_keyframe::displayed_frame_at_offset(left.frames_, frame_offset), left_demuxer,
+            playback_keyframe::displayed_frame_at_offset(right_ptr->frames_, frame_offset), active_demuxer);
+
+        keyframe_resolve = keyframe_navigation_.resolve_step(keyframe_step_direction, left_demuxer, active_demuxer, keyframe_request, active_right_index_,
+                                                             displayed_anchors.left_demuxer_seconds, displayed_anchors.left_valid, displayed_anchors.right_demuxer_seconds,
+                                                             displayed_anchors.right_valid);
+        if (const char* nav_message = playback_keyframe::keyframe_navigation_message(keyframe_resolve.status)) {
+          display_->set_pending_message(nav_message);
+        }
+        if (keyframe_resolve.status == playback_keyframe::KeyframeNavigationStatus::SeekReady) {
+          seek_relative = keyframe_resolve.seek_relative;
+          seek_from_start = false;
+        }
+      }
+
+      const bool keyframe_seek = keyframe_resolve.status == playback_keyframe::KeyframeNavigationStatus::SeekReady;
+      const bool physical_seek_required = (seek_relative != 0.0F) || (shift_right_frames != 0) || force_seek_current_position;
+
+      if (keyframe_seek || physical_seek_required) {
         // update total right time shifted
         if (shift_right_frames != 0) {
+          keyframe_navigation_.reset_session();
           total_right_time_shifted += shift_right_frames;
         }
 
@@ -1250,74 +1331,73 @@ void VideoCompare::compare() {
           display_->reinitialize_video_dimensions(static_cast<unsigned>(canvas_width_), static_cast<unsigned>(canvas_height_));
         }
 
-        playback_seek::SeekRequest seek_request;
-        seek_request.seek_relative = seek_relative;
-        seek_request.seek_from_start = seek_from_start;
-        seek_request.force_seek_current_position = force_seek_current_position;
-        seek_request.all_sides_multi_frame =
-            std::all_of(media_frame_detection_states_.cbegin(), media_frame_detection_states_.cend(), [](const auto& kv) { return kv.second.cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::MultiFrame; });
-        seek_request.shift_right_frames = shift_right_frames;
-        seek_request.shortest_duration = shortest_duration_;
-        seek_request.left_pts = left.pts_;
-        seek_request.unadjusted_static_right_time_shift = static_right_time_shift;
-        seek_request.time_shift_multiplier = time_shift_.multiplier;
-        seek_request.left.start_time = left.start_time_;
-        seek_request.left.first_pts = left.first_pts_;
-        seek_request.left.delta_pts = left.delta_pts_;
-        seek_request.left.single_frame = media_frame_detection_states_.at(LEFT).cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::SingleFrame;
-
-        for (const auto& pair : side_states) {
-          if (!pair.first.is_right()) {
-            continue;
-          }
-
-          playback_seek::SeekSideInput right_input;
-          right_input.start_time = pair.second.start_time_;
-          right_input.first_pts = pair.second.first_pts_;
-          right_input.delta_pts = pair.second.delta_pts_;
-          right_input.single_frame = media_frame_detection_states_.at(pair.first).cardinality.load(std::memory_order_relaxed) == MediaFrameCardinality::SingleFrame;
-          seek_request.rights.push_back(right_input);
-        }
+        playback_seek::SeekRequest seek_request = make_seek_request(seek_relative, seek_from_start, force_seek_current_position, shift_right_frames, static_right_time_shift);
 
         const playback_seek::SeekPlan seek_plan = playback_seek::plan_seek(seek_request);
 
-        // Seek all right videos and track failures
         bool seek_failed = false;
         size_t right_plan_index = 0;
 
+        constexpr float kKeyframeSnapBias = 1e-3F;
+        const bool keyframe_backward_snap = keyframe_seek && seek_relative > 0.0F;
+        const bool owner_left = keyframe_seek && keyframe_resolve.candidate_owner == SideType::Left;
+        const Side active_right = Side::Right(active_right_index_);
+
+        const auto demuxer_seek_input = [&](Demuxer& demuxer, const Side& side, const float target_position, const bool backward) {
+          if (keyframe_seek) {
+            const bool is_owner = (owner_left && side == LEFT) || (!owner_left && side == active_right);
+            const bool ok = is_owner ? demuxer.seek_keyframe_owner(keyframe_resolve.target_demuxer_position) : demuxer.seek_keyframe_preroll(target_position);
+            if (!ok) {
+              seek_failed = true;
+            }
+            return ok;
+          }
+
+          const bool ok = demuxer.seek(target_position, backward);
+          if (!ok && !backward) {
+            seek_failed = true;
+          }
+          return ok;
+        };
+
+        right_plan_index = 0;
         for (auto& pair : side_states) {
           const Side& side = pair.first;
 
           if (side.is_right()) {
             const playback_seek::RightSeekTarget& right_target = seek_plan.rights[right_plan_index++];
+            const float right_seek_position = keyframe_backward_snap ? right_target.target_position + kKeyframeSnapBias : right_target.target_position;
+            const bool right_seek_backward = seek_plan.backward || keyframe_backward_snap;
 
 #ifdef _DEBUG
-            std::cout << "SEEK: next_right_position=" << (int)(right_target.target_position * 1000) << " (side=" << side.to_string() << "), backward=" << seek_plan.backward << std::endl;
+            std::cout << "SEEK: next_right_position=" << (int)(right_seek_position * 1000) << " (side=" << side.to_string() << "), backward=" << right_seek_backward << std::endl;
 #endif
-            const bool right_seek_result = demuxers_[side]->seek(right_target.target_position, seek_plan.backward);
-            if (!right_seek_result && !seek_plan.backward) {
-              seek_failed = true;
-            }
+            const bool right_seek_result = demuxer_seek_input(*demuxers_[side], side, right_seek_position, right_seek_backward);
 #ifdef _DEBUG
             std::cout << "Right seek result: " << right_seek_result << " - side: " << side.to_string() << std::endl;
 #endif
           }
         }
 
+        const float left_plan_position = keyframe_backward_snap ? seek_plan.left_target_position + kKeyframeSnapBias : seek_plan.left_target_position;
+        const float left_seek_position = keyframe_seek && !owner_left ? keyframe_resolve.comparison_timeline_position : left_plan_position;
+        const bool left_seek_backward = seek_plan.backward || keyframe_backward_snap;
+
 #ifdef _DEBUG
-        std::cout << "SEEK: next_left_position=" << (int)(seek_plan.left_target_position * 1000) << ", backward=" << seek_plan.backward << std::endl;
+        std::cout << "SEEK: next_left_position=" << (int)(left_seek_position * 1000) << ", backward=" << left_seek_backward << std::endl;
 #endif
-        const bool left_seek_result = demuxers_[LEFT]->seek(seek_plan.left_target_position, seek_plan.backward);
-        if (!left_seek_result && !seek_plan.backward) {
-          seek_failed = true;
-        }
+        const bool left_seek_result = demuxer_seek_input(left_demuxer, LEFT, left_seek_position, left_seek_backward);
 #ifdef _DEBUG
         std::cout << "Left seek result: " << left_seek_result << " - side: " << LEFT.to_string() << std::endl;
 #endif
 
         // Restore all positions if any seek failed
         if (seek_failed) {
-          display_->set_pending_message("Unable to seek past end of file");
+          if (keyframe_seek) {
+            keyframe_navigation_.reset_session();
+          }
+          const std::string seek_fail_message = keyframe_seek ? "Keyframe navigation seek failed" : "Unable to seek past end of file";
+          display_->set_pending_message(seek_fail_message);
 
           demuxers_[LEFT]->seek(seek_plan.left_restore_position, true);
 
@@ -1325,7 +1405,8 @@ void VideoCompare::compare() {
           for (auto& pair : side_states) {
             const Side& side = pair.first;
             if (side.is_right()) {
-              demuxers_[side]->seek(seek_plan.rights[right_plan_index++].restore_position, true);
+              const playback_seek::RightSeekTarget& target = seek_plan.rights[right_plan_index++];
+              demuxers_[side]->seek(target.restore_position, true);
             }
           }
         }
@@ -1369,24 +1450,38 @@ void VideoCompare::compare() {
           }
         };
 
-        pop_and_reset(left);
+        if (!keyframe_seek || !seek_failed) {
+          pop_and_reset(left);
 
-        static_right_time_shift = playback_seek::compute_post_seek_static_right_time_shift(static_right_time_shift);
-
-        // Reset all right videos after seek
-        for (auto& pair : side_states) {
-          const Side& side = pair.first;
-          if (side.is_right()) {
-            SideState& right_state = pair.second;
-
-            right_state.effective_time_shift_ = static_right_time_shift;
-            pop_and_reset(right_state, &right_state.effective_time_shift_);
+          if (keyframe_seek) {
+            static_right_time_shift = time_shift_offset_av_time_ + static_cast<int64_t>(total_right_time_shifted) * right_delta;
+          } else {
+            static_right_time_shift = playback_seek::compute_post_seek_static_right_time_shift(static_right_time_shift);
           }
-        }
 
-        // After seek, skip fetch/store so a failed next-frame pop cannot null the
-        // post-seek frame before it is put back into the display buffer.
-        skip_update = true;
+          // Reset all right videos after seek
+          for (auto& pair : side_states) {
+            const Side& side = pair.first;
+            if (side.is_right()) {
+              SideState& right_state = pair.second;
+
+              right_state.effective_time_shift_ = static_right_time_shift;
+              pop_and_reset(right_state, &right_state.effective_time_shift_);
+            }
+          }
+
+          if (keyframe_seek) {
+            const playback_keyframe::KeyframeNavigationStatus landing_status = keyframe_navigation_.verify_landing_from_frames(
+                keyframe_resolve, active_right_index_, left.frame_.get(), left_demuxer, right_ptr->frame_.get(), active_demuxer);
+            if (const char* nav_message = playback_keyframe::keyframe_navigation_message(landing_status)) {
+              display_->set_pending_message(nav_message);
+            }
+          }
+
+          // After seek, skip fetch/store so a failed next-frame pop cannot null the
+          // post-seek frame before it is put back into the display buffer.
+          skip_update = true;
+        }
       }
 
       bool store_frames = false;

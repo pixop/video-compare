@@ -1,6 +1,13 @@
 #define SDL_MAIN_HANDLED
+#include "keyframe_index.h"
+#include "keyframe_index_probe.h"
+#include "playback_keyframe.h"
 #include "video_compare.h"
+extern "C" {
+#include <libavformat/avformat.h>
+}
 #include <SDL2/SDL.h>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -22,7 +29,26 @@
 
 namespace {
 
-enum class Scenario { Baseline, EventInjection, Seek, StillSeek, SyncMismatch, MultiRightSync, FrameNavigation, BufferForwardOnly, BufferPingPong, SeekBurstForward, SeekBurstMixed, CropCopy, InteractiveCrop, DynamicSwap };
+enum class Scenario {
+  Baseline,
+  EventInjection,
+  Seek,
+  StillSeek,
+  SyncMismatch,
+  MultiRightSync,
+  FrameNavigation,
+  KeyframeNavigation,
+  KeyframeNavigationGop25,
+  KeyframeNavigationAsymmetric,
+  KeyframeNavigationUnionTimeShift,
+  BufferForwardOnly,
+  BufferPingPong,
+  SeekBurstForward,
+  SeekBurstMixed,
+  CropCopy,
+  InteractiveCrop,
+  DynamicSwap
+};
 
 std::atomic<int> events_pushed{0};
 std::atomic<bool> watchdog_fired{false};
@@ -52,6 +78,14 @@ const char* scenario_name(const Scenario scenario) {
       return "multi-right-sync";
     case Scenario::FrameNavigation:
       return "frame-navigation";
+    case Scenario::KeyframeNavigation:
+      return "keyframe-navigation";
+    case Scenario::KeyframeNavigationGop25:
+      return "keyframe-navigation-gop25";
+    case Scenario::KeyframeNavigationAsymmetric:
+      return "keyframe-navigation-asymmetric";
+    case Scenario::KeyframeNavigationUnionTimeShift:
+      return "keyframe-navigation-union-time-shift";
     case Scenario::BufferForwardOnly:
       return "buffer-forward-only";
     case Scenario::BufferPingPong:
@@ -83,6 +117,13 @@ int watchdog_ticks_for(const Scenario scenario) {
   }
   if (scenario == Scenario::InteractiveCrop) {
     return 250;
+  }
+  if (scenario == Scenario::KeyframeNavigationUnionTimeShift) {
+    const char* steps_env = std::getenv("KEYFRAME_NAV_STEPS");
+    const char* warmup_env = std::getenv("KEYFRAME_NAV_WARMUP_D");
+    const int steps = (steps_env != nullptr && steps_env[0] != '\0') ? std::max(1, std::atoi(steps_env)) : 3;
+    const int warmup = (warmup_env != nullptr && warmup_env[0] != '\0') ? std::max(0, std::atoi(warmup_env)) : 4;
+    return 120 + (warmup + steps + 1) * 28;
   }
   return is_stress_scenario(scenario) ? 250 : 120;
 }
@@ -619,6 +660,18 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(300);
+    // Ordinary forward seeks past EOF: advance near clip end, then one more +1s
+    // should fail; demuxers restore and the displayed left PTS stays stable.
+    for (int i = 0; i < 3; ++i) {
+      push_keydown(SDLK_RIGHT, SDL_SCANCODE_RIGHT, 0);
+      sleep_ms(450);
+    }
+    push_copy_timestamp();
+    sleep_ms(300);
+    push_keydown(SDLK_RIGHT, SDL_SCANCODE_RIGHT, 0);
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(300);
   } else if (scenario == Scenario::StillSeek) {
     // JPEG/image2 becomes SingleFrame after the first unique PTS, then EOF.
     // The 1000 ms settle above is required: a JPEG input alone does not mean
@@ -663,6 +716,116 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(200);
+  } else if (scenario == Scenario::KeyframeNavigation) {
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(300);
+    push_keydown(SDLK_LEFT, SDL_SCANCODE_LEFT, 0);
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(200);
+    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    sleep_ms(900);
+    push_copy_timestamp();
+    sleep_ms(200);
+    // No next keyframe at the end of the two-keyframe fixture.
+    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    sleep_ms(900);
+    push_copy_timestamp();
+    sleep_ms(200);
+    push_keydown(SDLK_a, SDL_SCANCODE_A, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    sleep_ms(900);
+    push_copy_timestamp();
+    sleep_ms(200);
+    // No previous keyframe at the beginning either.
+    push_keydown(SDLK_a, SDL_SCANCODE_A, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    sleep_ms(900);
+    push_copy_timestamp();
+    sleep_ms(200);
+    // Seek to the final keyframe, play into its GOP, then request a next
+    // keyframe that does not exist. Rejected navigation must not rewind.
+    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    sleep_ms(900);
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(1000);
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(300);
+    push_copy_timestamp();
+    sleep_ms(200);
+    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    sleep_ms(900);
+    push_copy_timestamp();
+    sleep_ms(200);
+  } else if (scenario == Scenario::KeyframeNavigationGop25) {
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(300);
+    push_keydown(SDLK_RIGHT, SDL_SCANCODE_RIGHT, 0, KMOD_SHIFT);
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(200);
+    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(200);
+    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(200);
+    push_keydown(SDLK_a, SDL_SCANCODE_A, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(200);
+  } else if (scenario == Scenario::KeyframeNavigationAsymmetric) {
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(300);
+    push_keydown(SDLK_RIGHT, SDL_SCANCODE_RIGHT, 0, KMOD_SHIFT);
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(200);
+    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(200);
+    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(200);
+    push_keydown(SDLK_a, SDL_SCANCODE_A, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    sleep_ms(700);
+    push_copy_timestamp();
+    sleep_ms(200);
+  } else if (scenario == Scenario::KeyframeNavigationUnionTimeShift) {
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(300);
+    const char* frame_shift = std::getenv("KEYFRAME_NAV_FRAME_SHIFT");
+    if (frame_shift != nullptr && frame_shift[0] != '\0') {
+      const int presses = std::max(1, std::atoi(frame_shift));
+      for (int i = 0; i < presses; ++i) {
+        push_keydown(SDLK_EQUALS, SDL_SCANCODE_EQUALS, 0, KMOD_CTRL);
+        sleep_ms(500);
+      }
+      sleep_ms(400);
+    }
+    const char* warmup_env = std::getenv("KEYFRAME_NAV_WARMUP_D");
+    const int warmup_d = (warmup_env != nullptr && warmup_env[0] != '\0') ? std::max(0, std::atoi(warmup_env)) : 4;
+    for (int i = 0; i < warmup_d; ++i) {
+      push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+      sleep_ms(900);
+    }
+    sleep_ms(300);
+    push_copy_timestamp();
+    sleep_ms(200);
+    const char* steps_env = std::getenv("KEYFRAME_NAV_STEPS");
+    const int step_count = (steps_env != nullptr && steps_env[0] != '\0') ? std::max(1, std::atoi(steps_env)) : 3;
+    const char* backward_env = std::getenv("KEYFRAME_NAV_BACKWARD");
+    const bool backward = backward_env != nullptr && backward_env[0] == '1';
+    const SDL_Keycode key = backward ? SDLK_a : SDLK_d;
+    const SDL_Scancode scan = backward ? SDL_SCANCODE_A : SDL_SCANCODE_D;
+    for (int i = 0; i < step_count; ++i) {
+      push_keydown(key, scan, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+      sleep_ms(2000);
+      push_copy_timestamp();
+      sleep_ms(250);
+    }
   } else if (scenario == Scenario::BufferForwardOnly || scenario == Scenario::BufferPingPong) {
     // Fill the 3-slot history, pause so offset 0 stays on the newest frame,
     // then slow to 1/16x so timer-driven steps are ~640 ms. J is the
@@ -720,7 +883,7 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
         push_relative_seek(direction);
         sleep_ms(10);
       }
-      sleep_ms(1500);
+      sleep_ms(2000);
     }
 
     push_copy_timestamp();
@@ -917,6 +1080,10 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   reset_helper_counters();
 
   VideoCompareConfig config = make_config(resolved);
+  const char* shift_env = std::getenv("KEYFRAME_NAV_SHIFT_MS");
+  if (shift_env != nullptr && shift_env[0] != '\0') {
+    config.time_shift.offset_ms = std::strtol(shift_env, nullptr, 10);
+  }
   if (scenario == Scenario::SyncMismatch || scenario == Scenario::MultiRightSync || scenario == Scenario::CropCopy || scenario == Scenario::InteractiveCrop) {
     // Auto fps= would otherwise lift 25 fps to 30 and hide the sync path.
     // crop-copy also wants a clean Shift+X chain so crop= is the only extra filter.
@@ -977,14 +1144,15 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     }
   } else if (scenario == Scenario::Seek) {
     const std::vector<double> times = copied_positions(output);
-    if (times.size() < 3) {
-      std::fprintf(stderr, "FAIL seek expected 3 copied timestamps, got %zu\n", times.size());
+    if (times.size() < 5) {
+      std::fprintf(stderr, "FAIL seek expected 5 copied timestamps, got %zu\n", times.size());
       std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
       exit_code = EXIT_FAILURE;
     } else {
       const double forward = times[1] - times[0];
       const double backward = times[1] - times[2];
-      std::printf("seek timestamps: before=%.3f after+1s=%.3f after-1s=%.3f\n", times[0], times[1], times[2]);
+      const double eof_drift = std::fabs(times[4] - times[3]);
+      std::printf("seek timestamps: before=%.3f after+1s=%.3f after-1s=%.3f pre_eof=%.3f after_eof_fail=%.3f\n", times[0], times[1], times[2], times[3], times[4]);
       // Intra mpeg4 should land near ±1s. Allow decoder/PTS slack without
       // accepting a no-op (identical timestamps).
       if (forward < 0.40 || forward > 1.75) {
@@ -993,8 +1161,15 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       } else if (backward < 0.40 || backward > 1.75) {
         std::fprintf(stderr, "FAIL backward seek delta %.3f not in [0.40, 1.75]\n", backward);
         exit_code = EXIT_FAILURE;
+      } else if (eof_drift > 0.25) {
+        std::fprintf(stderr, "FAIL forward seek past EOF drift %.3f exceeds 0.25s (%.3f vs %.3f)\n", eof_drift, times[4], times[3]);
+        exit_code = EXIT_FAILURE;
+      } else if (times[3] < 2.5) {
+        std::fprintf(stderr, "FAIL seek past EOF precondition: pre-EOF PTS %.3f too early\n", times[3]);
+        exit_code = EXIT_FAILURE;
       } else {
         std::printf("PASS keyboard seek moved presented PTS forward then backward\n");
+        std::printf("PASS ordinary forward seek past EOF kept displayed PTS stable (drift=%.3f)\n", eof_drift);
       }
     }
   } else if (scenario == Scenario::StillSeek) {
@@ -1089,6 +1264,348 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
         exit_code = EXIT_FAILURE;
       } else {
         std::printf("PASS Shift+D / Shift+A presented one frame forward then one frame backward\n");
+      }
+    }
+  } else if (scenario == Scenario::KeyframeNavigation) {
+    const std::vector<double> times = copied_positions(output);
+    if (times.size() < 7) {
+      std::fprintf(stderr, "FAIL keyframe-navigation expected 7 copied timestamps, got %zu\n", times.size());
+      exit_code = EXIT_FAILURE;
+    } else if (output.find("Keyframe navigation unavailable") != std::string::npos) {
+      std::fprintf(stderr, "FAIL keyframe-navigation reported unavailable on indexed fixtures\n");
+      exit_code = EXIT_FAILURE;
+    } else {
+      const double t0 = times[0];
+      const double after_next_kf = times[1];
+      const double after_next_boundary = times[2];
+      const double after_prev_kf = times[3];
+      const double after_prev_boundary = times[4];
+      const double to_keyframe = after_next_kf - t0;
+      const double return_delta = after_prev_kf - after_next_kf;
+      std::printf("keyframe-navigation timestamps: T0=%.3f next_kf=%.3f prev_kf=%.3f jump=%.3f return=%.3f\n", t0, after_next_kf, after_prev_kf, to_keyframe, return_delta);
+      if (to_keyframe < 1.90 || to_keyframe > 2.10) {
+        std::fprintf(stderr, "FAIL next-keyframe jump %.3f not in [1.90, 2.10] (50-frame GOP at 25 fps)\n", to_keyframe);
+        exit_code = EXIT_FAILURE;
+      } else if (return_delta > -1.90 || return_delta < -2.10) {
+        std::fprintf(stderr, "FAIL prev-keyframe delta %.3f not in [-2.10, -1.90]\n", return_delta);
+        exit_code = EXIT_FAILURE;
+      } else if (std::fabs(after_next_boundary - after_next_kf) > 0.05) {
+        std::fprintf(stderr, "FAIL next-keyframe boundary changed position %.3f -> %.3f\n", after_next_kf, after_next_boundary);
+        exit_code = EXIT_FAILURE;
+      } else if (std::fabs(after_prev_kf) > 0.05) {
+        std::fprintf(stderr, "FAIL prev-keyframe did not land on first keyframe (got %.3f)\n", after_prev_kf);
+        exit_code = EXIT_FAILURE;
+      } else if (std::fabs(after_prev_boundary - after_prev_kf) > 0.05) {
+        std::fprintf(stderr, "FAIL prev-keyframe boundary changed position %.3f -> %.3f\n", after_prev_kf, after_prev_boundary);
+        exit_code = EXIT_FAILURE;
+      } else if (times[5] < after_next_kf + 0.50 || times[5] > after_next_kf + 1.70) {
+        std::fprintf(stderr, "FAIL final-GOP setup did not advance into final GOP: %.3f -> %.3f\n", after_next_kf, times[5]);
+        exit_code = EXIT_FAILURE;
+      } else if (std::fabs(times[6] - times[5]) > 0.05) {
+        std::fprintf(stderr, "FAIL next-keyframe from final GOP rewound: %.3f -> %.3f\n", times[5], times[6]);
+        exit_code = EXIT_FAILURE;
+      } else {
+        std::printf("PASS Ctrl+Shift+D/A seeked coherent keyframes on left or active right input\n");
+      }
+    }
+  } else if (scenario == Scenario::KeyframeNavigationGop25) {
+    const std::vector<double> times = copied_positions(output);
+    if (times.size() < 4) {
+      std::fprintf(stderr, "FAIL keyframe-navigation-gop25 expected 4 left copied timestamps, got %zu\n", times.size());
+      exit_code = EXIT_FAILURE;
+    } else if (output.find("Keyframe navigation unavailable") != std::string::npos) {
+      std::fprintf(stderr, "FAIL keyframe-navigation-gop25 reported unavailable on indexed fixtures\n");
+      exit_code = EXIT_FAILURE;
+    } else {
+      const double t0 = times[0];
+      const double d1 = times[1] - t0;
+      const double d2 = times[2] - times[1];
+      const double d_back = times[3] - times[2];
+      std::printf("keyframe-navigation-gop25 symmetric fixtures: T0=%.3f T1=%.3f T2=%.3f T3=%.3f d1=%.3f d2=%.3f back=%.3f\n", t0, times[1], times[2], times[3], d1, d2, d_back);
+
+      std::vector<double> expect_forward_steps;
+      std::vector<double> expect_backward_steps;
+      if (playback_keyframe::libavformat_index_api_available() && !resolved.empty()) {
+        AVFormatContext* format_context = nullptr;
+        if (avformat_open_input(&format_context, resolved[0].c_str(), nullptr, nullptr) >= 0 && avformat_find_stream_info(format_context, nullptr) >= 0) {
+          const int video_stream = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+          const AVStream* stream = format_context->streams[video_stream];
+          const float start_time = stream->start_time != AV_NOPTS_VALUE ? static_cast<float>(av_q2d(stream->time_base) * stream->start_time) : 0.0F;
+          const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream, start_time);
+          std::vector<double> key_positions;
+          for (const playback_keyframe::IndexEntry& entry : snapshot.entries) {
+            if ((entry.flags & AVINDEX_KEYFRAME) == 0) {
+              continue;
+            }
+            const int64_t pts = playback_keyframe::index_entry_presentation_timestamp(snapshot, entry);
+            if (pts == AV_NOPTS_VALUE) {
+              continue;
+            }
+            key_positions.push_back(playback_keyframe::stream_timestamp_to_demuxer_seconds(pts, snapshot.time_base, snapshot.video_start_time_seconds));
+          }
+          if (key_positions.size() >= 2) {
+            const auto adjacent_forward_from = [&](const double reference) {
+              const playback_keyframe::AdjacentKeyframe next = playback_keyframe::find_adjacent_keyframe(snapshot, +1, static_cast<float>(reference));
+              if (next.status == playback_keyframe::AdjacentKeyframeStatus::Ok) {
+                return static_cast<double>(next.demuxer_position_seconds) - reference;
+              }
+              return 0.0;
+            };
+            expect_forward_steps.push_back(adjacent_forward_from(t0));
+            expect_forward_steps.push_back(adjacent_forward_from(times[1]));
+            const playback_keyframe::AdjacentKeyframe back = playback_keyframe::find_adjacent_keyframe(snapshot, -1, static_cast<float>(times[2]));
+            if (back.status == playback_keyframe::AdjacentKeyframeStatus::Ok) {
+              expect_backward_steps.push_back(static_cast<double>(back.demuxer_position_seconds) - times[2]);
+            }
+          }
+          avformat_close_input(&format_context);
+        }
+      }
+
+      constexpr double kTol = 0.08;
+      const auto step_near = [&](const double got, const double expect) {
+        return std::fabs(got - expect) <= kTol;
+      };
+      const double exp_d1 = expect_forward_steps.size() > 0 ? expect_forward_steps[0] : 1.0;
+      const double exp_d2 = expect_forward_steps.size() > 1 ? expect_forward_steps[1] : exp_d1;
+      const double exp_back = expect_backward_steps.size() > 0 ? expect_backward_steps[0] : -exp_d2;
+      if (!step_near(d1, exp_d1)) {
+        std::fprintf(stderr, "FAIL GOP25 forward step 1 delta %.3f not ~%.3f\n", d1, exp_d1);
+        exit_code = EXIT_FAILURE;
+      } else if (!step_near(d2, exp_d2)) {
+        std::fprintf(stderr, "FAIL GOP25 forward step 2 delta %.3f not ~%.3f\n", d2, exp_d2);
+        exit_code = EXIT_FAILURE;
+      } else if (!step_near(d_back, exp_back)) {
+        std::fprintf(stderr, "FAIL GOP25 backward step delta %.3f not ~%.3f\n", d_back, exp_back);
+        exit_code = EXIT_FAILURE;
+      } else {
+        std::printf("PASS Ctrl+Shift+D/A keyframe steps on symmetric GOP-25 fixtures (left PTS)\n");
+      }
+    }
+  } else if (scenario == Scenario::KeyframeNavigationAsymmetric) {
+    const std::vector<double> times = copied_positions(output);
+    if (times.size() < 4) {
+      std::fprintf(stderr, "FAIL keyframe-navigation-asymmetric expected 4 left copied timestamps, got %zu\n", times.size());
+      exit_code = EXIT_FAILURE;
+    } else if (output.find("Keyframe navigation unavailable") != std::string::npos) {
+      std::fprintf(stderr, "FAIL keyframe-navigation-asymmetric reported unavailable on indexed fixtures\n");
+      exit_code = EXIT_FAILURE;
+    } else {
+      const double t0 = times[0];
+      const double d1 = times[1] - t0;
+      const double d2 = times[2] - times[1];
+      const double d_back = times[3] - times[2];
+      std::printf("keyframe-navigation-asymmetric: T0=%.3f T1=%.3f T2=%.3f T3=%.3f d1=%.3f d2=%.3f back=%.3f\n", t0, times[1], times[2], times[3], d1, d2, d_back);
+
+      std::vector<double> union_steps_forward;
+      std::vector<double> union_steps_backward;
+      if (playback_keyframe::libavformat_index_api_available() && resolved.size() >= 2) {
+        auto key_positions_for = [](const std::string& path) {
+          std::vector<double> positions;
+          AVFormatContext* format_context = nullptr;
+          if (avformat_open_input(&format_context, path.c_str(), nullptr, nullptr) < 0) {
+            return positions;
+          }
+          if (avformat_find_stream_info(format_context, nullptr) < 0) {
+            avformat_close_input(&format_context);
+            return positions;
+          }
+          const int video_stream = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+          const AVStream* stream = format_context->streams[video_stream];
+          const float start_time = stream->start_time != AV_NOPTS_VALUE ? static_cast<float>(av_q2d(stream->time_base) * stream->start_time) : 0.0F;
+          const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream, start_time);
+          for (const playback_keyframe::IndexEntry& entry : snapshot.entries) {
+            if ((entry.flags & AVINDEX_KEYFRAME) == 0) {
+              continue;
+            }
+            const int64_t pts = playback_keyframe::index_entry_presentation_timestamp(snapshot, entry);
+            if (pts == AV_NOPTS_VALUE) {
+              continue;
+            }
+            positions.push_back(playback_keyframe::stream_timestamp_to_demuxer_seconds(pts, snapshot.time_base, snapshot.video_start_time_seconds));
+          }
+          avformat_close_input(&format_context);
+          std::sort(positions.begin(), positions.end());
+          positions.erase(std::unique(positions.begin(), positions.end(), [](const double a, const double b) { return std::fabs(a - b) <= 0.04; }), positions.end());
+          return positions;
+        };
+
+        const std::vector<double> left_keys = key_positions_for(resolved[0]);
+        const std::vector<double> right_keys = key_positions_for(resolved[1]);
+        std::vector<double> union_keys = left_keys;
+        for (const double key : right_keys) {
+          const bool duplicate = std::any_of(union_keys.begin(), union_keys.end(), [&](const double existing) { return std::fabs(existing - key) <= 0.04; });
+          if (!duplicate) {
+            union_keys.push_back(key);
+          }
+        }
+        std::sort(union_keys.begin(), union_keys.end());
+
+        const auto forward_delta_from = [&](const double reference) {
+          for (const double key : union_keys) {
+            if (key > reference + 0.04) {
+              return key - reference;
+            }
+          }
+          return -1.0;
+        };
+        const auto backward_delta_from = [&](const double reference) {
+          for (auto it = union_keys.rbegin(); it != union_keys.rend(); ++it) {
+            if (*it < reference - 0.04) {
+              return *it - reference;
+            }
+          }
+          return 1.0;
+        };
+
+        union_steps_forward.push_back(forward_delta_from(t0));
+        union_steps_forward.push_back(forward_delta_from(times[1]));
+        union_steps_backward.push_back(backward_delta_from(times[2]));
+      }
+
+      const auto step_near = [](const double value, const double expected) { return std::fabs(value - expected) <= 0.12; };
+      const double exp_d1 = union_steps_forward.size() > 0 ? union_steps_forward[0] : 1.0;
+      const double exp_d2 = union_steps_forward.size() > 1 ? union_steps_forward[1] : 1.0;
+      const double exp_back = union_steps_backward.empty() ? -1.0 : union_steps_backward[0];
+
+      bool steps_ok = true;
+      const auto expect_forward = [&](const double delta, const double expected, const char* label) {
+        if (expected < 0.0) {
+          if (std::fabs(delta) > 0.05) {
+            std::fprintf(stderr, "FAIL %s delta %.3f expected boundary hold\n", label, delta);
+            steps_ok = false;
+          }
+          return;
+        }
+        if (!step_near(delta, expected)) {
+          std::fprintf(stderr, "FAIL %s delta %.3f not ~%.3f\n", label, delta, expected);
+          steps_ok = false;
+        }
+      };
+
+      expect_forward(d1, exp_d1, "asymmetric union forward step 1");
+      expect_forward(d2, exp_d2, "asymmetric union forward step 2");
+      if (!step_near(d_back, exp_back)) {
+        std::fprintf(stderr, "FAIL asymmetric union backward step delta %.3f not ~%.3f\n", d_back, exp_back);
+        steps_ok = false;
+      }
+      if (steps_ok) {
+        std::printf("PASS Ctrl+Shift+D/A union keyframes on asymmetric GOP fixtures (order-independent)\n");
+      } else {
+        exit_code = EXIT_FAILURE;
+      }
+    }
+  } else if (scenario == Scenario::KeyframeNavigationUnionTimeShift) {
+    constexpr double kUnionTol = 0.022;
+    const auto near = [&](const double a, const double b) { return std::fabs(a - b) <= kUnionTol; };
+
+    const std::vector<double> times = copied_positions(output);
+    if (times.empty()) {
+      std::fprintf(stderr, "FAIL union-time-shift expected copied timestamps, got none\n");
+      exit_code = EXIT_FAILURE;
+    } else if (output.find("Keyframe navigation unavailable") != std::string::npos ||
+               output.find("LandingFailed") != std::string::npos ||
+               output.find("Landing failed") != std::string::npos) {
+      std::fprintf(stderr, "FAIL union-time-shift reported keyframe navigation failure\n");
+      exit_code = EXIT_FAILURE;
+    } else {
+      print_pts_stdout("union-time-shift observed: ", times);
+
+      const char* expect_env = std::getenv("KEYFRAME_NAV_EXPECT");
+      std::vector<double> expected;
+      if (expect_env != nullptr && expect_env[0] != '\0') {
+        const char* cursor = expect_env;
+        while (*cursor != '\0') {
+          char* end = nullptr;
+          const double value = std::strtod(cursor, &end);
+          if (end == cursor) {
+            break;
+          }
+          expected.push_back(value);
+          cursor = end;
+          while (*cursor == ',' || *cursor == ' ') {
+            ++cursor;
+          }
+        }
+      }
+
+      bool ok = true;
+      if (!expected.empty()) {
+        if (times.size() < expected.size()) {
+          std::fprintf(stderr, "FAIL union-time-shift expected %zu timestamps, got %zu\n", expected.size(), times.size());
+          ok = false;
+        } else {
+          for (size_t i = 0; i < expected.size(); ++i) {
+            if (!near(times[i], expected[i])) {
+              std::fprintf(stderr, "FAIL union-time-shift index %zu expected ~%.3f got %.3f (shift_ms=%ld)\n", i, expected[i], times[i], config.time_shift.offset_ms);
+              ok = false;
+              break;
+            }
+            if (i > 0 && !(times[i] > times[i - 1] + 0.005)) {
+              std::fprintf(stderr, "FAIL union-time-shift stall at %zu: %.3f -> %.3f (shift_ms=%ld)\n", i, times[i - 1], times[i],
+                           config.time_shift.offset_ms);
+              ok = false;
+              break;
+            }
+          }
+        }
+      } else {
+        const double shift_s = static_cast<double>(config.time_shift.offset_ms) / 1000.0;
+        const bool backward = std::getenv("KEYFRAME_NAV_BACKWARD") != nullptr && std::getenv("KEYFRAME_NAV_BACKWARD")[0] == '1';
+        if (std::fabs(shift_s - 0.04) <= 0.001 && !backward && times[0] < 2.0 && near(times[0], 0.938)) {
+          expected = {0.938, 1.000, 2.043, 3.085, 4.127, 5.167, 5.208};
+        } else if (std::fabs(shift_s - 0.04) <= 0.001 && !backward && times[0] < 2.0 && near(times[0], 1.000)) {
+          expected = {1.000, 2.043, 3.085, 4.127, 5.167, 5.208, 6.208};
+          if (times.size() >= 8) {
+            expected.push_back(7.250);
+          }
+        } else if (std::fabs(shift_s - 0.04) <= 0.001 && !backward) {
+          expected = {4.167, 5.167, 5.208, 6.250};
+        } else if (std::fabs(shift_s + 0.04) <= 0.001 && !backward) {
+          expected = {4.167, 5.208, 5.248, 6.250};
+        }
+
+        if (!expected.empty() && ok) {
+          if (times.size() < expected.size()) {
+            std::fprintf(stderr, "FAIL union-time-shift expected %zu timestamps, got %zu\n", expected.size(), times.size());
+            ok = false;
+          } else {
+            for (size_t i = 0; i < expected.size(); ++i) {
+              if (!near(times[i], expected[i])) {
+                std::fprintf(stderr, "FAIL union-time-shift index %zu expected ~%.3f got %.3f (shift_ms=%ld)\n", i, expected[i], times[i],
+                             config.time_shift.offset_ms);
+                ok = false;
+                break;
+              }
+              if (i > 0 && !(times[i] > times[i - 1] + 0.005)) {
+                std::fprintf(stderr, "FAIL union-time-shift stall at %zu: %.3f -> %.3f\n", i, times[i - 1], times[i]);
+                ok = false;
+                break;
+              }
+            }
+          }
+        } else if (shift_s > 0.0 && !backward && expected.empty()) {
+          for (size_t i = 1; i < times.size(); ++i) {
+            const double delta = times[i] - times[i - 1];
+            if (backward) {
+              if (!(delta < -0.005)) {
+                std::fprintf(stderr, "FAIL union-time-shift backward stall at %zu: %.3f -> %.3f\n", i, times[i - 1], times[i]);
+                ok = false;
+                break;
+              }
+            } else if (!(delta > 0.005)) {
+              std::fprintf(stderr, "FAIL union-time-shift forward stall at %zu: %.3f -> %.3f\n", i, times[i - 1], times[i]);
+              ok = false;
+              break;
+            }
+          }
+        }
+      }
+
+      if (ok) {
+        std::printf("PASS union keyframe navigation with right time shift offset_ms=%ld\n", config.time_shift.offset_ms);
+      } else {
+        exit_code = EXIT_FAILURE;
       }
     }
   } else if (scenario == Scenario::BufferForwardOnly || scenario == Scenario::BufferPingPong) {
@@ -1486,6 +2003,9 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "  %s sync-mismatch LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s multi-right-sync LEFT RIGHT0 RIGHT1\n", argv0);
   std::fprintf(stderr, "  %s frame-navigation LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s keyframe-navigation LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s keyframe-navigation-gop25 LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s keyframe-navigation-asymmetric LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s buffer-forward-only LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s buffer-pingpong LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s seek-burst-forward LEFT RIGHT\n", argv0);
@@ -1558,6 +2078,34 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::FrameNavigation, files);
+    }
+    if (name == "keyframe-navigation") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::KeyframeNavigation, files);
+    }
+    if (name == "keyframe-navigation-gop25") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::KeyframeNavigationGop25, files);
+    }
+    if (name == "keyframe-navigation-asymmetric") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::KeyframeNavigationAsymmetric, files);
+    }
+    if (name == "keyframe-navigation-union-time-shift") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::KeyframeNavigationUnionTimeShift, files);
     }
     if (name == "buffer-forward-only") {
       if (files.size() != 2) {

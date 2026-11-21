@@ -12,6 +12,7 @@
 #include "core_types.h"
 #include "demuxer.h"
 #include "display.h"
+#include "keyframe_navigation.h"
 #include "format_converter.h"
 #include "frame_metadata.h"
 #include "queue.h"
@@ -235,6 +236,7 @@ class VideoCompare {
   std::unique_ptr<Timer> timer_;
 
   size_t active_right_index_{0};
+  playback_keyframe::KeyframeNavigation keyframe_navigation_;
   std::map<Side, RightVideoInfo> right_video_info_;
   VideoMetadata left_video_metadata_;
 
