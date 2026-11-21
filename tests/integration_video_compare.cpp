@@ -633,12 +633,12 @@ void print_pts_stdout(const char* label, const std::vector<double>& times) {
   std::printf("\n");
 }
 
-std::vector<double> copied_positions(const std::string& output) {
+std::vector<double> parse_timestamp_prefixes(const std::string& output, const char* prefix) {
   std::vector<double> times;
-  const std::string prefix = "Copied to clipboard: ";
+  const std::string needle(prefix);
   size_t pos = 0;
-  while ((pos = output.find(prefix, pos)) != std::string::npos) {
-    pos += prefix.size();
+  while ((pos = output.find(needle, pos)) != std::string::npos) {
+    pos += needle.size();
     const size_t end = output.find_first_of("\r\n", pos);
     const std::string token = output.substr(pos, end == std::string::npos ? std::string::npos : end - pos);
     double seconds = 0.0;
@@ -646,6 +646,34 @@ std::vector<double> copied_positions(const std::string& output) {
       times.push_back(seconds);
     }
   }
+  return times;
+}
+
+std::vector<double> copied_positions(const std::string& output) {
+  return parse_timestamp_prefixes(output, "Copied to clipboard: ");
+}
+
+bool integration_keyframe_nav_observability() {
+  const char* value = std::getenv("VC_INTEGRATION_KEYFRAME_NAV");
+  if (value == nullptr || value[0] == '\0' || value[0] == '0') {
+    return false;
+  }
+  return (value[0] == '1') || (value[0] == 'y') || (value[0] == 'Y') || (value[0] == 't') || (value[0] == 'T');
+}
+
+std::vector<double> union_time_shift_observed_positions(const std::string& output) {
+  if (!integration_keyframe_nav_observability()) {
+    return copied_positions(output);
+  }
+
+  std::vector<double> times;
+  const std::vector<double> clipboard = copied_positions(output);
+  if (!clipboard.empty()) {
+    // Paused baseline is displayed left PTS; each landed step reports the committed union comparison timeline.
+    times.push_back(clipboard[0]);
+  }
+  const std::vector<double> union_landings = parse_timestamp_prefixes(output, "Integration union position: ");
+  times.insert(times.end(), union_landings.begin(), union_landings.end());
   return times;
 }
 
@@ -1557,9 +1585,9 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
     constexpr double kUnionTol = 0.022;
     const auto near = [&](const double a, const double b) { return std::fabs(a - b) <= kUnionTol; };
 
-    const std::vector<double> times = copied_positions(output);
+    const std::vector<double> times = union_time_shift_observed_positions(output);
     if (times.empty()) {
-      std::fprintf(stderr, "FAIL union-time-shift expected copied timestamps, got none\n");
+      std::fprintf(stderr, "FAIL union-time-shift expected observed union timestamps, got none\n");
       exit_code = EXIT_FAILURE;
     } else if (output.find("Keyframe navigation unavailable") != std::string::npos ||
                output.find("LandingFailed") != std::string::npos ||
