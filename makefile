@@ -103,6 +103,7 @@ tests/test_%$(EXE): tests/test_%.o
 tests/test_duration_deriver$(EXE): src/duration_deriver.o
 
 tests/test_frame_metadata$(EXE): TEST_LIBS = $(LDLIBS)
+tests/test_progress_dots$(EXE): TEST_LIBS = $(LDLIBS)
 
 tests/test_playback_timing$(EXE): TEST_LIBS = $(LDLIBS)
 
