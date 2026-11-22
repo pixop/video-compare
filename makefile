@@ -167,6 +167,8 @@ integration: $(integration_bin) tests/test_playback_keyframe$(EXE)
 	$$wrap ./$(integration_bin) baseline "$$media/left_25.mp4" "$$media/right0_25.mp4"; \
 	echo "Running $(integration_bin) event-injection"; \
 	$$wrap ./$(integration_bin) event-injection "$$media/left_25.mp4" "$$media/right0_25.mp4" "$$media/right1_25.mp4"; \
+	echo "Running $(integration_bin) high-dpi-input"; \
+	$$wrap ./$(integration_bin) high-dpi-input "$$media/left_25.mp4" "$$media/right0_25.mp4"; \
 	echo "Running $(integration_bin) seek"; \
 	$$wrap ./$(integration_bin) seek "$$media/seek_left_25.mp4" "$$media/seek_right_25.mp4"; \
 	echo "Running $(integration_bin) still-seek"; \
