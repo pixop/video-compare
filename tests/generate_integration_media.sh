@@ -41,6 +41,10 @@ generate_clip "$out_dir/right2_25.mp4" 1
 generate_clip "$out_dir/seek_left_25.mp4" 4
 generate_clip "$out_dir/seek_right_25.mp4" 4
 
+# Matroska loads its Cues lazily; exercise both sparse and all-keyframe FFV1 indexes.
+ffmpeg -hide_banner -loglevel error -y -f lavfi -i "testsrc=size=160x90:rate=25:duration=2" -c:v ffv1 "$out_dir/kf_ffv1_default.mkv"
+ffmpeg -hide_banner -loglevel error -y -f lavfi -i "testsrc=size=160x90:rate=25:duration=2" -c:v ffv1 -g 1 "$out_dir/kf_ffv1_gop1.mkv"
+
 # MPEG-4 GOP 25 with 2 B-frames per GOP (identical left/right for integration).
 generate_gop25_clip() {
   dest=$1

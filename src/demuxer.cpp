@@ -174,11 +174,15 @@ bool Demuxer::seek_keyframe_preroll(const float target_presentation_seconds) {
 
   constexpr float kReferenceEpsilon = 1e-4F;
   const playback_keyframe::AdjacentKeyframe prior = adjacent_keyframe(-1, target_presentation_seconds + kReferenceEpsilon);
+  constexpr float kPrerollBias = 1e-3F;
+  if (prior.status == playback_keyframe::AdjacentKeyframeStatus::AtBoundary) {
+    // At the first keyframe there is no earlier index entry to preroll from.
+    return seek(target_presentation_seconds + kPrerollBias, true);
+  }
   if (prior.status != playback_keyframe::AdjacentKeyframeStatus::Ok) {
     return false;
   }
 
-  constexpr float kPrerollBias = 1e-3F;
   return seek(prior.demuxer_position_seconds + kPrerollBias, true);
 }
 
@@ -219,6 +223,10 @@ bool Demuxer::ensure_keyframe_index_initialized() {
   }
 
   keyframe_index_init_attempted_ = true;
+  // Some demuxers populate their keyframe index only after the first seek.
+  const AVStream* stream = probe_format_context_->streams[probe_video_stream_index_];
+  const int64_t start = stream->start_time != AV_NOPTS_VALUE ? stream->start_time : 0;
+  (void)av_seek_frame(probe_format_context_, probe_video_stream_index_, start, AVSEEK_FLAG_BACKWARD);
   keyframe_index_snapshot_ = playback_keyframe::capture_keyframe_index_snapshot(probe_format_context_, probe_video_stream_index_, probe_video_start_time_seconds());
   return playback_keyframe::raw_index_has_keyframes(keyframe_index_snapshot_);
 #else

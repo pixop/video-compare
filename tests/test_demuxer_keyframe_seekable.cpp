@@ -95,6 +95,26 @@ static void test_file_seekable_and_index_gate(const std::string& path) {
   expect_bool("indexed file index_navigation_supported", demuxer.index_navigation_supported(), true);
 }
 
+static void test_ffv1_matroska_navigation(const std::string& path) {
+  Demuxer demuxer(Side::Left(), "", path, nullptr, nullptr);
+  expect_bool("FFV1 Matroska index available", demuxer.index_navigation_supported(), true);
+
+  const auto next = demuxer.adjacent_keyframe(+1, 0.0F);
+  expect_bool("FFV1 next keyframe available", next.status == playback_keyframe::AdjacentKeyframeStatus::Ok, true);
+  if (next.status == playback_keyframe::AdjacentKeyframeStatus::Ok) {
+    expect_bool("FFV1 next keyframe follows first", next.demuxer_position_seconds > 0.0F, true);
+  }
+
+  const bool preroll = demuxer.seek_keyframe_preroll(0.0F);
+  expect_bool("FFV1 first-keyframe preroll succeeds", preroll, true);
+  if (preroll) {
+    AVPacket packet{};
+    const bool read = demuxer(packet);
+    expect_bool("FFV1 first-keyframe preroll lands at start", read && packet.stream_index == demuxer.video_stream_index() && packet.pts == 0, true);
+    av_packet_unref(&packet);
+  }
+}
+
 static void test_pipe_nonseekable_rejects_without_probe(const std::string& source_path) {
   const std::string fifo = std::string("/tmp/vc_kf_pipe_") + std::to_string(getpid());
   if (mkfifo(fifo.c_str(), 0600) != 0) {
@@ -187,6 +207,9 @@ int main(int argc, char** argv) {
 
   try {
     test_file_seekable_and_index_gate(fixture);
+    for (int i = 2; i < argc; ++i) {
+      test_ffv1_matroska_navigation(argv[i]);
+    }
     test_pipe_nonseekable_rejects_without_probe(fixture);
     test_resolve_step_mixed_file_and_pipe(fixture, fixture);
   } catch (const std::exception& ex) {

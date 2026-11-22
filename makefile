@@ -162,7 +162,7 @@ integration: $(integration_bin) tests/test_playback_keyframe$(EXE)
 	echo "Running tests/test_playback_keyframe with indexed GOP fixture"; \
 	./tests/test_playback_keyframe "$$media/seek_right_gop25.mp4"; \
 	echo "Running tests/test_demuxer_keyframe_seekable (pipe nonseekable gate)"; \
-	./tests/test_demuxer_keyframe_seekable "$$media/seek_right_gop25.mp4"; \
+	./tests/test_demuxer_keyframe_seekable "$$media/seek_right_gop25.mp4" "$$media/kf_ffv1_default.mkv" "$$media/kf_ffv1_gop1.mkv"; \
 	echo "Running $(integration_bin) baseline"; \
 	$$wrap ./$(integration_bin) baseline "$$media/left_25.mp4" "$$media/right0_25.mp4"; \
 	echo "Running $(integration_bin) event-injection"; \
