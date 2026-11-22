@@ -34,7 +34,10 @@ jobs:
             libswresample-dev \
             libsdl2-dev \
             libsdl2-ttf-dev \
-            pkg-config
+            pkg-config \
+            xvfb \
+            xauth \
+            libgl1-mesa-dri
 
       - name: Environment
         run: |
@@ -50,6 +53,11 @@ jobs:
 
       - name: Unit tests
         run: make check
+
+      - name: Accelerated progress rendering equivalence (Mesa OpenGL)
+        run: |
+          xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX' ./tests/test_progress_dots --accelerated
+          SDL_RENDER_LINE_METHOD=2 xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX' ./tests/test_progress_dots --accelerated
 
       - name: Integration tests
         run: make integration

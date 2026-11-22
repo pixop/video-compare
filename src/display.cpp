@@ -20,6 +20,7 @@
 #include "format_converter.h"
 #include "frame_metadata.h"
 #include "png_saver.h"
+#include "progress_dots.h"
 #include "scope_window.h"
 #include "version.h"
 #include "video_compare_icon.h"
@@ -355,6 +356,7 @@ Display::Display(const int display_number,
   SDL_FreeSurface(icon_surface);
 
   renderer_ = check_sdl(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "renderer");
+  batch_progress_dots_ = progress_dots::can_batch_for_renderer();
 
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
   SDL_RenderClear(renderer_);
@@ -1588,22 +1590,34 @@ void Display::render_progress_dots(const float position, const float progress, c
   if (duration_ > 0) {
     const float dot_size = 2.f;
 
-    const int dot_width = std::round(drawable_to_window_width_factor_ * dot_size);
-    const int dot_height = std::round(drawable_to_window_height_factor_ * dot_size);
+    const int dot_width = std::max(1, static_cast<int>(std::round(drawable_to_window_width_factor_ * dot_size)));
+    const int dot_height = std::max(1, static_cast<int>(std::round(drawable_to_window_height_factor_ * dot_size)));
 
     const int y_offset = is_top ? 1 : drawable_height_ - 1 - dot_height;
 
     const int x_position = std::round(position * drawable_width_ / duration_);
     const int x_progress = std::round(progress * drawable_width_ / duration_);
 
-    for (int x = 0; x < x_position; x++) {
-      if (x % (2 * dot_width) < dot_width) {
-        SDL_SetRenderDrawColor(renderer_, POSITION_COLOR.r, POSITION_COLOR.g, POSITION_COLOR.b, BACKGROUND_ALPHA * 3 / 2);
-      } else {
-        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
+    if (dot_height == 1 || !batch_progress_dots_) {
+      // Preserve original rasterization for degenerate or driver-rendered lines.
+      for (int x = 0; x < x_position; ++x) {
+        if (x % (2 * dot_width) < dot_width) {
+          SDL_SetRenderDrawColor(renderer_, POSITION_COLOR.r, POSITION_COLOR.g, POSITION_COLOR.b, BACKGROUND_ALPHA * 3 / 2);
+        } else {
+          SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
+        }
+        SDL_RenderDrawLine(renderer_, x, y_offset, x, y_offset + dot_height - 1);
       }
-
-      SDL_RenderDrawLine(renderer_, x, y_offset, x, y_offset + dot_height - 1);
+    } else {
+      progress_dots::build_rects(x_position, drawable_width_, dot_width, dot_height, y_offset, progress_bright_rects_, progress_dark_rects_);
+      if (!progress_bright_rects_.empty()) {
+        SDL_SetRenderDrawColor(renderer_, POSITION_COLOR.r, POSITION_COLOR.g, POSITION_COLOR.b, BACKGROUND_ALPHA * 3 / 2);
+        SDL_RenderFillRects(renderer_, progress_bright_rects_.data(), static_cast<int>(progress_bright_rects_.size()));
+      }
+      if (!progress_dark_rects_.empty()) {
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA);
+        SDL_RenderFillRects(renderer_, progress_dark_rects_.data(), static_cast<int>(progress_dark_rects_.size()));
+      }
     }
 
     // draw current frame

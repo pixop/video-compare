@@ -326,6 +326,9 @@ class Display {
   SDL_Renderer* renderer_;
   SDL_Texture* video_texture_linear_{nullptr};
   SDL_Texture* video_texture_nn_{nullptr};
+  std::vector<SDL_Rect> progress_bright_rects_;
+  std::vector<SDL_Rect> progress_dark_rects_;
+  bool batch_progress_dots_{false};
 
   SDL_Event event_;
   int mouse_x_;
