@@ -66,7 +66,7 @@ inline SeekPlan plan_seek(const SeekRequest& request) {
 
   plan.left_target_position = std::max(plan.left_target_position, min_left_position);
 
-  plan.backward = (seek_relative < 0.0F) || (request.shift_right_frames != 0) || (request.force_seek_current_position && request.all_sides_multi_frame);
+  plan.backward = request.seek_from_start || (seek_relative < 0.0F) || (request.shift_right_frames != 0) || (request.force_seek_current_position && request.all_sides_multi_frame);
 
   plan.rights.reserve(request.rights.size());
 

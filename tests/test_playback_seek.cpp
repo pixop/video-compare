@@ -123,7 +123,7 @@ int main() {
     const float rewritten = static_cast<float>(40000 * AV_TIME_TO_SEC);
 
     expect_near("left still ignores timeline fraction", plan.left_target_position, left_restore(request) + rewritten);
-    expect_bool("rewritten still-left seek is forward", plan.backward, false);
+    expect_bool("absolute still-left seek is backward", plan.backward, true);
     expect_near("from-start right uses rewritten seek_relative", plan.rights[0].target_position, request.shortest_duration * rewritten + request.rights[0].start_time);
   }
 
@@ -186,7 +186,7 @@ int main() {
     const float rewritten = static_cast<float>(40000 * AV_TIME_TO_SEC);
 
     expect_near("left from-start keeps 0.5", plan.left_target_position, request.shortest_duration * 0.5F + request.left.start_time);
-    expect_bool("backward stays from pre-right seek_relative", plan.backward, false);
+    expect_bool("absolute seek remains backward after right rewrite", plan.backward, true);
     expect_near("right0 still uses assigned delta", plan.rights[0].target_position, right_restore(request, 0) + rewritten);
     expect_near("right1 from-start sees right0 rewrite", plan.rights[1].target_position, request.shortest_duration * rewritten + right1.start_time);
     expect_near("right2 from-start sees same rewrite", plan.rights[2].target_position, request.shortest_duration * rewritten + right2.start_time);

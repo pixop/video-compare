@@ -3565,7 +3565,7 @@ void Display::handle_event(const SDL_Event& event) {
               std::string timestamp = match.str();
               notify_user(string_sprintf("Timestamp pasted: %s", timestamp.c_str()));
 
-              seek_relative_ = parse_timestamps_to_seconds(timestamp) / static_cast<float>(duration_);
+              seek_relative_ = parse_timestamp_for_seek_seconds(timestamp) / static_cast<float>(duration_);
               seek_from_start_ = true;
             } else {
               notify_user("No valid timestamp found in clipboard.");

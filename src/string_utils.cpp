@@ -211,6 +211,15 @@ double parse_timestamps_to_seconds(const std::string& timestamp) {
   return hours * 3600.0 + minutes * 60.0 + seconds;
 }
 
+double parse_timestamp_for_seek_seconds(const std::string& timestamp) {
+  // format_position() rounds to milliseconds. Use the upper boundary of
+  // that rounding interval so seeking backward includes the original frame.
+  constexpr double kHalfMillisecondSeconds = 0.0005;
+  const size_t decimal_point = timestamp.find('.');
+  const bool millisecond_precision = decimal_point != std::string::npos && timestamp.size() - decimal_point - 1 == 3;
+  return parse_timestamps_to_seconds(timestamp) + (millisecond_precision ? kHalfMillisecondSeconds : 0.0);
+}
+
 std::string to_lower_case(const std::string& str) {
   std::string tmp;
 

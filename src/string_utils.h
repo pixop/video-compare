@@ -66,6 +66,8 @@ double parse_strict_double(const std::string& s);
 
 double parse_timestamps_to_seconds(const std::string& timestamp);
 
+double parse_timestamp_for_seek_seconds(const std::string& timestamp);
+
 std::string to_lower_case(const std::string& str);
 
 std::string to_upper_case(const std::string& str);

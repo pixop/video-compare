@@ -2,6 +2,7 @@
 #include "keyframe_index.h"
 #include "keyframe_index_probe.h"
 #include "playback_keyframe.h"
+#include "string_utils.h"
 #include "video_compare.h"
 extern "C" {
 #include <libavformat/avformat.h>
@@ -36,6 +37,7 @@ enum class Scenario {
   EventInjection,
   HighDpiInput,
   Seek,
+  ClipboardSeek,
   StillSeek,
   SyncMismatch,
   MultiRightSync,
@@ -130,6 +132,8 @@ const char* scenario_name(const Scenario scenario) {
       return "high-dpi-input";
     case Scenario::Seek:
       return "seek";
+    case Scenario::ClipboardSeek:
+      return "clipboard-seek";
     case Scenario::StillSeek:
       return "still-seek";
     case Scenario::SyncMismatch:
@@ -936,6 +940,18 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(300);
+  } else if (scenario == Scenario::ClipboardSeek) {
+    push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
+    sleep_ms(300);
+    for (const char* timestamp : {"00:00:05.208", "00:00:05.208333"}) {
+      if (SDL_SetClipboardText(timestamp) < 0) {
+        std::fprintf(stderr, "FAIL could not prepare clipboard: %s\n", SDL_GetError());
+      }
+      push_keydown(SDLK_v, SDL_SCANCODE_V, 0, clipboard_mod());
+      sleep_ms(1200);
+      push_copy_timestamp();
+      sleep_ms(250);
+    }
   } else if (scenario == Scenario::StillSeek) {
     // JPEG/image2 becomes SingleFrame after the first unique PTS, then EOF.
     // The 1000 ms settle above is required: a JPEG input alone does not mean
@@ -1511,6 +1527,20 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       } else {
         exit_code = EXIT_FAILURE;
       }
+    }
+  } else if (scenario == Scenario::ClipboardSeek) {
+    if (std::fabs(parse_timestamp_for_seek_seconds("5.208") - 5.2085) > 1e-9 ||
+        std::fabs(parse_timestamp_for_seek_seconds("00:00:05.208333") - 5.208333) > 1e-9 ||
+        std::fabs(parse_timestamp_for_seek_seconds("00:00:05") - 5.0) > 1e-9) {
+      std::fprintf(stderr, "FAIL timestamp seek precision adjustment\n");
+      exit_code = EXIT_FAILURE;
+    }
+    const std::vector<double> times = copied_positions(output);
+    if (times.size() != 2 || std::fabs(times[0] - 5.208333) > 0.015 || std::fabs(times[1] - 5.208333) > 0.015) {
+      std::fprintf(stderr, "FAIL clipboard paste expected 5.208 for 3- and 6-decimal timestamps (got %zu samples)\n", times.size());
+      exit_code = EXIT_FAILURE;
+    } else {
+      std::printf("PASS clipboard paste 5.208 and 5.208333 both landed at %.3f\n", times[0]);
     }
   } else if (scenario == Scenario::SyncMismatch) {
     // Clipboard is left PTS only. A mid-clip timestamp after unpaused 25/30
@@ -2385,6 +2415,7 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "  %s high-dpi-input LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s seek LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s still-seek LEFT RIGHT\n", argv0);
+  std::fprintf(stderr, "  %s clipboard-seek LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s sync-mismatch LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s multi-right-sync LEFT RIGHT0 RIGHT1\n", argv0);
   std::fprintf(stderr, "  %s frame-navigation LEFT RIGHT\n", argv0);
@@ -2442,6 +2473,13 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::Seek, files);
+    }
+    if (name == "clipboard-seek") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::ClipboardSeek, files);
     }
     if (name == "still-seek") {
       if (files.size() != 2) {
