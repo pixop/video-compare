@@ -14,6 +14,7 @@
 #include "conversion_geometry.h"
 #include "core_types.h"
 #include "font_selection.h"
+#include "hud_text_cache.h"
 #include "row_workers.h"
 #include "scope_window.h"
 #include "string_utils.h"
@@ -327,6 +328,9 @@ class Display {
   SDL_Texture* video_texture_linear_{nullptr};
   SDL_Texture* video_texture_nn_{nullptr};
 
+  enum class HudLabel : size_t { LeftPosition, RightPosition, SeekTarget, ZoomFactor, PlaybackSpeed, BufferCount, Count };
+  std::array<HudTextCache, static_cast<size_t>(HudLabel::Count)> hud_text_caches_;
+
   SDL_Event event_;
   int mouse_x_;
   int mouse_y_;
@@ -359,6 +363,8 @@ class Display {
 
   void print_verbose_info();
 
+  void clear_hud_text_caches();
+  const HudTextCache& cached_hud_text(HudLabel label, const std::string& text, SDL_Color color);
   void rebuild_fonts();
   void rebuild_font_dependent_ui();
   bool resolve_embedded_font_for_current_labels();

@@ -430,6 +430,7 @@ Display::Display(const int display_number,
 }
 
 Display::~Display() {
+  clear_hud_text_caches();
   SDL_DestroyTexture(video_texture_linear_);
   SDL_DestroyTexture(video_texture_nn_);
   SDL_DestroyTexture(side_ui_[LEFT.as_simple_index()].text_texture);
@@ -799,6 +800,18 @@ void Display::print_verbose_info() {
   std::cout << "libavcodec configuration: " << avcodec_configuration() << std::endl << std::endl;
 }
 
+void Display::clear_hud_text_caches() {
+  for (auto& cache : hud_text_caches_) {
+    cache.clear();
+  }
+}
+
+const HudTextCache& Display::cached_hud_text(const HudLabel label, const std::string& text, const SDL_Color color) {
+  HudTextCache& cache = hud_text_caches_[static_cast<size_t>(label)];
+  cache.update(renderer_, small_font_, text, color);
+  return cache;
+}
+
 void Display::rebuild_fonts() {
   static constexpr int MIN_SMALL_FONT_SIZE = 14;
   static constexpr int MAX_SMALL_FONT_SIZE = 64;
@@ -812,6 +825,7 @@ void Display::rebuild_fonts() {
   TTF_FontPtr new_small{open_ui_font_at_size(font_selection_, active_embedded_font_, small_font_size, "small text")};
   TTF_FontPtr new_large{open_ui_font_at_size(font_selection_, active_embedded_font_, big_font_size, "large text")};
 
+  clear_hud_text_caches();
   if (small_font_ != nullptr) {
     TTF_CloseFont(small_font_);
   }
@@ -2715,11 +2729,10 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       // file name and current position of left video
       const std::string left_picture_type(1, av_get_picture_type_char(left_frame->pict_type));
       const std::string left_pos_str = format_position(left_position, true) + " " + left_picture_type + format_position_difference(left_position, right_position);
-      text_surface = TTF_RenderText_Blended(small_font_, left_pos_str.c_str(), POSITION_COLOR);
-      SDL_Texture* left_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-      const int left_position_text_width = text_surface->w;
-      const int left_position_text_height = text_surface->h;
-      SDL_FreeSurface(text_surface);
+      const HudTextCache& left_pos_text = cached_hud_text(HudLabel::LeftPosition, left_pos_str, POSITION_COLOR);
+      SDL_Texture* left_position_text_texture = left_pos_text.texture();
+      const int left_position_text_width = left_pos_text.width();
+      const int left_position_text_height = left_pos_text.height();
 
       if (mode_ == Mode::VStack) {
         render_text(line1_y_, line1_y_, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
@@ -2733,17 +2746,15 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
         render_text(line1_y_, left_position_row_y, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
       }
 
-      SDL_DestroyTexture(left_position_text_texture);
     }
     if (show_right_) {
       // file name and current position of right video
       const std::string right_picture_type(1, av_get_picture_type_char(right_frame->pict_type));
       const std::string right_pos_str = format_position(right_position, true) + " " + right_picture_type + format_position_difference(right_position, left_position);
-      text_surface = TTF_RenderText_Blended(small_font_, right_pos_str.c_str(), POSITION_COLOR);
-      SDL_Texture* right_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-      int right_position_text_width = text_surface->w;
-      int right_position_text_height = text_surface->h;
-      SDL_FreeSurface(text_surface);
+      const HudTextCache& right_pos_text = cached_hud_text(HudLabel::RightPosition, right_pos_str, POSITION_COLOR);
+      SDL_Texture* right_position_text_texture = right_pos_text.texture();
+      int right_position_text_width = right_pos_text.width();
+      int right_position_text_height = right_pos_text.height();
 
       int text1_x;
       int text1_y;
@@ -2766,24 +2777,21 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
                   border_extension_, false);
       render_text(text2_x, text2_y, right_position_text_texture, right_position_text_width, right_position_text_height, border_extension_, false);
 
-      SDL_DestroyTexture(right_position_text_texture);
     }
     if (mouse_is_inside_window_ && duration_ > 0) {
       // target seek position
       float target_position = static_cast<float>(mouse_x_) / static_cast<float>(window_width_) * duration_;
 
       const std::string target_pos_str = format_position(target_position, true);
-      text_surface = TTF_RenderText_Blended(small_font_, target_pos_str.c_str(), TARGET_COLOR);
-      SDL_Texture* target_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-      const int target_position_text_width = text_surface->w;
-      const int target_position_text_height = text_surface->h;
-      SDL_FreeSurface(text_surface);
+      const HudTextCache& target_pos_text = cached_hud_text(HudLabel::SeekTarget, target_pos_str, TARGET_COLOR);
+      SDL_Texture* target_position_text_texture = target_pos_text.texture();
+      const int target_position_text_width = target_pos_text.width();
+      const int target_position_text_height = target_pos_text.height();
 
       SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 2);
       render_text(drawable_width_ - line1_y_ - target_position_text_width, drawable_height_ - line1_y_ - target_position_text_height, target_position_text_texture, target_position_text_width, target_position_text_height, border_extension_,
                   false);
 
-      SDL_DestroyTexture(target_position_text_texture);
     }
 
     // zoom factor
@@ -2803,11 +2811,10 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       zoom_factor_str = string_sprintf("x%1.0f", global_zoom_factor_);
     }
 
-    text_surface = TTF_RenderText_Blended(small_font_, zoom_factor_str.c_str(), ZOOM_COLOR);
-    SDL_Texture* zoom_position_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-    const int zoom_position_text_width = text_surface->w;
-    const int zoom_position_text_height = text_surface->h;
-    SDL_FreeSurface(text_surface);
+    const HudTextCache& zoom_text = cached_hud_text(HudLabel::ZoomFactor, zoom_factor_str, ZOOM_COLOR);
+    SDL_Texture* zoom_position_text_texture = zoom_text.texture();
+    const int zoom_position_text_width = zoom_text.width();
+    const int zoom_position_text_height = zoom_text.height();
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 2);
 
@@ -2815,7 +2822,6 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     int text_y = (mode_ == Mode::VStack) ? line1_y_ : drawable_height_ - line1_y_ - zoom_position_text_height;
 
     render_text(text_x, text_y, zoom_position_text_texture, zoom_position_text_width, zoom_position_text_height, border_extension_, false);
-    SDL_DestroyTexture(zoom_position_text_texture);
 
     // playback speed
     std::string playback_speed_str;
@@ -2847,24 +2853,21 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     }
 
     const std::string united_playback_speed_str = string_sprintf("@%s%s", playback_speed_str.c_str(), playback_speed_factor_str.c_str());
-    text_surface = TTF_RenderText_Blended(small_font_, united_playback_speed_str.c_str(), PLAYBACK_SPEED_COLOR);
-    SDL_Texture* playack_speed_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-    const int playack_speed_text_width = text_surface->w;
-    const int playack_speed_text_height = text_surface->h;
-    SDL_FreeSurface(text_surface);
+    const HudTextCache& speed_text = cached_hud_text(HudLabel::PlaybackSpeed, united_playback_speed_str, PLAYBACK_SPEED_COLOR);
+    SDL_Texture* playack_speed_text_texture = speed_text.texture();
+    const int playack_speed_text_width = speed_text.width();
+    const int playack_speed_text_height = speed_text.height();
 
     text_x = drawable_width_ / 2 - playack_speed_text_width / 2 - border_extension_;
     text_y = drawable_height_ - line1_y_ - zoom_position_text_height;
 
     render_text(text_x, text_y, playack_speed_text_texture, playack_speed_text_width, playack_speed_text_height, border_extension_, false);
-    SDL_DestroyTexture(playack_speed_text_texture);
 
     // current frame / number of frames in history buffer
-    text_surface = TTF_RenderText_Blended(small_font_, current_total_browsable.c_str(), BUFFER_COLOR);
-    SDL_Texture* current_total_browsable_text_texture = SDL_CreateTextureFromSurface(renderer_, text_surface);
-    const int current_total_browsable_text_width = text_surface->w;
-    const int current_total_browsable_text_height = text_surface->h;
-    SDL_FreeSurface(text_surface);
+    const HudTextCache& buffer_text = cached_hud_text(HudLabel::BufferCount, current_total_browsable, BUFFER_COLOR);
+    SDL_Texture* current_total_browsable_text_texture = buffer_text.texture();
+    const int current_total_browsable_text_width = buffer_text.width();
+    const int current_total_browsable_text_height = buffer_text.height();
 
     text_y = (mode_ == Mode::VStack) ? line1_y_ : line2_y_;
 
@@ -2897,7 +2900,6 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
     text_rect = {drawable_width_ / 2 - current_total_browsable_text_width / 2, text_y, current_total_browsable_text_width, current_total_browsable_text_height};
     SDL_RenderCopy(renderer_, current_total_browsable_text_texture, nullptr, &text_rect);
-    SDL_DestroyTexture(current_total_browsable_text_texture);
 
     // display progress as dot lines
     render_progress_dots(left_position, left_progress, true);
@@ -3228,6 +3230,24 @@ void Display::handle_event(const SDL_Event& event) {
   };
 
   switch (event_.type) {
+    case SDL_RENDER_DEVICE_RESET:
+      // SDL reports that textures must be recreated. Reuse the display's
+      // existing asset builders, including the persistent HUD text cache.
+      clear_hud_text_caches();
+      recreate_video_textures_for_current_mode();
+      rebuild_side_ui_textures();
+      rebuild_help_textures();
+      for (SDL_Texture* texture : metadata_textures_) {
+        SDL_DestroyTexture(texture);
+      }
+      metadata_textures_.clear();
+      metadata_total_height_ = 0;
+      metadata_dirty_ = true;
+      if (message_texture_ != nullptr) {
+        SDL_DestroyTexture(message_texture_);
+        message_texture_ = nullptr;
+      }
+      break;
     case SDL_WINDOWEVENT:
       switch (event_.window.event) {
         case SDL_WINDOWEVENT_CLOSE: {

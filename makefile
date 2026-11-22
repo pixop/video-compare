@@ -125,6 +125,8 @@ tests/test_format_converter$(EXE): TEST_LIBS = $(LDLIBS)
 tests/test_font_selection$(EXE): src/font_selection.o
 tests/test_font_selection$(EXE): TEST_LIBS = $(LDLIBS)
 
+tests/test_hud_text_cache$(EXE): TEST_LIBS = $(LDLIBS)
+
 tests/test_video_filterer$(EXE): TEST_LIBS = $(LDLIBS)
 
 tests/test_tone_mapping$(EXE): src/tone_mapping.o
