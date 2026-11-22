@@ -356,6 +356,8 @@ Display::Display(const int display_number,
   SDL_FreeSurface(icon_surface);
 
   renderer_ = check_sdl(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), "renderer");
+  // Use native drawable pixels. Setting SDL's logical size would also remap
+  // mouse events to drawable coordinates, while input expects window coordinates.
   batch_progress_dots_ = progress_dots::can_batch_for_renderer();
 
   SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
@@ -406,8 +408,6 @@ Display::Display(const int display_number,
   normal_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
   pan_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZEALL);
   selection_mode_cursor_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
-
-  SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
 
   last_window_title_.clear();
 
@@ -1129,8 +1129,6 @@ void Display::handle_window_resize(const bool reset_forced_size_guard, const boo
   double_border_extension_ = border_extension_ * 2;
 
   // Rebuild cached UI assets that are size-dependent (fonts, help, metadata, labels).
-  SDL_RenderSetLogicalSize(renderer_, drawable_width_, drawable_height_);
-
   rebuild_font_dependent_ui();
 
   // Clamp overlay scroll positions to the new size and refresh ROI-dependent title.

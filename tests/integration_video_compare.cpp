@@ -34,6 +34,7 @@ namespace {
 enum class Scenario {
   Baseline,
   EventInjection,
+  HighDpiInput,
   Seek,
   StillSeek,
   SyncMismatch,
@@ -125,6 +126,8 @@ const char* scenario_name(const Scenario scenario) {
       return "baseline";
     case Scenario::EventInjection:
       return "event-injection";
+    case Scenario::HighDpiInput:
+      return "high-dpi-input";
     case Scenario::Seek:
       return "seek";
     case Scenario::StillSeek:
@@ -1347,6 +1350,11 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   reset_helper_counters();
 
   VideoCompareConfig config = make_config(resolved);
+  if (scenario == Scenario::HighDpiInput) {
+    config.high_dpi_allowed = true;
+    // -d halves the requested window size; keep the resulting test window valid.
+    config.window_size = std::make_tuple(640, 360);
+  }
   const char* shift_env = std::getenv("KEYFRAME_NAV_SHIFT_MS");
   if (shift_env != nullptr && shift_env[0] != '\0') {
     config.time_shift.offset_ms = std::strtol(shift_env, nullptr, 10);
@@ -1395,6 +1403,21 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
 
   try {
     VideoCompare video_compare(config, keyframe_landing_observer);
+    if (scenario == Scenario::HighDpiInput) {
+      // SDL_RenderSetLogicalSize() rewrites mouse events into drawable pixel
+      // coordinates. Display's input path expects window coordinates instead.
+      SDL_Window* window = SDL_GetWindowFromID(first_sdl_window_id());
+      SDL_Renderer* renderer = window != nullptr ? SDL_GetRenderer(window) : nullptr;
+      if (renderer == nullptr || (SDL_GetWindowFlags(window) & SDL_WINDOW_ALLOW_HIGHDPI) == 0) {
+        throw std::runtime_error("High-DPI test window or renderer unavailable");
+      }
+      int logical_w = -1;
+      int logical_h = -1;
+      SDL_RenderGetLogicalSize(renderer, &logical_w, &logical_h);
+      if (logical_w != 0 || logical_h != 0) {
+        throw std::runtime_error("Renderer logical sizing would scale mouse events twice on high-DPI displays");
+      }
+    }
     helper = std::thread(run_event_script, scenario, std::ref(finished));
     video_compare();
   } catch (const std::exception& exception) {
@@ -1420,7 +1443,9 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   const std::string output = integration_stdout.snapshot();
   std::cout << output;
 
-  if (scenario == Scenario::EventInjection) {
+  if (scenario == Scenario::HighDpiInput) {
+    std::printf("PASS high-DPI input retains unscaled SDL window mouse coordinates\n");
+  } else if (scenario == Scenario::EventInjection) {
     if (events_pushed.load() < 3) {
       std::fprintf(stderr, "FAIL render-reset event injection was incomplete\n");
       exit_code = EXIT_FAILURE;
@@ -2357,6 +2382,7 @@ void print_usage(const char* argv0) {
   std::fprintf(stderr, "usage:\n");
   std::fprintf(stderr, "  %s baseline LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s event-injection LEFT RIGHT0 RIGHT1\n", argv0);
+  std::fprintf(stderr, "  %s high-dpi-input LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s seek LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s still-seek LEFT RIGHT\n", argv0);
   std::fprintf(stderr, "  %s sync-mismatch LEFT RIGHT\n", argv0);
@@ -2402,6 +2428,13 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
       }
       return run_scenario(Scenario::EventInjection, files);
+    }
+    if (name == "high-dpi-input") {
+      if (files.size() != 2) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+      return run_scenario(Scenario::HighDpiInput, files);
     }
     if (name == "seek") {
       if (files.size() != 2) {
