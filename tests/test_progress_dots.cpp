@@ -1,3 +1,4 @@
+#define SDL_MAIN_HANDLED
 #include "progress_dots.h"
 #include <SDL2/SDL.h>
 #include <cstdio>
