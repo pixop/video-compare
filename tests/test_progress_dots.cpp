@@ -1,10 +1,10 @@
 #define SDL_MAIN_HANDLED
-#include "progress_dots.h"
 #include <SDL2/SDL.h>
 #include <cstdio>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <vector>
+#include "progress_dots.h"
 
 // Compare pixel-for-pixel against the original per-column implementation,
 // including alpha blending, clipping, and both top/bottom HUD positions.
@@ -64,9 +64,7 @@ int main(int argc, char** argv) {
             SDL_RenderClear(renderer);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
           };
-          auto read_pixels = [&](std::vector<uint32_t>& pixels) {
-            return SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_ARGB8888, pixels.data(), width * sizeof(uint32_t)) == 0;
-          };
+          auto read_pixels = [&](std::vector<uint32_t>& pixels) { return SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_ARGB8888, pixels.data(), width * sizeof(uint32_t)) == 0; };
           clear();
           for (int x = 0; x < end_x; ++x) {
             if (x % (2 * dot_w) < dot_w) {

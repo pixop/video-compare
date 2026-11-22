@@ -1,11 +1,11 @@
 #define SDL_MAIN_HANDLED
-#include "hud_text_cache.h"
-#include "source_code_pro_regular_ttf.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
+#include "hud_text_cache.h"
+#include "source_code_pro_regular_ttf.h"
 
 int main() {
   SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);

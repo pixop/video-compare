@@ -840,10 +840,9 @@ bool append_verified_union_landings(std::vector<double>& times, const std::vecto
     const auto& landing = landings[i];
     if (landing.verification_status != playback_keyframe::KeyframeNavigationStatus::None || !landing.actual_owner_demuxer_valid || !landing.actual_comparison_timeline_valid ||
         std::fabs(landing.actual_comparison_timeline_seconds - landing.requested_comparison_timeline_seconds) > kUnionTol) {
-      std::fprintf(stderr, "FAIL union-time-shift landing %zu owner=%s right=%zu status=%d owner_demuxer=%.3f expected=%.3f comparison=%.3f expected=%.3f valid=%d/%d\n", i,
-                   landing.candidate_owner == SideType::Left ? "left" : "right", landing.active_right_index, static_cast<int>(landing.verification_status), landing.actual_owner_demuxer_seconds,
-                   landing.requested_owner_demuxer_seconds, landing.actual_comparison_timeline_seconds, landing.requested_comparison_timeline_seconds,
-                   landing.actual_owner_demuxer_valid, landing.actual_comparison_timeline_valid);
+      std::fprintf(stderr, "FAIL union-time-shift landing %zu owner=%s right=%zu status=%d owner_demuxer=%.3f expected=%.3f comparison=%.3f expected=%.3f valid=%d/%d\n", i, landing.candidate_owner == SideType::Left ? "left" : "right",
+                   landing.active_right_index, static_cast<int>(landing.verification_status), landing.actual_owner_demuxer_seconds, landing.requested_owner_demuxer_seconds, landing.actual_comparison_timeline_seconds,
+                   landing.requested_comparison_timeline_seconds, landing.actual_owner_demuxer_valid, landing.actual_comparison_timeline_valid);
       return false;
     }
     times.push_back(landing.actual_comparison_timeline_seconds);

@@ -2757,7 +2757,6 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
         const int left_position_row_y = line1_y_ + side_ui_[displayed_left_side_.as_simple_index()].text_height + double_border_extension_ + HUD_SCANLINE_GAP;
         render_text(line1_y_, left_position_row_y, left_position_text_texture, left_position_text_width, left_position_text_height, border_extension_, true);
       }
-
     }
     if (show_right_) {
       // file name and current position of right video
@@ -2788,7 +2787,6 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       render_text(text1_x, text1_y, side_ui_[displayed_right_side_.as_simple_index()].text_texture, side_ui_[displayed_right_side_.as_simple_index()].text_width, side_ui_[displayed_right_side_.as_simple_index()].text_height,
                   border_extension_, false);
       render_text(text2_x, text2_y, right_position_text_texture, right_position_text_width, right_position_text_height, border_extension_, false);
-
     }
     if (mouse_is_inside_window_ && duration_ > 0) {
       // target seek position
@@ -2803,7 +2801,6 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       SDL_SetRenderDrawColor(renderer_, 0, 0, 0, BACKGROUND_ALPHA * 2);
       render_text(drawable_width_ - line1_y_ - target_position_text_width, drawable_height_ - line1_y_ - target_position_text_height, target_position_text_texture, target_position_text_width, target_position_text_height, border_extension_,
                   false);
-
     }
 
     // zoom factor
