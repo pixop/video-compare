@@ -891,9 +891,19 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     // Display::handle_event does not filter KEYDOWN by windowID. ScopeManager
     // only consumes events with a non-zero id that matches an open scope.
     // windowID 0 is the case we need to prove is accepted.
-    std::fprintf(stderr, "event-injection: first SDL window id=%u; pushing Tab with windowID=0\n", existing_window_id);
+    std::fprintf(stderr, "event-injection: first SDL window id=%u; injecting renderer reset followed by Tab with windowID=0\n", existing_window_id);
+    // Simulate SDL notifying us that GPU textures have been lost. The next
+    // input event must still be handled after rebuilding display resources.
+    SDL_Event reset_event{};
+    reset_event.type = SDL_RENDER_DEVICE_RESET;
+    if (SDL_PushEvent(&reset_event) > 0) {
+      events_pushed.fetch_add(1);
+    } else {
+      std::fprintf(stderr, "FAIL injecting SDL_RENDER_DEVICE_RESET: %s\n", SDL_GetError());
+    }
+    sleep_ms(200);
     push_keydown(SDLK_TAB, SDL_SCANCODE_TAB, 0);
-    sleep_ms(500);
+    sleep_ms(300);
   } else if (scenario == Scenario::Seek) {
     // Pause so the copied PTS is a stable pre-seek landing, not a moving playhead.
     // The seek transaction itself does not consult play_; pause only freezes fetch.
@@ -1411,6 +1421,10 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   std::cout << output;
 
   if (scenario == Scenario::EventInjection) {
+    if (events_pushed.load() < 3) {
+      std::fprintf(stderr, "FAIL render-reset event injection was incomplete\n");
+      exit_code = EXIT_FAILURE;
+    }
     if (output.find("Active right video: 2/2") == std::string::npos) {
       std::fprintf(stderr, "FAIL injected Tab did not produce 'Active right video: 2/2'\n");
       std::fprintf(stderr, "captured stdout:\n%s\n", output.c_str());
