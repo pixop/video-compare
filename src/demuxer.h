@@ -44,7 +44,6 @@ class Demuxer : public SideAware {
   bool ensure_probe_format_context();
   void close_probe_format_context();
   bool probe_context_matches_live() const;
-  float probe_video_start_time_seconds() const;
 
   int64_t container_start_time() const;
 

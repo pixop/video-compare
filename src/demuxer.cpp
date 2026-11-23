@@ -186,20 +186,6 @@ bool Demuxer::seek_keyframe_preroll(const float target_presentation_seconds) {
   return seek(prior.demuxer_position_seconds + kPrerollBias, true);
 }
 
-float Demuxer::probe_video_start_time_seconds() const {
-  if (probe_format_context_ == nullptr || probe_video_stream_index_ < 0) {
-    return 0.0F;
-  }
-
-  const AVStream* video_stream = probe_format_context_->streams[probe_video_stream_index_];
-  if (video_stream != nullptr && video_stream->start_time != AV_NOPTS_VALUE) {
-    return static_cast<float>(av_rescale_q(video_stream->start_time, video_stream->time_base, AV_R_MICROSECONDS)) * AV_TIME_TO_SEC;
-  }
-
-  const int64_t container_start = probe_format_context_->start_time != AV_NOPTS_VALUE ? probe_format_context_->start_time : 0;
-  return static_cast<float>(container_start) * AV_TIME_TO_SEC;
-}
-
 bool Demuxer::ensure_keyframe_index_initialized() {
 #if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(59, 0, 0)
   if (keyframe_index_init_attempted_) {
@@ -227,7 +213,7 @@ bool Demuxer::ensure_keyframe_index_initialized() {
   const AVStream* stream = probe_format_context_->streams[probe_video_stream_index_];
   const int64_t start = stream->start_time != AV_NOPTS_VALUE ? stream->start_time : 0;
   (void)av_seek_frame(probe_format_context_, probe_video_stream_index_, start, AVSEEK_FLAG_BACKWARD);
-  keyframe_index_snapshot_ = playback_keyframe::capture_keyframe_index_snapshot(probe_format_context_, probe_video_stream_index_, probe_video_start_time_seconds());
+  keyframe_index_snapshot_ = playback_keyframe::capture_keyframe_index_snapshot(probe_format_context_, probe_video_stream_index_);
   return playback_keyframe::raw_index_has_keyframes(keyframe_index_snapshot_);
 #else
   keyframe_index_init_attempted_ = true;

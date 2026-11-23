@@ -78,6 +78,14 @@ generate_gop_clip "$out_dir/kf_right_gop50.mp4" 4 50
 generate_gop_clip "$out_dir/kf_asym_left_gop25.mp4" 4 25
 generate_gop_clip "$out_dir/kf_asym_right_gop50.mp4" 4 50
 
+# Nonzero video start time with B-frames and indexed keyframes, without requiring libx264.
+ffmpeg -hide_banner -loglevel error -y \
+  -f lavfi -i "testsrc=size=320x180:rate=50:duration=5" \
+  -vf "setpts=PTS+0.02/TB" -pix_fmt yuv420p \
+  -c:v mpeg4 -q:v 5 -g 50 -bf 2 \
+  -video_track_timescale 16000 "$out_dir/kf_start_offset_left_50.mp4"
+cp "$out_dir/kf_start_offset_left_50.mp4" "$out_dir/kf_start_offset_right_50.mp4"
+
 # Union shift regression: left GOP 50 @ 48 fps (~1.041667 s keys, B-frames) + right keys only at 0 and 5.208333 s.
 if ffmpeg -hide_banner -loglevel error -y \
   -f lavfi -i "testsrc=size=320x180:rate=48:duration=10" \

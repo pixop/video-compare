@@ -30,14 +30,12 @@ struct KeyframeIndexSnapshot {
   bool seekable{false};
   bool presentation_mapping_verified{false};
   AVRational time_base{0, 1};
-  float video_start_time_seconds{0.0F};
   std::vector<IndexEntry> entries;
 };
 
 #if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(59, 0, 0)
-inline KeyframeIndexSnapshot capture_keyframe_index_snapshot(AVFormatContext* format_context, const int video_stream_index, const float video_start_time_seconds) {
+inline KeyframeIndexSnapshot capture_keyframe_index_snapshot(AVFormatContext* format_context, const int video_stream_index) {
   KeyframeIndexSnapshot snapshot;
-  snapshot.video_start_time_seconds = video_start_time_seconds;
 
   if (format_context == nullptr || format_context->pb == nullptr || (format_context->pb->seekable & AVIO_SEEKABLE_NORMAL) == 0) {
     return snapshot;

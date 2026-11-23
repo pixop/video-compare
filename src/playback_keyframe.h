@@ -24,17 +24,16 @@ inline bool libavformat_index_api_available() {
 #endif
 }
 
-// plan_seek / demuxer::seek positions are seconds on the same timeline as av_seek_frame
-// after multiplying by AV_TIME_BASE: content PTS in seconds plus per-stream start time.
-inline int64_t demuxer_seconds_to_stream_timestamp(const float demuxer_seconds, const AVRational& time_base, const float video_start_time_seconds) {
-  const double content_seconds = static_cast<double>(demuxer_seconds) - static_cast<double>(video_start_time_seconds);
-  const int64_t av_time = static_cast<int64_t>(content_seconds * static_cast<double>(AV_TIME_BASE));
+// Index timestamps already include the stream start time. Demuxer seek positions
+// use the same absolute timeline; only displayed frame PTS is start-normalized.
+inline int64_t demuxer_seconds_to_stream_timestamp(const float demuxer_seconds, const AVRational& time_base) {
+  const int64_t av_time = static_cast<int64_t>(static_cast<double>(demuxer_seconds) * static_cast<double>(AV_TIME_BASE));
   return av_rescale_q(av_time, AV_TIME_BASE_Q, time_base);
 }
 
-inline float stream_timestamp_to_demuxer_seconds(const int64_t stream_timestamp, const AVRational& time_base, const float video_start_time_seconds) {
+inline float stream_timestamp_to_demuxer_seconds(const int64_t stream_timestamp, const AVRational& time_base) {
   const int64_t av_time = av_rescale_q(stream_timestamp, time_base, AV_TIME_BASE_Q);
-  return static_cast<float>(av_time) * AV_TIME_TO_SEC + video_start_time_seconds;
+  return static_cast<float>(av_time) * AV_TIME_TO_SEC;
 }
 
 inline int find_reference_index(const KeyframeIndexSnapshot& snapshot, const int64_t reference_presentation_timestamp) {
@@ -70,8 +69,7 @@ inline AdjacentKeyframe find_adjacent_keyframe(const KeyframeIndexSnapshot& snap
   }
 
   const AVRational& time_base = snapshot.time_base;
-  const float start_time = snapshot.video_start_time_seconds;
-  const int64_t reference_presentation_timestamp = demuxer_seconds_to_stream_timestamp(reference_demuxer_seconds, time_base, start_time);
+  const int64_t reference_presentation_timestamp = demuxer_seconds_to_stream_timestamp(reference_demuxer_seconds, time_base);
   const int reference_index = find_reference_index(snapshot, reference_presentation_timestamp);
   const int count = static_cast<int>(snapshot.entries.size());
 
@@ -91,7 +89,7 @@ inline AdjacentKeyframe find_adjacent_keyframe(const KeyframeIndexSnapshot& snap
         }
         result.status = AdjacentKeyframeStatus::Ok;
         result.stream_timestamp = presentation_timestamp;
-        result.demuxer_position_seconds = stream_timestamp_to_demuxer_seconds(presentation_timestamp, time_base, start_time);
+        result.demuxer_position_seconds = stream_timestamp_to_demuxer_seconds(presentation_timestamp, time_base);
         return result;
       }
       result.status = AdjacentKeyframeStatus::AtBoundary;
@@ -114,7 +112,7 @@ inline AdjacentKeyframe find_adjacent_keyframe(const KeyframeIndexSnapshot& snap
     if (reference_is_keyframe && playhead_after_index_time) {
       result.status = AdjacentKeyframeStatus::Ok;
       result.stream_timestamp = reference_entry_presentation;
-      result.demuxer_position_seconds = stream_timestamp_to_demuxer_seconds(reference_entry_presentation, time_base, start_time);
+      result.demuxer_position_seconds = stream_timestamp_to_demuxer_seconds(reference_entry_presentation, time_base);
       return result;
     }
 
@@ -130,7 +128,7 @@ inline AdjacentKeyframe find_adjacent_keyframe(const KeyframeIndexSnapshot& snap
       }
       result.status = AdjacentKeyframeStatus::Ok;
       result.stream_timestamp = presentation_timestamp;
-      result.demuxer_position_seconds = stream_timestamp_to_demuxer_seconds(presentation_timestamp, time_base, start_time);
+      result.demuxer_position_seconds = stream_timestamp_to_demuxer_seconds(presentation_timestamp, time_base);
       return result;
     }
 
@@ -159,7 +157,7 @@ inline AdjacentKeyframe find_adjacent_keyframe(const KeyframeIndexSnapshot& snap
 
     result.status = AdjacentKeyframeStatus::Ok;
     result.stream_timestamp = presentation_timestamp;
-    result.demuxer_position_seconds = stream_timestamp_to_demuxer_seconds(presentation_timestamp, time_base, start_time);
+    result.demuxer_position_seconds = stream_timestamp_to_demuxer_seconds(presentation_timestamp, time_base);
     return result;
   }
 

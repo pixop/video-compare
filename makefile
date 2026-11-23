@@ -187,6 +187,8 @@ integration: $(integration_bin) tests/test_playback_keyframe$(EXE)
 	fi; \
 	echo "Running $(integration_bin) keyframe-navigation-gop25"; \
 	$$wrap ./$(integration_bin) keyframe-navigation-gop25 "$$media/seek_left_gop25.mp4" "$$media/seek_right_gop25.mp4"; \
+	echo "Running $(integration_bin) keyframe-navigation-gop25 (nonzero video start)"; \
+	KEYFRAME_NAV_EXPECT_START_MS=20 $$wrap ./$(integration_bin) keyframe-navigation-gop25 "$$media/kf_start_offset_left_50.mp4" "$$media/kf_start_offset_right_50.mp4"; \
 	if [ -f "$$media/kf_asym_left_gop25.mp4" ] && [ -f "$$media/kf_asym_right_gop50.mp4" ]; then \
 		echo "Running $(integration_bin) keyframe-navigation-asymmetric (left GOP25)"; \
 		$$wrap ./$(integration_bin) keyframe-navigation-asymmetric "$$media/kf_asym_left_gop25.mp4" "$$media/kf_asym_right_gop50.mp4"; \

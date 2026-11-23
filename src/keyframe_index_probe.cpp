@@ -110,9 +110,8 @@ static std::vector<size_t> collect_keyframe_indices(const KeyframeIndexSnapshot&
   return keyframes;
 }
 
-static int64_t demuxer_seconds_to_stream_timestamp_local(const float demuxer_seconds, const AVRational& time_base, const float video_start_time_seconds) {
-  const double content_seconds = static_cast<double>(demuxer_seconds) - static_cast<double>(video_start_time_seconds);
-  const int64_t av_time = static_cast<int64_t>(content_seconds * static_cast<double>(AV_TIME_BASE));
+static int64_t demuxer_seconds_to_stream_timestamp_local(const float demuxer_seconds, const AVRational& time_base) {
+  const int64_t av_time = static_cast<int64_t>(static_cast<double>(demuxer_seconds) * static_cast<double>(AV_TIME_BASE));
   return av_rescale_q(av_time, AV_TIME_BASE_Q, time_base);
 }
 
@@ -188,7 +187,7 @@ bool prepare_adjacent_keyframe_probe(AVFormatContext* format_context, const int 
     return false;
   }
 
-  const int64_t reference_presentation_timestamp = demuxer_seconds_to_stream_timestamp_local(reference_demuxer_seconds, snapshot.time_base, snapshot.video_start_time_seconds);
+  const int64_t reference_presentation_timestamp = demuxer_seconds_to_stream_timestamp_local(reference_demuxer_seconds, snapshot.time_base);
   int reference_index = find_reference_keyframe_index_by_raw_timestamp(snapshot, reference_presentation_timestamp);
   if (reference_index < 0) {
     reference_index = static_cast<int>(keyframes.front());
@@ -223,8 +222,8 @@ bool prepare_adjacent_keyframe_probe(AVFormatContext* format_context, const int 
   return snapshot_has_keyframe_index(snapshot);
 }
 
-KeyframeIndexSnapshot capture_verified_keyframe_index_snapshot(AVFormatContext* format_context, const int video_stream_index, const float video_start_time_seconds) {
-  KeyframeIndexSnapshot snapshot = capture_keyframe_index_snapshot(format_context, video_stream_index, video_start_time_seconds);
+KeyframeIndexSnapshot capture_verified_keyframe_index_snapshot(AVFormatContext* format_context, const int video_stream_index) {
+  KeyframeIndexSnapshot snapshot = capture_keyframe_index_snapshot(format_context, video_stream_index);
   if (!snapshot.seekable || snapshot.entries.empty()) {
     return snapshot;
   }

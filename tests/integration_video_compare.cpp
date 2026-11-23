@@ -1675,7 +1675,12 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
           const int video_stream = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
           const AVStream* stream = format_context->streams[video_stream];
           const float start_time = stream->start_time != AV_NOPTS_VALUE ? static_cast<float>(av_q2d(stream->time_base) * stream->start_time) : 0.0F;
-          const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream, start_time);
+          const char* expected_start_ms = std::getenv("KEYFRAME_NAV_EXPECT_START_MS");
+          if (expected_start_ms != nullptr && std::fabs(start_time * 1000.0 - std::atof(expected_start_ms)) > 0.1) {
+            std::fprintf(stderr, "FAIL keyframe navigation test input has unexpected start time %.6f\n", start_time);
+            exit_code = EXIT_FAILURE;
+          }
+          const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream);
           std::vector<double> key_positions;
           for (const playback_keyframe::IndexEntry& entry : snapshot.entries) {
             if ((entry.flags & AVINDEX_KEYFRAME) == 0) {
@@ -1685,21 +1690,24 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
             if (pts == AV_NOPTS_VALUE) {
               continue;
             }
-            key_positions.push_back(playback_keyframe::stream_timestamp_to_demuxer_seconds(pts, snapshot.time_base, snapshot.video_start_time_seconds));
+            key_positions.push_back(playback_keyframe::stream_timestamp_to_demuxer_seconds(pts, snapshot.time_base));
           }
           if (key_positions.size() >= 2) {
-            const auto adjacent_forward_from = [&](const double reference) {
-              const playback_keyframe::AdjacentKeyframe next = playback_keyframe::find_adjacent_keyframe(snapshot, +1, static_cast<float>(reference));
+            // Clipboard PTS is normalized to zero; keyframe index PTS is absolute.
+            const auto adjacent_forward_from = [&](const double display_position) {
+              const double demuxer_position = display_position + start_time;
+              const playback_keyframe::AdjacentKeyframe next = playback_keyframe::find_adjacent_keyframe(snapshot, +1, static_cast<float>(demuxer_position));
               if (next.status == playback_keyframe::AdjacentKeyframeStatus::Ok) {
-                return static_cast<double>(next.demuxer_position_seconds) - reference;
+                return static_cast<double>(next.demuxer_position_seconds) - demuxer_position;
               }
               return 0.0;
             };
             expect_forward_steps.push_back(adjacent_forward_from(t0));
             expect_forward_steps.push_back(adjacent_forward_from(times[1]));
-            const playback_keyframe::AdjacentKeyframe back = playback_keyframe::find_adjacent_keyframe(snapshot, -1, static_cast<float>(times[2]));
+            const double back_reference = times[2] + start_time;
+            const playback_keyframe::AdjacentKeyframe back = playback_keyframe::find_adjacent_keyframe(snapshot, -1, static_cast<float>(back_reference));
             if (back.status == playback_keyframe::AdjacentKeyframeStatus::Ok) {
-              expect_backward_steps.push_back(static_cast<double>(back.demuxer_position_seconds) - times[2]);
+              expect_backward_steps.push_back(static_cast<double>(back.demuxer_position_seconds) - back_reference);
             }
           }
           avformat_close_input(&format_context);
@@ -1711,7 +1719,10 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       const double exp_d1 = expect_forward_steps.size() > 0 ? expect_forward_steps[0] : 1.0;
       const double exp_d2 = expect_forward_steps.size() > 1 ? expect_forward_steps[1] : exp_d1;
       const double exp_back = expect_backward_steps.size() > 0 ? expect_backward_steps[0] : -exp_d2;
-      if (!step_near(d1, exp_d1)) {
+      if (d1 <= 0.10 || d2 <= 0.10) {
+        std::fprintf(stderr, "FAIL GOP25 forward keyframe navigation did not advance: %.3f, %.3f\n", d1, d2);
+        exit_code = EXIT_FAILURE;
+      } else if (!step_near(d1, exp_d1)) {
         std::fprintf(stderr, "FAIL GOP25 forward step 1 delta %.3f not ~%.3f\n", d1, exp_d1);
         exit_code = EXIT_FAILURE;
       } else if (!step_near(d2, exp_d2)) {
@@ -1753,9 +1764,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
             return positions;
           }
           const int video_stream = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-          const AVStream* stream = format_context->streams[video_stream];
-          const float start_time = stream->start_time != AV_NOPTS_VALUE ? static_cast<float>(av_q2d(stream->time_base) * stream->start_time) : 0.0F;
-          const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream, start_time);
+          const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream);
           for (const playback_keyframe::IndexEntry& entry : snapshot.entries) {
             if ((entry.flags & AVINDEX_KEYFRAME) == 0) {
               continue;
@@ -1764,7 +1773,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
             if (pts == AV_NOPTS_VALUE) {
               continue;
             }
-            positions.push_back(playback_keyframe::stream_timestamp_to_demuxer_seconds(pts, snapshot.time_base, snapshot.video_start_time_seconds));
+            positions.push_back(playback_keyframe::stream_timestamp_to_demuxer_seconds(pts, snapshot.time_base));
           }
           avformat_close_input(&format_context);
           std::sort(positions.begin(), positions.end());

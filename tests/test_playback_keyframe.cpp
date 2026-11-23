@@ -103,7 +103,7 @@ static std::vector<float> keyframe_demuxer_positions_from_snapshot(const playbac
       continue;
     }
     const int64_t presentation_timestamp = playback_keyframe::index_entry_presentation_timestamp(snapshot, entry);
-    positions.push_back(playback_keyframe::stream_timestamp_to_demuxer_seconds(presentation_timestamp, snapshot.time_base, snapshot.video_start_time_seconds));
+    positions.push_back(playback_keyframe::stream_timestamp_to_demuxer_seconds(presentation_timestamp, snapshot.time_base));
   }
   return positions;
 }
@@ -123,7 +123,7 @@ static void test_synthetic_reference_index_ignores_non_keyframes() {
     }
   }
 
-  const int64_t between_first_and_second_key = playback_keyframe::demuxer_seconds_to_stream_timestamp(0.24F, snapshot.time_base, 0.0F);
+  const int64_t between_first_and_second_key = playback_keyframe::demuxer_seconds_to_stream_timestamp(0.24F, snapshot.time_base);
   expect_i("reference index skips non-keyframes", playback_keyframe::find_reference_index(snapshot, between_first_and_second_key), 0);
 
   const int64_t after_second_key_pres = playback_keyframe::index_entry_presentation_timestamp(snapshot, snapshot.entries[3]);
@@ -168,13 +168,12 @@ static void test_keyframe_navigation_cursor_walk_sparse_left() {
   snapshot.seekable = true;
   snapshot.presentation_mapping_verified = true;
   snapshot.time_base = AVRational{1, 48};
-  snapshot.video_start_time_seconds = 0.0F;
 
   const std::vector<float> lattice = {0.0F, 1.041667F, 2.083333F, 3.125F, 4.166667F, 5.208333F};
   for (const float position : lattice) {
     playback_keyframe::IndexEntry entry{};
     entry.flags = AVINDEX_KEYFRAME;
-    entry.presentation_timestamp = playback_keyframe::demuxer_seconds_to_stream_timestamp(position, snapshot.time_base, 0.0F);
+    entry.presentation_timestamp = playback_keyframe::demuxer_seconds_to_stream_timestamp(position, snapshot.time_base);
     snapshot.entries.push_back(entry);
   }
 
@@ -201,7 +200,6 @@ static void test_synthetic_pts_dts_mapping_navigation() {
   snapshot.seekable = true;
   snapshot.presentation_mapping_verified = true;
   snapshot.time_base = AVRational{1, 25};
-  snapshot.video_start_time_seconds = 0.0F;
   snapshot.entries = {
       {-2, AVINDEX_KEYFRAME}, {4, 0}, {7, 0}, {10, AVINDEX_KEYFRAME}, {16, 0}, {19, 0}, {22, AVINDEX_KEYFRAME}, {28, 0}, {34, AVINDEX_KEYFRAME}, {40, 0}, {46, AVINDEX_KEYFRAME}, {52, 0}, {58, AVINDEX_KEYFRAME},
   };
@@ -243,7 +241,6 @@ static void test_nonuniform_mapping_rejects_unprobed_pts() {
   snapshot.seekable = true;
   snapshot.presentation_mapping_verified = true;
   snapshot.time_base = AVRational{1, 25};
-  snapshot.video_start_time_seconds = 0.0F;
   snapshot.entries = {
       {8, AVINDEX_KEYFRAME},
       {30, AVINDEX_KEYFRAME},
@@ -270,7 +267,6 @@ static void test_nonuniform_different_dts_pts_offsets() {
   snapshot.seekable = true;
   snapshot.presentation_mapping_verified = true;
   snapshot.time_base = AVRational{1, 25};
-  snapshot.video_start_time_seconds = 0.0F;
   snapshot.entries = {
       {0, AVINDEX_KEYFRAME},
       {25, AVINDEX_KEYFRAME},
@@ -280,9 +276,9 @@ static void test_nonuniform_different_dts_pts_offsets() {
   snapshot.entries[1].presentation_timestamp = 27;
   snapshot.entries[2].presentation_timestamp = 52;
 
-  expect_near("offset entry 0", playback_keyframe::stream_timestamp_to_demuxer_seconds(snapshot.entries[0].presentation_timestamp, snapshot.time_base, 0.0F), 0.0F);
-  expect_near("offset entry 1", playback_keyframe::stream_timestamp_to_demuxer_seconds(snapshot.entries[1].presentation_timestamp, snapshot.time_base, 0.0F), 1.08F);
-  expect_near("offset entry 2", playback_keyframe::stream_timestamp_to_demuxer_seconds(snapshot.entries[2].presentation_timestamp, snapshot.time_base, 0.0F), 2.08F);
+  expect_near("offset entry 0", playback_keyframe::stream_timestamp_to_demuxer_seconds(snapshot.entries[0].presentation_timestamp, snapshot.time_base), 0.0F);
+  expect_near("offset entry 1", playback_keyframe::stream_timestamp_to_demuxer_seconds(snapshot.entries[1].presentation_timestamp, snapshot.time_base), 1.08F);
+  expect_near("offset entry 2", playback_keyframe::stream_timestamp_to_demuxer_seconds(snapshot.entries[2].presentation_timestamp, snapshot.time_base), 2.08F);
 
   const playback_keyframe::AdjacentKeyframe next = playback_keyframe::find_adjacent_keyframe(snapshot, +1, 1.0F);
   expect_status("late timeline neighbor", next.status, playback_keyframe::AdjacentKeyframeStatus::Ok);
@@ -742,7 +738,6 @@ static void test_find_adjacent_forward_before_first_keyframe() {
   snapshot.seekable = true;
   snapshot.presentation_mapping_verified = true;
   snapshot.time_base = AVRational{1, 25};
-  snapshot.video_start_time_seconds = 1.0F;
   snapshot.entries = {
       {25, AVINDEX_KEYFRAME},
       {50, AVINDEX_KEYFRAME},
@@ -750,14 +745,20 @@ static void test_find_adjacent_forward_before_first_keyframe() {
   snapshot.entries[0].presentation_timestamp = 25;
   snapshot.entries[1].presentation_timestamp = 50;
 
-  const playback_keyframe::AdjacentKeyframe next = playback_keyframe::find_adjacent_keyframe(snapshot, +1, 1.05F);
+  const playback_keyframe::AdjacentKeyframe next = playback_keyframe::find_adjacent_keyframe(snapshot, +1, 0.95F);
   expect_status("forward before first indexed key", next.status, playback_keyframe::AdjacentKeyframeStatus::Ok);
   if (next.status == playback_keyframe::AdjacentKeyframeStatus::Ok) {
-    expect_near("forward before first lands on first key", next.demuxer_position_seconds, 2.0F);
+    expect_near("forward before first lands on first key", next.demuxer_position_seconds, 1.0F);
   }
 
-  const playback_keyframe::AdjacentKeyframe back = playback_keyframe::find_adjacent_keyframe(snapshot, -1, 1.05F);
+  const playback_keyframe::AdjacentKeyframe back = playback_keyframe::find_adjacent_keyframe(snapshot, -1, 0.95F);
   expect_status("backward before first indexed key", back.status, playback_keyframe::AdjacentKeyframeStatus::AtBoundary);
+
+  const playback_keyframe::AdjacentKeyframe previous = playback_keyframe::find_adjacent_keyframe(snapshot, -1, 1.05F);
+  expect_status("backward shortly after first indexed key", previous.status, playback_keyframe::AdjacentKeyframeStatus::Ok);
+  if (previous.status == playback_keyframe::AdjacentKeyframeStatus::Ok) {
+    expect_near("backward shortly after first lands on first key", previous.demuxer_position_seconds, 1.0F);
+  }
 }
 
 static void test_union_unindexed_right_fallback_left_only() {
@@ -828,7 +829,7 @@ static void test_real_variable_gop_keyframes(const std::string& path, const char
   }
 
   const int video_stream = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-  const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream, 0.0F);
+  const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream);
   avformat_close_input(&format_context);
 
   {
@@ -868,9 +869,11 @@ static void test_start_time_roundtrip() {
   const AVRational time_base{1, 25};
   const float start_time = 1.25F;
   const int64_t stream_ts = 50;
-  const float demuxer_pos = playback_keyframe::stream_timestamp_to_demuxer_seconds(stream_ts, time_base, start_time);
-  const int64_t roundtrip_ts = playback_keyframe::demuxer_seconds_to_stream_timestamp(demuxer_pos, time_base, start_time);
+  const float demuxer_pos = playback_keyframe::stream_timestamp_to_demuxer_seconds(stream_ts, time_base);
+  const int64_t roundtrip_ts = playback_keyframe::demuxer_seconds_to_stream_timestamp(demuxer_pos, time_base);
   expect_i64("nonzero start time stream ts roundtrip", roundtrip_ts, stream_ts);
+  expect_near("indexed PTS maps to absolute demuxer seconds", demuxer_pos, 2.0F);
+  expect_near("normalized displayed PTS matches index", playback_keyframe::avframe_pts_to_demuxer_seconds(750000, start_time), 2.0F);
 }
 
 static void test_fixture_index_navigation(const std::string& path) {
@@ -901,7 +904,7 @@ static void test_fixture_index_navigation(const std::string& path) {
     return;
   }
 
-  const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream, 0.0F);
+  const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream);
   if (!playback_keyframe::snapshot_has_keyframe_index(snapshot)) {
     avformat_close_input(&format_context);
     std::fprintf(stderr, "FAIL fixture has no keyframe index: %s\n", path.c_str());
@@ -929,7 +932,7 @@ static void test_fixture_index_navigation(const std::string& path) {
         continue;
       }
       const int64_t presentation_timestamp = playback_keyframe::index_entry_presentation_timestamp(snapshot, entry);
-      const float position = playback_keyframe::stream_timestamp_to_demuxer_seconds(presentation_timestamp, snapshot.time_base, snapshot.video_start_time_seconds);
+      const float position = playback_keyframe::stream_timestamp_to_demuxer_seconds(presentation_timestamp, snapshot.time_base);
       if (!found_first_keyframe || position < first_keyframe_position) {
         first_keyframe_position = position;
         found_first_keyframe = true;
@@ -947,7 +950,7 @@ static void test_fixture_index_navigation(const std::string& path) {
   // Exercise the actual on-demand probe from positions between keyframes,
   // comparing against a fully probed index. This catches DTS-vs-PTS errors
   // that synthetic index-only tests cannot expose.
-  playback_keyframe::KeyframeIndexSnapshot lazy = playback_keyframe::capture_keyframe_index_snapshot(format_context, video_stream, 0.0F);
+  playback_keyframe::KeyframeIndexSnapshot lazy = playback_keyframe::capture_keyframe_index_snapshot(format_context, video_stream);
   const std::vector<float> positions = keyframe_demuxer_positions_from_snapshot(snapshot);
   for (size_t i = 1; i < positions.size() && i < 4; ++i) {
     const float reference = 0.5F * (positions[i - 1] + positions[i]);
@@ -974,7 +977,7 @@ static bool demuxer_style_seek(AVFormatContext* format_context, const float posi
   return av_seek_frame(format_context, -1, seek_target, backward ? AVSEEK_FLAG_BACKWARD : 0) >= 0;
 }
 
-static float first_keyframe_demuxer_position(AVFormatContext* format_context, const int video_stream, const AVRational& time_base, const float video_start_time_seconds) {
+static float first_keyframe_demuxer_position(AVFormatContext* format_context, const int video_stream, const AVRational& time_base) {
   avformat_flush(format_context);
 
   AVPacket packet{};
@@ -992,7 +995,7 @@ static float first_keyframe_demuxer_position(AVFormatContext* format_context, co
       continue;
     }
 
-    const float position = playback_keyframe::stream_timestamp_to_demuxer_seconds(packet.pts, time_base, video_start_time_seconds);
+    const float position = playback_keyframe::stream_timestamp_to_demuxer_seconds(packet.pts, time_base);
     av_packet_unref(&packet);
     return position;
   }
@@ -1020,7 +1023,7 @@ static void test_real_media_demuxer_keyframe_seek(const std::string& path, const
   }
 
   const int video_stream = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-  const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream, 0.0F);
+  const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream);
 
   constexpr float kKeyframeSnapBias = 1e-3F;
 
@@ -1038,7 +1041,7 @@ static void test_real_media_demuxer_keyframe_seek(const std::string& path, const
       continue;
     }
 
-    const float landed = first_keyframe_demuxer_position(format_context, video_stream, snapshot.time_base, snapshot.video_start_time_seconds);
+    const float landed = first_keyframe_demuxer_position(format_context, video_stream, snapshot.time_base);
     const std::string step_label = std::string(label) + " backward keyframe land";
     expect_near(step_label.c_str(), landed, expected_landings[i]);
   }
@@ -1062,13 +1065,13 @@ static void test_real_hevc_forward_seek_overshoots(const std::string& path) {
   }
 
   const int video_stream = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-  const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream, 0.0F);
+  const playback_keyframe::KeyframeIndexSnapshot snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream);
 
   const float target = 1.041667F;
   const float overshoot_expected = 2.083333F;
 
   if (demuxer_style_seek(format_context, target, false)) {
-    const float landed = first_keyframe_demuxer_position(format_context, video_stream, snapshot.time_base, snapshot.video_start_time_seconds);
+    const float landed = first_keyframe_demuxer_position(format_context, video_stream, snapshot.time_base);
     expect_near("real-hevc forward seek without BACKWARD overshoots", landed, overshoot_expected);
   }
 
@@ -1165,7 +1168,7 @@ int main(int argc, char** argv) {
       AVFormatContext* format_context = nullptr;
       if (avformat_open_input(&format_context, hevc, nullptr, nullptr) >= 0 && avformat_find_stream_info(format_context, nullptr) >= 0) {
         const int video_stream = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-        const playback_keyframe::KeyframeIndexSnapshot hevc_snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream, 0.0F);
+        const playback_keyframe::KeyframeIndexSnapshot hevc_snapshot = playback_keyframe::capture_verified_keyframe_index_snapshot(format_context, video_stream);
         avformat_close_input(&format_context);
         expect_bool("real-hevc mapping verified", hevc_snapshot.presentation_mapping_verified, true);
         int64_t first_key_offset = 0;
