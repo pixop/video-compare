@@ -382,7 +382,13 @@ void ScopeWindow::present_frame(const AVFrame* filtered_frame, const bool allow_
     sdl_check_bool(SDL_RenderCopy(renderer_, texture_, nullptr, nullptr) == 0, "SDL_RenderCopy");
   }
 
-  draw_left_right_overlay(renderer_, window_width_, window_height_, window_width_ / 2);
+  // The image fills the physical renderer output; align its overlays to
+  // those same coordinates, independently of the logical scope window size.
+  int drawable_w = 0;
+  int drawable_h = 0;
+  if (SDL_GetRendererOutputSize(renderer_, &drawable_w, &drawable_h) == 0 && drawable_w > 0 && drawable_h > 0) {
+    draw_left_right_overlay(renderer_, drawable_w, drawable_h, drawable_w / 2);
+  }
 
   SDL_RenderPresent(renderer_);
 }

@@ -45,6 +45,18 @@ static void expect_substr(const char* label, const std::string& haystack, const 
   std::printf("PASS %s\n", label);
 }
 
+static void test_physical_startup_size() {
+  using display_pixel_scale::window_size_for_drawable;
+  expect_true("Physical startup size at 100%", window_size_for_drawable(1920, 800, 800, 4) == 1920);
+  expect_true("Physical startup size at 125%", window_size_for_drawable(1920, 800, 1000, 4) == 1536);
+  expect_true("Physical startup size at 150%", window_size_for_drawable(1920, 800, 1200, 4) == 1280);
+  expect_true("Physical startup size at 200%", window_size_for_drawable(3840, 800, 1600, 4) == 1920);
+  expect_true("Physical startup size rounds fractional points", window_size_for_drawable(1001, 800, 1200, 4) == 667);
+  expect_true("Physical startup size honors minimum", window_size_for_drawable(4, 800, 1600, 4) == 4);
+  expect_true("Physical startup size uses measured rather than requested geometry", window_size_for_drawable(1920, 600, 900, 4) == 1280);
+  expect_true("Physical startup size cannot overflow an int", window_size_for_drawable(std::numeric_limits<int>::max(), 2, 1, 4) == std::numeric_limits<int>::max());
+}
+
 static void test_uniform_1x_and_2x_dpi() {
   // Stretch: layout fills content; video_to_window == layout/content (here 1.0).
   const PhysicalPixelScale one_x = compute_physical_pixel_scale(1.0F, 1.0F, 1.0F, 1.0F, 1.0F);
@@ -128,6 +140,7 @@ static void test_append_formatting() {
 }
 
 int main() {
+  test_physical_startup_size();
   test_uniform_1x_and_2x_dpi();
   test_letterboxed_aspect();
   test_nonuniform_dpi();

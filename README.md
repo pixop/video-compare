@@ -72,13 +72,13 @@ Vertically stacked mode:
 
 ## Usage
 
-Launch using the operating system's DPI setting. Video pixels are doubled on devices like a Retina 5K display;
-therefore, it is the preferred option for displaying HD 1080p videos on such screens:
+By default, video-compare follows the operating system's display scaling. This is useful for
+viewing HD 1080p videos on high-DPI displays:
 
     video-compare video1.mp4 video2.mp4
 
-Allow high DPI mode on systems which supports that. Video pixels are displayed "1-to-1". Useful
-for e.g. displaying UHD 4K video on a Retina 5K display:
+Enable high-DPI mode to display video pixels "1-to-1" where possible. Useful for e.g.
+displaying UHD 4K video on a Retina 5K display:
 
     video-compare -d video1.mp4 video2.mp4
 

@@ -29,6 +29,12 @@ struct ZoomRectState {
   float zoom_factor;
 };
 
+// A drag delta is already expressed in logical window units. The
+// layout-to-drawable transform applies the pixel density when rendering.
+inline ZoomVec2 window_delta_to_layout(const ZoomVec2 delta, const float layout_per_window_x, const float layout_per_window_y) {
+  return {delta.x * layout_per_window_x, delta.y * layout_per_window_y};
+}
+
 inline ZoomVec2 zoom_transform_origin(const float frame_width, const float frame_height) {
   return {frame_width * 0.5F, frame_height * 0.5F};
 }

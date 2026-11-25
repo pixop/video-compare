@@ -222,6 +222,12 @@ static std::string format_libav_version(unsigned version) {
 }
 
 SDL::SDL() {
+  // Let SDL use logical window coordinates on high-DPI displays, while the
+  // renderer uses physical pixels. Other video backends ignore this hint.
+  // Use the string literal for compatibility with older SDL2 headers.
+  if (SDL_GetHint("SDL_WINDOWS_DPI_SCALING") == nullptr) {
+    SDL_SetHint("SDL_WINDOWS_DPI_SCALING", "1");
+  }
   check_sdl(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) == 0, "SDL init");
   check_sdl(TTF_Init() == 0, "TTF init");
 }
@@ -305,11 +311,6 @@ Display::Display(const int display_number,
 
     window_x = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number);
     window_y = SDL_WINDOWPOS_UNDEFINED_DISPLAY(display_number);
-
-    if (high_dpi_allowed_) {
-      window_width /= 2;
-      window_height /= 2;
-    }
   } else {
     const int usable_width = std::max(bounds.w - border_width, MIN_WINDOW_WIDTH);
     const int usable_height = std::max(bounds.h - border_height, MIN_WINDOW_HEIGHT);
@@ -337,8 +338,15 @@ Display::Display(const int display_number,
     throw std::runtime_error{"Window height cannot be less than " + std::to_string(MIN_WINDOW_HEIGHT)};
   }
 
+  // With -d the requested dimensions describe physical drawable pixels.
+  // Start with a reasonably sized window to measure its actual pixel density;
+  // this is not a constraint on the final requested size.
+  const bool physical_startup_size = high_dpi_allowed_ && !fit_window_to_usable_bounds;
+  const int initial_width = physical_startup_size ? std::min(window_width, std::max(bounds.w - border_width, MIN_WINDOW_WIDTH)) : window_width;
+  const int initial_height = physical_startup_size ? std::min(window_height, std::max(bounds.h - border_height, MIN_WINDOW_HEIGHT)) : window_height;
   const int create_window_flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
-  window_ = check_sdl(SDL_CreateWindow(format_window_title(left_file_name, right_file_name).c_str(), window_x, window_y, window_width, window_height, high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
+  window_ = check_sdl(SDL_CreateWindow(format_window_title(left_file_name, right_file_name).c_str(), window_x, window_y, initial_width, initial_height,
+                                      high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
                       "window");
 
   SDL_RWops* embedded_icon = check_sdl(SDL_RWFromConstMem(VIDEO_COMPARE_ICON_BMP, VIDEO_COMPARE_ICON_BMP_LEN), "get pointer to icon");
@@ -364,10 +372,34 @@ Display::Display(const int display_number,
   SDL_RenderClear(renderer_);
   SDL_RenderPresent(renderer_);
 
-  SDL_GL_GetDrawableSize(window_, &drawable_width_, &drawable_height_);
-  SDL_GetWindowSize(window_, &window_width_, &window_height_);
-  window_aspect_ratio_ = static_cast<float>(window_width_) / static_cast<float>(std::max(1, window_height_));
+  const auto query_initial_geometry = [this]() {
+    int drawable_w = 0, drawable_h = 0, window_w = 0, window_h = 0;
+    SDL_GetWindowSize(window_, &window_w, &window_h);
+    if (SDL_GetRendererOutputSize(renderer_, &drawable_w, &drawable_h) != 0 || drawable_w <= 0 || drawable_h <= 0 || window_w <= 0 || window_h <= 0) {
+      return false;
+    }
+    drawable_width_ = drawable_w;
+    drawable_height_ = drawable_h;
+    window_width_ = window_w;
+    window_height_ = window_h;
+    return true;
+  };
+
+  check_sdl(query_initial_geometry(), "get initial window and renderer geometry");
   startup_window_size_ = {window_width_, window_height_};
+
+  if (physical_startup_size) {
+    const int target_w = display_pixel_scale::window_size_for_drawable(window_width, window_width_, drawable_width_, MIN_WINDOW_WIDTH);
+    const int target_h = display_pixel_scale::window_size_for_drawable(window_height, window_height_, drawable_height_, MIN_WINDOW_HEIGHT);
+
+    startup_window_size_ = {target_w, target_h};
+    if (target_w != window_width_ || target_h != window_height_) {
+      SDL_SetWindowSize(window_, target_w, target_h);
+      // A delayed resize is handled by the normal SDL window events.
+      query_initial_geometry();
+    }
+  }
+  window_aspect_ratio_ = static_cast<float>(startup_window_size_[0]) / static_cast<float>(startup_window_size_[1]);
   saved_window_size_ = startup_window_size_;
 
   // Check if window is larger than display and warn user
@@ -780,7 +812,7 @@ void Display::print_verbose_info() {
   SDL_GetDesktopDisplayMode(current_display_number, &desktop_display_mode);
   std::cout << "SDL desktop size:      " << desktop_display_mode.w << "x" << desktop_display_mode.h << std::endl;
 
-  std::cout << "SDL GL drawable size:  " << drawable_width_ << "x" << drawable_height_ << std::endl;
+  std::cout << "SDL drawable size:     " << drawable_width_ << "x" << drawable_height_ << std::endl;
   std::cout << "SDL window size:       " << window_width_ << "x" << window_height_ << std::endl;
 
   auto stringify_format_and_bpp = [&](Uint32 pixel_format) -> std::string { return string_sprintf("%s (%d bpp)", SDL_GetPixelFormatName(pixel_format), SDL_BITSPERPIXEL(pixel_format)); };
@@ -1054,9 +1086,15 @@ void Display::handle_window_resize(const bool reset_forced_size_guard, const boo
   int new_window_w = 0;
   int new_window_h = 0;
 
-  // Query both logical window size and drawable size since they can diverge (e.g. high-DPI).
-  SDL_GL_GetDrawableSize(window_, &new_drawable_w, &new_drawable_h);
+  // A renderer can be temporarily unavailable during a resize or minimization.
+  // Keep the last valid geometry until SDL reports a usable size again.
+  if (SDL_GetRendererOutputSize(renderer_, &new_drawable_w, &new_drawable_h) != 0) {
+    return;
+  }
   SDL_GetWindowSize(window_, &new_window_w, &new_window_h);
+  if (new_drawable_w <= 0 || new_drawable_h <= 0 || new_window_w <= 0 || new_window_h <= 0) {
+    return;
+  }
 
   bool was_fullscreen = is_fullscreen_;
   is_fullscreen_ = detect_fullscreen_like_state();
@@ -1102,11 +1140,6 @@ void Display::handle_window_resize(const bool reset_forced_size_guard, const boo
         return;
       }
     }
-  }
-
-  // Ignore invalid sizes (can occur during platform-specific resize transitions).
-  if (new_drawable_w <= 0 || new_drawable_h <= 0 || new_window_w <= 0 || new_window_h <= 0) {
-    return;
   }
 
   // No change means we can skip the expensive rebuilds below.
@@ -3277,7 +3310,7 @@ void Display::handle_event(const SDL_Event& event) {
         case SDL_WINDOWEVENT_SIZE_CHANGED:
         case SDL_WINDOWEVENT_MAXIMIZED:
         case SDL_WINDOWEVENT_RESTORED:
-#ifdef SDL_WINDOWEVENT_DISPLAY_CHANGED
+#if SDL_VERSION_ATLEAST(2, 0, 18)
         case SDL_WINDOWEVENT_DISPLAY_CHANGED:
 #endif
           handle_window_resize();
@@ -3316,9 +3349,10 @@ void Display::handle_event(const SDL_Event& event) {
       refresh_selection_end_from_mouse();
 
       if (event_.motion.state & SDL_BUTTON_RMASK) {
-        const auto pan_offset = Vector2D(event_.motion.xrel, event_.motion.yrel) * Vector2D(video_to_window_width_factor_, video_to_window_height_factor_) / Vector2D(drawable_to_window_width_factor_, drawable_to_window_height_factor_);
-
-        update_move_offset(move_offset_ + pan_offset);
+        // SDL mouse deltas are in logical window coordinates, not drawable pixels.
+        const auto pan_offset = zoom_transform::window_delta_to_layout({static_cast<float>(event_.motion.xrel), static_cast<float>(event_.motion.yrel)},
+                                                                      video_to_window_width_factor_, video_to_window_height_factor_);
+        update_move_offset(move_offset_ + Vector2D(pan_offset.x, pan_offset.y));
       }
 
       if (show_metadata_) {
@@ -3757,6 +3791,7 @@ void Display::handle_event(const SDL_Event& event) {
                                                  aspect_view_mode_to_string(aspect_view_mode_).c_str());
             display_pixel_scale::append_display_state_viewport_and_pixel_scale(message, global_zoom_factor_, drawable_to_window_width_factor_, drawable_to_window_height_factor_, video_to_window_width_factor_,
                                                                                video_to_window_height_factor_);
+            message += string_sprintf(" drawable=%dx%d hud_scale=%.3g", drawable_width_, drawable_height_, font_scale_);
             video_filter_state::append_display_state_mapping(message, swap_left_right_, active_right_index_);
             if (visual_left_pre_canvas_size_.first > 0 && visual_left_pre_canvas_size_.second > 0) {
               message += string_sprintf(" visual_left=%dx%d", visual_left_pre_canvas_size_.first, visual_left_pre_canvas_size_.second);

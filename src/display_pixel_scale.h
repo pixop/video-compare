@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <string>
 
 namespace display_pixel_scale {
@@ -17,6 +18,14 @@ struct PhysicalPixelScale {
   float x;
   float y;
 };
+
+// Convert a desired physical size using the measured drawable/window ratio.
+// All measured sizes must be positive. A fractional scale may need rounding
+// to the closest representable logical window dimension.
+inline int window_size_for_drawable(const int desired_drawable, const int measured_window, const int measured_drawable, const int min_window) {
+  const double logical_size = std::round(static_cast<double>(desired_drawable) * measured_window / measured_drawable);
+  return static_cast<int>(std::max(static_cast<double>(min_window), std::min(logical_size, static_cast<double>(std::numeric_limits<int>::max()))));
+}
 
 inline float physical_1to1_viewport_zoom_base(const float video_to_window_width_factor, const float drawable_to_window_width_factor, const float video_to_window_height_factor, const float drawable_to_window_height_factor) {
   return std::min(video_to_window_width_factor / drawable_to_window_width_factor, video_to_window_height_factor / drawable_to_window_height_factor);
