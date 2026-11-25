@@ -23,8 +23,8 @@
 #include "string_utils.h"
 #include "video_filter_context.h"
 #include "video_filter_state.h"
+#include "video_frame_buffer_pool.h"
 extern "C" {
-#include <libavutil/imgutils.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
 }
@@ -51,11 +51,6 @@ static auto avpacket_deleter = [](AVPacket* packet) {
 };
 
 static auto avframe_deleter = [](AVFrame* frame) { av_frame_free(&frame); };
-
-static auto avframe_and_data_deleter = [](AVFrame* frame) {
-  av_freep(&frame->data[0]);
-  avframe_deleter(frame);
-};
 
 static inline std::pair<size_t, size_t> calculate_max_dest_dimensions(const std::map<Side, std::unique_ptr<VideoFilterer>>& video_filterers) {
   size_t max_w = 0;
@@ -600,10 +595,14 @@ void VideoCompare::filter_video(const Side& side) {
 
 void VideoCompare::format_convert_video(const Side& side) {
   ScopedLogSide scoped_log_side(side);
+  VideoFrameBufferPool frame_pool;
 
   try {
     while (keep_running()) {
       if (converted_frame_queues_[side]->is_stopped()) {
+        // Release cached buffers at EOF and during seeks. Frames still held by
+        // the display or queues remain valid through their AVBufferRef owners.
+        frame_pool.reset();
         if (seeking_) {
           ready_to_seek_.set(ReadyToSeek::ProcessorThread::Converter, side);
         }
@@ -616,14 +615,15 @@ void VideoCompare::format_convert_video(const Side& side) {
 
       if (filtered_frame_queues_[side]->pop(frame_filtered)) {
         // scale and convert pixel format before pushing to frame queue for displaying
-        AVFrameUniquePtr frame_converted{av_frame_alloc(), avframe_and_data_deleter};
+        AVFrameUniquePtr frame_converted{av_frame_alloc(), avframe_deleter};
 
         if (av_frame_copy_props(frame_converted.get(), frame_filtered.get()) < 0) {
           throw std::runtime_error("Copying filtered frame properties");
         }
-        if (av_image_alloc(frame_converted->data, frame_converted->linesize, format_converters_[side]->dest_width(), format_converters_[side]->dest_height(), format_converters_[side]->dest_pixel_format(), 64) < 0) {
-          throw std::runtime_error("Allocating converted picture");
-        }
+        const int width = static_cast<int>(format_converters_[side]->dest_width());
+        const int height = static_cast<int>(format_converters_[side]->dest_height());
+        const AVPixelFormat format = format_converters_[side]->dest_pixel_format();
+        frame_pool.allocate(frame_converted.get(), width, height, format);
         (*format_converters_[side])(frame_filtered.get(), frame_converted.get());
 
         converted_frame_queues_[side]->push(std::move(frame_converted));
