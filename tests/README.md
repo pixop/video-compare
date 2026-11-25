@@ -40,7 +40,7 @@ Adding a unit test:
 - `check` picks up `tests/test_*.cpp` automatically.
 - Integration is `tests/integration_video_compare.cpp`, so that wildcard skips it.
 - Header-only tests need no makefile change.
-- Tests that link production objects or FFmpeg still declare those extras in the makefile.
+- Tests that link production objects or FFmpeg declare those extras in `tests/tests.mk`, included by the root makefile.
 - Production headers are included as `"foo.h"` via `-Isrc`.
 
 What `check` covers:
