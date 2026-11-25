@@ -32,6 +32,8 @@ tests/test_frame_metadata$(EXE): TEST_LIBS = $(LDLIBS)
 tests/test_progress_dots$(EXE): TEST_LIBS = $(LDLIBS)
 tests/test_split_texture_upload_cache$(EXE): TEST_LIBS = $(LDLIBS)
 
+tests/test_queue$(EXE): TEST_LIBS = -pthread
+
 tests/test_playback_timing$(EXE): TEST_LIBS = $(LDLIBS)
 
 tests/test_playback_seek$(EXE): TEST_LIBS = $(LDLIBS)
