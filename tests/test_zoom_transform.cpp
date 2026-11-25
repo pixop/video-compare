@@ -456,6 +456,24 @@ static void test_window_letterbox_chain(const OriginPolicy policy) {
   }
 }
 
+static void test_drag_tracks_cursor_at_any_pixel_density() {
+  // Include the combined stack layout and a fitted viewport with unequal axes.
+  for (const Mode mode : {Mode::Split, Mode::HStack, Mode::VStack}) {
+    const Frame frame = kHD;
+    const ZoomVec2 layout = layout_size(mode, frame);
+    const ContentWindow content = fit_content_window(800.0F, 600.0F, layout.x / layout.y);
+    const ZoomVec2 delta{24.0F, -12.0F};
+    const float layout_per_window_x = layout.x / content.w;
+    const float layout_per_window_y = layout.y / content.h;
+    const ZoomVec2 offset = zoom_transform::window_delta_to_layout(delta, layout_per_window_x, layout_per_window_y);
+    for (const float density : {1.0F, 1.25F, 1.5F, 2.0F}) {
+      const ZoomVec2 drawable_delta{offset.x * density / layout_per_window_x, offset.y * density / layout_per_window_y};
+      expect_vec(make_label("12", mode, ("drag tracks cursor at density " + std::to_string(density)).c_str()).c_str(), drawable_delta,
+                 {delta.x * density, delta.y * density});
+    }
+  }
+}
+
 static void test_transform_origin_is_frame_center() {
   const ZoomVec2 origin = zoom_transform::zoom_transform_origin(kHD.width, kHD.height);
   expect_vec("transform origin is single-frame center", origin, {960.0F, 540.0F});
@@ -463,6 +481,7 @@ static void test_transform_origin_is_frame_center() {
 
 static void run_suite(const OriginPolicy policy) {
   test_transform_origin_is_frame_center();
+  test_drag_tracks_cursor_at_any_pixel_density();
   test_split_native(policy);
   test_split_letterboxed(policy);
   test_hstack_native(policy);

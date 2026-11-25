@@ -1367,7 +1367,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
   VideoCompareConfig config = make_config(resolved);
   if (scenario == Scenario::HighDpiInput) {
     config.high_dpi_allowed = true;
-    // -d halves the requested window size; keep the resulting test window valid.
+    // The requested dimensions refer to physical pixels in high-DPI mode.
     config.window_size = std::make_tuple(640, 360);
   }
   const char* shift_env = std::getenv("KEYFRAME_NAV_SHIFT_MS");
@@ -1425,6 +1425,12 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       SDL_Renderer* renderer = window != nullptr ? SDL_GetRenderer(window) : nullptr;
       if (renderer == nullptr || (SDL_GetWindowFlags(window) & SDL_WINDOW_ALLOW_HIGHDPI) == 0) {
         throw std::runtime_error("High-DPI test window or renderer unavailable");
+      }
+      int output_w = 0;
+      int output_h = 0;
+      // The dummy renderer has a 1:1 pixel density; -d must not halve it.
+      if (SDL_GetRendererOutputSize(renderer, &output_w, &output_h) != 0 || output_w != 640 || output_h != 360) {
+        throw std::runtime_error("Unexpected initial high-DPI renderer output size");
       }
       int logical_w = -1;
       int logical_h = -1;
