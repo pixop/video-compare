@@ -641,7 +641,7 @@ int main(int argc, char** argv) {
          {"left-demuxer", {"--left-demuxer"}, "left FFmpeg video demuxer name, specified as [type?][:options?]", 1},
          {"right-demuxer", {"--right-demuxer"}, "right FFmpeg video demuxer name, specified as [type?][:options?]", 1},
          {"find-demuxers", {"--find-demuxers"}, "find FFmpeg video demuxers that match the provided search term (e.g. 'matroska', 'mp4', 'vapoursynth' or 'pipe'; use \"\" to list all)", 1},
-         {"decoder", {"--decoder"}, "FFmpeg video decoder name for both sides, specified as [type?][:options?] (e.g. ':strict=unofficial', ':strict=-2' or 'vvc:strict=experimental')", 1},
+         {"decoder", {"--decoder"}, "FFmpeg video decoder name for both sides, specified as [type?][:options?] (e.g. ':strict=unofficial', ':strict=-2', 'vvc:strict=experimental' or ':threads=4')", 1},
          {"left-decoder", {"--left-decoder"}, "left FFmpeg video decoder name, specified as [type?][:options?] (e.g. ':strict=-2,trust_dec_pts=1' or 'h264:trust_dec_pts=1,rewrite_duration=1')", 1},
          {"right-decoder", {"--right-decoder"}, "right FFmpeg video decoder name, specified as [type?][:options?] (e.g. ':rewrite_duration=1')", 1},
          {"find-decoders", {"--find-decoders"}, "find FFmpeg video decoders that match the provided search term (e.g. 'h264', 'hevc', 'av1' or 'cuvid'; use \"\" to list all)", 1},
