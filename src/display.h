@@ -17,6 +17,7 @@
 #include "hud_text_cache.h"
 #include "row_workers.h"
 #include "scope_window.h"
+#include "split_texture_upload_cache.h"
 #include "string_utils.h"
 #include "video_filter_state.h"
 extern "C" {
@@ -327,6 +328,8 @@ class Display {
   SDL_Renderer* renderer_;
   SDL_Texture* video_texture_linear_{nullptr};
   SDL_Texture* video_texture_nn_{nullptr};
+  SDL_Texture* cached_split_texture_{nullptr};
+  SplitTextureUploadCache split_texture_upload_cache_;
   std::vector<SDL_Rect> progress_bright_rects_;
   std::vector<SDL_Rect> progress_dark_rects_;
   bool batch_progress_dots_{false};

@@ -30,6 +30,7 @@ tests/test_duration_deriver$(EXE): src/duration_deriver.o
 
 tests/test_frame_metadata$(EXE): TEST_LIBS = $(LDLIBS)
 tests/test_progress_dots$(EXE): TEST_LIBS = $(LDLIBS)
+tests/test_split_texture_upload_cache$(EXE): TEST_LIBS = $(LDLIBS)
 
 tests/test_playback_timing$(EXE): TEST_LIBS = $(LDLIBS)
 
@@ -74,6 +75,7 @@ check: $(test_bin)
 		echo "Running $$test"; \
 		./$$test; \
 	done
+	./tests/test_split_texture_upload_cache$(EXE) --10-bpc
 
 .PHONY: integration
 integration: $(integration_bin) tests/test_playback_keyframe$(EXE)

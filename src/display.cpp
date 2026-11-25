@@ -517,6 +517,8 @@ void Display::recreate_video_textures_for_current_mode() {
 
   video_texture_linear_ = create_video_texture("linear");
   video_texture_nn_ = create_video_texture("nearest");
+  cached_split_texture_ = nullptr;
+  split_texture_upload_cache_.reset(video_width_);
 }
 
 void Display::apply_window_size_and_relayout(const int target_w, const int target_h, const bool force_layout_refresh) {
@@ -2666,6 +2668,25 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   // the nearest texel border to the mouse x-position in window coordinates
   const float video_texel_clamped_mouse_x = static_cast<float>(content_window_.x) + (std::round(video_mouse_x) * zoom_rect.size.x() / static_cast<float>(video_width_) + zoom_rect.start.x()) / video_to_window_width_factor_;
 
+  // During paused split comparisons, moving the slider often exposes pixels
+  // already present in the shared texture. This applies to both RGB24 and
+  // packed 10-bpc uploads; retain the original playback, subtraction and
+  // stacked-mode paths.
+  const bool cache_split_uploads = !play_ && mode_ == Mode::Split && !subtraction_mode_;
+  if (!cache_split_uploads) {
+    if (cached_split_texture_ != nullptr) {
+      cached_split_texture_ = nullptr;
+      split_texture_upload_cache_.reset(video_width_);
+    }
+  } else {
+    SDL_Texture* texture = get_video_texture();
+    if (cached_split_texture_ != texture) {
+      cached_split_texture_ = texture;
+      split_texture_upload_cache_.reset(video_width_);
+    }
+    split_texture_upload_cache_.set_frames(left_frame, left_frame_key, right_frame, right_frame_key);
+  }
+
   if (show_left_ || show_right_) {
     const int split_x = (compare_mode && mode_ == Mode::Split) ? clamp_range(std::round(video_mouse_x), 0.0F, float(video_width_)) : show_left_ ? video_width_ : 0;
 
@@ -2674,13 +2695,17 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       const SDL_Rect tex_render_quad_left = {0, 0, split_x, video_height_};
       const SDL_FRect screen_render_quad_left = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_left, zoom_rect));
 
-      if (input_received_ || has_updated_left_frame) {
+      const bool need_left_upload = cache_split_uploads ? split_texture_upload_cache_.needs_left_upload(split_x) : (input_received_ || has_updated_left_frame);
+      if (need_left_upload) {
         if (use_10_bpc_) {
           convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
 
           update_texture(&tex_render_quad_left, left_planes_[0], pitches_left[0], "left update (10 bpc, video mode)");
         } else {
           update_texture(&tex_render_quad_left, planes_left[0], pitches_left[0], "left update (video mode)");
+        }
+        if (cache_split_uploads) {
+          split_texture_upload_cache_.left_uploaded(split_x);
         }
       }
 
@@ -2695,7 +2720,8 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
       const SDL_Rect roi = {start_right, 0, (video_width_ - start_right), video_height_};
       const SDL_FRect screen_render_quad_right = video_rect_to_drawable_transform(video_to_zoom_space(tex_render_quad_right, zoom_rect));
 
-      if (input_received_ || has_updated_right_frame) {
+      const bool need_right_upload = cache_split_uploads ? split_texture_upload_cache_.needs_right_upload(start_right) : (input_received_ || has_updated_right_frame);
+      if (need_right_upload) {
         if (subtraction_mode_) {
           update_difference(planes_left, pitches_left, planes_right, pitches_right, start_right);
 
@@ -2714,6 +2740,9 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
           } else {
             update_texture(&tex_render_quad_right, planes_right[0] + start_right * 3, pitches_right[0], "right update (video mode)");
           }
+        }
+        if (cache_split_uploads) {
+          split_texture_upload_cache_.right_uploaded(start_right);
         }
       }
 
