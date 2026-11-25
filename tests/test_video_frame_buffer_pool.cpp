@@ -92,13 +92,11 @@ static void test_reset_with_outstanding_frames() {
   // Retire both in-use and cached buffers, as happens at EOF or during a seek.
   pool.reset();
   pool.reset();  // Repeated idle resets are safe.
-  check(retained->data[0][0] == 0x5a && retained->data[0][retained->linesize[0] * 179] == 0x5a,
-        "retained frame stays valid after reset");
+  check(retained->data[0][0] == 0x5a && retained->data[0][retained->linesize[0] * 179] == 0x5a, "retained frame stays valid after reset");
 
   AVFrame* next = alloc_frame();
   pool.allocate(next, 320, 180, AV_PIX_FMT_RGB48LE);
-  check(next->buf[0] != nullptr && next->data[0] != retained->data[0],
-        "new pool must not reuse a live frame from the retired pool");
+  check(next->buf[0] != nullptr && next->data[0] != retained->data[0], "new pool must not reuse a live frame from the retired pool");
   std::memset(next->data[0], 0x34, next->linesize[0] * 180);
   check(retained->data[0][0] == 0x5a, "new pool writes do not affect retired frames");
   av_frame_free(&retained);
@@ -143,8 +141,7 @@ static void test_conversion_pixels(const AVPixelFormat source_format, const AVPi
   check(direct_rows == height && pooled_rows == height, "both conversions completed");
   for (int y = 0; y < height; ++y) {
     const int active_bytes = width * (dest_format == AV_PIX_FMT_RGB24 ? 3 : 6);
-    check(std::memcmp(direct->data[0] + y * direct->linesize[0], pooled->data[0] + y * pooled->linesize[0], active_bytes) == 0,
-          "converted pixels are identical");
+    check(std::memcmp(direct->data[0] + y * direct->linesize[0], pooled->data[0] + y * pooled->linesize[0], active_bytes) == 0, "converted pixels are identical");
   }
 
   sws_freeContext(sws);

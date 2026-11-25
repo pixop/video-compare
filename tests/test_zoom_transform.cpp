@@ -468,8 +468,7 @@ static void test_drag_tracks_cursor_at_any_pixel_density() {
     const ZoomVec2 offset = zoom_transform::window_delta_to_layout(delta, layout_per_window_x, layout_per_window_y);
     for (const float density : {1.0F, 1.25F, 1.5F, 2.0F}) {
       const ZoomVec2 drawable_delta{offset.x * density / layout_per_window_x, offset.y * density / layout_per_window_y};
-      expect_vec(make_label("12", mode, ("drag tracks cursor at density " + std::to_string(density)).c_str()).c_str(), drawable_delta,
-                 {delta.x * density, delta.y * density});
+      expect_vec(make_label("12", mode, ("drag tracks cursor at density " + std::to_string(density)).c_str()).c_str(), drawable_delta, {delta.x * density, delta.y * density});
     }
   }
 }

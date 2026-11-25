@@ -1534,9 +1534,7 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       }
     }
   } else if (scenario == Scenario::ClipboardSeek) {
-    if (std::fabs(parse_timestamp_for_seek_seconds("5.208") - 5.2085) > 1e-9 ||
-        std::fabs(parse_timestamp_for_seek_seconds("00:00:05.208333") - 5.208333) > 1e-9 ||
-        std::fabs(parse_timestamp_for_seek_seconds("00:00:05") - 5.0) > 1e-9) {
+    if (std::fabs(parse_timestamp_for_seek_seconds("5.208") - 5.2085) > 1e-9 || std::fabs(parse_timestamp_for_seek_seconds("00:00:05.208333") - 5.208333) > 1e-9 || std::fabs(parse_timestamp_for_seek_seconds("00:00:05") - 5.0) > 1e-9) {
       std::fprintf(stderr, "FAIL timestamp seek precision adjustment\n");
       exit_code = EXIT_FAILURE;
     }

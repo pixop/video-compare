@@ -146,7 +146,6 @@ void test_quit_wakes_empty_consumer() {
   expect(!consumer.get("quit did not unblock consumer"), "quit aborts pending pop");
 }
 
-
 void test_concurrent_producers_and_consumers() {
   constexpr int kProducers = 3;
   constexpr int kConsumers = 4;

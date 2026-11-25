@@ -345,9 +345,8 @@ Display::Display(const int display_number,
   const int initial_width = physical_startup_size ? std::min(window_width, std::max(bounds.w - border_width, MIN_WINDOW_WIDTH)) : window_width;
   const int initial_height = physical_startup_size ? std::min(window_height, std::max(bounds.h - border_height, MIN_WINDOW_HEIGHT)) : window_height;
   const int create_window_flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
-  window_ = check_sdl(SDL_CreateWindow(format_window_title(left_file_name, right_file_name).c_str(), window_x, window_y, initial_width, initial_height,
-                                      high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags),
-                      "window");
+  window_ = check_sdl(
+      SDL_CreateWindow(format_window_title(left_file_name, right_file_name).c_str(), window_x, window_y, initial_width, initial_height, high_dpi_allowed_ ? create_window_flags | SDL_WINDOW_ALLOW_HIGHDPI : create_window_flags), "window");
 
   SDL_RWops* embedded_icon = check_sdl(SDL_RWFromConstMem(VIDEO_COMPARE_ICON_BMP, VIDEO_COMPARE_ICON_BMP_LEN), "get pointer to icon");
   SDL_Surface* icon_surface = check_sdl(SDL_LoadBMP_RW(embedded_icon, 1), "load icon");
@@ -3379,8 +3378,7 @@ void Display::handle_event(const SDL_Event& event) {
 
       if (event_.motion.state & SDL_BUTTON_RMASK) {
         // SDL mouse deltas are in logical window coordinates, not drawable pixels.
-        const auto pan_offset = zoom_transform::window_delta_to_layout({static_cast<float>(event_.motion.xrel), static_cast<float>(event_.motion.yrel)},
-                                                                      video_to_window_width_factor_, video_to_window_height_factor_);
+        const auto pan_offset = zoom_transform::window_delta_to_layout({static_cast<float>(event_.motion.xrel), static_cast<float>(event_.motion.yrel)}, video_to_window_width_factor_, video_to_window_height_factor_);
         update_move_offset(move_offset_ + Vector2D(pan_offset.x, pan_offset.y));
       }
 
