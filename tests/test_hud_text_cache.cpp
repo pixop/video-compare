@@ -28,8 +28,8 @@ static bool read_renderer_argb(SDL_Renderer* renderer, int width, int height, st
 }
 
 int main() {
-  setenv("SDL_VIDEODRIVER", "dummy", 1);
-  setenv("SDL_RENDER_DRIVER", "software", 1);
+  SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HINT_OVERRIDE);
+  SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "software", SDL_HINT_OVERRIDE);
   if (!SDL_Init(SDL_INIT_VIDEO) || !TTF_Init()) {
     std::fprintf(stderr, "SDL initialization failed: %s\n", SDL_GetError());
     return EXIT_FAILURE;

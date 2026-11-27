@@ -205,8 +205,8 @@ void require_readable_file(const char* path) {
 }
 
 void prepare_dummy_software_sdl() {
-  setenv("SDL_VIDEODRIVER", "dummy", 1);
-  setenv("SDL_RENDER_DRIVER", "software", 1);
+  SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HINT_OVERRIDE);
+  SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "software", SDL_HINT_OVERRIDE);
 }
 
 Uint32 first_sdl_window_id() {

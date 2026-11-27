@@ -45,8 +45,8 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   if (!accelerated) {
-    setenv("SDL_VIDEODRIVER", "dummy", 1);
-    setenv("SDL_RENDER_DRIVER", "software", 1);
+    SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HINT_OVERRIDE);
+    SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "software", SDL_HINT_OVERRIDE);
   }
   if (!SDL_Init(SDL_INIT_VIDEO)) {
     std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());

@@ -137,8 +137,8 @@ jobs:
             gcc:p
             make:p
             ffmpeg:p
-            SDL3:p
-            SDL3_ttf:p
+            sdl3:p
+            sdl3-ttf:p
             pkgconf:p
 
       - name: Environment

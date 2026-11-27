@@ -6,10 +6,10 @@
 
 namespace progress_dots {
 
-// SDL 2.0.20+ changed default line rendering; under SDL3 we always use fill-rect batching.
+// SDL's driver-line and geometry methods can cover different pixels than filled rectangles.
 inline bool can_batch_for_renderer() {
-  (void)SDL_GetVersion();
-  return true;
+  const char* method = SDL_GetHint(SDL_HINT_RENDER_LINE_METHOD);
+  return method == nullptr || *method == '\0' || std::strcmp(method, "0") == 0 || std::strcmp(method, "1") == 0;
 }
 
 // Produce the same disjoint pixel strips as the legacy per-column draw loop.
