@@ -8,8 +8,8 @@
 #include "font_selection.h"
 #include "source_code_pro_regular_ttf.h"
 extern "C" {
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
+#include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 }
 
 #ifdef _WIN32
@@ -37,12 +37,12 @@ static void expect(bool condition, const char* message) {
 
 struct SdlTtfFixture {
   SdlTtfFixture() {
-    if (SDL_Init(0) != 0) {
+    if (!SDL_Init(0)) {
       throw std::runtime_error{std::string("SDL_Init failed: ") + SDL_GetError()};
     }
-    if (TTF_Init() != 0) {
+    if (!TTF_Init()) {
       SDL_Quit();
-      throw std::runtime_error{std::string("TTF_Init failed: ") + TTF_GetError()};
+      throw std::runtime_error{std::string("TTF_Init failed: ") + SDL_GetError()};
     }
   }
 

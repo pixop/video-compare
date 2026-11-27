@@ -7,7 +7,7 @@
 extern "C" {
 #include <libavformat/avformat.h>
 }
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <limits.h>
 #include <algorithm>
 #include <atomic>
@@ -205,8 +205,8 @@ void require_readable_file(const char* path) {
 }
 
 void prepare_dummy_software_sdl() {
-  SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
-  SDL_setenv("SDL_RENDER_DRIVER", "software", 1);
+  setenv("SDL_VIDEODRIVER", "dummy", 1);
+  setenv("SDL_RENDER_DRIVER", "software", 1);
 }
 
 Uint32 first_sdl_window_id() {
@@ -220,26 +220,25 @@ Uint32 first_sdl_window_id() {
 
 void push_quit() {
   SDL_Event event{};
-  event.type = SDL_QUIT;
-  if (SDL_PushEvent(&event) < 0) {
+  event.type = SDL_EVENT_QUIT;
+  if (!SDL_PushEvent(&event)) {
     std::fprintf(stderr, "SDL_PushEvent(SDL_QUIT) failed: %s\n", SDL_GetError());
   } else {
     events_pushed.fetch_add(1);
   }
 }
 
-void push_keydown(const SDL_Keycode key, const SDL_Scancode scancode, const Uint32 window_id, const SDL_Keymod mod = KMOD_NONE) {
+void push_keydown(const SDL_Keycode key, const SDL_Scancode scancode, const Uint32 window_id, const SDL_Keymod mod = SDL_KMOD_NONE) {
   SDL_Event event{};
-  event.type = SDL_KEYDOWN;
-  event.key.type = SDL_KEYDOWN;
+  event.type = SDL_EVENT_KEY_DOWN;
   event.key.timestamp = SDL_GetTicks();
   event.key.windowID = window_id;
-  event.key.state = SDL_PRESSED;
-  event.key.repeat = 0;
-  event.key.keysym.scancode = scancode;
-  event.key.keysym.sym = key;
-  event.key.keysym.mod = mod;
-  if (SDL_PushEvent(&event) < 0) {
+  event.key.down = true;
+  event.key.repeat = false;
+  event.key.scancode = scancode;
+  event.key.key = key;
+  event.key.mod = mod;
+  if (!SDL_PushEvent(&event)) {
     std::fprintf(stderr, "SDL_PushEvent(KEYDOWN) failed: %s\n", SDL_GetError());
   } else {
     events_pushed.fetch_add(1);
@@ -248,66 +247,61 @@ void push_keydown(const SDL_Keycode key, const SDL_Scancode scancode, const Uint
 
 SDL_Keymod clipboard_mod() {
 #ifdef __APPLE__
-  return static_cast<SDL_Keymod>(KMOD_GUI);
+  return static_cast<SDL_Keymod>(SDL_KMOD_GUI);
 #else
-  return static_cast<SDL_Keymod>(KMOD_CTRL);
+  return static_cast<SDL_Keymod>(SDL_KMOD_CTRL);
 #endif
 }
 
 void push_copy_timestamp() {
-  push_keydown(SDLK_c, SDL_SCANCODE_C, 0, clipboard_mod());
+  push_keydown(SDLK_C, SDL_SCANCODE_C, 0, clipboard_mod());
 }
 
 void push_crop_gesture(const SDL_Keycode side_key, const SDL_Scancode side_scancode, const int x0, const int y0, const int x1, const int y1) {
   SDL_Event events[5]{};
   const Uint32 timestamp = SDL_GetTicks();
 
-  events[0].type = SDL_KEYDOWN;
-  events[0].key.type = SDL_KEYDOWN;
+  events[0].type = SDL_EVENT_KEY_DOWN;
   events[0].key.timestamp = timestamp;
   events[0].key.windowID = 0;
-  events[0].key.state = SDL_PRESSED;
-  events[0].key.repeat = 0;
-  events[0].key.keysym.scancode = side_scancode;
-  events[0].key.keysym.sym = side_key;
-  events[0].key.keysym.mod = KMOD_SHIFT;
+  events[0].key.down = true;
+  events[0].key.repeat = false;
+  events[0].key.scancode = side_scancode;
+  events[0].key.key = side_key;
+  events[0].key.mod = SDL_KMOD_SHIFT;
 
-  events[1].type = SDL_MOUSEMOTION;
-  events[1].motion.type = SDL_MOUSEMOTION;
+  events[1].type = SDL_EVENT_MOUSE_MOTION;
   events[1].motion.timestamp = timestamp;
   events[1].motion.windowID = 0;
-  events[1].motion.x = x0;
-  events[1].motion.y = y0;
+  events[1].motion.x = static_cast<float>(x0);
+  events[1].motion.y = static_cast<float>(y0);
 
-  events[2].type = SDL_MOUSEBUTTONDOWN;
-  events[2].button.type = SDL_MOUSEBUTTONDOWN;
+  events[2].type = SDL_EVENT_MOUSE_BUTTON_DOWN;
   events[2].button.timestamp = timestamp;
   events[2].button.windowID = 0;
   events[2].button.button = SDL_BUTTON_LEFT;
-  events[2].button.state = SDL_PRESSED;
+  events[2].button.down = true;
   events[2].button.clicks = 1;
-  events[2].button.x = x0;
-  events[2].button.y = y0;
+  events[2].button.x = static_cast<float>(x0);
+  events[2].button.y = static_cast<float>(y0);
 
-  events[3].type = SDL_MOUSEMOTION;
-  events[3].motion.type = SDL_MOUSEMOTION;
+  events[3].type = SDL_EVENT_MOUSE_MOTION;
   events[3].motion.timestamp = timestamp;
   events[3].motion.windowID = 0;
-  events[3].motion.x = x1;
-  events[3].motion.y = y1;
+  events[3].motion.x = static_cast<float>(x1);
+  events[3].motion.y = static_cast<float>(y1);
 
-  events[4].type = SDL_MOUSEBUTTONUP;
-  events[4].button.type = SDL_MOUSEBUTTONUP;
+  events[4].type = SDL_EVENT_MOUSE_BUTTON_UP;
   events[4].button.timestamp = timestamp;
   events[4].button.windowID = 0;
   events[4].button.button = SDL_BUTTON_LEFT;
-  events[4].button.state = SDL_RELEASED;
+  events[4].button.down = false;
   events[4].button.clicks = 1;
-  events[4].button.x = x1;
-  events[4].button.y = y1;
+  events[4].button.x = static_cast<float>(x1);
+  events[4].button.y = static_cast<float>(y1);
 
   constexpr int kEventCount = sizeof(events) / sizeof(events[0]);
-  const int added = SDL_PeepEvents(events, kEventCount, SDL_ADDEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
+  const int added = SDL_PeepEvents(events, kEventCount, SDL_ADDEVENT, SDL_EVENT_FIRST, SDL_EVENT_LAST);
   if (added < 0) {
     std::fprintf(stderr, "SDL_PeepEvents(crop gesture) failed: %s\n", SDL_GetError());
     return;
@@ -349,7 +343,7 @@ size_t display_state_count_locked() {
 // Emit Shift+X and return the 0-based index of a newly appended Display state line.
 bool emit_shift_x_and_wait_for_new_display_state(size_t* new_line_index, const int response_wait_ms) {
   const size_t before_count = display_state_count_locked();
-  push_keydown(SDLK_x, SDL_SCANCODE_X, 0, KMOD_SHIFT);
+  push_keydown(SDLK_X, SDL_SCANCODE_X, 0, SDL_KMOD_SHIFT);
 
   constexpr int kPollStepMs = 25;
   for (int waited = 0; waited < response_wait_ms; waited += kPollStepMs) {
@@ -365,7 +359,7 @@ bool emit_shift_x_and_wait_for_new_display_state(size_t* new_line_index, const i
 
 void dump_display_filters() {
   if (g_official_display_dump_indices == nullptr) {
-    push_keydown(SDLK_x, SDL_SCANCODE_X, 0, KMOD_SHIFT);
+    push_keydown(SDLK_X, SDL_SCANCODE_X, 0, SDL_KMOD_SHIFT);
     sleep_ms(200);
     return;
   }
@@ -380,12 +374,12 @@ void dump_display_filters() {
 }
 
 void select_right_video(const int index) {
-  push_keydown(static_cast<SDL_Keycode>(SDLK_1 + index), static_cast<SDL_Scancode>(SDL_SCANCODE_1 + index), 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+  push_keydown(static_cast<SDL_Keycode>(SDLK_1 + index), static_cast<SDL_Scancode>(SDL_SCANCODE_1 + index), 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
   sleep_ms(300);
 }
 
 void toggle_swap() {
-  push_keydown(SDLK_s, SDL_SCANCODE_S, 0);
+  push_keydown(SDLK_S, SDL_SCANCODE_S, 0);
   sleep_ms(200);
 }
 
@@ -399,24 +393,24 @@ void interactive_crop(const SDL_Keycode side_key, const SDL_Scancode side_scanco
 
 void copy_visual_left_crop_to_others() {
   // Ctrl+Shift+L: visual-left crop -> right-side video(s). After Swap that is only the visual right.
-  push_keydown(SDLK_l, SDL_SCANCODE_L, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+  push_keydown(SDLK_L, SDL_SCANCODE_L, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
   wait_for_filter_refresh();
 }
 
 void copy_visual_right_crop_to_left() {
-  push_keydown(SDLK_r, SDL_SCANCODE_R, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+  push_keydown(SDLK_R, SDL_SCANCODE_R, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
   wait_for_filter_refresh();
 }
 
 void clear_visual_left_crop() {
   // Ctrl+L: clear the video currently displayed on the left.
-  push_keydown(SDLK_l, SDL_SCANCODE_L, 0, KMOD_CTRL);
+  push_keydown(SDLK_L, SDL_SCANCODE_L, 0, SDL_KMOD_CTRL);
   wait_for_filter_refresh();
 }
 
 void clear_visual_right_crop() {
   // Ctrl+R: clear the video currently displayed on the right.
-  push_keydown(SDLK_r, SDL_SCANCODE_R, 0, KMOD_CTRL);
+  push_keydown(SDLK_R, SDL_SCANCODE_R, 0, SDL_KMOD_CTRL);
   wait_for_filter_refresh();
 }
 
@@ -901,8 +895,8 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     // Simulate SDL notifying us that GPU textures have been lost. The next
     // input event must still be handled after rebuilding display resources.
     SDL_Event reset_event{};
-    reset_event.type = SDL_RENDER_DEVICE_RESET;
-    if (SDL_PushEvent(&reset_event) > 0) {
+    reset_event.type = SDL_EVENT_RENDER_DEVICE_RESET;
+    if (SDL_PushEvent(&reset_event)) {
       events_pushed.fetch_add(1);
     } else {
       std::fprintf(stderr, "FAIL injecting SDL_RENDER_DEVICE_RESET: %s\n", SDL_GetError());
@@ -917,7 +911,7 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(400);
     push_copy_timestamp();
     sleep_ms(300);
-    // RIGHT/LEFT are relative ±1.0s (KMOD_NONE). begin_input_frame clears
+    // RIGHT/LEFT are relative ±1.0s (SDL_KMOD_NONE). begin_input_frame clears
     // seek_from_start, so these are not timeline-from-start seeks.
     push_keydown(SDLK_RIGHT, SDL_SCANCODE_RIGHT, 0);
     sleep_ms(700);
@@ -943,10 +937,10 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
     sleep_ms(300);
     for (const char* timestamp : {"00:00:05.208", "00:00:05.208333"}) {
-      if (SDL_SetClipboardText(timestamp) < 0) {
+      if (!SDL_SetClipboardText(timestamp)) {
         std::fprintf(stderr, "FAIL could not prepare clipboard: %s\n", SDL_GetError());
       }
-      push_keydown(SDLK_v, SDL_SCANCODE_V, 0, clipboard_mod());
+      push_keydown(SDLK_V, SDL_SCANCODE_V, 0, clipboard_mod());
       sleep_ms(1200);
       push_copy_timestamp();
       sleep_ms(250);
@@ -962,7 +956,7 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(600);
     // Proof of life after skip_update + buffer restore. Do not quit
     // immediately after the seek. F dumps the presented stills.
-    push_keydown(SDLK_f, SDL_SCANCODE_F, 0);
+    push_keydown(SDLK_F, SDL_SCANCODE_F, 0);
     sleep_ms(500);
   } else if (scenario == Scenario::SyncMismatch) {
     // Natural playback only. The shared 1000 ms settle plus this extra wait
@@ -987,11 +981,11 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     push_copy_timestamp();
     sleep_ms(200);
     // Shift only — do not combine with the clipboard modifier.
-    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, KMOD_SHIFT);
+    push_keydown(SDLK_D, SDL_SCANCODE_D, 0, SDL_KMOD_SHIFT);
     sleep_ms(500);
     push_copy_timestamp();
     sleep_ms(200);
-    push_keydown(SDLK_a, SDL_SCANCODE_A, 0, KMOD_SHIFT);
+    push_keydown(SDLK_A, SDL_SCANCODE_A, 0, SDL_KMOD_SHIFT);
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(200);
@@ -1002,27 +996,27 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(200);
-    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    push_keydown(SDLK_D, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
     sleep_ms(900);
     push_copy_timestamp();
     sleep_ms(200);
     // No next keyframe at the end of the two-keyframe fixture.
-    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    push_keydown(SDLK_D, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
     sleep_ms(900);
     push_copy_timestamp();
     sleep_ms(200);
-    push_keydown(SDLK_a, SDL_SCANCODE_A, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    push_keydown(SDLK_A, SDL_SCANCODE_A, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
     sleep_ms(900);
     push_copy_timestamp();
     sleep_ms(200);
     // No previous keyframe at the beginning either.
-    push_keydown(SDLK_a, SDL_SCANCODE_A, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    push_keydown(SDLK_A, SDL_SCANCODE_A, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
     sleep_ms(900);
     push_copy_timestamp();
     sleep_ms(200);
     // Seek to the final keyframe, play into its GOP, then request a next
     // keyframe that does not exist. Rejected navigation must not rewind.
-    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    push_keydown(SDLK_D, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
     sleep_ms(900);
     push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
     sleep_ms(1000);
@@ -1030,45 +1024,45 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(300);
     push_copy_timestamp();
     sleep_ms(200);
-    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    push_keydown(SDLK_D, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
     sleep_ms(900);
     push_copy_timestamp();
     sleep_ms(200);
   } else if (scenario == Scenario::KeyframeNavigationGop25) {
     push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
     sleep_ms(300);
-    push_keydown(SDLK_RIGHT, SDL_SCANCODE_RIGHT, 0, KMOD_SHIFT);
+    push_keydown(SDLK_RIGHT, SDL_SCANCODE_RIGHT, 0, SDL_KMOD_SHIFT);
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(200);
-    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    push_keydown(SDLK_D, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(200);
-    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    push_keydown(SDLK_D, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(200);
-    push_keydown(SDLK_a, SDL_SCANCODE_A, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    push_keydown(SDLK_A, SDL_SCANCODE_A, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(200);
   } else if (scenario == Scenario::KeyframeNavigationAsymmetric) {
     push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
     sleep_ms(300);
-    push_keydown(SDLK_RIGHT, SDL_SCANCODE_RIGHT, 0, KMOD_SHIFT);
+    push_keydown(SDLK_RIGHT, SDL_SCANCODE_RIGHT, 0, SDL_KMOD_SHIFT);
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(200);
-    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    push_keydown(SDLK_D, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(200);
-    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    push_keydown(SDLK_D, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(200);
-    push_keydown(SDLK_a, SDL_SCANCODE_A, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+    push_keydown(SDLK_A, SDL_SCANCODE_A, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
     sleep_ms(700);
     push_copy_timestamp();
     sleep_ms(200);
@@ -1079,7 +1073,7 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     if (frame_shift != nullptr && frame_shift[0] != '\0') {
       const int presses = std::max(1, std::atoi(frame_shift));
       for (int i = 0; i < presses; ++i) {
-        push_keydown(SDLK_EQUALS, SDL_SCANCODE_EQUALS, 0, KMOD_CTRL);
+        push_keydown(SDLK_EQUALS, SDL_SCANCODE_EQUALS, 0, SDL_KMOD_CTRL);
         sleep_ms(500);
       }
       sleep_ms(400);
@@ -1087,7 +1081,7 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     const char* warmup_env = std::getenv("KEYFRAME_NAV_WARMUP_D");
     const int warmup_d = (warmup_env != nullptr && warmup_env[0] != '\0') ? std::max(0, std::atoi(warmup_env)) : 0;
     for (int i = 0; i < warmup_d; ++i) {
-      push_keydown(SDLK_d, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+      push_keydown(SDLK_D, SDL_SCANCODE_D, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
       sleep_ms(900);
     }
     sleep_ms(300);
@@ -1097,10 +1091,10 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     const int step_count = (steps_env != nullptr && steps_env[0] != '\0') ? std::max(1, std::atoi(steps_env)) : 3;
     const char* backward_env = std::getenv("KEYFRAME_NAV_BACKWARD");
     const bool backward = backward_env != nullptr && backward_env[0] == '1';
-    const SDL_Keycode key = backward ? SDLK_a : SDLK_d;
+    const SDL_Keycode key = backward ? SDLK_A : SDLK_D;
     const SDL_Scancode scan = backward ? SDL_SCANCODE_A : SDL_SCANCODE_D;
     for (int i = 0; i < step_count; ++i) {
-      push_keydown(key, scan, 0, static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT));
+      push_keydown(key, scan, 0, static_cast<SDL_Keymod>(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
       sleep_ms(2000);
       push_copy_timestamp();
       sleep_ms(250);
@@ -1112,7 +1106,7 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     push_keydown(SDLK_SPACE, SDL_SCANCODE_SPACE, 0);
     sleep_ms(300);
     for (int i = 0; i < 24; ++i) {
-      push_keydown(SDLK_j, SDL_SCANCODE_J, 0);
+      push_keydown(SDLK_J, SDL_SCANCODE_J, 0);
     }
     sleep_ms(200);
     push_copy_timestamp();
@@ -1167,7 +1161,7 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
 
     push_copy_timestamp();
     sleep_ms(300);
-    push_keydown(SDLK_d, SDL_SCANCODE_D, 0, KMOD_SHIFT);
+    push_keydown(SDLK_D, SDL_SCANCODE_D, 0, SDL_KMOD_SHIFT);
     sleep_ms(500);
     push_copy_timestamp();
     sleep_ms(200);
@@ -1185,18 +1179,18 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
 
     // 1. Normal Ctrl+Shift+L: crop logical left, give R0 and R1 different crops,
     //    leave R2 uncropped, copy visual left to all rights, then undo.
-    interactive_crop(SDLK_l, SDL_SCANCODE_L, left_x0, left_y0, left_x1, left_y1);
+    interactive_crop(SDLK_L, SDL_SCANCODE_L, left_x0, left_y0, left_x1, left_y1);
     dump_display_filters();
     toggle_swap();
     dump_display_filters();
     toggle_swap();
 
     select_right_video(1);
-    interactive_crop(SDLK_r, SDL_SCANCODE_R, right1_x0, right1_y0, right1_x1, right1_y1);
+    interactive_crop(SDLK_R, SDL_SCANCODE_R, right1_x0, right1_y0, right1_x1, right1_y1);
     dump_display_filters();
 
     select_right_video(0);
-    interactive_crop(SDLK_r, SDL_SCANCODE_R, right0_x0, right0_y0, right0_x1, right0_y1);
+    interactive_crop(SDLK_R, SDL_SCANCODE_R, right0_x0, right0_y0, right0_x1, right0_y1);
     dump_display_filters();
 
     copy_visual_left_crop_to_others();
@@ -1256,7 +1250,7 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     // 4. Undo keeps the concrete side from the operation, not the later
     //    selected right. Crop R1, switch to R2, Backspace.
     select_right_video(1);
-    interactive_crop(SDLK_r, SDL_SCANCODE_R, right1_again_x0, right1_again_y0, right1_again_x1, right1_again_y1);
+    interactive_crop(SDLK_R, SDL_SCANCODE_R, right1_again_x0, right1_again_y0, right1_again_x1, right1_again_y1);
     dump_display_filters();
     select_right_video(2);
     dump_display_filters();
@@ -1305,16 +1299,16 @@ void run_event_script(const Scenario scenario, std::atomic<bool>& finished) {
     sleep_ms(400);
 
     dump_display_filters();
-    interactive_crop(SDLK_b, SDL_SCANCODE_B, x0, y0, x1, y1);
+    interactive_crop(SDLK_B, SDL_SCANCODE_B, x0, y0, x1, y1);
     dump_display_filters();
-    interactive_crop(SDLK_l, SDL_SCANCODE_L, x0, y0, x1, y1);
+    interactive_crop(SDLK_L, SDL_SCANCODE_L, x0, y0, x1, y1);
     dump_display_filters();
     undo_last_crop();
     dump_display_filters();
-    interactive_crop(SDLK_r, SDL_SCANCODE_R, x0, y0, x1, y1);
+    interactive_crop(SDLK_R, SDL_SCANCODE_R, x0, y0, x1, y1);
     dump_display_filters();
     toggle_swap();
-    interactive_crop(SDLK_l, SDL_SCANCODE_L, x0, y0, x1, y1);
+    interactive_crop(SDLK_L, SDL_SCANCODE_L, x0, y0, x1, y1);
     dump_display_filters();
   } else if (scenario == Scenario::DynamicSwap) {
     // 320x240 (4:3) left, 640x360 (16:9) right. Canvas/window stay 16:9;
@@ -1423,19 +1417,20 @@ int run_scenario(const Scenario scenario, const std::vector<std::string>& files)
       // coordinates. Display's input path expects window coordinates instead.
       SDL_Window* window = SDL_GetWindowFromID(first_sdl_window_id());
       SDL_Renderer* renderer = window != nullptr ? SDL_GetRenderer(window) : nullptr;
-      if (renderer == nullptr || (SDL_GetWindowFlags(window) & SDL_WINDOW_ALLOW_HIGHDPI) == 0) {
+      if (renderer == nullptr || (SDL_GetWindowFlags(window) & SDL_WINDOW_HIGH_PIXEL_DENSITY) == 0) {
         throw std::runtime_error("High-DPI test window or renderer unavailable");
       }
       int output_w = 0;
       int output_h = 0;
       // The dummy renderer has a 1:1 pixel density; -d must not halve it.
-      if (SDL_GetRendererOutputSize(renderer, &output_w, &output_h) != 0 || output_w != 640 || output_h != 360) {
+      if (!SDL_GetCurrentRenderOutputSize(renderer, &output_w, &output_h) || output_w != 640 || output_h != 360) {
         throw std::runtime_error("Unexpected initial high-DPI renderer output size");
       }
       int logical_w = -1;
       int logical_h = -1;
-      SDL_RenderGetLogicalSize(renderer, &logical_w, &logical_h);
-      if (logical_w != 0 || logical_h != 0) {
+      SDL_RendererLogicalPresentation logical_mode = SDL_LOGICAL_PRESENTATION_DISABLED;
+      SDL_GetRenderLogicalPresentation(renderer, &logical_w, &logical_h, &logical_mode);
+      if (logical_w != 0 || logical_h != 0 || logical_mode != SDL_LOGICAL_PRESENTATION_DISABLED) {
         throw std::runtime_error("Renderer logical sizing would scale mouse events twice on high-DPI displays");
       }
     }

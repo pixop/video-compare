@@ -1,5 +1,5 @@
 #include "scope_manager.h"
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <algorithm>
 #include <utility>
 #include "scope_window.h"

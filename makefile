@@ -18,17 +18,16 @@ ifneq ($(filter MINGW%,$(shell uname)),)
     FFMPEG_VERSION = $(GYAN_FFMPEG_VERSION)-$(GYAN_FFMPEG_VARIANT)
 
     FFMPEG_PATH = ffmpeg-$(FFMPEG_VERSION)
-    SDL2_PATH = SDL2-devel-$(SDL2_VERSION)-mingw/SDL2-$(SDL2_VERSION)/x86_64-w64-mingw32
-    SDL2_TTF_PATH = SDL2_ttf-devel-$(SDL2_TTF_VERSION)-mingw/SDL2_ttf-$(SDL2_TTF_VERSION)/x86_64-w64-mingw32
+    SDL3_PATH = SDL3-devel-$(SDL3_VERSION)-mingw/SDL3-$(SDL3_VERSION)/x86_64-w64-mingw32
+    SDL3_TTF_PATH = SDL3_ttf-devel-$(SDL3_TTF_VERSION)-mingw/SDL3_ttf-$(SDL3_TTF_VERSION)/x86_64-w64-mingw32
 
     CXX = x86_64-w64-mingw32-g++
     CXXFLAGS += -I$(FFMPEG_PATH)/include/ \
-                -I$(SDL2_PATH)/include/ \
-                -I$(SDL2_PATH)/include/SDL2/ \
-                -I$(SDL2_TTF_PATH)/include/
+                -I$(SDL3_PATH)/include/ \
+                -I$(SDL3_TTF_PATH)/include/
     LDLIBS += -L$(FFMPEG_PATH)/lib/ \
-              -L$(SDL2_PATH)/lib/ \
-              -L$(SDL2_TTF_PATH)/lib/
+              -L$(SDL3_PATH)/lib/ \
+              -L$(SDL3_TTF_PATH)/lib/
   endif
 else
   CXX = g++
@@ -53,14 +52,29 @@ ifneq "$(wildcard /usr/include/ffmpeg)" ""
   CXXFLAGS += -I/usr/include/ffmpeg
 endif
 
+# Optional local SDL3 prefix (e.g. /tmp/video-compare-sdl3-prefix from a source build).
+# Usage: make SDL3_PREFIX=/path/to/prefix
+SDL3_PREFIX ?=
+ifneq ($(SDL3_PREFIX),)
+  CXXFLAGS += -I$(SDL3_PREFIX)/include
+  LDLIBS += -L$(SDL3_PREFIX)/lib -Wl,-rpath,$(SDL3_PREFIX)/lib
+  export PKG_CONFIG_PATH := $(SDL3_PREFIX)/lib/pkgconfig$(if $(PKG_CONFIG_PATH),:$(PKG_CONFIG_PATH),)
+endif
+
 # Default: don't use pkg-config unless user explicitly enables it
 # Usage: make USE_PKG_CONFIG=1
 USE_PKG_CONFIG ?= 0
 
 ifeq ($(USE_PKG_CONFIG),1)
-  LDLIBS += $(shell pkg-config --libs libavformat libavcodec libavfilter libavutil libswscale libswresample sdl2 SDL2_ttf)
+  SDL3_CFLAGS := $(shell pkg-config --cflags sdl3 sdl3-ttf 2>/dev/null)
+  SDL3_LIBS := $(shell pkg-config --libs sdl3 sdl3-ttf 2>/dev/null)
+  ifeq ($(SDL3_LIBS),)
+    $(error SDL3 pkg-config modules sdl3 and sdl3-ttf are required; set SDL3_PREFIX or install SDL3 development packages)
+  endif
+  CXXFLAGS += $(SDL3_CFLAGS)
+  LDLIBS += $(shell pkg-config --libs libavformat libavcodec libavfilter libavutil libswscale libswresample) $(SDL3_LIBS)
 else
-  LDLIBS += -lavformat -lavcodec -lavfilter -lavutil -lswscale -lswresample -lSDL2_ttf -lSDL2
+  LDLIBS += -lavformat -lavcodec -lavfilter -lavutil -lswscale -lswresample -lSDL3_ttf -lSDL3
 endif
 
 src = $(wildcard src/*.cpp)

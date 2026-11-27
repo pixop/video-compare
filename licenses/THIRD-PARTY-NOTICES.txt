@@ -31,13 +31,13 @@ Linux and macOS release artifacts do not bundle FFmpeg libraries. They
 dynamically link against FFmpeg libraries supplied by the target system;
 the applicable FFmpeg licensing terms depend on the installed FFmpeg build.
 
-SDL2
+SDL3
 ----
 Upstream project: Simple DirectMedia Layer (https://github.com/libsdl-org/SDL)
 License: zlib License
 License file: licenses/LICENSE-SDL2-Zlib.txt
 
-SDL2_ttf
+SDL3_ttf
 --------
 Upstream project: SDL_ttf (https://github.com/libsdl-org/SDL_ttf)
 License: zlib License

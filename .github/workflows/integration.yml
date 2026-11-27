@@ -25,6 +25,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            cmake \
+            git \
             ffmpeg \
             libavformat-dev \
             libavcodec-dev \
@@ -32,27 +34,47 @@ jobs:
             libavutil-dev \
             libswscale-dev \
             libswresample-dev \
-            libsdl2-dev \
-            libsdl2-ttf-dev \
+            libfreetype-dev \
+            libharfbuzz-dev \
+            libx11-dev \
+            libxext-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxfixes-dev \
+            libxrandr-dev \
+            libxss-dev \
+            libgl-dev \
             pkg-config \
             xvfb \
             xauth \
             libgl1-mesa-dri
+
+      - name: Build pinned SDL3 prefix
+        env:
+          SDL3_PREFIX: ${{ github.workspace }}/.cache/sdl3-prefix
+          JOBS: 2
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build_sdl3_prefix.sh
+          scripts/build_sdl3_prefix.sh "${SDL3_PREFIX}"
+          echo "SDL3_PREFIX=${SDL3_PREFIX}" >> "${GITHUB_ENV}"
+          echo "PKG_CONFIG_PATH=${SDL3_PREFIX}/lib/pkgconfig" >> "${GITHUB_ENV}"
+          echo "LD_LIBRARY_PATH=${SDL3_PREFIX}/lib" >> "${GITHUB_ENV}"
 
       - name: Environment
         run: |
           uname -s -m
           g++ --version | head -1
           ffmpeg -version | head -1
-          pkg-config --modversion sdl2
-          pkg-config --modversion SDL2_ttf
+          pkg-config --modversion sdl3
+          pkg-config --modversion sdl3-ttf
           command -v timeout
 
       - name: Build
-        run: make -j"$(nproc)"
+        run: make USE_PKG_CONFIG=1 SDL3_PREFIX="${SDL3_PREFIX}" -j"$(nproc)"
 
       - name: Unit tests
-        run: make check
+        run: make USE_PKG_CONFIG=1 SDL3_PREFIX="${SDL3_PREFIX}" check
 
       - name: Accelerated progress rendering equivalence (Mesa OpenGL)
         run: |
@@ -60,7 +82,7 @@ jobs:
           SDL_RENDER_LINE_METHOD=2 xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX' ./tests/test_progress_dots --accelerated
 
       - name: Integration tests
-        run: make integration
+        run: make USE_PKG_CONFIG=1 SDL3_PREFIX="${SDL3_PREFIX}" integration
 
   integration-macos:
     runs-on: macos-15-intel
@@ -74,7 +96,7 @@ jobs:
 
       - name: Install dependencies via Homebrew
         run: |
-          brew install ffmpeg sdl2 sdl2_ttf pkg-config
+          brew install ffmpeg sdl3 sdl3_ttf pkg-config
 
       - name: Environment
         run: |
@@ -82,8 +104,8 @@ jobs:
           echo "HOMEBREW_PREFIX=${HOMEBREW_PREFIX:-}"
           g++ --version | head -1
           ffmpeg -version | head -1
-          pkg-config --modversion sdl2
-          pkg-config --modversion SDL2_ttf
+          pkg-config --modversion sdl3
+          pkg-config --modversion sdl3-ttf
           command -v timeout || echo "timeout not installed (optional)"
 
       - name: Build
@@ -115,8 +137,8 @@ jobs:
             gcc:p
             make:p
             ffmpeg:p
-            SDL2:p
-            SDL2_ttf:p
+            SDL3:p
+            SDL3_ttf:p
             pkgconf:p
 
       - name: Environment
@@ -127,8 +149,8 @@ jobs:
           echo "MSYSTEM=${MSYSTEM}"
           g++ --version | head -1
           ffmpeg -version | head -1
-          pkg-config --modversion sdl2
-          pkg-config --modversion SDL2_ttf
+          pkg-config --modversion sdl3
+          pkg-config --modversion sdl3-ttf
           command -v timeout
           timeout --version | head -1
           command -v make

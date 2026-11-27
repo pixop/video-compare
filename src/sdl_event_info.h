@@ -1,5 +1,5 @@
 #pragma once
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <cstdint>
 
 // Small helper for introspecting SDL events without duplicating SDL union-field knowledge everywhere.

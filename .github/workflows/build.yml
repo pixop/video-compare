@@ -47,23 +47,23 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          ./download_and_extract_windows_deps.sh ffmpeg
+          ./scripts/download_and_extract_windows_deps.sh ffmpeg
 
-      - name: Download SDL2
+      - name: Download SDL3
         shell: msys2 {0}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          ./download_and_extract_windows_deps.sh sdl2
+          ./scripts/download_and_extract_windows_deps.sh sdl3
 
-      - name: Download SDL2_ttf
+      - name: Download SDL3_ttf
         shell: msys2 {0}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          ./download_and_extract_windows_deps.sh sdl2_ttf
+          ./scripts/download_and_extract_windows_deps.sh sdl3_ttf
 
       - name: Build
         shell: msys2 {0}
@@ -240,20 +240,46 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            cmake \
+            git \
+            pkg-config \
             libavformat-dev \
             libavcodec-dev \
             libavfilter-dev \
             libavutil-dev \
             libswscale-dev \
             libswresample-dev \
-            libsdl2-dev \
-            libsdl2-ttf-dev
+            libfreetype-dev \
+            libharfbuzz-dev \
+            libx11-dev \
+            libxext-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxfixes-dev \
+            libxrandr-dev \
+            libxss-dev \
+            libgl-dev \
+            xvfb \
+            xauth \
+            libgl1-mesa-dri
+
+      - name: Build pinned SDL3 prefix
+        env:
+          SDL3_PREFIX: ${{ github.workspace }}/.cache/sdl3-prefix
+          JOBS: 2
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build_sdl3_prefix.sh
+          scripts/build_sdl3_prefix.sh "${SDL3_PREFIX}"
+          echo "SDL3_PREFIX=${SDL3_PREFIX}" >> "${GITHUB_ENV}"
+          echo "PKG_CONFIG_PATH=${SDL3_PREFIX}/lib/pkgconfig" >> "${GITHUB_ENV}"
+          echo "LD_LIBRARY_PATH=${SDL3_PREFIX}/lib" >> "${GITHUB_ENV}"
 
       - name: Build
-        run: make -j$(nproc)
+        run: make USE_PKG_CONFIG=1 SDL3_PREFIX="${SDL3_PREFIX}" -j$(nproc)
 
       - name: Run unit tests
-        run: make check
+        run: make USE_PKG_CONFIG=1 SDL3_PREFIX="${SDL3_PREFIX}" check
 
       - name: Verify build output
         run: |
@@ -298,7 +324,7 @@ jobs:
 
       - name: Install dependencies via Homebrew
         run: |
-          brew install ffmpeg sdl2 sdl2_ttf
+          brew install ffmpeg sdl3 sdl3_ttf
 
       - name: Build
         run: make -j$(sysctl -n hw.ncpu)

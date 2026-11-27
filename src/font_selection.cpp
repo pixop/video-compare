@@ -5,11 +5,11 @@
 #include "source_code_pro_regular_ttf.h"
 #include "string_utils.h"
 extern "C" {
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 }
 
-#if !SDL_TTF_VERSION_ATLEAST(2, 0, 18)
-#error "SDL2_ttf >= 2.0.18 required for TTF_GlyphIsProvided32"
+#if !SDL_TTF_VERSION_ATLEAST(3, 2, 0)
+#error "SDL3_ttf >= 3.2.0 required for TTF_FontHasGlyph"
 #endif
 
 namespace {
@@ -111,20 +111,20 @@ T check_sdl(T value, const char* context) {
 
 [[nodiscard]] TTF_Font* open_embedded_font(EmbeddedFont family, int point_size, const char* text_role) {
   const char* family_name = embedded_font_display_name(family);
-  SDL_RWops* rw = nullptr;
+  SDL_IOStream* io = nullptr;
 
   switch (family) {
     case EmbeddedFont::SourceCodePro:
-      rw = check_sdl(SDL_RWFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN), "get pointer to font");
+      io = check_sdl(SDL_IOFromConstMem(SOURCE_CODE_PRO_REGULAR_TTF, SOURCE_CODE_PRO_REGULAR_TTF_LEN), "get pointer to font");
       break;
     case EmbeddedFont::Sarasa:
-      rw = check_sdl(SDL_RWFromConstMem(SARASA_MONO_SC_REGULAR_TTF, SARASA_MONO_SC_REGULAR_TTF_LEN), "get pointer to font");
+      io = check_sdl(SDL_IOFromConstMem(SARASA_MONO_SC_REGULAR_TTF, SARASA_MONO_SC_REGULAR_TTF_LEN), "get pointer to font");
       break;
   }
 
-  TTF_Font* font = TTF_OpenFontRW(rw, 1, point_size);
+  TTF_Font* font = TTF_OpenFontIO(io, true, static_cast<float>(point_size));
   if (font == nullptr) {
-    const char* ttf_error = TTF_GetError();
+    const char* ttf_error = SDL_GetError();
     const std::string raw_error = (ttf_error != nullptr && *ttf_error != '\0') ? ttf_error : "unknown error";
     throw std::runtime_error{string_sprintf("TTF open %s %s (%d pt) - %s", family_name, text_role, point_size, raw_error.c_str())};
   }
@@ -220,9 +220,9 @@ std::string format_custom_font_open_error(const std::string& path, int point_siz
 }
 
 TTF_Font* open_custom_font_file(const std::string& path, int point_size, const char* text_role) {
-  TTF_Font* font = TTF_OpenFont(path.c_str(), point_size);
+  TTF_Font* font = TTF_OpenFont(path.c_str(), static_cast<float>(point_size));
   if (font == nullptr) {
-    const char* ttf_error = TTF_GetError();
+    const char* ttf_error = SDL_GetError();
     throw std::runtime_error{format_custom_font_open_error(path, point_size, text_role, ttf_error)};
   }
   return font;
@@ -250,7 +250,7 @@ bool font_supports_utf8_text(TTF_Font* font, const std::string& text, bool* malf
       return false;
     }
 
-    if (all_glyphs_supported && codepoint_requires_glyph(cp) && !TTF_GlyphIsProvided32(font, static_cast<Uint32>(cp))) {
+    if (all_glyphs_supported && codepoint_requires_glyph(cp) && !TTF_FontHasGlyph(font, static_cast<Uint32>(cp))) {
       all_glyphs_supported = false;
     }
   }

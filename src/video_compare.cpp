@@ -1089,7 +1089,7 @@ void VideoCompare::compare() {
       // - Destruction is deferred: scope windows set close_requested_ and are destroyed later by reconcile().
       display_->begin_input_frame();
       SDL_Event event;
-      while (SDL_PollEvent(&event) != 0) {
+      while (SDL_PollEvent(&event)) {
         display_->mark_input_received();
 
         const uint32_t wid = SDLEventInfo::window_id(event);

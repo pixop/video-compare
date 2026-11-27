@@ -2,7 +2,7 @@
 
 [![GitHub release](https://img.shields.io/github/release/pixop/video-compare?v=2)](https://github.com/pixop/video-compare/releases)
 
-Split-screen video comparison tool written in C++14, utilizing FFmpeg libraries and SDL2. It provides
+Split-screen video comparison tool written in C++14, utilizing FFmpeg libraries and SDL3. It provides
 interactive navigation and playback controls, along with various analysis tools and customizable display options.
 
 `video-compare` can be used to visually compare the impact of codecs, resizing algorithms, and other modifications
@@ -291,22 +291,21 @@ Availability may depend on conflicts with application shortcuts or operating sys
 
 ### Requirements
 
-Requires FFmpeg headers and development libraries to be installed, along with SDL2 and
-its TrueType font rendering add on (libsdl2_ttf). SDL2 version 2.0.10 or later is now
-specifically required for subpixel accuracy rendering capabilities. Users may need to
-upgrade their existing SDL2 installation before compiling.
+Requires FFmpeg development libraries, SDL3, and its TrueType font add-on SDL3_ttf.
 
-On Debian GNU/Linux the required development packages can be installed via `apt`:
+On Debian GNU/Linux where SDL3 is packaged, install the development packages via `apt`:
 
 ```sh
-apt install build-essential libavformat-dev libavcodec-dev libavfilter-dev libavutil-dev libswscale-dev libswresample-dev libsdl2-dev libsdl2-ttf-dev
+apt install build-essential libavformat-dev libavcodec-dev libavfilter-dev libavutil-dev libswscale-dev libswresample-dev libsdl3-dev libsdl3-ttf-dev
 ```
 
 On Fedora Linux the required development packages can be installed via `dnf`:
 
 ```sh
-dnf install make gcc-c++ ffmpeg-devel SDL2-devel SDL2_ttf-devel
+dnf install make gcc-c++ ffmpeg-devel SDL3-devel SDL3_ttf-devel
 ```
+
+If your distribution does not package SDL3, use the [pinned build script](scripts/build_sdl3_prefix.sh) and pass its install path as `SDL3_PREFIX` to `make`.
 
 ### Instructions
 
@@ -366,7 +365,7 @@ We're always looking for ways to improve and expand the tool. Your feedback and 
 `video-compare` was created by Jon Frydensbjerg (email: jon@pixop.com). The code is mainly based on
 the excellent video player GitHub project: https://github.com/pockethook/player
 
-Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL2](https://github.com/libsdl-org/SDL) and
+Many thanks to the [FFmpeg](https://github.com/FFmpeg/FFmpeg), [SDL](https://github.com/libsdl-org/SDL) and
 [stb](https://github.com/nothings/stb) authors.
 
 ## License

@@ -1,6 +1,6 @@
 #pragma once
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
+#include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 #include <stdexcept>
 #include <string>
 
@@ -29,14 +29,14 @@ class HudTextCache {
     if (texture_ != nullptr && font_ == font && text_ == text && color_.r == color.r && color_.g == color.g && color_.b == color.b && color_.a == color.a) {
       return;
     }
-    SDL_Surface* surface = TTF_RenderText_Blended(font, text.c_str(), color);
+    SDL_Surface* surface = TTF_RenderText_Blended(font, text.c_str(), text.length(), color);
     if (surface == nullptr) {
-      throw std::runtime_error(std::string("Rendering HUD text: ") + TTF_GetError());
+      throw std::runtime_error(std::string("Rendering HUD text: ") + SDL_GetError());
     }
     SDL_Texture* next_texture = SDL_CreateTextureFromSurface(renderer, surface);
     const int next_width = surface->w;
     const int next_height = surface->h;
-    SDL_FreeSurface(surface);
+    SDL_DestroySurface(surface);
     if (next_texture == nullptr) {
       throw std::runtime_error(std::string("Creating HUD texture: ") + SDL_GetError());
     }

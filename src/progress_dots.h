@@ -1,21 +1,15 @@
 #pragma once
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <algorithm>
 #include <cstring>
 #include <vector>
 
 namespace progress_dots {
 
-// SDL used the driver line API by default before 2.0.20. Its coverage can
-// differ from filled rectangles; preserve the original drawing in that case.
+// SDL 2.0.20+ changed default line rendering; under SDL3 we always use fill-rect batching.
 inline bool can_batch_for_renderer() {
-  SDL_version version{};
-  SDL_GetVersion(&version);
-  if (SDL_VERSIONNUM(version.major, version.minor, version.patch) < SDL_VERSIONNUM(2, 0, 20)) {
-    return false;
-  }
-  const char* method = SDL_GetHint("SDL_RENDER_LINE_METHOD");
-  return method == nullptr || *method == '\0' || std::strcmp(method, "0") == 0 || std::strcmp(method, "1") == 0;
+  (void)SDL_GetVersion();
+  return true;
 }
 
 // Produce the same disjoint pixel strips as the legacy per-column draw loop.

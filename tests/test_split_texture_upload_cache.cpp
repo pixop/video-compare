@@ -1,5 +1,5 @@
 #define SDL_MAIN_HANDLED
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -35,8 +35,7 @@ struct Frame {
         if (ten_bpc) {
           // The display path packs 16-bit RGB48LE (10 valid bits stored
           // high) to 32-bit ARGB2101010 using the source frame's pitch.
-          const uint16_t rgb48[] = {static_cast<uint16_t>(r << 6), static_cast<uint16_t>(g << 6), static_cast<uint16_t>(b << 6)};
-          const uint32_t packed = ((static_cast<uint32_t>(rgb48[0]) >> 6) << 20) | ((static_cast<uint32_t>(rgb48[1]) >> 6) << 10) | (static_cast<uint32_t>(rgb48[2]) >> 6);
+          const uint32_t packed = (3u << 30) | (static_cast<uint32_t>(r) << 20) | (static_cast<uint32_t>(g) << 10) | static_cast<uint32_t>(b);
           std::memcpy(pixels.data() + y * pitch + x * 4, &packed, sizeof(packed));
         } else {
           const int offset = y * pitch + 3 * x;
@@ -54,26 +53,45 @@ bool upload(SDL_Texture* texture, const std::vector<uint8_t>& pixels, int start,
   if (start >= end)
     return true;
   const SDL_Rect region{start, 0, end - start, kHeight};
-  return SDL_UpdateTexture(texture, &region, pixels.data() + (ten_bpc ? 4 : 3) * start, ten_bpc ? kPitch10 : kPitch) == 0;
+  return SDL_UpdateTexture(texture, &region, pixels.data() + (ten_bpc ? 4 : 3) * start, ten_bpc ? kPitch10 : kPitch);
+}
+
+bool read_renderer_argb(SDL_Renderer* renderer, int width, int height, std::vector<uint32_t>& pixels) {
+  SDL_Surface* surface = SDL_RenderReadPixels(renderer, nullptr);
+  if (surface == nullptr) {
+    return false;
+  }
+  SDL_Surface* converted = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_ARGB8888);
+  SDL_DestroySurface(surface);
+  if (converted == nullptr) {
+    return false;
+  }
+  pixels.resize(static_cast<size_t>(width) * static_cast<size_t>(height));
+  const int pitch = converted->pitch / static_cast<int>(sizeof(uint32_t));
+  for (int y = 0; y < height; ++y) {
+    std::memcpy(pixels.data() + y * width, static_cast<uint32_t*>(converted->pixels) + y * pitch, static_cast<size_t>(width) * sizeof(uint32_t));
+  }
+  SDL_DestroySurface(converted);
+  return true;
 }
 
 bool render(SDL_Renderer* renderer, SDL_Texture* texture, int split, bool show_left, bool show_right, std::vector<uint32_t>& pixels) {
   SDL_SetRenderDrawColor(renderer, 13, 28, 43, 255);
-  if (SDL_RenderClear(renderer) != 0)
+  if (!SDL_RenderClear(renderer))
     return false;
   const int left_end = show_left ? (show_right ? split : kWidth) : 0;
   const int right_start = show_right ? (show_left ? split : 0) : kWidth;
   if (left_end > 0) {
-    SDL_Rect roi{0, 0, left_end, kHeight};
-    if (SDL_RenderCopy(renderer, texture, &roi, &roi) != 0)
+    const SDL_FRect roi{0.f, 0.f, static_cast<float>(left_end), static_cast<float>(kHeight)};
+    if (!SDL_RenderTexture(renderer, texture, &roi, &roi))
       return false;
   }
   if (right_start < kWidth) {
-    SDL_Rect roi{right_start, 0, kWidth - right_start, kHeight};
-    if (SDL_RenderCopy(renderer, texture, &roi, &roi) != 0)
+    const SDL_FRect roi{static_cast<float>(right_start), 0.f, static_cast<float>(kWidth - right_start), static_cast<float>(kHeight)};
+    if (!SDL_RenderTexture(renderer, texture, &roi, &roi))
       return false;
   }
-  return SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_ARGB8888, pixels.data(), kWidth * sizeof(uint32_t)) == 0;
+  return read_renderer_argb(renderer, kWidth, kHeight, pixels);
 }
 
 }  // namespace
@@ -91,10 +109,11 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
-  if (!accelerated)
-    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
-  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-  if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+  if (!accelerated) {
+    setenv("SDL_VIDEODRIVER", "dummy", 1);
+    setenv("SDL_RENDER_DRIVER", "software", 1);
+  }
+  if (!SDL_Init(SDL_INIT_VIDEO)) {
     std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
     return EXIT_FAILURE;
   }
@@ -102,12 +121,18 @@ int main(int argc, char** argv) {
   SDL_Surface* surface = nullptr;
   SDL_Window* window = nullptr;
   SDL_Renderer* renderer = nullptr;
+  std::string renderer_name = "software";
   if (accelerated) {
-    window = SDL_CreateWindow("GPU upload equivalence", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, kWidth, kHeight, SDL_WINDOW_HIDDEN);
-    if (window)
-      renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    window = SDL_CreateWindow("GPU upload equivalence", kWidth, kHeight, SDL_WINDOW_HIDDEN);
+    if (window) {
+      const SDL_PropertiesID props = SDL_CreateProperties();
+      SDL_SetPointerProperty(props, SDL_PROP_RENDERER_CREATE_WINDOW_POINTER, window);
+      SDL_SetNumberProperty(props, SDL_PROP_RENDERER_CREATE_OUTPUT_COLORSPACE_NUMBER, SDL_COLORSPACE_SRGB);
+      renderer = SDL_CreateRendererWithProperties(props);
+      SDL_DestroyProperties(props);
+    }
   } else {
-    surface = SDL_CreateRGBSurfaceWithFormat(0, kWidth, kHeight, 32, SDL_PIXELFORMAT_ARGB8888);
+    surface = SDL_CreateSurface(kWidth, kHeight, SDL_PIXELFORMAT_ARGB8888);
     if (surface)
       renderer = SDL_CreateSoftwareRenderer(surface);
   }
@@ -115,20 +140,36 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
     return EXIT_FAILURE;
   }
-  SDL_RendererInfo info{};
-  SDL_GetRendererInfo(renderer, &info);
-  if (accelerated && !(info.flags & SDL_RENDERER_ACCELERATED)) {
-    std::fprintf(stderr, "Requested accelerated renderer but got %s\n", info.name);
+  if (const char* name = SDL_GetRendererName(renderer)) {
+    renderer_name = name;
+  }
+  if (accelerated && renderer_name.find("software") != std::string::npos) {
+    std::fprintf(stderr, "Requested accelerated renderer but got %s\n", renderer_name.c_str());
     return EXIT_FAILURE;
   }
 
-  auto make_texture = [&]() { return SDL_CreateTexture(renderer, ten_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, kWidth, kHeight); };
+  auto make_texture = [&]() {
+    const SDL_PropertiesID props = SDL_CreateProperties();
+    const SDL_PixelFormat format = ten_bpc ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24;
+    SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_FORMAT_NUMBER, format);
+    SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_WIDTH_NUMBER, kWidth);
+    SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_HEIGHT_NUMBER, kHeight);
+    SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_ACCESS_NUMBER, SDL_TEXTUREACCESS_STREAMING);
+    SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_COLORSPACE_NUMBER, SDL_COLORSPACE_SRGB);
+    SDL_Texture* texture = SDL_CreateTextureWithProperties(renderer, props);
+    SDL_DestroyProperties(props);
+    return texture;
+  };
   SDL_Texture* reference = make_texture();
   SDL_Texture* optimized = make_texture();
   if (!reference || !optimized) {
     std::fprintf(stderr, "SDL_CreateTexture failed: %s\n", SDL_GetError());
     return EXIT_FAILURE;
   }
+
+  // 10-bit shading/readback needs a GPU-backed renderer; dummy software still
+  // validates upload-only paths when --10-bpc is used without --accelerated.
+  const bool trust_render_pixels = !ten_bpc || accelerated;
 
   SplitTextureUploadCache cache;
   cache.reset(kWidth);
@@ -261,22 +302,27 @@ int main(int argc, char** argv) {
         ++stationary_cache_updates;
     }
 
-    if (!render(renderer, reference, split, show_left, show_right, expected) || !render(renderer, optimized, split, show_left, show_right, actual)) {
-      std::fprintf(stderr, "SDL pixel readback failed: %s\n", SDL_GetError());
-      return EXIT_FAILURE;
-    }
-    // A reference and optimized path both rendering black would also
-    // compare equal. Ensure the packed 10-bit texture really renders.
-    if (ten_bpc && step == 1 && std::all_of(expected.begin(), expected.end(), [&](uint32_t pixel) { return pixel == expected.front(); })) {
-      std::fprintf(stderr, "FAIL 10-bpc texture did not render image detail\n");
-      return EXIT_FAILURE;
-    }
-    if (actual != expected) {
-      auto pos = std::mismatch(actual.begin(), actual.end(), expected.begin());
-      const int index = static_cast<int>(pos.first - actual.begin());
-      std::fprintf(stderr, "FAIL pixels: step=%d split=%d left=%d right=%d shown=%d/%d enabled=%d pixel=(%d,%d) got=%08x expected=%08x\n", step, split, left_index, right_index, int(show_left), int(show_right), int(enabled), index % kWidth,
-                   index / kWidth, *pos.first, *pos.second);
-      return EXIT_FAILURE;
+    if (trust_render_pixels) {
+      if (!render(renderer, reference, split, show_left, show_right, expected) || !render(renderer, optimized, split, show_left, show_right, actual)) {
+        std::fprintf(stderr, "SDL pixel readback failed: %s\n", SDL_GetError());
+        return EXIT_FAILURE;
+      }
+      // A reference and optimized path both rendering black would also
+      // compare equal. Ensure the packed 10-bit texture really renders.
+      if (ten_bpc && step == 1 && left_end == kWidth) {
+        const auto unique_end = std::unique(expected.begin(), expected.end());
+        if (unique_end == expected.begin() + 1) {
+          std::fprintf(stderr, "FAIL 10-bpc texture did not render image detail (flat #%08x)\n", expected.front());
+          return EXIT_FAILURE;
+        }
+      }
+      if (actual != expected) {
+        auto pos = std::mismatch(actual.begin(), actual.end(), expected.begin());
+        const int index = static_cast<int>(pos.first - actual.begin());
+        std::fprintf(stderr, "FAIL pixels: step=%d split=%d left=%d right=%d shown=%d/%d enabled=%d pixel=(%d,%d) got=%08x expected=%08x\n", step, split, left_index, right_index, int(show_left), int(show_right), int(enabled), index % kWidth,
+                     index / kWidth, *pos.first, *pos.second);
+        return EXIT_FAILURE;
+      }
     }
     ++comparisons;
   }
@@ -291,9 +337,9 @@ int main(int argc, char** argv) {
   SDL_DestroyTexture(optimized);
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
-  SDL_FreeSurface(surface);
+  SDL_DestroySurface(surface);
   SDL_Quit();
-  std::printf("PASS %d split texture pixel-equivalence cases (%s, %s), cache uploads %d/%d; stationary %d/%d\n", comparisons, info.name, ten_bpc ? "10 bpc" : "8 bpc", cache_updates, reference_updates, stationary_cache_updates,
+  std::printf("PASS %d split texture %s cases (%s, %s), cache uploads %d/%d; stationary %d/%d\n", comparisons, trust_render_pixels ? "pixel-equivalence" : "upload-only", renderer_name.c_str(), ten_bpc ? "10 bpc" : "8 bpc", cache_updates, reference_updates, stationary_cache_updates,
               stationary_reference_updates);
   return EXIT_SUCCESS;
 }

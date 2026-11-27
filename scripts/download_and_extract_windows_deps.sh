@@ -3,8 +3,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-DEPS_MK="${SCRIPT_DIR}/windows_deps.mk"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "$REPO_ROOT"
+DEPS_MK="${REPO_ROOT}/windows_deps.mk"
 
 trim_value() {
     local value="$1"
@@ -51,20 +52,20 @@ require_ffmpeg_deps() {
     validate_sha256_config "GYAN_FFMPEG_ARCHIVE_SHA256" "$GYAN_FFMPEG_ARCHIVE_SHA256"
 }
 
-require_sdl2_deps() {
-    SDL2_VERSION="$(read_mk_var SDL2_VERSION)"
-    SDL2_WIN32_X64_ZIP_SHA256="$(read_mk_var SDL2_WIN32_X64_ZIP_SHA256)"
-    SDL2_DEVEL_MINGW_TAR_SHA256="$(read_mk_var SDL2_DEVEL_MINGW_TAR_SHA256)"
-    validate_sha256_config "SDL2_WIN32_X64_ZIP_SHA256" "$SDL2_WIN32_X64_ZIP_SHA256"
-    validate_sha256_config "SDL2_DEVEL_MINGW_TAR_SHA256" "$SDL2_DEVEL_MINGW_TAR_SHA256"
+require_sdl3_deps() {
+    SDL3_VERSION="$(read_mk_var SDL3_VERSION)"
+    SDL3_WIN32_X64_ZIP_SHA256="$(read_mk_var SDL3_WIN32_X64_ZIP_SHA256)"
+    SDL3_DEVEL_MINGW_TAR_SHA256="$(read_mk_var SDL3_DEVEL_MINGW_TAR_SHA256)"
+    validate_sha256_config "SDL3_WIN32_X64_ZIP_SHA256" "$SDL3_WIN32_X64_ZIP_SHA256"
+    validate_sha256_config "SDL3_DEVEL_MINGW_TAR_SHA256" "$SDL3_DEVEL_MINGW_TAR_SHA256"
 }
 
-require_sdl2_ttf_deps() {
-    SDL2_TTF_VERSION="$(read_mk_var SDL2_TTF_VERSION)"
-    SDL2_TTF_WIN32_X64_ZIP_SHA256="$(read_mk_var SDL2_TTF_WIN32_X64_ZIP_SHA256)"
-    SDL2_TTF_DEVEL_MINGW_TAR_SHA256="$(read_mk_var SDL2_TTF_DEVEL_MINGW_TAR_SHA256)"
-    validate_sha256_config "SDL2_TTF_WIN32_X64_ZIP_SHA256" "$SDL2_TTF_WIN32_X64_ZIP_SHA256"
-    validate_sha256_config "SDL2_TTF_DEVEL_MINGW_TAR_SHA256" "$SDL2_TTF_DEVEL_MINGW_TAR_SHA256"
+require_sdl3_ttf_deps() {
+    SDL3_TTF_VERSION="$(read_mk_var SDL3_TTF_VERSION)"
+    SDL3_TTF_WIN32_X64_ZIP_SHA256="$(read_mk_var SDL3_TTF_WIN32_X64_ZIP_SHA256)"
+    SDL3_TTF_DEVEL_MINGW_TAR_SHA256="$(read_mk_var SDL3_TTF_DEVEL_MINGW_TAR_SHA256)"
+    validate_sha256_config "SDL3_TTF_WIN32_X64_ZIP_SHA256" "$SDL3_TTF_WIN32_X64_ZIP_SHA256"
+    validate_sha256_config "SDL3_TTF_DEVEL_MINGW_TAR_SHA256" "$SDL3_TTF_DEVEL_MINGW_TAR_SHA256"
 }
 
 gyan_ffmpeg_archive_name() {
@@ -494,20 +495,20 @@ main() {
         ffmpeg)
             download_ffmpeg
             ;;
-        sdl2)
-            require_sdl2_deps
-            validate_sdl_tag "SDL2" "$TAG" "release-${SDL2_VERSION}"
-            download_sdl_library "SDL" "SDL2" "release-${SDL2_VERSION}" \
-                "$SDL2_WIN32_X64_ZIP_SHA256" "$SDL2_DEVEL_MINGW_TAR_SHA256"
+        sdl3)
+            require_sdl3_deps
+            validate_sdl_tag "SDL3" "$TAG" "release-${SDL3_VERSION}"
+            download_sdl_library "SDL" "SDL3" "release-${SDL3_VERSION}" \
+                "$SDL3_WIN32_X64_ZIP_SHA256" "$SDL3_DEVEL_MINGW_TAR_SHA256"
             ;;
-        sdl2_ttf)
-            require_sdl2_ttf_deps
-            validate_sdl_tag "SDL2_ttf" "$TAG" "release-${SDL2_TTF_VERSION}"
-            download_sdl_library "SDL_ttf" "SDL2_ttf" "release-${SDL2_TTF_VERSION}" \
-                "$SDL2_TTF_WIN32_X64_ZIP_SHA256" "$SDL2_TTF_DEVEL_MINGW_TAR_SHA256"
+        sdl3_ttf)
+            require_sdl3_ttf_deps
+            validate_sdl_tag "SDL3_ttf" "$TAG" "release-${SDL3_TTF_VERSION}"
+            download_sdl_library "SDL_ttf" "SDL3_ttf" "release-${SDL3_TTF_VERSION}" \
+                "$SDL3_TTF_WIN32_X64_ZIP_SHA256" "$SDL3_TTF_DEVEL_MINGW_TAR_SHA256"
             ;;
         *)
-            echo "Usage: $0 {ffmpeg|sdl2|sdl2_ttf} [release_tag]" >&2
+            echo "Usage: $0 {ffmpeg|sdl3|sdl3_ttf} [release_tag]" >&2
             exit 1
             ;;
     esac

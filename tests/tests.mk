@@ -32,6 +32,8 @@ tests/test_frame_metadata$(EXE): TEST_LIBS = $(LDLIBS)
 tests/test_progress_dots$(EXE): TEST_LIBS = $(LDLIBS)
 tests/test_split_texture_upload_cache$(EXE): TEST_LIBS = $(LDLIBS)
 
+tests/test_sdr_texture_render$(EXE): TEST_LIBS = $(LDLIBS)
+
 tests/test_queue$(EXE): TEST_LIBS = -pthread
 
 tests/test_playback_timing$(EXE): TEST_LIBS = $(LDLIBS)
@@ -78,6 +80,15 @@ check: $(test_bin)
 		./$$test; \
 	done
 	./tests/test_split_texture_upload_cache$(EXE) --10-bpc
+	@set -e; if command -v xvfb-run >/dev/null 2>&1; then \
+		echo "Running tests/test_sdr_texture_render under Xvfb (GLX)"; \
+		xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX' ./tests/test_sdr_texture_render --accelerated; \
+		echo "Running tests/test_split_texture_upload_cache --10-bpc --accelerated"; \
+		xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX' ./tests/test_split_texture_upload_cache --10-bpc --accelerated; \
+	else \
+		echo "SKIP accelerated SDR/10-bpc pixel tests (xvfb-run not available)"; \
+		./tests/test_sdr_texture_render; \
+	fi
 
 .PHONY: integration
 integration: $(integration_bin) tests/test_playback_keyframe$(EXE)
