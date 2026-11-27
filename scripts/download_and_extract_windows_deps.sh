@@ -302,7 +302,7 @@ generate_ffmpeg_source_manifest() {
     gyan_release_archive="https://github.com/GyanD/codexffmpeg/archive/refs/tags/${GYAN_FFMPEG_VERSION}.tar.gz"
     gyan_build_scripts_repo="https://github.com/GyanD/media-autobuild_suite"
 
-    manifest_path="${SCRIPT_DIR}/licenses/FFMPEG-SOURCE.txt"
+    manifest_path="${REPO_ROOT}/licenses/FFMPEG-SOURCE.txt"
     mkdir -p "$(dirname "$manifest_path")"
 
     cat > "$manifest_path" <<EOF
