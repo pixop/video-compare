@@ -38,13 +38,15 @@ VideoFilterer::VideoFilterer(const Side& side,
                              const std::string& custom_color_primaries,
                              const std::string& custom_color_trc,
                              const VideoFilterContext* video_filter_context,
-                             const bool disable_auto_filters)
+                             const bool disable_auto_filters,
+                             const bool native_hdr_presentation)
     : SideAware(side),
       demuxer_(demuxer),
       video_decoder_(video_decoder),
       tone_mapping_mode_(tone_mapping_mode),
       tone_map_algorithm_(tone_map_algorithm),
       boost_tone_(boost_tone),
+      native_hdr_presentation_(native_hdr_presentation),
       width_(video_decoder->width()),
       height_(video_decoder->height()),
       crop_space_width_(std::max(1, static_cast<int>(video_decoder->width()))),
@@ -126,12 +128,15 @@ VideoFilterer::VideoFilterer(const Side& side,
 
   dynamic_range_ = video_decoder->infer_dynamic_range(custom_color_trc);
   const bool is_hdr_trc = dynamic_range_ != DynamicRange::Standard;
-  const bool must_tonemap = tone_mapping_mode == ToneMapping::FullRange || tone_mapping_mode == ToneMapping::Relative || (tone_mapping_mode == ToneMapping::Auto && is_hdr_trc);
+  const bool must_tonemap =
+      !native_hdr_presentation_ && (tone_mapping_mode == ToneMapping::FullRange || tone_mapping_mode == ToneMapping::Relative || (tone_mapping_mode == ToneMapping::Auto && is_hdr_trc));
 
   // resolve initial peak luminance
   peak_luminance_nits_ = video_decoder->safe_peak_luminance_nits(dynamic_range_);
 
-  if (tone_mapping_mode == ToneMapping::Auto && is_hdr_trc) {
+  if (native_hdr_presentation_) {
+    log_info("Native HDR presentation (--hdr): FFmpeg tone mapping disabled; PQ HDR10 tags preserved for linear scRGB upload.");
+  } else if (tone_mapping_mode == ToneMapping::Auto && is_hdr_trc) {
     const char* msg;
 
     if (dynamic_range_ == DynamicRange::PQ) {
@@ -146,32 +151,60 @@ VideoFilterer::VideoFilterer(const Side& side,
   }
 
   // set color space and range (+ primaries and TRC if tone-mapping is required) to limited range Rec. 709 if metadata is unspecified or pass any user-provided values
-  if (!disable_auto_filters || must_tonemap || !custom_color_space.empty() || !custom_color_range.empty() || !custom_color_primaries.empty() || !custom_color_trc.empty()) {
+  if (native_hdr_presentation_ || !disable_auto_filters || must_tonemap || !custom_color_space.empty() || !custom_color_range.empty() || !custom_color_primaries.empty() || !custom_color_trc.empty()) {
     std::vector<std::string> notes, setparams_options;
 
-    if ((video_decoder->color_space() == AVCOL_SPC_UNSPECIFIED) || !custom_color_space.empty()) {
-      if (custom_color_space.empty()) {
+    const auto default_colorspace = [&]() -> std::string {
+      if (native_hdr_presentation_) {
+        return "bt2020nc";
+      }
+      return "bt709";
+    };
+    const auto default_primaries = [&]() -> std::string {
+      if (native_hdr_presentation_) {
+        return "bt2020";
+      }
+      return "bt709";
+    };
+    const auto default_trc = [&]() -> std::string {
+      if (native_hdr_presentation_) {
+        if (dynamic_range_ == DynamicRange::HLG) {
+          return "arib-std-b67";
+        }
+        return "smpte2084";
+      }
+      return "bt709";
+    };
+    const auto default_range = [&]() -> std::string {
+      if (native_hdr_presentation_) {
+        return video_decoder->color_range() == AVCOL_RANGE_JPEG ? "pc" : "tv";
+      }
+      return "tv";
+    };
+
+    if (native_hdr_presentation_ || (video_decoder->color_space() == AVCOL_SPC_UNSPECIFIED) || !custom_color_space.empty()) {
+      if (!native_hdr_presentation_ && custom_color_space.empty()) {
         notes.push_back("'Color space' (colorspace)");
       }
-      setparams_options.push_back("colorspace=" + (custom_color_space.empty() ? "bt709" : custom_color_space));
+      setparams_options.push_back("colorspace=" + (custom_color_space.empty() ? default_colorspace() : custom_color_space));
     }
-    if ((video_decoder->color_range() == AVCOL_RANGE_UNSPECIFIED) || !custom_color_range.empty()) {
-      if (custom_color_range.empty()) {
+    if (native_hdr_presentation_ || (video_decoder->color_range() == AVCOL_RANGE_UNSPECIFIED) || !custom_color_range.empty()) {
+      if (!native_hdr_presentation_ && custom_color_range.empty()) {
         notes.push_back("'Color range' (range)");
       }
-      setparams_options.push_back("range=" + (custom_color_range.empty() ? "tv" : custom_color_range));
+      setparams_options.push_back("range=" + (custom_color_range.empty() ? default_range() : custom_color_range));
     }
-    if ((must_tonemap && video_decoder->color_primaries() == AVCOL_PRI_UNSPECIFIED) || !custom_color_primaries.empty()) {
-      if (custom_color_primaries.empty()) {
+    if (native_hdr_presentation_ || (must_tonemap && video_decoder->color_primaries() == AVCOL_PRI_UNSPECIFIED) || !custom_color_primaries.empty()) {
+      if (!native_hdr_presentation_ && custom_color_primaries.empty()) {
         notes.push_back("'Color primaries' (color_primaries)");
       }
-      setparams_options.push_back("color_primaries=" + (custom_color_primaries.empty() ? "bt709" : custom_color_primaries));
+      setparams_options.push_back("color_primaries=" + (custom_color_primaries.empty() ? default_primaries() : custom_color_primaries));
     }
-    if ((must_tonemap && video_decoder->color_trc() == AVCOL_TRC_UNSPECIFIED) || !custom_color_trc.empty()) {
-      if (custom_color_trc.empty()) {
+    if (native_hdr_presentation_ || (must_tonemap && video_decoder->color_trc() == AVCOL_TRC_UNSPECIFIED) || !custom_color_trc.empty()) {
+      if (!native_hdr_presentation_ && custom_color_trc.empty()) {
         notes.push_back("'Transfer characteristics' (color_trc)");
       }
-      setparams_options.push_back("color_trc=" + (custom_color_trc.empty() ? "bt709" : custom_color_trc));
+      setparams_options.push_back("color_trc=" + (custom_color_trc.empty() ? default_trc() : custom_color_trc));
     }
 
     if (!notes.empty()) {

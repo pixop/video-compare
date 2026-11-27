@@ -162,6 +162,20 @@ to simulate the relative light level difference between the two videos on an act
 
     video-compare -T rel -L 500 hdr_video.mp4 sdr_video.mp4
 
+### Native HDR (WIP, opt-in)
+
+    video-compare --hdr left_hdr10.mkv right_hdr10.mkv
+    video-compare --hdr left_hlg.mkv right_hlg.mkv
+
+Native HDR requires a supported D3D11 or Metal renderer and an HDR/EDR display.
+It accepts BT.2020 PQ or HLG inputs, with the same transfer function on all inputs.
+HLG uses a fixed 1,000-nit reference display. The flag implies 10-bit processing
+and disables SDR tone mapping; the default SDR path is unchanged.
+
+Mixed SDR/PQ/HLG comparisons and HDR analysis tools are not supported yet.
+Native display output still needs validation on Windows and macOS hardware.
+See [HDR status](docs/HDR_STATUS.md) for implementation and test details.
+
 Apply common filters to both videos and extend them with additional side-specific filters using the
 placeholder resolution functionality. This structure also works for demuxer, decoder, and hardware
 acceleration settings:

@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 #include "conversion_geometry.h"
+#include "hdr_color.h"
 #include "core_types.h"
 #include "font_selection.h"
 #include "hud_text_cache.h"
@@ -174,6 +175,10 @@ class Display {
   const AspectLockMode aspect_lock_mode_;
   AspectViewMode aspect_view_mode_;
   const bool use_10_bpc_;
+  const bool native_hdr_;
+  float scrgb_content_white_nits_{hdr_color::platform_scrgb_content_white_nits()};
+  float sdl_sdr_white_level_{1.0F};
+  bool native_hdr_output_active_{false};
   bool fast_input_alignment_;
   bool bilinear_texture_filtering_;
   const ConversionFit conversion_fit_;
@@ -297,6 +302,8 @@ class Display {
   SDL_Cursor* selection_mode_cursor_;
   uint8_t* diff_buffer_{nullptr};
   uint32_t* left_buffer_{nullptr};
+  uint16_t* hdr_fp16_left_{nullptr};
+  uint16_t* hdr_fp16_right_{nullptr};
   uint32_t* right_buffer_{nullptr};
   std::array<uint8_t*, 3> diff_planes_;
   std::array<uint32_t*, 3> left_planes_;
@@ -392,6 +399,8 @@ class Display {
   void recreate_video_textures_for_current_mode();
 
   void convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, std::array<uint32_t*, 3> out_planes, std::array<size_t, 3> out_pitches, const SDL_Rect& roi);
+  void convert_rgb48_hdr_to_scrgb_fp16(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, uint16_t* out_pixels, const int out_pitch_bytes, const SDL_Rect& roi, AVColorTransferCharacteristic trc);
+  bool reject_native_hdr_unsupported_action(const std::string& action);
 
   void update_difference(std::array<uint8_t*, 3> planes_left, std::array<size_t, 3> pitches_left, std::array<uint8_t*, 3> planes_right, std::array<size_t, 3> pitches_right, int split_x);
 
@@ -491,6 +500,7 @@ class Display {
           const AspectLockMode aspect_lock_mode,
           const AspectViewMode aspect_view_mode,
           const bool use_10_bpc,
+          const bool native_hdr,
           const bool fast_input_alignment,
           const bool bilinear_texture_filtering,
           const ConversionFit conversion_fit,

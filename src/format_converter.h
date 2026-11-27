@@ -19,7 +19,8 @@ class FormatConverter : public SideAware {
                   const AVColorRange src_color_range,
                   const ConversionFit conversion_fit = ConversionFit::Stretch,
                   const Side& side = NONE,
-                  const int flags = SWS_FAST_BILINEAR);
+                  const int flags = SWS_FAST_BILINEAR,
+                  const bool hdr_force_full_range_rgb_output = false);
   ~FormatConverter();
 
   void init();
@@ -50,6 +51,7 @@ class FormatConverter : public SideAware {
   const size_t dest_height_;
   const AVPixelFormat dest_pixel_format_;
   const ConversionFit conversion_fit_;
+  const bool hdr_force_full_range_rgb_output_;
 
   AVColorSpace src_color_space_;
   AVColorRange src_color_range_;

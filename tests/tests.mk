@@ -66,6 +66,17 @@ tests/test_video_filterer$(EXE): TEST_LIBS = $(LDLIBS)
 tests/test_tone_mapping$(EXE): src/tone_mapping.o
 tests/test_tone_mapping$(EXE): TEST_LIBS = $(LDLIBS)
 
+tests/test_hdr_color$(EXE): src/hdr_color.o
+tests/test_hdr_color$(EXE): TEST_LIBS = $(LDLIBS)
+
+tests/test_hdr_metadata$(EXE): tests/test_hdr_metadata.o src/hdr_metadata.o src/core_types.o
+tests/test_hdr_metadata$(EXE): TEST_LIBS = $(LDLIBS)
+
+tests/test_hdr_yuv_fixture$(EXE): tests/test_hdr_yuv_fixture.o src/format_converter.o src/frame_metadata.o src/ffmpeg.o src/side_aware_logger.o src/core_types.o src/hdr_color.o src/hdr_metadata.o
+tests/test_hdr_yuv_fixture$(EXE): TEST_LIBS = $(LDLIBS)
+
+tests/test_hdr_sdl_audit$(EXE): TEST_LIBS = $(LDLIBS)
+
 tests/test_scope_color$(EXE): src/scope_color.o
 tests/test_scope_color$(EXE): TEST_LIBS = $(LDLIBS)
 

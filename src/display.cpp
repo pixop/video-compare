@@ -19,6 +19,9 @@
 #include "display_pixel_scale.h"
 #include "ffmpeg.h"
 #include "format_converter.h"
+#include "hdr_color.h"
+#include "hdr_metadata.h"
+#include "hdr_native.h"
 #include "frame_metadata.h"
 #include "png_saver.h"
 #include "progress_dots.h"
@@ -247,6 +250,7 @@ Display::Display(const int display_number,
                  const AspectLockMode aspect_lock_mode,
                  const AspectViewMode aspect_view_mode,
                  const bool use_10_bpc,
+                 const bool native_hdr,
                  const bool fast_input_alignment,
                  const bool bilinear_texture_filtering,
                  const ConversionFit conversion_fit,
@@ -268,6 +272,7 @@ Display::Display(const int display_number,
       aspect_lock_mode_{aspect_lock_mode},
       aspect_view_mode_{aspect_view_mode},
       use_10_bpc_{use_10_bpc},
+      native_hdr_{native_hdr},
       fast_input_alignment_{fast_input_alignment},
       bilinear_texture_filtering_{bilinear_texture_filtering},
       conversion_fit_{conversion_fit},
@@ -369,10 +374,25 @@ Display::Display(const int display_number,
 
   const SDL_PropertiesID renderer_properties = SDL_CreateProperties();
   SDL_SetPointerProperty(renderer_properties, SDL_PROP_RENDERER_CREATE_WINDOW_POINTER, window_);
-  SDL_SetNumberProperty(renderer_properties, SDL_PROP_RENDERER_CREATE_OUTPUT_COLORSPACE_NUMBER, SDL_COLORSPACE_SRGB);
+  SDL_SetNumberProperty(renderer_properties, SDL_PROP_RENDERER_CREATE_OUTPUT_COLORSPACE_NUMBER, native_hdr_ ? SDL_COLORSPACE_SRGB_LINEAR : SDL_COLORSPACE_SRGB);
   SDL_SetNumberProperty(renderer_properties, SDL_PROP_RENDERER_CREATE_PRESENT_VSYNC_NUMBER, 1);
   renderer_ = check_sdl(SDL_CreateRendererWithProperties(renderer_properties), "renderer");
   SDL_DestroyProperties(renderer_properties);
+  if (native_hdr_) {
+    const hdr_native::NativeHdrStatus hdr_status = hdr_native::probe_native_hdr_after_renderer(renderer_, window_);
+    hdr_native::require_viable_native_hdr_output(hdr_status);
+    scrgb_content_white_nits_ = hdr_color::platform_scrgb_content_white_nits();
+    sdl_sdr_white_level_ = hdr_status.sdl_sdr_white_level;
+    native_hdr_output_active_ = hdr_status.display_hdr_enabled;
+    if (pending_verbose_print_) {
+      std::cout << "Native HDR:            enabled (SDL_COLORSPACE_SRGB_LINEAR / scRGB)" << std::endl;
+      std::cout << "HDR display active:    " << std::boolalpha << native_hdr_output_active_ << std::endl;
+      std::cout << "scRGB content scale: " << scrgb_content_white_nits_ << " nits = 1.0 (platform reference; not SDL_PROP_RENDERER_SDR_WHITE_POINT)" << std::endl;
+      std::cout << "SDL SDR white level:   " << sdl_sdr_white_level_ << " (normalized HUD scale; not nits)" << std::endl;
+      std::cout << "Renderer HDR headroom: " << hdr_status.hdr_headroom << " x SDR white" << std::endl;
+    }
+    set_pending_message("Native HDR: HUD/pixel readout/screenshots/scopes are not HDR-accurate");
+  }
   // Use native drawable pixels. Setting SDL's logical size would also remap
   // mouse events to drawable coordinates, while input expects window coordinates.
   batch_progress_dots_ = progress_dots::can_batch_for_renderer();
@@ -502,6 +522,12 @@ Display::~Display() {
   if (right_buffer_ != nullptr) {
     delete[] right_buffer_;
   }
+  if (hdr_fp16_left_ != nullptr) {
+    delete[] hdr_fp16_left_;
+  }
+  if (hdr_fp16_right_ != nullptr) {
+    delete[] hdr_fp16_right_;
+  }
 
   SDL_DestroyRenderer(renderer_);
   SDL_DestroyWindow(window_);
@@ -519,11 +545,13 @@ void Display::recreate_video_textures_for_current_mode() {
 
   auto create_video_texture = [&](const std::string& scale_quality) {
     const SDL_PropertiesID texture_properties = SDL_CreateProperties();
-    SDL_SetNumberProperty(texture_properties, SDL_PROP_TEXTURE_CREATE_FORMAT_NUMBER, use_10_bpc_ ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24);
+    const SDL_PixelFormat texture_format = native_hdr_ ? SDL_PIXELFORMAT_RGBA64_FLOAT : (use_10_bpc_ ? SDL_PIXELFORMAT_ARGB2101010 : SDL_PIXELFORMAT_RGB24);
+    const SDL_Colorspace texture_colorspace = native_hdr_ ? SDL_COLORSPACE_SRGB_LINEAR : SDL_COLORSPACE_SRGB;
+    SDL_SetNumberProperty(texture_properties, SDL_PROP_TEXTURE_CREATE_FORMAT_NUMBER, texture_format);
     SDL_SetNumberProperty(texture_properties, SDL_PROP_TEXTURE_CREATE_WIDTH_NUMBER, mode_ == Mode::HStack ? video_width_ * 2 : video_width_);
     SDL_SetNumberProperty(texture_properties, SDL_PROP_TEXTURE_CREATE_HEIGHT_NUMBER, mode_ == Mode::VStack ? video_height_ * 2 : video_height_);
     SDL_SetNumberProperty(texture_properties, SDL_PROP_TEXTURE_CREATE_ACCESS_NUMBER, SDL_TEXTUREACCESS_STREAMING);
-    SDL_SetNumberProperty(texture_properties, SDL_PROP_TEXTURE_CREATE_COLORSPACE_NUMBER, SDL_COLORSPACE_SRGB);
+    SDL_SetNumberProperty(texture_properties, SDL_PROP_TEXTURE_CREATE_COLORSPACE_NUMBER, texture_colorspace);
     SDL_Texture* texture = check_sdl(SDL_CreateTextureWithProperties(renderer_, texture_properties), "video texture " + scale_quality);
     SDL_DestroyProperties(texture_properties);
     SDL_SetTextureScaleMode(texture, scale_quality == "linear" ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
@@ -776,6 +804,14 @@ void Display::reinitialize_video_dimensions(const unsigned width, const unsigned
   if (right_buffer_ != nullptr) {
     delete[] right_buffer_;
     right_buffer_ = nullptr;
+  }
+  if (hdr_fp16_left_ != nullptr) {
+    delete[] hdr_fp16_left_;
+    hdr_fp16_left_ = nullptr;
+  }
+  if (hdr_fp16_right_ != nullptr) {
+    delete[] hdr_fp16_right_;
+    hdr_fp16_right_ = nullptr;
   }
   left_planes_ = {nullptr, nullptr, nullptr};
   right_planes_ = {nullptr, nullptr, nullptr};
@@ -1223,6 +1259,41 @@ void Display::convert_to_packed_10_bpc(std::array<uint8_t*, 3> in_planes, std::a
       suggest_block_rows_by_bytes(roi.w, roi.h, sizeof(uint16_t), 3));
 }
 
+bool Display::reject_native_hdr_unsupported_action(const std::string& action) {
+  if (!native_hdr_) {
+    return false;
+  }
+  notify_user(action + " is not available in native HDR mode");
+  return true;
+}
+
+void Display::convert_rgb48_hdr_to_scrgb_fp16(std::array<uint8_t*, 3> in_planes, std::array<size_t, 3> in_pitches, uint16_t* out_pixels, const int out_pitch_bytes, const SDL_Rect& roi,
+                                               const AVColorTransferCharacteristic trc) {
+  const float scrgb_white = scrgb_content_white_nits_;
+  const AVColorTransferCharacteristic effective_trc = hdr_metadata::is_native_hdr_transfer(trc) ? trc : AVCOL_TRC_SMPTE2084;
+  if (effective_trc == AVCOL_TRC_SMPTE2084) {
+    hdr_color::ensure_pq_rgb48_lut_initialized();
+  }
+  row_workers_.run_dynamic(
+      roi.h,
+      [=](const int start_row, const int end_row) {
+        for (int y = start_row; y < end_row; ++y) {
+          const uint16_t* in_row = reinterpret_cast<const uint16_t*>(in_planes[0] + roi.x * 6 + in_pitches[0] * (roi.y + y));
+          uint16_t* out_row = reinterpret_cast<uint16_t*>(reinterpret_cast<uint8_t*>(out_pixels) + out_pitch_bytes * (roi.y + y) + roi.x * 8);
+
+          for (int x = 0; x < roi.w; ++x) {
+            const std::array<float, 3> scrgb = hdr_color::hdr_rgb48_full_range_pixel_to_scrgb_linear(in_row[0], in_row[1], in_row[2], effective_trc, scrgb_white);
+            out_row[x * 4 + 0] = hdr_color::float_to_fp16(scrgb[0]);
+            out_row[x * 4 + 1] = hdr_color::float_to_fp16(scrgb[1]);
+            out_row[x * 4 + 2] = hdr_color::float_to_fp16(scrgb[2]);
+            out_row[x * 4 + 3] = hdr_color::float_to_fp16(1.0F);
+            in_row += 3;
+          }
+        }
+      },
+      suggest_block_rows_by_bytes(roi.w, roi.h, sizeof(uint16_t), 3));
+}
+
 template <int Bpc>
 inline void process_difference_scanline(const typename BitDepthTraits<Bpc>::P* plane_left,
                                         const typename BitDepthTraits<Bpc>::P* plane_right,
@@ -1535,6 +1606,9 @@ void write_png(const AVFrame* frame, const std::string& filename, std::atomic_bo
 };
 
 void Display::save_image_frames(const AVFrame* left_frame, const AVFrame* right_frame) {
+  if (native_hdr_) {
+  return;
+  }
   std::atomic_bool error_occurred(false);
 
   const auto create_onscreen_display_avframe = [&]() -> AVFramePtr {
@@ -2577,8 +2651,16 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   std::array<size_t, 3> pitches_left{static_cast<size_t>(left_frame->linesize[0]), static_cast<size_t>(left_frame->linesize[1]), static_cast<size_t>(left_frame->linesize[2])};
   std::array<size_t, 3> pitches_right{static_cast<size_t>(right_frame->linesize[0]), static_cast<size_t>(right_frame->linesize[1]), static_cast<size_t>(right_frame->linesize[2])};
 
-  // init 10 bpc temp buffers
-  if (use_10_bpc_) {
+  // init 10 bpc / native HDR temp buffers
+  if (native_hdr_) {
+    const size_t fp16_pixels = static_cast<size_t>(video_width_) * static_cast<size_t>(video_height_) * 4U;
+    if (hdr_fp16_left_ == nullptr) {
+      hdr_fp16_left_ = new uint16_t[fp16_pixels];
+    }
+    if (hdr_fp16_right_ == nullptr) {
+      hdr_fp16_right_ = new uint16_t[fp16_pixels];
+    }
+  } else if (use_10_bpc_) {
     if (left_buffer_ == nullptr) {
       left_buffer_ = new uint32_t[pitches_left[0] * video_height_ / 4];
       left_planes_ = {left_buffer_, nullptr, nullptr};
@@ -2601,6 +2683,9 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
   // print pixel position in original video coordinates and RGB+YUV color value
   if (print_mouse_position_and_color_) {
+    if (native_hdr_) {
+      print_mouse_position_and_color_ = false;
+    } else {
     const bool print_left_pixel = mouse_video_x >= 0 && mouse_video_x < video_width_ && mouse_video_y >= 0 && mouse_video_y < video_height_;
 
     bool print_right_pixel;
@@ -2643,10 +2728,15 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     }
 
     print_mouse_position_and_color_ = false;
+    }
   }
 
-  // print image similarity metrics
+  // print image similarity metrics (SDR 8-bit codes only; not valid for PQ/HLG native HDR presentation)
   if (print_image_similarity_metrics_) {
+    if (native_hdr_) {
+      notify_user("Objective PSNR/SSIM/VMAF metrics are SDR-referred and unavailable in native HDR mode");
+      print_image_similarity_metrics_ = false;
+    } else {
     if (conversion_fit_ == ConversionFit::Native && !metrics_padding_warned_) {
       const int left_orig_w = FrameMetadata::get_original_width(left_frame, left_frame->width);
       const int left_orig_h = FrameMetadata::get_original_height(left_frame, left_frame->height);
@@ -2703,6 +2793,7 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
     }
 
     print_image_similarity_metrics_ = false;
+    }
   }
 
   // clear everything
@@ -2749,7 +2840,11 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
 
       const bool need_left_upload = cache_split_uploads ? split_texture_upload_cache_.needs_left_upload(split_x) : (input_received_ || has_updated_left_frame);
       if (need_left_upload) {
-        if (use_10_bpc_) {
+        if (native_hdr_) {
+          const int fp16_pitch = video_width_ * 8;
+          convert_rgb48_hdr_to_scrgb_fp16(planes_left, pitches_left, hdr_fp16_left_, fp16_pitch, tex_render_quad_left, static_cast<AVColorTransferCharacteristic>(left_frame->color_trc));
+          update_texture(&tex_render_quad_left, hdr_fp16_left_, fp16_pitch, "left update (native HDR scRGB)");
+        } else if (use_10_bpc_) {
           convert_to_packed_10_bpc(planes_left, pitches_left, left_planes_, pitches_left, tex_render_quad_left);
 
           update_texture(&tex_render_quad_left, left_planes_[0], pitches_left[0], "left update (10 bpc, video mode)");
@@ -2787,7 +2882,11 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
             update_texture(&tex_render_quad_right, diff_planes_[0] + start_right * 3, diff_pitches_[0], "right update (subtraction mode)");
           }
         } else {
-          if (use_10_bpc_) {
+          if (native_hdr_) {
+            const int fp16_pitch = video_width_ * 8;
+            convert_rgb48_hdr_to_scrgb_fp16(planes_right, pitches_right, hdr_fp16_right_, fp16_pitch, roi, static_cast<AVColorTransferCharacteristic>(right_frame->color_trc));
+            update_texture(&tex_render_quad_right, hdr_fp16_right_ + static_cast<size_t>(start_right) * 4U, fp16_pitch, "right update (native HDR scRGB)");
+          } else if (use_10_bpc_) {
             convert_to_packed_10_bpc(planes_right, pitches_right, right_planes_, pitches_right, roi);
 
             update_texture(&tex_render_quad_right, right_planes_[0] + start_right, pitches_right[0], "right update (10 bpc, video mode)");
@@ -3090,7 +3189,9 @@ bool Display::possibly_refresh(const AVFrame* left_frame, const AVFrame* right_f
   }
 
   if (save_image_frames_) {
-    save_image_frames(left_frame, right_frame);
+    if (!native_hdr_) {
+      save_image_frames(left_frame, right_frame);
+    }
     save_image_frames_ = false;
   }
 
@@ -3401,6 +3502,16 @@ void Display::handle_event(const SDL_Event& event) {
         pending_verbose_print_ = false;
       }
       break;
+    case SDL_EVENT_WINDOW_HDR_STATE_CHANGED:
+      if (native_hdr_) {
+        const hdr_native::NativeHdrStatus hdr_status = hdr_native::probe_native_hdr_after_renderer(renderer_, window_);
+        sdl_sdr_white_level_ = hdr_status.sdl_sdr_white_level;
+        native_hdr_output_active_ = hdr_status.display_hdr_enabled;
+        if (!hdr_status.display_hdr_enabled) {
+          set_pending_message("HDR/EDR disabled on current display; output may clip");
+        }
+      }
+      break;
     case SDL_EVENT_MOUSE_WHEEL:
       if (mouse_is_inside_window_ && event_.wheel.y != 0) {
         float delta_zoom = wheel_sensitivity_ * event_.wheel.y * (event_.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -1 : 1);
@@ -3600,43 +3711,58 @@ void Display::handle_event(const SDL_Event& event) {
           set_buffer_play_loop_mode(buffer_play_loop_mode_ != Loop::ForwardOnly ? Loop::ForwardOnly : Loop::Off);
           break;
         case SDLK_F1:
+          if (reject_native_hdr_unsupported_action("Scopes")) {
+            break;
+          }
           toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Histogram)] = true;
           break;
         case SDLK_1:
         case SDLK_KP_1:
           if (is_shift_down) {
-            // Fallback for layouts where F-keys are inconvenient
-            toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Histogram)] = true;
+            if (!reject_native_hdr_unsupported_action("Scopes")) {
+              toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Histogram)] = true;
+            }
           } else {
             show_left_ = !show_left_;
           }
           break;
         case SDLK_F2:
+          if (reject_native_hdr_unsupported_action("Scopes")) {
+            break;
+          }
           toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Vectorscope)] = true;
           break;
         case SDLK_2:
         case SDLK_KP_2:
           if (is_shift_down) {
-            // Fallback for layouts where F-keys are inconvenient
-            toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Vectorscope)] = true;
+            if (!reject_native_hdr_unsupported_action("Scopes")) {
+              toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Vectorscope)] = true;
+            }
           } else {
             show_right_ = !show_right_;
           }
           break;
         case SDLK_F3:
+          if (reject_native_hdr_unsupported_action("Scopes")) {
+            break;
+          }
           toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Waveform)] = true;
           break;
         case SDLK_3:
         case SDLK_KP_3:
           if (is_shift_down) {
-            // Fallback for layouts where F-keys are inconvenient
-            toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Waveform)] = true;
+            if (!reject_native_hdr_unsupported_action("Scopes")) {
+              toggle_scope_window_requested_[ScopeWindow::index(ScopeWindow::Type::Waveform)] = true;
+            }
           } else {
             show_hud_ = !show_hud_;
           }
           break;
         case SDLK_0:
         case SDLK_KP_0:
+          if (reject_native_hdr_unsupported_action("Subtraction mode")) {
+            break;
+          }
           subtraction_mode_ = !subtraction_mode_;
           break;
         case SDLK_Z:
@@ -3741,11 +3867,15 @@ void Display::handle_event(const SDL_Event& event) {
             }
             update_cursor();
           } else {
-            save_image_frames_ = true;
+            if (!reject_native_hdr_unsupported_action("Screenshot save")) {
+              save_image_frames_ = true;
+            }
           }
           break;
         case SDLK_P:
-          print_mouse_position_and_color_ = mouse_is_inside_window_;
+          if (!reject_native_hdr_unsupported_action("Pixel readout")) {
+            print_mouse_position_and_color_ = mouse_is_inside_window_;
+          }
           break;
         case SDLK_TAB:
           if (is_shift_down) {
@@ -3766,7 +3896,7 @@ void Display::handle_event(const SDL_Event& event) {
 
             const std::string mode_name = mode_to_string(mode_);
             notify_user(string_sprintf("Display mode set to '%s'", to_upper_case(mode_name).c_str()));
-          } else {
+          } else if (!reject_native_hdr_unsupported_action("Objective similarity metrics (PSNR/SSIM/VMAF)")) {
             print_image_similarity_metrics_ = true;
           }
           break;

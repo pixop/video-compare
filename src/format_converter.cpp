@@ -47,7 +47,8 @@ FormatConverter::FormatConverter(const size_t src_width,
                                  const AVColorRange src_color_range,
                                  const ConversionFit conversion_fit,
                                  const Side& side,
-                                 const int flags)
+                                 const int flags,
+                                 const bool hdr_force_full_range_rgb_output)
     : SideAware(side),
       src_width_{src_width},
       src_height_{src_height},
@@ -56,6 +57,7 @@ FormatConverter::FormatConverter(const size_t src_width,
       dest_height_{dest_height},
       dest_pixel_format_{dest_pixel_format},
       conversion_fit_{conversion_fit},
+      hdr_force_full_range_rgb_output_{hdr_force_full_range_rgb_output},
       src_color_space_{src_color_space},
       src_color_range_{src_color_range},
       active_flags_(flags),
@@ -145,10 +147,11 @@ void FormatConverter::init() {
   }
 
   const int sws_color_space = get_sws_colorspace(src_color_space_);
-  const int sws_color_range = get_sws_range(src_color_range_);
+  const int sws_src_range = get_sws_range(src_color_range_);
+  const int sws_dst_range = hdr_force_full_range_rgb_output_ ? 1 : sws_src_range;
   const int* yuv2rgb_coeffs = sws_getCoefficients(sws_color_space);
 
-  sws_setColorspaceDetails(conversion_context_, yuv2rgb_coeffs, sws_color_range, yuv2rgb_coeffs, sws_color_range, 0, FIXED_1_0, FIXED_1_0);
+  sws_setColorspaceDetails(conversion_context_, yuv2rgb_coeffs, sws_src_range, yuv2rgb_coeffs, sws_dst_range, 0, FIXED_1_0, FIXED_1_0);
 }
 
 void FormatConverter::free() {
@@ -283,4 +286,10 @@ void FormatConverter::operator()(AVFrame* src, AVFrame* dst) {
   dst->format = dest_pixel_format();
   dst->width = static_cast<int>(dest_width());
   dst->height = static_cast<int>(dest_height());
+  if (hdr_force_full_range_rgb_output_) {
+    dst->color_range = AVCOL_RANGE_JPEG;
+    dst->colorspace = src->colorspace;
+    dst->color_primaries = src->color_primaries;
+    dst->color_trc = src->color_trc;
+  }
 }

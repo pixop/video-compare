@@ -13,6 +13,7 @@
 #include "side_aware_logger.h"
 #include "string_utils.h"
 #include "tone_mapping.h"
+#include "hdr_native.h"
 #include "version.h"
 #include "video_compare.h"
 #include "vmaf_calculator.h"
@@ -621,6 +622,7 @@ int main(int argc, char** argv) {
          {"filters", {"-i", "--filters"}, "specify a comma-separated list of FFmpeg filters to be applied to both sides (e.g. scale=1920:-2,delogo=x=10:y=10:w=100:h=70)", 1},
          {"left-filters", {"-l", "--left-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the left video (e.g. format=gray,crop=iw:ih-240)", 1},
          {"right-filters", {"-r", "--right-filters"}, "specify a comma-separated list of FFmpeg filters to be applied to the right video (e.g. yadif,hqdn3d,pad=iw+320:ih:160:0)", 1},
+         {"hdr", {"--hdr"}, "native HDR presentation for PQ or HLG (same transfer on all inputs; implies --10-bpc and -T off); requires HDR/EDR display", 0},
          {"find-filters", {"--find-filters"}, "find FFmpeg video filters that match the provided search term (e.g. 'scale', 'libvmaf' or 'dnn'; use \"\" to list all)", 1},
          {"conversion-size", {"--conversion-size"}, "shared conversion canvas size: 'max' (default, axis-wise maximum of filtered destinations) or an explicit [width]x[height] (e.g. 1920x1440)", 1},
          {"conversion-fit", {"--conversion-fit"}, "how filtered frames are placed on the conversion canvas: 'stretch' (default, scale to fill) or 'native' (1:1 centered samples with black padding)", 1},
@@ -757,6 +759,10 @@ int main(int argc, char** argv) {
         config.conversion_fit = parse_conversion_fit(static_cast<const std::string&>(args["conversion-fit"]));
       }
       config.use_10_bpc = args["10-bpc"];
+      config.native_hdr = args["hdr"];
+      if (config.native_hdr) {
+        config.use_10_bpc = true;
+      }
       config.fast_input_alignment = args["fast-alignment"];
       config.bilinear_texture_filtering = args["bilinear-texture"];
       config.disable_auto_filters = args["disable-auto-filters"];
@@ -1054,6 +1060,8 @@ int main(int argc, char** argv) {
       }
 
       maybe_log_runtime_note();
+
+      hdr_native::validate_native_hdr_cli_options(config);
 
       VideoCompare compare{config};
       compare();

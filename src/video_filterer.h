@@ -62,7 +62,8 @@ class VideoFilterer : public SideAware {
                 const std::string& custom_color_primaries,
                 const std::string& custom_color_trc,
                 const VideoFilterContext* video_filter_context,
-                const bool disable_auto_filters);
+                const bool disable_auto_filters,
+                const bool native_hdr_presentation = false);
   ~VideoFilterer();
 
   void init();
@@ -105,6 +106,7 @@ class VideoFilterer : public SideAware {
   const ToneMapping tone_mapping_mode_;
   const ToneMapAlgorithm tone_map_algorithm_;
   const float boost_tone_{1.0F};
+  const bool native_hdr_presentation_{false};
 
   std::string pre_filter_description_;
   std::string post_filter_description_;

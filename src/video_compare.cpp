@@ -24,6 +24,8 @@
 #include "video_filter_context.h"
 #include "video_filter_state.h"
 #include "video_frame_buffer_pool.h"
+#include "hdr_metadata.h"
+#include "hdr_native.h"
 extern "C" {
 #include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
@@ -178,6 +180,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config, playback_keyframe::
     throw std::logic_error{"At least one right video must be supplied"};
   }
 
+  hdr_native::validate_native_hdr_cli_options(config_);
+
   // Initialize left video demuxer and decoder
   install_processor(demuxers_, ReadyToSeek::ProcessorThread::Demultiplexer, LEFT, std::make_unique<Demuxer>(LEFT, config.left.demuxer, config.left.file_name, config.left.demuxer_options, config.left.decoder_options));
   install_processor(
@@ -198,6 +202,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config, playback_keyframe::
                                                      right_config.decoder_options));
   }
 
+  hdr_native::qualify_hdr10_inputs(config_, video_decoders_);
+
   // Create VideoFilterContext to manage all videos for consistent auto-filter determination
   VideoFilterContext video_filter_context;
   video_filter_context.add(LEFT, demuxers_[LEFT].get(), video_decoders_[LEFT].get(), config.left.color_trc);
@@ -211,7 +217,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config, playback_keyframe::
   // Initialize filterers using VideoFilterContext for consistent auto-filter determination
   install_processor(video_filterers_, ReadyToSeek::ProcessorThread::Filterer, LEFT,
                     std::make_unique<VideoFilterer>(LEFT, demuxers_[LEFT].get(), video_decoders_[LEFT].get(), config.left.tone_mapping_mode, config.left.tone_map_algorithm, config.left.boost_tone, config.left.video_filters,
-                                                    config.left.color_space, config.left.color_range, config.left.color_primaries, config.left.color_trc, &video_filter_context, config.disable_auto_filters));
+                                                    config.left.color_space, config.left.color_range, config.left.color_primaries, config.left.color_trc, &video_filter_context, config.disable_auto_filters,
+                                                    config.native_hdr));
 
   // For each right video, use VideoFilterContext for auto-filter determination
   for (size_t i = 0; i < config.right_videos.size(); ++i) {
@@ -221,7 +228,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config, playback_keyframe::
     install_processor(
         video_filterers_, ReadyToSeek::ProcessorThread::Filterer, right_side,
         std::make_unique<VideoFilterer>(right_side, demuxers_[right_side].get(), video_decoders_[right_side].get(), right_config.tone_mapping_mode, right_config.tone_map_algorithm, right_config.boost_tone, right_config.video_filters,
-                                        right_config.color_space, right_config.color_range, right_config.color_primaries, right_config.color_trc, &video_filter_context, config.disable_auto_filters));
+                                        right_config.color_space, right_config.color_range, right_config.color_primaries, right_config.color_trc, &video_filter_context, config.disable_auto_filters,
+                                        config.native_hdr));
   }
 
   // Calculate canvas dimensions from conversion-size policy
@@ -342,8 +350,8 @@ VideoCompare::VideoCompare(const VideoCompareConfig& config, playback_keyframe::
   const std::string right_file_name = (right_it != right_video_info_.end()) ? right_it->second.file_name : right_video_info_.begin()->second.file_name;
 
   display_ = std::make_unique<Display>(config_.display_number, config_.display_mode, config_.verbose, config_.fit_window_to_usable_bounds, config_.high_dpi_allowed, config_.ui_scale, config_.font_selection, config_.aspect_lock_mode,
-                                       config_.aspect_view_mode, config_.use_10_bpc, use_fast_input_alignment(config_), config_.bilinear_texture_filtering, config_.conversion_fit, config_.window_size, canvas_width_, canvas_height_,
-                                       shortest_duration_, config_.wheel_sensitivity, config_.start_in_subtraction_mode, config_.start_in_fullscreen, config_.left.file_name, right_file_name);
+                                       config_.aspect_view_mode, config_.use_10_bpc, config_.native_hdr, use_fast_input_alignment(config_), config_.bilinear_texture_filtering, config_.conversion_fit, config_.window_size, canvas_width_,
+                                       canvas_height_, shortest_duration_, config_.wheel_sensitivity, config_.start_in_subtraction_mode, config_.start_in_fullscreen, config_.left.file_name, right_file_name);
   display_->set_num_right_videos(right_video_info_.size());
   display_->set_active_right_index(active_right_index_);
   display_->update_metadata(left_video_metadata_, right_video_info_[active_right].metadata);
@@ -365,7 +373,7 @@ void VideoCompare::recreate_format_converter_for_side(const Side& side, const in
   const auto& filterer = video_filterers_.at(side);
   ready_to_seek_.init(ReadyToSeek::ProcessorThread::Converter, side);
   format_converters_[side] = std::make_unique<FormatConverter>(filterer->dest_width(), filterer->dest_height(), canvas_width_, canvas_height_, filterer->dest_pixel_format(), output_pixel_format, video_decoders_[side]->color_space(),
-                                                               video_decoders_[side]->color_range(), config_.conversion_fit, side, sws_flags);
+                                                               video_decoders_[side]->color_range(), config_.conversion_fit, side, sws_flags, config_.native_hdr);
 }
 
 void VideoCompare::recreate_format_converters(const int sws_flags) {
@@ -614,6 +622,9 @@ void VideoCompare::format_convert_video(const Side& side) {
       AVFrameUniquePtr frame_filtered{av_frame_alloc(), avframe_deleter};
 
       if (filtered_frame_queues_[side]->pop(frame_filtered)) {
+        if (config_.native_hdr) {
+          hdr_metadata::validate_hdr_filtered_frame(side.to_string(), *frame_filtered);
+        }
         // scale and convert pixel format before pushing to frame queue for displaying
         AVFrameUniquePtr frame_converted{av_frame_alloc(), avframe_deleter};
 
@@ -625,6 +636,9 @@ void VideoCompare::format_convert_video(const Side& side) {
         const AVPixelFormat format = format_converters_[side]->dest_pixel_format();
         frame_pool.allocate(frame_converted.get(), width, height, format);
         (*format_converters_[side])(frame_filtered.get(), frame_converted.get());
+        if (config_.native_hdr) {
+          hdr_metadata::validate_hdr_converted_frame(side.to_string(), *frame_converted);
+        }
 
         converted_frame_queues_[side]->push(std::move(frame_converted));
       } else if (filtered_frame_queues_[side]->is_stopped() || seeking_) {
